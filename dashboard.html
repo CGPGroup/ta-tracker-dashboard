@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Irth TA Tracker</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #ffffff;
+    --page: #f5f8fa;
+    --text-primary: #000000;
+    --text-secondary: #404040;
+    --text-muted: #808080;
+    --grid: #e6e6e6;
+    --baseline: #c0c0c0;
+    --border: rgba(0,0,0,0.10);
+
+    --brand: #d97757;
+    --brand-dark: #bf502b;
+    --brand-wash: #f4ded7;
+
+    --seq-200: #e49d86; --seq-300: #da7c5d; --seq-400: #bf502b; --seq-500: #89391f; --seq-600: #5c2615;
+
+    --good: #0ca30c;
+    --warning: #fab219;
+    --critical: #d03b3b;
+    --neutral: #808080;
+
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+  }
+
+  /* ---------- Shell ---------- */
+  .shell { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px; flex: none;
+    background: #211d1a;
+    color: #fff;
+    display: flex; flex-direction: column;
+    padding: 20px 14px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; color: #fff;
+  }
+  .brand-text { line-height: 1.2; }
+  .brand-text .l1 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+  .brand-text .l2 { font-size: 10.5px; color: #a8a8a8; }
+
+  .nav { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 8px;
+    color: #c9c9c9; font-size: 13.5px; font-weight: 500;
+    cursor: pointer; user-select: none;
+    border: none; background: none; text-align: left; width: 100%;
+    border-left: 3px solid transparent;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  .nav-item.active { background: rgba(217,119,87,0.18); color: #fff; border-left: 3px solid var(--brand); }
+  .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
+
+  .sidebar-foot {
+    margin-top: auto; padding: 12px 8px 4px;
+    font-size: 11px; color: #8c8c8c; line-height: 1.5;
+    border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
+  }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  .topbar {
+    height: 60px; flex: none;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 700; }
+  .topbar .sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .pill {
+    font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
+    background: var(--brand-wash); color: var(--brand-dark);
+  }
+  .pill.demo { background: #fff3d6; color: #946200; }
+
+  .content { padding: 22px 24px 60px; max-width: 1320px; margin: 0 auto; width: 100%; }
+
+  .banner-demo {
+    background: #fff8e6; border: 1px solid #f4dfa0; color: #7a5b00;
+    border-radius: var(--radius); padding: 10px 16px; font-size: 12.5px;
+    margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+  }
+
+  /* ---------- KPI tiles ---------- */
+  .kpi-row {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
+    margin-bottom: 20px;
+  }
+  .kpi-tile {
+    background: var(--surface-1); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 14px 16px;
+  }
+  .kpi-label { font-size: 11.5px; color: var(--text-secondary); margin-bottom: 6px; }
+  .kpi-value { font-size: 24px; font-weight: 700; line-height: 1; }
+  .kpi-value.good { color: var(--good); }
+  .kpi-value.warning { color: #946200; }
+  .kpi-value.critical { color: var(--critical); }
+
+  /* ---------- Panels / charts ---------- */
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+
+  .panel {
+    background: var(--surface-1); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 18px 20px;
+  }
+  .panel h3 { font-size: 13.5px; margin: 0 0 2px; font-weight: 700; }
+  .panel .panel-sub { font-size: 11.5px; color: var(--text-muted); margin-bottom: 14px; }
+
+  .barlist { display: flex; flex-direction: column; gap: 10px; }
+  .barlist-row { display: grid; grid-template-columns: 108px 1fr 34px; align-items: center; gap: 10px; }
+  .barlist-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .barlist-track { position: relative; height: 16px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+  .barlist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px 0 0 4px; }
+  .barlist-value { font-size: 12px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .stackbar-wrap { margin-bottom: 16px; }
+  .stackbar-title { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+  .stackbar-title .tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; }
+  .tag.official { background: var(--brand-wash); color: var(--brand-dark); }
+  .tag.internal { background: #ececec; color: var(--text-secondary); }
+  .stackbar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--grid); }
+  .stackbar > div { height: 100%; }
+  .stackbar-legend { display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--text-secondary); }
+  .stackbar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+
+  .meter-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px 0 4px; }
+  .meter-value { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .meter-track { width: 100%; height: 16px; border-radius: 8px; background: var(--grid); overflow: hidden; }
+  .meter-fill { height: 100%; border-radius: 8px 0 0 8px; background: var(--good); transition: width .3s ease; }
+  .meter-caption { font-size: 11px; color: var(--text-muted); text-align: center; }
+  .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+  /* ---------- Tables ---------- */
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .toolbar input[type="text"], .toolbar select {
+    font-family: inherit; font-size: 12.5px; padding: 7px 10px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1);
+    color: var(--text-primary);
+  }
+  .toolbar input[type="text"] { min-width: 220px; }
+  .toolbar .count { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+
+  table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--text-muted); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--grid);
+    white-space: nowrap;
+  }
+  table.data td { padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  table.data tr:hover td { background: #fbfbfb; }
+  table.data tr.clickable { cursor: pointer; }
+  table.data tr.clickable:hover td { background: var(--brand-wash); }
+
+  .pos-title { font-weight: 600; }
+  .pos-code { color: var(--text-muted); font-weight: 500; font-size: 11.5px; margin-left: 5px; }
+  td.cell-position { white-space: nowrap; }
+
+  .status-chip {
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+    background: #eee; color: var(--text-secondary);
+  }
+  .sla-chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+    padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+  }
+  .sla-chip.within { background: #e4f7e4; color: #0d6b0d; }
+  .sla-chip.risk { background: #fff3d6; color: #946200; }
+  .sla-chip.out { background: #fbe4e4; color: #a32424; }
+  .sla-chip.none { background: #eeeeee; color: #6b6b6b; }
+  .sla-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* ---------- Insert form ---------- */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field.full { grid-column: 1 / -1; }
+  .form-field label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .form-field input, .form-field select, .form-field textarea {
+    font-family: inherit; font-size: 13px; padding: 9px 11px;
+    border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  }
+  .form-field input:disabled { background: #f2f2f2; color: var(--text-muted); }
+  .form-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 18px;
+    border-radius: 9px; border: none; cursor: pointer;
+  }
+  .btn.primary { background: var(--brand); color: #fff; }
+  .btn.primary:hover { background: var(--brand-dark); }
+  .btn.ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn.small { padding: 7px 13px; font-size: 12.5px; }
+
+  .callout {
+    background: var(--brand-wash); border: 1px solid #f6c9b8; border-radius: var(--radius);
+    padding: 14px 16px; font-size: 12.5px; color: #6e2c17; margin-bottom: 18px; line-height: 1.5;
+  }
+  .callout b { color: #000; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ---------- Detail modal ---------- */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    align-items: flex-start; justify-content: center; padding: 40px 20px; z-index: 50; overflow-y: auto;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-card {
+    background: var(--surface-1); border-radius: var(--radius); box-shadow: var(--shadow);
+    width: 100%; max-width: 780px; padding: 22px 26px 26px;
+  }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+  .modal-head h2 { font-size: 18px; margin: 0; }
+  .modal-close { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 4px; }
+  .modal-close:hover { color: var(--text-primary); }
+  .modal-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+  .modal-note {
+    background: #f2f2f2; border-radius: 8px; padding: 8px 12px; font-size: 11.5px;
+    color: var(--text-secondary); margin-bottom: 18px;
+  }
+  .facts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; margin-bottom: 18px; }
+  .fact-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 3px; }
+  .fact-value { font-size: 13px; font-weight: 600; }
+  .sla-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+  .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
+  .sla-card .sla-name { font-size: 11.5px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .modal-section-title { font-size: 12.5px; font-weight: 700; margin: 0 0 8px; }
+  .status-update-row { display: flex; gap: 8px; align-items: center; margin-bottom: 18px; }
+  .timeline { list-style: none; margin: 0 0 14px; padding: 0; max-height: 220px; overflow-y: auto; }
+  .timeline li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
+  .timeline li:last-child { border-bottom: none; }
+  .timeline .tl-date { flex: none; width: 76px; color: var(--text-muted); font-size: 11px; padding-top: 1px; }
+  .timeline .tl-badge {
+    flex: none; font-size: 9.5px; font-weight: 700; text-transform: uppercase; padding: 2px 6px;
+    border-radius: 5px; height: fit-content; margin-top: 1px;
+  }
+  .timeline .tl-badge.auto { background: #ececec; color: var(--text-secondary); }
+  .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
+  .timeline .tl-text { flex: 1; }
+  .add-remark textarea {
+    width: 100%; font-family: inherit; font-size: 13px; padding: 9px 11px;
+    border: 1px solid var(--border); border-radius: 8px; resize: vertical; margin-bottom: 8px;
+  }
+
+  @media (max-width: 1080px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/msal/3.7.1/msal-browser.min.js"></script>
+</head>
+<body>
+<div class="viz-root" data-palette="#d97757">
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">IR</div>
+      <div class="brand-text">
+        <div class="l1">IRTH · TA TRACKER</div>
+        <div class="l2">Managed by Cornerstone</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-view="dashboard"><span class="nav-ic">▣</span> Dashboard</button>
+      <button class="nav-item" data-view="positions"><span class="nav-ic">▤</span> Positions</button>
+      <button class="nav-item" data-view="tracking"><span class="nav-ic">▥</span> Tracking</button>
+      <button class="nav-item" data-view="manage"><span class="nav-ic">＋</span> SSOT Management</button>
+    </nav>
+    <div class="sidebar-foot">
+      Source of truth: the team's shared Excel.<br>
+      This panel updates when the export is refreshed.
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="topbarTitle">Dashboard</h1>
+        <div class="sub" id="topbarSub">Overview of all active positions</div>
+      </div>
+      <div class="topbar-right">
+        <span class="pill" id="connectionPill">Not connected</span>
+        <button class="btn primary small" id="connectBtn" type="button">Connect Microsoft 365</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="banner-demo" id="demoBanner">
+        This view is showing sample data. Click "Connect Microsoft 365" above and sign in with your work account to load the real Excel data and enable saving.
+      </div>
+
+      <!-- ======================= DASHBOARD ======================= -->
+      <section class="view active" id="view-dashboard">
+        <div class="kpi-row" id="kpiRow"></div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Active pipeline by status</h3>
+            <div class="panel-sub">Open positions, grouped by funnel stage</div>
+            <div class="barlist" id="chartEstado"></div>
+          </div>
+          <div class="panel">
+            <h3>Recruiter workload</h3>
+            <div class="panel-sub">Active positions assigned today</div>
+            <div class="barlist" id="chartReclutador"></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <h3>SLA health</h3>
+            <div class="panel-sub">Distribution of active positions by SLA status, adjusted for exceptions</div>
+            <div id="chartSla"></div>
+          </div>
+          <div class="panel">
+            <h3>Hired by location (YTD)</h3>
+            <div class="panel-sub">Confirmed placements this year, by city</div>
+            <div class="barlist" id="chartHiredLoc"></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <h3>SLA compliance</h3>
+            <div class="panel-sub">% of active positions that are not out of SLA on any indicator today</div>
+            <div class="meter-wrap">
+              <div class="meter-value" id="meterValue">--%</div>
+              <div class="meter-track"><div class="meter-fill" id="meterFill" style="width:0%"></div></div>
+              <div class="meter-caption">Goal: keep this as close to 100% as possible</div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Hires per month (2026)</h3>
+            <div class="panel-sub">Confirmed placements per month, year to date</div>
+            <div id="chartHiresTrend"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= POSITIONS ======================= -->
+      <section class="view" id="view-positions">
+        <div class="panel">
+          <h3>Positions</h3>
+          <div class="panel-sub">Every position that exists in the system, in any status (includes closed, cancelled, and fell-through). This is the full directory, not the working tracker.</div>
+          <div class="toolbar">
+            <input type="text" id="positionsSearch" placeholder="Search by position, hiring manager, or recruiter…">
+            <select id="positionsStatus"><option value="">All statuses</option></select>
+            <select id="positionsRecruiter"><option value="">All recruiters</option></select>
+            <select id="positionsHM"><option value="">All hiring managers</option></select>
+            <select id="positionsLocation"><option value="">All locations</option></select>
+            <select id="positionsTTS"><option value="">TTS: all</option></select>
+            <select id="positionsTTF"><option value="">TTF: all</option></select>
+            <select id="positionsTTH"><option value="">TTH: all</option></select>
+            <select id="positionsPlacement"><option value="">Placement: all</option><option value="yes">Placement: yes</option><option value="no">Placement: no</option></select>
+            <span class="count" id="positionsCount"></span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="data" id="positionsTable">
+              <thead><tr>
+                <th>Position</th><th>Client</th><th>Hiring manager</th><th>Recruiter</th><th>Location</th><th>Status</th>
+                <th>TTS</th><th>TTF</th><th>TTH</th><th>Last remark</th><th>Placement</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= TRACKING ======================= -->
+      <section class="view" id="view-tracking">
+        <div class="panel">
+          <h3>Tracking</h3>
+          <div class="panel-sub">Codes, SLA, and the latest activity for every position, in one place. Click a row to open its detail, add a remark, or update its status.</div>
+          <div class="toolbar">
+            <input type="text" id="trackingSearch" placeholder="Search by position, hiring manager, or recruiter…">
+            <select id="trackingStatus"><option value="">All statuses</option></select>
+            <select id="trackingRecruiter"><option value="">All recruiters</option></select>
+            <select id="trackingTTS"><option value="">TTS: all</option></select>
+            <select id="trackingTTF"><option value="">TTF: all</option></select>
+            <select id="trackingTTH"><option value="">TTH: all</option></select>
+            <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+              <input type="checkbox" id="trackingOnlyActive"> Active only
+            </label>
+            <span class="count" id="trackingCount"></span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="data" id="trackingTable">
+              <thead><tr>
+                <th>Position</th><th>Recruiter</th><th>Status</th>
+                <th>TTS</th><th>TTF</th><th>TTH</th><th>Last update</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= SSOT MANAGEMENT ======================= -->
+      <section class="view" id="view-manage">
+        <div class="callout">
+          <b>How this section works:</b> this creates brand-new entities only (a new position or a new recruiter). It's not for updating an existing position, that happens from Tracking. Connect to Microsoft 365 with the button at the top to save what you create here straight to the shared Excel file.
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <h3>New position (requisition)</h3>
+            <div class="panel-sub">Added as a new row in the Positions sheet</div>
+            <div class="form-grid">
+              <div class="form-field"><label>Position title</label><input type="text" id="newPosTitle" placeholder="e.g. Backend Engineer"></div>
+              <div class="form-field"><label>Job code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
+              <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
+              <div class="form-field"><label>Hiring manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
+              <div class="form-field"><label>Assigned recruiter</label><select id="newPosRecruiter"><option>María Pérez</option><option>Carlos Ruiz</option><option>Laura Gómez</option><option>Juan Torres</option></select></div>
+              <div class="form-field"><label>Location</label><select id="newPosLocation"><option>Bogotá</option><option>Medellín</option><option>Remote LATAM</option><option>Mexico City</option></select></div>
+              <div class="form-field"><label>Initial status</label><select id="newPosStatus"><option>Sourcing</option></select></div>
+              <div class="form-field"><label>Intake meeting date</label><input type="date" id="newPosIntake"></div>
+              <div class="form-field full"><label>Initial remark (optional)</label><textarea rows="2" id="newPosRemark" placeholder="Kickoff context…"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn primary" type="button" id="createPositionBtn">Create position</button>
+              <button class="btn ghost" type="button" id="clearPositionBtn">Clear</button>
+            </div>
+            <div class="panel-sub" id="createPositionMsg" style="margin-top:8px;"></div>
+          </div>
+
+          <div class="panel">
+            <h3>New recruiter</h3>
+            <div class="panel-sub">Added to the recruiter list used across the app</div>
+            <div class="form-grid">
+              <div class="form-field full"><label>Full name</label><input type="text" id="newRecName" placeholder="e.g. Juan Torres"></div>
+              <div class="form-field full"><label>Email</label><input type="email" id="newRecEmail" placeholder="juan.torres@company.com"></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn primary" type="button" id="createRecruiterBtn">Add recruiter</button>
+              <button class="btn ghost" type="button" id="clearRecruiterBtn">Clear</button>
+            </div>
+            <div class="panel-sub" id="createRecruiterMsg" style="margin-top:8px;"></div>
+
+            <h3 style="margin-top:26px;">New status or holiday</h3>
+            <div class="panel-sub">Edits the shared configuration (Config sheet)</div>
+            <div class="form-grid">
+              <div class="form-field"><label>New status</label><input type="text" placeholder="e.g. Backfill"></div>
+              <div class="form-field"><label>New holiday</label><input type="date"></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn ghost" type="button" disabled title="Not connected yet, coming soon">Add to Config</button>
+            </div>
+            <div class="panel-sub" style="margin-top:8px;">Not wired up yet, statuses and holidays still need to be added directly in the Config sheet for now.</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ======================= POSITION DETAIL MODAL ======================= -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <h2 id="modalTitle">Position</h2>
+        <div class="modal-sub" id="modalSub"></div>
+      </div>
+      <button class="modal-close" id="modalClose" type="button">×</button>
+    </div>
+    <div class="modal-note" id="modalNote">Not connected to Microsoft 365 — updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the real Excel file.</div>
+
+    <div class="facts-grid" id="modalFacts"></div>
+
+    <div class="modal-section-title">SLA</div>
+    <div class="sla-grid" id="modalSlaGrid"></div>
+
+    <div class="modal-section-title">Update status</div>
+    <div class="status-update-row">
+      <select id="modalStatusSelect"></select>
+      <button class="btn primary small" id="modalStatusSave" type="button">Save status</button>
+    </div>
+
+    <div class="modal-section-title">Activity</div>
+    <ul class="timeline" id="modalTimeline"></ul>
+
+    <div class="modal-section-title">Add a remark</div>
+    <div class="add-remark">
+      <textarea id="modalRemarkText" rows="2" placeholder="What changed, what's next…"></textarea>
+      <button class="btn primary small" id="modalRemarkSave" type="button">Add remark</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   SAMPLE DATA (replace with the real Excel export)
+   ============================================================ */
+const STATUS_ORDER = ["Sourcing","Screening","Interviewing","Offer","Filled","Hired","Fell Through","On Hold","Cancelled"];
+const TERMINAL = ["Hired","Cancelled","Fell Through"];
+
+let RECRUITERS = ["María Pérez","Carlos Ruiz","Laura Gómez","Juan Torres"];
+let LOCATIONS = ["Bogotá","Medellín","Remote LATAM","Mexico City"];
+const CLIENT = "Irth Solutions";
+
+let POSITIONS = [
+  {id:"ENG-001", title:"Backend Engineer", client:"Irth Solutions", hiringManager:"David Chen", recruiter:"María Pérez", status:"Interviewing", location:"Bogotá", intake:"2026-08-10", submit:"2026-08-19", fill:null, hire:null, lastRemark:"Second technical interview scheduled for Thursday.", extra:[]},
+  {id:"DTA-001", title:"Data Analyst", client:"Irth Solutions", hiringManager:"Priya Nair", recruiter:"Carlos Ruiz", status:"Sourcing", location:"Medellín", intake:"2026-08-17", submit:null, fill:null, hire:null, lastRemark:"Search kicked off, first batch of candidates next week.", extra:[]},
+  {id:"ENG-002", title:"QA Engineer", client:"Irth Solutions", hiringManager:"David Chen", recruiter:"María Pérez", status:"Offer", location:"Remote LATAM", intake:"2026-07-27", submit:"2026-08-13", fill:null, hire:null, lastRemark:"Offer sent, waiting on the candidate's response.", extra:[]},
+  {id:"PM-001", title:"Product Manager", client:"Irth Solutions", hiringManager:"Robert Kim", recruiter:"Laura Gómez", status:"Screening", location:"Mexico City", intake:"2026-08-06", submit:null, fill:null, hire:null, lastRemark:"12 applicants under initial review.", extra:[]},
+  {id:"ENG-003", title:"DevOps Engineer", client:"Irth Solutions", hiringManager:"Priya Nair", recruiter:"Juan Torres", status:"Hired", location:"Bogotá", intake:"2026-03-10", submit:"2026-03-19", fill:"2026-04-20", hire:"2026-04-30", lastRemark:"Onboarding confirmed.", extra:[]},
+  {id:"SAL-001", title:"Sales Executive", client:"Irth Solutions", hiringManager:"Sandra Lee", recruiter:"Carlos Ruiz", status:"Fell Through", location:"Medellín", intake:"2026-04-01", submit:"2026-04-12", fill:"2026-05-01", hire:null, lastRemark:"Candidate backed out after signing. Client is deciding whether to reopen.", extra:[]},
+  {id:"ENG-004", title:"Frontend Engineer", client:"Irth Solutions", hiringManager:"David Chen", recruiter:"María Pérez", status:"Interviewing", location:"Remote LATAM", intake:"2026-07-20", submit:"2026-08-03", fill:null, hire:null, lastRemark:"3 candidates in the final panel.", extra:[]},
+  {id:"HR-001", title:"HR Business Partner", client:"Irth Solutions", hiringManager:"Robert Kim", recruiter:"Laura Gómez", status:"On Hold", location:"Mexico City", intake:"2026-06-15", submit:null, fill:null, hire:null, lastRemark:"Client paused the search due to an internal reorg.", extra:[]},
+  {id:"HR-002", title:"Internal Recruiter", client:"Irth Solutions", hiringManager:"Michael Torres", recruiter:"Juan Torres", status:"Sourcing", location:"Bogotá", intake:null, submit:null, fill:null, hire:null, lastRemark:"Kickoff done, intake meeting not scheduled yet.", extra:[]},
+  {id:"CS-001", title:"Customer Success Manager", client:"Irth Solutions", hiringManager:"Sandra Lee", recruiter:"Carlos Ruiz", status:"Filled", location:"Medellín", intake:"2026-06-01", submit:"2026-06-17", fill:"2026-07-31", hire:null, lastRemark:"Offer accepted, waiting on the start date.", extra:[]},
+  {id:"ENG-005", title:"Data Engineer", client:"Irth Solutions", hiringManager:"Priya Nair", recruiter:"María Pérez", status:"Hired", location:"Remote LATAM", intake:"2026-02-20", submit:"2026-03-02", fill:"2026-03-30", hire:"2026-04-15", lastRemark:"Closed, placement confirmed.", extra:[]},
+  {id:"UX-001", title:"UX Researcher", client:"Irth Solutions", hiringManager:"Robert Kim", recruiter:"Laura Gómez", status:"Cancelled", location:"Mexico City", intake:"2026-05-20", submit:null, fill:null, hire:null, lastRemark:"Client cancelled the position due to a headcount freeze.", extra:[]},
+  {id:"SAL-002", title:"Account Executive", client:"Irth Solutions", hiringManager:"Sandra Lee", recruiter:"Juan Torres", status:"Sourcing", location:"Bogotá", intake:null, submit:null, fill:null, hire:null, lastRemark:"Kickoff done, defining the profile with the hiring manager.", extra:[]},
+  {id:"ENG-006", title:"Site Reliability Engineer", client:"Irth Solutions", hiringManager:"David Chen", recruiter:"Carlos Ruiz", status:"Offer", location:"Medellín", intake:"2026-06-25", submit:"2026-07-08", fill:null, hire:null, lastRemark:"Negotiating the start date with the candidate.", extra:[]},
+  {id:"HR-003", title:"Talent Sourcer", client:"Irth Solutions", hiringManager:"Michael Torres", recruiter:"María Pérez", status:"Hired", location:"Bogotá", intake:"2026-01-15", submit:"2026-01-26", fill:"2026-02-20", hire:"2026-03-02", lastRemark:"Closed a few months ago, internal referral.", extra:[]},
+  {id:"ENG-007", title:"Machine Learning Engineer", client:"Irth Solutions", hiringManager:"Priya Nair", recruiter:"Carlos Ruiz", status:"Hired", location:"Remote LATAM", intake:"2025-11-10", submit:"2025-11-24", fill:"2025-12-20", hire:"2026-01-15", lastRemark:"Placement confirmed.", extra:[]},
+  {id:"DTA-002", title:"Financial Analyst", client:"Irth Solutions", hiringManager:"Robert Kim", recruiter:"Laura Gómez", status:"Hired", location:"Mexico City", intake:"2025-11-20", submit:"2025-12-03", fill:"2026-01-05", hire:"2026-01-28", lastRemark:"Placement confirmed.", extra:[]},
+  {id:"HR-004", title:"Technical Recruiter", client:"Irth Solutions", hiringManager:"Michael Torres", recruiter:"Juan Torres", status:"Hired", location:"Bogotá", intake:"2025-12-10", submit:"2025-12-22", fill:"2026-01-25", hire:"2026-02-18", lastRemark:"Placement confirmed.", extra:[]},
+  {id:"ENG-008", title:"Backend Engineer II", client:"Irth Solutions", hiringManager:"David Chen", recruiter:"María Pérez", status:"Hired", location:"Medellín", intake:"2026-01-08", submit:"2026-01-21", fill:"2026-02-20", hire:"2026-03-16", lastRemark:"Placement confirmed.", extra:[]},
+  {id:"DTA-003", title:"Supply Chain Analyst", client:"Irth Solutions", hiringManager:"Sandra Lee", recruiter:"Carlos Ruiz", status:"Hired", location:"Bogotá", intake:"2026-03-05", submit:"2026-03-18", fill:"2026-04-15", hire:"2026-05-14", lastRemark:"Placement confirmed.", extra:[]},
+  {id:"ENG-009", title:"Solutions Architect", client:"Irth Solutions", hiringManager:"Priya Nair", recruiter:"Laura Gómez", status:"Hired", location:"Remote LATAM", intake:"2026-04-13", submit:"2026-04-27", fill:"2026-05-25", hire:"2026-06-22", lastRemark:"Placement confirmed.", extra:[]},
+  {id:"HR-005", title:"Payroll Specialist", client:"Irth Solutions", hiringManager:"Robert Kim", recruiter:"Juan Torres", status:"Hired", location:"Mexico City", intake:"2026-05-20", submit:"2026-06-02", fill:"2026-06-29", hire:"2026-07-27", lastRemark:"Placement confirmed.", extra:[]},
+];
+
+let HOLIDAYS_SET = new Set(["2026-01-01","2026-01-12","2026-03-23","2026-04-02","2026-04-03","2026-05-01","2026-05-18","2026-06-08","2026-06-15","2026-06-29","2026-07-20","2026-08-07","2026-08-17","2026-10-12","2026-11-02","2026-11-16","2026-12-08","2026-12-25"]);
+let RISK_THRESHOLD = 0.85;
+let SLA_TARGETS = { TTS: 9, TTF: 45, TTH: 50 };
+// Fila (indice, 0-based dentro de la Tabla de Excel) donde vive cada posicion, para poder
+// hacer PATCH directo cuando esta conectado a Microsoft Graph. Se llena en loadFromGraph().
+let POSITIONS_ROW_INDEX = {};
+
+function parseD(s){ return s ? new Date(s+"T00:00:00") : null; }
+function isBizDay(d){ const w=d.getDay(); if(w===0||w===6) return false; const s=d.toISOString().slice(0,10); return !HOLIDAYS_SET.has(s); }
+function bizDaysBetween(start,end){
+  if(!start||!end) return null;
+  if(end<start) return 0;
+  let c=0; const d=new Date(start); d.setDate(d.getDate()+1);
+  while(d<=end){ if(isBizDay(d)) c++; d.setDate(d.getDate()+1); }
+  return c;
+}
+function slaFor(p, key, closeDateStr){
+  const intake = parseD(p.intake);
+  if(!intake) return {status:"none", elapsed:null, target:SLA_TARGETS[key]};
+  const close = parseD(closeDateStr);
+  const target = SLA_TARGETS[key];
+  const ref = close || new Date();
+  const elapsed = bizDaysBetween(intake, ref);
+  let status;
+  if(close){ status = elapsed<=target ? "within" : "out"; }
+  else if(elapsed>target) status="out";
+  else if(elapsed>=target*RISK_THRESHOLD) status="risk";
+  else status="within";
+  return {status, elapsed, target};
+}
+function computeSla(p){
+  return { TTS: slaFor(p,"TTS",p.submit), TTF: slaFor(p,"TTF",p.fill), TTH: slaFor(p,"TTH",p.hire) };
+}
+
+const STATUS_META = {
+  within: {label:"Within SLA", color:"var(--good)"},
+  risk: {label:"At risk", color:"var(--warning)"},
+  out: {label:"Out of SLA", color:"var(--critical)"},
+  none: {label:"Not started", color:"var(--neutral)"},
+};
+
+function posLabel(p){
+  return `<span class="pos-title">${p.title}</span><span class="pos-code">${p.id}</span>`;
+}
+
+/* ============================================================
+   DASHBOARD: KPIs + charts
+   ============================================================ */
+function renderKpis(){
+  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const hiredYtd = POSITIONS.filter(p=>p.status==="Hired").length;
+  let atRisk=0, outOfSla=0;
+  active.forEach(p=>{
+    const s = computeSla(p);
+    if(["TTS","TTF","TTH"].some(k=>s[k].status==="risk")) atRisk++;
+    if(["TTS","TTF","TTH"].some(k=>s[k].status==="out")) outOfSla++;
+  });
+  const fellThrough = POSITIONS.filter(p=>p.fill && p.status==="Fell Through").length;
+
+  const tiles = [
+    {label:"Active positions", value: active.length, cls:""},
+    {label:"Hired (YTD)", value: hiredYtd, cls:"good"},
+    {label:"Pending offers", value: POSITIONS.filter(p=>p.status==="Offer").length, cls:""},
+    {label:"At SLA risk", value: atRisk, cls: atRisk>0 ? "warning":""},
+    {label:"Out of SLA", value: outOfSla, cls: outOfSla>0 ? "critical":""},
+    {label:"Filled without Hire (risk)", value: fellThrough, cls: fellThrough>0 ? "critical":""},
+  ];
+  document.getElementById("kpiRow").innerHTML = tiles.map(t=>`
+    <div class="kpi-tile">
+      <div class="kpi-label">${t.label}</div>
+      <div class="kpi-value ${t.cls}">${t.value}</div>
+    </div>`).join("");
+}
+
+function renderBarlist(elId, rows, colorVar){
+  const max = Math.max(1, ...rows.map(r=>r.value));
+  document.getElementById(elId).innerHTML = rows.map(r=>`
+    <div class="barlist-row">
+      <div class="barlist-label" title="${r.label}">${r.label}</div>
+      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${colorVar};"></div></div>
+      <div class="barlist-value">${r.value}</div>
+    </div>`).join("");
+}
+
+function renderEstadoChart(){
+  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const stages = STATUS_ORDER.filter(s=>!TERMINAL.includes(s));
+  const ramp = ["var(--seq-200)","var(--seq-300)","var(--seq-400)","var(--seq-500)","var(--seq-600)"];
+  const counts = stages.map(s=>({label:s, value: active.filter(p=>p.status===s).length}));
+  const max = Math.max(1, ...counts.map(c=>c.value));
+  document.getElementById("chartEstado").innerHTML = counts.map((r,i)=>`
+    <div class="barlist-row">
+      <div class="barlist-label">${r.label}</div>
+      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${ramp[Math.min(i,ramp.length-1)]};"></div></div>
+      <div class="barlist-value">${r.value}</div>
+    </div>`).join("");
+}
+
+function renderReclutadorChart(){
+  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const rows = RECRUITERS.map(r=>({label:r, value: active.filter(p=>p.recruiter===r).length}))
+    .sort((a,b)=>b.value-a.value);
+  renderBarlist("chartReclutador", rows, "var(--brand)");
+}
+
+function renderHiredLocChart(){
+  const hired = POSITIONS.filter(p=>p.status==="Hired");
+  const rows = LOCATIONS.map(l=>({label:l, value: hired.filter(p=>p.location===l).length}))
+    .sort((a,b)=>b.value-a.value);
+  renderBarlist("chartHiredLoc", rows, "var(--brand)");
+}
+
+function renderSlaChart(){
+  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const metrics = [
+    {key:"TTS", label:"TTS", tag:"official", tagLabel:"Official SLA"},
+    {key:"TTF", label:"TTF", tag:"internal", tagLabel:"Internal goal"},
+    {key:"TTH", label:"TTH", tag:"internal", tagLabel:"Internal goal"},
+  ];
+  const html = metrics.map(m=>{
+    const counts = {within:0, risk:0, out:0, none:0};
+    active.forEach(p=>{ counts[computeSla(p)[m.key].status]++; });
+    const total = active.length || 1;
+    const seg = (k)=> `<div style="width:${(counts[k]/total*100).toFixed(2)}%; background:${STATUS_META[k].color};"></div>`;
+    return `
+      <div class="stackbar-wrap">
+        <div class="stackbar-title">
+          <span><b>${m.label}</b></span>
+          <span class="tag ${m.tag}">${m.tagLabel}</span>
+        </div>
+        <div class="stackbar">${seg("within")}${seg("risk")}${seg("out")}${seg("none")}</div>
+      </div>`;
+  }).join("");
+  document.getElementById("chartSla").innerHTML = html + `
+    <div class="stackbar-legend">
+      <span><span class="dot" style="background:var(--good)"></span>Within SLA</span>
+      <span><span class="dot" style="background:var(--warning)"></span>At risk</span>
+      <span><span class="dot" style="background:var(--critical)"></span>Out of SLA</span>
+      <span><span class="dot" style="background:var(--neutral)"></span>Not started</span>
+    </div>`;
+}
+
+function renderSlaMeter(){
+  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  let outOfSla = 0;
+  active.forEach(p=>{
+    const s = computeSla(p);
+    if(["TTS","TTF","TTH"].some(k=>s[k].status==="out")) outOfSla++;
+  });
+  const rate = active.length ? Math.round(((active.length - outOfSla) / active.length) * 100) : 100;
+  let color = "var(--good)";
+  if(rate < 75) color = "var(--critical)";
+  else if(rate < 90) color = "var(--warning)";
+  const fillEl = document.getElementById("meterFill");
+  fillEl.style.width = rate + "%";
+  fillEl.style.background = color;
+  document.getElementById("meterValue").textContent = rate + "%";
+  document.getElementById("meterValue").style.color = color;
+}
+
+function renderHiresTrend(){
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug"];
+  const counts = new Array(months.length).fill(0);
+  POSITIONS.filter(p=>p.status==="Hired" && p.hire).forEach(p=>{
+    const d = parseD(p.hire);
+    if(d.getFullYear()===2026 && d.getMonth() < months.length) counts[d.getMonth()]++;
+  });
+
+  const w=560, h=190, padL=30, padR=16, padT=18, padB=26;
+  const rawMax = Math.max(...counts, 1);
+  const niceMax = Math.max(2, Math.ceil(rawMax/2)*2);
+  const stepX = (w - padL - padR) / (months.length - 1);
+  const yFor = v => padT + (h - padT - padB) * (1 - v/niceMax);
+  const points = counts.map((v,i)=>({x: padL + i*stepX, y: yFor(v), v}));
+
+  const linePath = points.map((p,i)=> (i===0?"M":"L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+  const baseY = (h - padB).toFixed(1);
+  const areaPath = linePath
+    + ` L${points[points.length-1].x.toFixed(1)},${baseY}`
+    + ` L${points[0].x.toFixed(1)},${baseY} Z`;
+
+  const gridVals = [0, niceMax/2, niceMax];
+  const gridLines = gridVals.map(v=>
+    `<line x1="${padL}" x2="${w-padR}" y1="${yFor(v).toFixed(1)}" y2="${yFor(v).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`
+  ).join("");
+  const gridLabels = gridVals.map(v=>
+    `<text x="${padL-8}" y="${(yFor(v)+4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--text-muted)">${v}</text>`
+  ).join("");
+  const xLabels = points.map((p,i)=>
+    `<text x="${p.x.toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="10" fill="var(--text-muted)">${months[i]}</text>`
+  ).join("");
+  const dots = points.map(p=>
+    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="2"/>`
+  ).join("");
+  const last = points[points.length-1];
+  const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary)">${last.v}</text>`;
+
+  document.getElementById("chartHiresTrend").innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
+      ${gridLines}
+      ${gridLabels}
+      <path d="${areaPath}" fill="var(--brand)" opacity="0.10" stroke="none"/>
+      <path d="${linePath}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+      ${endLabel}
+      ${xLabels}
+    </svg>`;
+}
+
+/* ============================================================
+   TABLE: Positions (full directory, no drill-down)
+   ============================================================ */
+function fillSelectOnce(sel, values){
+  if(sel.options.length<=1){
+    values.forEach(v=>{ const o=document.createElement("option"); o.value=v; o.textContent=v; sel.appendChild(o); });
+  }
+}
+
+const SLA_FILTER_OPTIONS = [["within","Within SLA"],["risk","At risk"],["out","Out of SLA"],["none","Not started"]];
+function fillSlaSelectOnce(sel){
+  if(sel.options.length<=1){
+    SLA_FILTER_OPTIONS.forEach(([v,l])=>{ const o=document.createElement("option"); o.value=v; o.textContent=l; sel.appendChild(o); });
+  }
+}
+
+function renderPositions(){
+  const statusSel = document.getElementById("positionsStatus");
+  const recSel = document.getElementById("positionsRecruiter");
+  const hmSel = document.getElementById("positionsHM");
+  const locSel = document.getElementById("positionsLocation");
+  const ttsSel = document.getElementById("positionsTTS");
+  const ttfSel = document.getElementById("positionsTTF");
+  const tthSel = document.getElementById("positionsTTH");
+  const placementSel = document.getElementById("positionsPlacement");
+  fillSelectOnce(statusSel, STATUS_ORDER);
+  fillSelectOnce(recSel, RECRUITERS);
+  fillSelectOnce(hmSel, [...new Set(POSITIONS.map(p=>p.hiringManager))].sort());
+  fillSelectOnce(locSel, LOCATIONS);
+  fillSlaSelectOnce(ttsSel);
+  fillSlaSelectOnce(ttfSel);
+  fillSlaSelectOnce(tthSel);
+
+  const q = document.getElementById("positionsSearch").value.trim().toLowerCase();
+  const est = statusSel.value, rec = recSel.value, hm = hmSel.value, loc = locSel.value;
+  const ttsF = ttsSel.value, ttfF = ttfSel.value, tthF = tthSel.value, placementF = placementSel.value;
+  const rows = POSITIONS.filter(p=>{
+    if(est && p.status!==est) return false;
+    if(rec && p.recruiter!==rec) return false;
+    if(hm && p.hiringManager!==hm) return false;
+    if(loc && p.location!==loc) return false;
+    if(placementF && (p.status==="Hired"?"yes":"no")!==placementF) return false;
+    if(ttsF || ttfF || tthF){
+      const s = computeSla(p);
+      if(ttsF && s.TTS.status!==ttsF) return false;
+      if(ttfF && s.TTF.status!==ttfF) return false;
+      if(tthF && s.TTH.status!==tthF) return false;
+    }
+    if(q && !(p.title.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.hiringManager.toLowerCase().includes(q) || p.recruiter.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  document.getElementById("positionsCount").textContent = rows.length + " positions";
+  document.querySelector("#positionsTable tbody").innerHTML = rows.map(p=>{
+    const s = computeSla(p);
+    return `
+    <tr>
+      <td class="cell-position">${posLabel(p)}</td><td>${p.client}</td><td>${p.hiringManager}</td><td>${p.recruiter}</td><td>${p.location}</td>
+      <td><span class="status-chip">${p.status}</span></td>
+      <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
+      <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${p.lastRemark||''}">${p.lastRemark||'—'}</td>
+      <td>${p.status==="Hired" ? "Yes" : "No"}</td>
+    </tr>`;
+  }).join("");
+}
+
+/* ============================================================
+   TABLE: Tracking (SLA + click-through detail)
+   ============================================================ */
+function slaChip(s){
+  const m = STATUS_META[s.status];
+  return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}</span>`;
+}
+function renderTracking(){
+  const statusSel = document.getElementById("trackingStatus");
+  const recSel = document.getElementById("trackingRecruiter");
+  const ttsSel = document.getElementById("trackingTTS");
+  const ttfSel = document.getElementById("trackingTTF");
+  const tthSel = document.getElementById("trackingTTH");
+  fillSelectOnce(statusSel, STATUS_ORDER);
+  fillSelectOnce(recSel, RECRUITERS);
+  fillSlaSelectOnce(ttsSel);
+  fillSlaSelectOnce(ttfSel);
+  fillSlaSelectOnce(tthSel);
+
+  const q = document.getElementById("trackingSearch").value.trim().toLowerCase();
+  const est = statusSel.value, rec = recSel.value;
+  const ttsF = ttsSel.value, ttfF = ttfSel.value, tthF = tthSel.value;
+  const onlyActive = document.getElementById("trackingOnlyActive").checked;
+  const rows = POSITIONS.filter(p=>{
+    if(onlyActive && TERMINAL.includes(p.status)) return false;
+    if(est && p.status!==est) return false;
+    if(rec && p.recruiter!==rec) return false;
+    if(ttsF || ttfF || tthF){
+      const s = computeSla(p);
+      if(ttsF && s.TTS.status!==ttsF) return false;
+      if(ttfF && s.TTF.status!==ttfF) return false;
+      if(tthF && s.TTH.status!==tthF) return false;
+    }
+    if(q && !(p.title.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.hiringManager.toLowerCase().includes(q) || p.recruiter.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  document.getElementById("trackingCount").textContent = rows.length + " positions";
+  document.querySelector("#trackingTable tbody").innerHTML = rows.map(p=>{
+    const s = computeSla(p);
+    const t = buildTimeline(p);
+    const last = t[t.length-1];
+    return `<tr class="clickable" data-id="${p.id}">
+      <td class="cell-position">${posLabel(p)}</td><td>${p.recruiter}</td>
+      <td><span class="status-chip">${p.status}</span></td>
+      <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
+      <td style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${last ? last.text : ''}">${last ? last.text : '—'}</td>
+    </tr>`;
+  }).join("");
+  document.querySelectorAll("#trackingTable tbody tr.clickable").forEach(tr=>{
+    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id));
+  });
+}
+
+/* ============================================================
+   Position detail: combined automatic + manual activity log
+   ============================================================ */
+function buildTimeline(p){
+  const entries = [];
+  if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
+  if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
+  if(p.fill)   entries.push({date:p.fill,   type:"auto", text:"Offer accepted — position filled."});
+  if(p.hire)   entries.push({date:p.hire,   type:"auto", text:"Placement confirmed — candidate hired."});
+  const manualDate = p.hire || p.fill || p.submit || p.intake;
+  if(manualDate && p.lastRemark) entries.push({date:manualDate, type:"manual", author:p.recruiter, text:p.lastRemark});
+  (p.extra || []).forEach(e=> entries.push(e));
+  return entries.filter(e=>e.date).sort((a,b)=>{
+    if(a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return (a.type==="auto"?0:1) - (b.type==="auto"?0:1);
+  });
+}
+
+let activeDetailId = null;
+
+function openDetailModal(id){
+  activeDetailId = id;
+  renderDetailModal();
+  document.getElementById("detailModal").classList.add("open");
+}
+function closeDetailModal(){
+  document.getElementById("detailModal").classList.remove("open");
+  activeDetailId = null;
+}
+function renderDetailModal(){
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  document.getElementById("modalTitle").innerHTML = posLabel(p);
+  document.getElementById("modalSub").textContent = `${p.client} · ${p.location}`;
+
+  const facts = [
+    {label:"Hiring manager", value:p.hiringManager},
+    {label:"Recruiter", value:p.recruiter},
+    {label:"Status", value:p.status},
+    {label:"Kickoff / intake", value:p.intake || "—"},
+    {label:"Submit date", value:p.submit || "—"},
+    {label:"Fill date", value:p.fill || "—"},
+    {label:"Hire date", value:p.hire || "—"},
+  ];
+  document.getElementById("modalFacts").innerHTML = facts.map(f=>`
+    <div><div class="fact-label">${f.label}</div><div class="fact-value">${f.value}</div></div>`).join("");
+
+  const s = computeSla(p);
+  const slaCards = [
+    {key:"TTS", label:"TTS", tag:"Official SLA"},
+    {key:"TTF", label:"TTF", tag:"Internal goal"},
+    {key:"TTH", label:"TTH", tag:"Internal goal"},
+  ];
+  document.getElementById("modalSlaGrid").innerHTML = slaCards.map(c=>`
+    <div class="sla-card">
+      <div class="sla-name"><span>${c.label}</span><span class="tag ${c.tag==="Official SLA"?"official":"internal"}">${c.tag}</span></div>
+      ${slaChip(s[c.key])}
+    </div>`).join("");
+
+  const statusSelect = document.getElementById("modalStatusSelect");
+  statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${st}" ${st===p.status?"selected":""}>${st}</option>`).join("");
+
+  const timeline = buildTimeline(p).slice().reverse();
+  document.getElementById("modalTimeline").innerHTML = timeline.length ? timeline.map(e=>`
+    <li>
+      <span class="tl-date">${e.date}</span>
+      <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
+      <span class="tl-text">${e.text}${e.author?` <span style="color:var(--text-muted);">— ${e.author}</span>`:""}</span>
+    </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity logged yet.</li>`;
+
+  document.getElementById("modalRemarkText").value = "";
+}
+
+async function saveModalStatus(){
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const newStatus = document.getElementById("modalStatusSelect").value;
+  if(newStatus !== p.status){
+    const oldStatus = p.status;
+    const remarkText = `Status changed from ${oldStatus} to ${newStatus}.`;
+    p.extra = p.extra || [];
+    p.extra.push({date: new Date().toISOString().slice(0,10), type:"manual", author:"You", text:remarkText});
+    p.status = newStatus;
+    renderDetailModal();
+    renderPositions();
+    renderTracking();
+    renderKpis();
+    renderEstadoChart();
+    renderReclutadorChart();
+    renderHiredLocChart();
+    renderSlaChart();
+    renderSlaMeter();
+    if(isConnected()){
+      try {
+        await graphUpdatePositionField(p.id, "G", newStatus);
+        await graphAppendHistorial(p.id, p.title, remarkText, "You");
+      } catch(err){
+        console.error(err);
+        alert("Could not save the status change to Excel. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
+      }
+    }
+  }
+}
+async function saveModalRemark(){
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const text = document.getElementById("modalRemarkText").value.trim();
+  if(!text) return;
+  p.extra = p.extra || [];
+  p.extra.push({date: new Date().toISOString().slice(0,10), type:"manual", author:"You", text});
+  p.lastRemark = text;
+  renderDetailModal();
+  renderTracking();
+  renderPositions();
+  if(isConnected()){
+    try {
+      await graphUpdatePositionField(p.id, "X", text);
+      await graphAppendHistorial(p.id, p.title, text, "You");
+    } catch(err){
+      console.error(err);
+      alert("Could not save the remark to Excel. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
+    }
+  }
+}
+
+document.getElementById("modalClose").addEventListener("click", closeDetailModal);
+document.getElementById("detailModal").addEventListener("click", (e)=>{ if(e.target.id==="detailModal") closeDetailModal(); });
+document.getElementById("modalStatusSave").addEventListener("click", saveModalStatus);
+document.getElementById("modalRemarkSave").addEventListener("click", saveModalRemark);
+
+/* ============================================================
+   Navigation
+   ============================================================ */
+const TITLES = {
+  dashboard: ["Dashboard", "Overview of all active positions"],
+  positions: ["Positions", "Every requisition that exists, in any status"],
+  tracking: ["Tracking", "Codes, SLA, and the latest activity per position"],
+  manage: ["SSOT Management", "Add new positions, recruiters, and configuration"],
+};
+document.querySelectorAll(".nav-item").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".nav-item").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const view = btn.dataset.view;
+    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+    document.getElementById("view-"+view).classList.add("active");
+    document.getElementById("topbarTitle").textContent = TITLES[view][0];
+    document.getElementById("topbarSub").textContent = TITLES[view][1];
+  });
+});
+
+document.getElementById("positionsSearch").addEventListener("input", renderPositions);
+document.getElementById("positionsStatus").addEventListener("change", renderPositions);
+document.getElementById("positionsRecruiter").addEventListener("change", renderPositions);
+document.getElementById("positionsHM").addEventListener("change", renderPositions);
+document.getElementById("positionsLocation").addEventListener("change", renderPositions);
+document.getElementById("positionsTTS").addEventListener("change", renderPositions);
+document.getElementById("positionsTTF").addEventListener("change", renderPositions);
+document.getElementById("positionsTTH").addEventListener("change", renderPositions);
+document.getElementById("positionsPlacement").addEventListener("change", renderPositions);
+
+document.getElementById("trackingSearch").addEventListener("input", renderTracking);
+document.getElementById("trackingStatus").addEventListener("change", renderTracking);
+document.getElementById("trackingRecruiter").addEventListener("change", renderTracking);
+document.getElementById("trackingTTS").addEventListener("change", renderTracking);
+document.getElementById("trackingTTF").addEventListener("change", renderTracking);
+document.getElementById("trackingTTH").addEventListener("change", renderTracking);
+document.getElementById("trackingOnlyActive").addEventListener("change", renderTracking);
+
+/* ============================================================
+   Init (datos locales / de ejemplo)
+   ============================================================ */
+function renderAll(){
+  renderKpis();
+  renderEstadoChart();
+  renderReclutadorChart();
+  renderHiredLocChart();
+  renderSlaChart();
+  renderSlaMeter();
+  renderHiresTrend();
+  renderPositions();
+  renderTracking();
+}
+renderAll();
+
+/* ============================================================
+   MICROSOFT 365 / GRAPH INTEGRATION
+   Conecta este dashboard directamente al TA_Tracker.xlsx en OneDrive,
+   vía MSAL.js (login en el navegador) + Microsoft Graph (leer y escribir
+   las Tablas de Excel). No hay backend, todo corre en este archivo.
+   ============================================================ */
+const MSAL_CONFIG = {
+  auth: {
+    clientId: "218de17a-fdce-4e90-a75f-65d09250ba9e",
+    authority: "https://login.microsoftonline.com/242ae368-a0e0-411f-9c46-cf0c4f7fa575",
+    redirectUri: "https://iot-db.github.io/ta-tracker-dashboard/",
+  },
+  cache: { cacheLocation: "sessionStorage" },
+};
+// Ruta del archivo dentro de "mi OneDrive" (root). Si mas adelante se mueve a un
+// sitio de SharePoint compartido, esta es la unica seccion que hay que cambiar.
+const EXCEL_FILE_PATH = "/TA Tracker/TA_Tracker.xlsx";
+const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite"];
+
+const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+let graphAccount = null;
+
+function isConnected(){ return !!graphAccount; }
+
+function setConnectionUi(connected, label){
+  const pill = document.getElementById("connectionPill");
+  const btn = document.getElementById("connectBtn");
+  const banner = document.getElementById("demoBanner");
+  const modalNote = document.getElementById("modalNote");
+  if(connected){
+    pill.textContent = label || "Connected";
+    pill.classList.remove("demo");
+    pill.style.background = "var(--brand-wash)";
+    pill.style.color = "var(--brand-dark)";
+    btn.textContent = "Reload from Excel";
+    banner.style.display = "none";
+    modalNote.textContent = "Connected to Microsoft 365 — changes here are saved straight to the shared Excel file.";
+  } else {
+    pill.textContent = "Not connected";
+    btn.textContent = "Connect Microsoft 365";
+    banner.style.display = "";
+    modalNote.textContent = 'Not connected to Microsoft 365 — updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the real Excel file.';
+  }
+}
+
+async function getGraphToken(){
+  if(!graphAccount) throw new Error("Not signed in.");
+  try {
+    const result = await msalInstance.acquireTokenSilent({ scopes: GRAPH_SCOPES, account: graphAccount });
+    return result.accessToken;
+  } catch(err){
+    const result = await msalInstance.acquireTokenPopup({ scopes: GRAPH_SCOPES });
+    return result.accessToken;
+  }
+}
+
+async function graphFetch(path, options = {}){
+  const token = await getGraphToken();
+  const res = await fetch("https://graph.microsoft.com/v1.0" + path, {
+    ...options,
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  if(!res.ok){
+    const body = await res.text();
+    throw new Error(`Graph API error (${res.status}): ${body.slice(0,300)}`);
+  }
+  if(res.status === 204) return null;
+  return res.json();
+}
+
+function filePathSegment(){
+  // Codifica el path para usarlo dentro de la URL de Graph: /me/drive/root:{path}:/workbook/...
+  return EXCEL_FILE_PATH.split("/").map(encodeURIComponent).join("/");
+}
+function workbookBase(){
+  return `/me/drive/root:${filePathSegment()}:/workbook`;
+}
+
+async function connectM365(){
+  const btn = document.getElementById("connectBtn");
+  btn.disabled = true;
+  try {
+    if(!graphAccount){
+      const loginResult = await msalInstance.loginPopup({ scopes: GRAPH_SCOPES });
+      graphAccount = loginResult.account;
+    }
+    setConnectionUi(true, "Connecting…");
+    await loadFromGraph();
+    setConnectionUi(true, "Connected: " + (graphAccount.username || "Microsoft 365"));
+  } catch(err){
+    console.error(err);
+    alert("Could not connect to Microsoft 365.\n\n" + err.message);
+    setConnectionUi(false);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function trysilentConnect(){
+  const accounts = msalInstance.getAllAccounts();
+  if(accounts.length === 0) return;
+  graphAccount = accounts[0];
+  try {
+    setConnectionUi(true, "Connecting…");
+    await loadFromGraph();
+    setConnectionUi(true, "Connected: " + (graphAccount.username || "Microsoft 365"));
+  } catch(err){
+    console.error(err);
+    graphAccount = null;
+    setConnectionUi(false);
+  }
+}
+
+function rowsToObjects(headerRow, rows){
+  return rows.map(r => {
+    const o = {};
+    headerRow.forEach((h, i) => { o[h] = r[i]; });
+    return o;
+  });
+}
+function excelValToDateStr(v){
+  if(v === null || v === undefined || v === "") return null;
+  if(typeof v === "string") return v.slice(0,10);
+  return null;
+}
+
+async function loadFromGraph(){
+  // Positions
+  const posResp = await graphFetch(`${workbookBase()}/tables('PositionsTable')/rows?$select=values`);
+  const posHeaderResp = await graphFetch(`${workbookBase()}/tables('PositionsTable')/headerRowRange`);
+  const posHeaders = posHeaderResp.values[0];
+  const posRows = posResp.value.map(r => r.values[0]);
+
+  const idx = (name) => posHeaders.indexOf(name);
+  const newPositions = posRows.map((r, rowNum) => {
+    const id = r[idx("Position ID")];
+    POSITIONS_ROW_INDEX[id] = rowNum;
+    return {
+      id,
+      title: r[idx("Position Title")],
+      client: r[idx("Client")],
+      hiringManager: r[idx("Hiring Manager")],
+      recruiter: r[idx("Recruiter")],
+      status: r[idx("Status")],
+      location: r[idx("Location")],
+      intake: excelValToDateStr(r[idx("Intake Date")]),
+      submit: excelValToDateStr(r[idx("Submit Date")]),
+      fill: excelValToDateStr(r[idx("Fill Date")]),
+      hire: excelValToDateStr(r[idx("Hire Date")]),
+      lastRemark: r[idx("Last Remark")],
+      extra: [],
+    };
+  }).filter(p => p.id);
+
+  // Historial: se usa para reemplazar el ultimo remark por el mas reciente real
+  try {
+    const histResp = await graphFetch(`${workbookBase()}/tables('HistorialTable')/rows?$select=values`);
+    const histHeaderResp = await graphFetch(`${workbookBase()}/tables('HistorialTable')/headerRowRange`);
+    const histHeaders = histHeaderResp.values[0];
+    const hIdx = (name) => histHeaders.indexOf(name);
+    const validIds = new Set(newPositions.map(p => p.id));
+    const latestByPos = {};
+    histResp.value.forEach(r => {
+      const row = r.values[0];
+      const pid = row[hIdx("Position ID")];
+      if(!validIds.has(pid)) return;
+      const dateStr = excelValToDateStr(row[hIdx("Date")]);
+      const remark = row[hIdx("Remark")];
+      if(!remark) return;
+      if(!latestByPos[pid] || (dateStr && dateStr >= latestByPos[pid].date)){
+        latestByPos[pid] = { date: dateStr, remark };
+      }
+    });
+    newPositions.forEach(p => { if(latestByPos[p.id]) p.lastRemark = latestByPos[p.id].remark; });
+  } catch(err){ console.warn("Could not load Historial (non-fatal):", err); }
+
+  // Recruiters
+  try {
+    const recResp = await graphFetch(`${workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
+    const newRecruiters = recResp.value.map(r => r.values[0][0]).filter(Boolean);
+    if(newRecruiters.length) RECRUITERS = newRecruiters;
+  } catch(err){ console.warn("Could not load Recruiters (non-fatal):", err); }
+
+  LOCATIONS = [...new Set(newPositions.map(p => p.location).filter(Boolean))];
+  POSITIONS = newPositions;
+  renderAll();
+}
+
+async function graphUpdatePositionField(positionId, columnLetter, value){
+  const rowIndex = POSITIONS_ROW_INDEX[positionId];
+  if(rowIndex === undefined) throw new Error("Position not found in the loaded table, reload from Excel first.");
+  // PATCH directo sobre la celda (fuera de la Tabla, usando range del worksheet) es mas
+  // simple que recalcular columnas dentro de la Tabla; la fila de datos empieza en la 2.
+  const excelRow = rowIndex + 2;
+  const address = `${columnLetter}${excelRow}`;
+  await graphFetch(`${workbookBase()}/worksheets('Positions')/range(address='${address}')`, {
+    method: "PATCH",
+    body: JSON.stringify({ values: [[value]] }),
+  });
+}
+
+async function graphAppendHistorial(positionId, positionTitle, remark, author){
+  const today = new Date().toISOString().slice(0,10);
+  await graphFetch(`${workbookBase()}/tables('HistorialTable')/rows/add`, {
+    method: "POST",
+    body: JSON.stringify({
+      values: [[positionId, `${positionTitle} ${positionId}`, today, "manual", remark, author]],
+    }),
+  });
+}
+
+async function graphAppendPosition(row){
+  await graphFetch(`${workbookBase()}/tables('PositionsTable')/rows/add`, {
+    method: "POST",
+    body: JSON.stringify({ values: [row] }),
+  });
+}
+
+async function graphAppendRecruiter(name, email){
+  await graphFetch(`${workbookBase()}/tables('RecruitersTable')/rows/add`, {
+    method: "POST",
+    body: JSON.stringify({ values: [[name, email || "", "Yes"]] }),
+  });
+}
+
+document.getElementById("connectBtn").addEventListener("click", connectM365);
+setConnectionUi(false);
+trysilentConnect();
+
+/* ---- SSOT Management: crear posicion / reclutador ---- */
+document.getElementById("createPositionBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("createPositionMsg");
+  const title = document.getElementById("newPosTitle").value.trim();
+  const code = document.getElementById("newPosCode").value.trim();
+  const hm = document.getElementById("newPosHM").value.trim();
+  const recruiter = document.getElementById("newPosRecruiter").value;
+  const location = document.getElementById("newPosLocation").value;
+  const status = document.getElementById("newPosStatus").value || "Sourcing";
+  const intake = document.getElementById("newPosIntake").value || null;
+  const remark = document.getElementById("newPosRemark").value.trim();
+
+  if(!title || !code){
+    msg.textContent = "Position title and job code are required.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(!isConnected()){
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to save this to Excel.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  msg.textContent = "Saving…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    // Orden de columnas A a Z de PositionsTable (ver build_tracker.py):
+    // ID, Title, Client, HM, Recruiter, Location, Status, Intake, Submit, Fill, Hire,
+    // luego las 12 columnas de formula (L a W, se dejan vacias, se autocalculan),
+    // Active, Placement, SLACompliant, LastRemark, LastRemarkDate, SLAException
+    const row = [
+      code, title, "Irth Solutions", hm, recruiter, location, status, intake, null, null, null,
+      null,null,null,null,null,null,null,null,null,null,null,
+      remark || "", intake, "No",
+    ];
+    await graphAppendPosition(row);
+    msg.textContent = "Position created. Reloading data…";
+    msg.style.color = "var(--good)";
+    await loadFromGraph();
+    document.getElementById("newPosTitle").value = "";
+    document.getElementById("newPosCode").value = "";
+    document.getElementById("newPosHM").value = "";
+    document.getElementById("newPosRemark").value = "";
+    msg.textContent = "Position created and loaded.";
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not save: " + err.message;
+    msg.style.color = "var(--critical)";
+  }
+});
+document.getElementById("clearPositionBtn").addEventListener("click", () => {
+  ["newPosTitle","newPosCode","newPosHM","newPosRemark","newPosIntake"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("createPositionMsg").textContent = "";
+});
+
+document.getElementById("createRecruiterBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("createRecruiterMsg");
+  const name = document.getElementById("newRecName").value.trim();
+  const email = document.getElementById("newRecEmail").value.trim();
+  if(!name){
+    msg.textContent = "Full name is required.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(!isConnected()){
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to save this to Excel.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  msg.textContent = "Saving…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    await graphAppendRecruiter(name, email);
+    msg.textContent = "Recruiter added. Reloading data…";
+    msg.style.color = "var(--good)";
+    await loadFromGraph();
+    document.getElementById("newRecName").value = "";
+    document.getElementById("newRecEmail").value = "";
+    msg.textContent = "Recruiter added and loaded.";
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not save: " + err.message;
+    msg.style.color = "var(--critical)";
+  }
+});
+document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
+  ["newRecName","newRecEmail"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("createRecruiterMsg").textContent = "";
+});
+</script>
+</body>
+</html>
