@@ -781,6 +781,14 @@ const STATUS_META = {
   out: {label:"Out of SLA", color:"var(--critical)"},
   none: {label:"Not started", color:"var(--neutral)"},
 };
+const STATUS_WORD = {within:"Within SLA", risk:"At Risk", out:"Out Of SLA", none:"Not Started"};
+// Lista de banderas (con emoji) de cuales de las 3 SLAs de una posicion estan mal, para
+// mostrar "por que" en los quick lists de KPIs/Needs Attention en vez de solo "la peor".
+function slaFlags(p){
+  const s = computeSla(p);
+  return ["TTS","TTF","TTH"].filter(k=>s[k].status==="risk"||s[k].status==="out")
+    .map(k=>`🚩 ${k}: ${STATUS_WORD[s[k].status]}`).join(" · ") || "No SLA issues";
+}
 
 function posLabel(p){
   return `<span class="pos-title">${p.title}</span><span class="pos-code">${p.id}</span>`;
@@ -831,16 +839,25 @@ function renderKpis(){
     {label:"Active Positions", value: active.length, cls:""},
     {label:"Submitted Vs Expected", value: submittedTotal, cls: submittedCls, sub: active.length ? `Expected ≥${minExpected} for ${active.length} active` : ""},
     {label:"Offers Pending Decision", value: POSITIONS.filter(p=>p.status==="Offer Request").length, cls:""},
-    {label:"At SLA Risk", value: atRisk, cls: atRisk>0 ? "warning":""},
-    {label:"Out Of SLA", value: outOfSla, cls: outOfSla>0 ? "critical":""},
+    {label:"At SLA Risk", value: atRisk, cls: atRisk>0 ? "warning":"", onClick: atRisk>0 ? ()=>{
+      const matches = active.filter(p=>["TTS","TTF","TTH"].some(k=>computeSla(p)[k].status==="risk"));
+      openQuickList("At SLA Risk", `${matches.length} position${matches.length===1?"":"s"}`, matches, slaFlags);
+    } : null},
+    {label:"Out Of SLA", value: outOfSla, cls: outOfSla>0 ? "critical":"", onClick: outOfSla>0 ? ()=>{
+      const matches = active.filter(p=>["TTS","TTF","TTH"].some(k=>computeSla(p)[k].status==="out"));
+      openQuickList("Out Of SLA", `${matches.length} position${matches.length===1?"":"s"}`, matches, slaFlags);
+    } : null},
     {label:"Offers Fell Through", value: fellThrough, cls: fellThrough>0 ? "critical":""},
   ];
-  document.getElementById("kpiRow").innerHTML = tiles.map(t=>`
-    <div class="kpi-tile">
+  document.getElementById("kpiRow").innerHTML = tiles.map((t,i)=>`
+    <div class="kpi-tile${t.onClick?' clickable-stat':''}" data-idx="${i}">
       <div class="kpi-label">${t.label}</div>
       <div class="kpi-value ${t.cls}">${t.value}</div>
       ${t.sub ? `<div class="kpi-sub">${t.sub}</div>` : ""}
     </div>`).join("");
+  document.querySelectorAll("#kpiRow .kpi-tile").forEach((el,i)=>{
+    if(tiles[i].onClick) el.addEventListener("click", tiles[i].onClick);
+  });
 }
 
 function renderBarlist(elId, rows, colorVar, onClickRow){
@@ -880,13 +897,17 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
     </div>`).join("");
   const centerValue = centerOverride ? centerOverride.value : total;
   const centerLabel = centerOverride ? centerOverride.label : (totalLabel || "Total");
+  // El texto del centro escala con el tamaño real del donut (antes era casi fijo), para que
+  // no quede apretado cuando el donut se dibuja chico (ej. 70px en Position By Location).
+  const valueFontSize = Math.max(12, Math.round(size * 0.18));
+  const labelFontSize = Math.max(8, Math.round(size * 0.10));
   document.getElementById(elId).innerHTML = `
     <div class="donut-wrap">
       <div class="donut-svg-wrap" style="width:${size}px; height:${size}px;">
         <svg viewBox="0 0 120 120">${arcs}</svg>
         <div class="donut-center">
-          <div class="donut-center-value" style="font-size:${size<120?18:22}px;">${centerValue}</div>
-          <div class="donut-center-label">${centerLabel}</div>
+          <div class="donut-center-value" style="font-size:${valueFontSize}px;">${centerValue}</div>
+          <div class="donut-center-label" style="font-size:${labelFontSize}px;">${centerLabel}</div>
         </div>
       </div>
       <div class="donut-legend">${legend}</div>
@@ -997,7 +1018,6 @@ function renderSlaChart(){
     {key:"TTF", label:"Time To Fill (TTF)", tag:"internal", tagLabel:"Internal Goal"},
     {key:"TTH", label:"Time To Hire (TTH)", tag:"internal", tagLabel:"Internal Goal"},
   ];
-  const STATUS_WORD = {within:"Within SLA", risk:"At Risk", out:"Out Of SLA", none:"Not Started"};
   const html = metrics.map(m=>{
     const counts = {within:0, risk:0, out:0, none:0};
     active.forEach(p=>{ counts[computeSla(p)[m.key].status]++; });
@@ -1300,10 +1320,13 @@ function renderNeedsAttention(){
     return;
   }
   list.innerHTML = rows.map(({p, s, worstKey})=>`
-    <div class="pending-offer-row">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${p.lastRemark ? p.lastRemark.slice(0,90) : "No remark yet"}</div></div>
+    <div class="pending-offer-row clickable-stat" data-id="${p.id}">
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${slaFlags(p)}</div></div>
       ${slaChip(s[worstKey])}
     </div>`).join("");
+  list.querySelectorAll(".pending-offer-row").forEach(row=>{
+    row.addEventListener("click", ()=> openDetailModal(row.dataset.id));
+  });
 }
 function renderTracking(){
   renderNeedsAttention();
@@ -1400,13 +1423,14 @@ function closeDetailModal(){
 // o fila de lista (SLA Health, Active Pipeline By Status, Active Workload By Recruiter,
 // Placements This Month, Positions By Location...). Muestra una lista corta de las
 // posiciones que cumplen ese criterio; cada fila abre el modal de detalle completo de esa posicion.
-function openQuickList(title, sub, positions){
+function openQuickList(title, sub, positions, subLineFn){
   document.getElementById("quickListTitle").textContent = title;
   document.getElementById("quickListSub").textContent = sub || `${positions.length} position${positions.length===1?"":"s"}`;
   const body = document.getElementById("quickListBody");
+  const subLine = subLineFn || (p => `${p.recruiter} · ${locationOnly(p)}`);
   body.innerHTML = positions.length ? positions.map(p => `
     <div class="quick-list-row" data-id="${p.id}">
-      <div>${posLabel(p)}<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${locationOnly(p)}</div></div>
+      <div>${posLabel(p)}<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${subLine(p)}</div></div>
       ${statusChip(p.status)}
     </div>`).join("") : `<div class="panel-sub" style="margin:0;">Nothing matches this right now.</div>`;
   body.querySelectorAll(".quick-list-row").forEach(row=>{
