@@ -109,12 +109,21 @@
 
   .content { padding: 22px 24px 60px; max-width: 1320px; margin: 0 auto; width: 100%; }
 
-  .banner-demo {
-    background: rgba(211,163,85,0.08); border: 1px solid rgba(211,163,85,0.28); color: var(--warning);
+  /* Sistema de alertas reutilizable: cualquier aviso/advertencia en el tracker (banner de
+     pagina completa o nota chiquita dentro de un modal) debe usar .alert-banner + un nivel
+     (tier-yellow/tier-orange/tier-red) segun que tan grave sea, en vez de estilos sueltos. */
+  .alert-banner {
     border-radius: var(--radius); padding: 8px 14px; font-size: 11px; font-weight: 700 !important;
-    margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+    margin-bottom: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid; line-height: 1.4;
   }
-  .banner-demo::before { content: "⚠"; font-size: 12px; }
+  .alert-banner::before { content: "⚠"; font-size: 12px; flex: none; }
+  .alert-banner.tier-yellow { background: rgba(211,163,85,0.08); border-color: rgba(211,163,85,0.28); color: var(--warning); }
+  .alert-banner.tier-orange { background: rgba(217,119,87,0.10); border-color: rgba(217,119,87,0.32); color: var(--brand-dark); }
+  .alert-banner.tier-red { background: rgba(193,116,102,0.10); border-color: rgba(193,116,102,0.36); color: var(--critical); }
+  .alert-banner.tier-red::before { content: "⛔"; }
+  .alert-banner.tier-good { background: rgba(123,184,126,0.08); border-color: rgba(123,184,126,0.28); color: var(--good); }
+  .alert-banner.tier-good::before { content: "✓"; }
+  .alert-banner.compact { font-size: 10.5px; margin-bottom: 18px; }
 
   /* ---------- KPI tiles ---------- */
   .kpi-row {
@@ -125,7 +134,7 @@
     background: var(--surface-1); border-radius: var(--radius);
     box-shadow: var(--shadow); padding: 14px 16px; border: 1px solid var(--border);
   }
-  .kpi-label { font-size: 11.5px; color: var(--text-secondary); margin-bottom: 6px; }
+  .kpi-label { font-size: 13.5px; color: var(--text-primary); font-weight: 700; margin-bottom: 6px; }
   .kpi-value { font-size: 24px; font-weight: 700; line-height: 1; }
   .kpi-value.good { color: var(--good); }
   .kpi-value.warning { color: var(--warning); }
@@ -136,8 +145,9 @@
   .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
   /* Layout tipo "masonry" para el Dashboard: los paneles se acomodan sin dejar huecos
      cuando un vecino es mas corto (a diferencia de un grid de filas fijas). */
-  .masonry-2col { column-count: 2; column-gap: 16px; }
-  .masonry-2col .panel { break-inside: avoid; margin-bottom: 16px; }
+  .dash-cols { display: flex; gap: 16px; align-items: stretch; }
+  .dash-col { display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 0; }
+  .dash-col .panel:last-child { flex: 1; display: flex; flex-direction: column; }
 
   .panel {
     background: var(--surface-1); border-radius: var(--radius);
@@ -146,14 +156,14 @@
   .panel h3 { font-size: 13.5px; margin: 0 0 2px; font-weight: 700; }
   .panel .panel-sub { font-size: 11.5px; color: var(--text-muted); margin-bottom: 14px; }
 
-  .barlist { display: flex; flex-direction: column; gap: 10px; }
+  .barlist { display: flex; flex-direction: column; gap: 6px; }
   .barlist-row { display: grid; grid-template-columns: 108px 1fr 34px; align-items: center; gap: 10px; }
   .barlist-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .barlist-track { position: relative; height: 16px; background: var(--grid); border-radius: 4px; overflow: hidden; }
   .barlist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px 0 0 4px; }
   .barlist-value { font-size: 12px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 
-  .stackbar-wrap { margin-bottom: 16px; }
+  .stackbar-wrap { margin-bottom: 6px; }
   .stackbar-title { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
   .stackbar-title .tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; }
   .tag.official { background: var(--brand-wash); color: var(--brand-dark); }
@@ -276,10 +286,6 @@
   .modal-close { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 4px; }
   .modal-close:hover { color: var(--text-primary); }
   .modal-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
-  .modal-note {
-    background: var(--surface-2); border-radius: 8px; padding: 7px 12px; font-size: 10.5px; font-weight: 700 !important;
-    color: var(--text-muted); margin-bottom: 18px;
-  }
   .facts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; margin-bottom: 18px; }
   .fact-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 3px; }
   .fact-value { font-size: 13px; font-weight: 600; }
@@ -331,7 +337,7 @@
   @media (max-width: 1080px) {
     .kpi-row { grid-template-columns: repeat(3, 1fr); }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
-    .masonry-2col { column-count: 1; }
+    .dash-cols { flex-direction: column; }
     .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
   }
 
@@ -368,8 +374,8 @@
       <button class="nav-item" data-view="manage"><span class="nav-ic">＋</span> SSOT Management</button>
     </nav>
     <div class="sidebar-foot">
-      Source of truth: the team's shared Excel.<br>
-      This panel updates when the export is refreshed.
+      Single Source Of Truth: The Team's Shared Data.<br>
+      Connect Microsoft 365 above to see live, always up to date numbers.
     </div>
   </aside>
 
@@ -386,54 +392,68 @@
     </div>
 
     <div class="content">
-      <div class="banner-demo" id="demoBanner">
-        This view is showing sample data. Click "Connect Microsoft 365" above and sign in with your work account to load the real Excel data and enable saving.
+      <div class="alert-banner tier-yellow" id="demoBanner">
+        This view is showing sample data. Click "Connect Microsoft 365" above and sign in with your work account to load the real shared data and enable saving.
       </div>
 
       <!-- ======================= DASHBOARD ======================= -->
       <section class="view active" id="view-dashboard">
         <div class="kpi-row" id="kpiRow"></div>
 
-        <div class="masonry-2col">
-          <div class="panel">
-            <h3>Active Pipeline By Status</h3>
-            <div class="panel-sub">Open positions, grouped by funnel stage</div>
-            <div class="barlist" id="chartEstado"></div>
+        <div class="dash-cols">
+          <div class="dash-col">
+            <div class="panel">
+              <h3>Active Pipeline By Status</h3>
+              <div class="panel-sub">Open positions, grouped by funnel stage</div>
+              <div class="barlist" id="chartEstado"></div>
+            </div>
+            <div class="panel">
+              <h3>Candidate Pipeline Totals</h3>
+              <div class="panel-sub">Sourced, submitted, active, and rejected candidates added up across all active positions (provisional, from Spott)</div>
+              <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">TOP OF FUNNEL</div>
+              <div class="barlist" id="chartPipelineTotalsTop"></div>
+              <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--grid);">
+                <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">IN PROCESS</div>
+                <div class="barlist" id="chartPipelineTotalsProcess"></div>
+              </div>
+            </div>
+            <div class="panel">
+              <h3>Pending Offers</h3>
+              <div class="panel-sub">Positions currently waiting on an offer decision</div>
+              <div id="listPendingOffers"></div>
+            </div>
+            <div class="panel">
+              <h3>Hires Per Month (2026)</h3>
+              <div class="panel-sub">Confirmed placements per month, year to date</div>
+              <div id="chartHiresTrend"></div>
+            </div>
           </div>
-          <div class="panel">
-            <h3>SLA Health</h3>
-            <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target (TTS in business days; TTF/TTH in calendar days)</div>
-            <div class="panel-sub" id="slaCleanSummary" style="margin-top:2px; margin-bottom:14px;"></div>
-            <div id="chartSla"></div>
-          </div>
-          <div class="panel">
-            <h3>Active Workload By Recruiter</h3>
-            <div class="panel-sub">Open positions currently assigned to each recruiter</div>
-            <div class="barlist" id="chartReclutador"></div>
-          </div>
-          <div class="panel">
-            <h3>Pending Offers</h3>
-            <div class="panel-sub">Positions currently waiting on an offer decision</div>
-            <div id="listPendingOffers"></div>
-          </div>
-          <div class="panel">
-            <h3>Placements This Month</h3>
-            <div class="panel-sub">Confirmed hires, this month vs last month</div>
-            <div id="chartPlacementsMonth"></div>
-          </div>
-          <div class="panel">
-            <h3>Hires Per Month (2026)</h3>
-            <div class="panel-sub">Confirmed placements per month, year to date</div>
-            <div id="chartHiresTrend"></div>
-          </div>
-          <div class="panel">
-            <h3>Position By Location/Work Arrangement</h3>
-            <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
-            <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
-            <div class="barlist" id="chartHiredLoc"></div>
-            <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--grid);">
-              <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
-              <div class="barlist" id="chartWorkArrangement"></div>
+          <div class="dash-col">
+            <div class="panel">
+              <h3>SLA Health</h3>
+              <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target (TTS in business days; TTF/TTH in calendar days)</div>
+              <div class="panel-sub" id="slaCleanSummary" style="margin-top:2px; margin-bottom:8px;"></div>
+              <div id="chartSla"></div>
+            </div>
+            <div class="panel">
+              <h3>Active Workload By Recruiter</h3>
+              <div class="panel-sub">Open positions currently assigned to each recruiter</div>
+              <div class="barlist" id="chartReclutador"></div>
+            </div>
+            <div class="panel">
+              <h3>Placements This Month</h3>
+              <div class="panel-sub">Confirmed hires, this month vs last month</div>
+              <div id="chartPlacementsMonth"></div>
+            </div>
+            <div class="panel">
+              <h3>Position By Location/Work Arrangement</h3>
+              <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
+              <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
+              <div class="barlist" id="chartHiredLoc"></div>
+              <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
+                <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
+                <div class="barlist" id="chartWorkArrangement"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -446,24 +466,24 @@
           <div class="panel-sub">Every position that exists in the system, in any status (includes closed, cancelled, and fell-through). This is the full directory, not the working tracker.</div>
           <div class="toolbar">
             <input type="text" id="positionsSearch" placeholder="Search by position, hiring manager, or recruiter…">
-            <select id="positionsStatus"><option value="">All statuses</option></select>
-            <select id="positionsRecruiter"><option value="">All recruiters</option></select>
-            <select id="positionsHM"><option value="">All hiring managers</option></select>
-            <select id="positionsLocation"><option value="">All countries</option></select>
-            <select id="positionsTTS" title="Time To Submit"><option value="">Time To Submit: all</option></select>
-            <select id="positionsTTF" title="Time To Fill"><option value="">Time To Fill: all</option></select>
-            <select id="positionsTTH" title="Time To Hire"><option value="">Time To Hire: all</option></select>
-            <select id="positionsPlacement"><option value="">Placement: all</option><option value="yes">Placement: yes</option><option value="no">Placement: no</option></select>
-            <select id="positionsPresetSelect"><option value="">Saved filters…</option></select>
-            <button class="btn ghost small" type="button" id="positionsSaveFilterBtn">Save filters</button>
-            <button class="btn ghost small" type="button" id="positionsDeleteFilterBtn">Delete saved</button>
+            <select id="positionsStatus"><option value="">All Statuses</option></select>
+            <select id="positionsRecruiter"><option value="">All Recruiters</option></select>
+            <select id="positionsHM"><option value="">All Hiring Managers</option></select>
+            <select id="positionsLocation"><option value="">All Countries</option></select>
+            <select id="positionsTTS" title="Time To Submit"><option value="">Time To Submit: All</option></select>
+            <select id="positionsTTF" title="Time To Fill"><option value="">Time To Fill: All</option></select>
+            <select id="positionsTTH" title="Time To Hire"><option value="">Time To Hire: All</option></select>
+            <select id="positionsPlacement"><option value="">Placement: All</option><option value="yes">Placement: Yes</option><option value="no">Placement: No</option></select>
+            <select id="positionsPresetSelect"><option value="">Saved Filters…</option></select>
+            <button class="btn ghost small" type="button" id="positionsSaveFilterBtn">Save Filters</button>
+            <button class="btn ghost small" type="button" id="positionsDeleteFilterBtn">Delete Saved</button>
             <span class="count" id="positionsCount"></span>
           </div>
           <div style="overflow-x:auto;">
             <table class="data" id="positionsTable">
               <thead><tr>
-                <th>Position</th><th>Client</th><th>Hiring manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
-                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last remark</th><th>Placement</th>
+                <th>Position</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
+                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Remark</th><th>Placement</th>
               </tr></thead>
               <tbody></tbody>
             </table>
@@ -488,24 +508,24 @@
           <div class="panel-sub">Codes, SLA, and the latest activity for every position, in one place. Click a row to open its detail, add a remark, or update its status.</div>
           <div class="toolbar">
             <input type="text" id="trackingSearch" placeholder="Search by position, hiring manager, or recruiter…">
-            <select id="trackingStatus"><option value="">All statuses</option></select>
-            <select id="trackingRecruiter"><option value="">All recruiters</option></select>
-            <select id="trackingTTS" title="Time To Submit"><option value="">Time To Submit: all</option></select>
-            <select id="trackingTTF" title="Time To Fill"><option value="">Time To Fill: all</option></select>
-            <select id="trackingTTH" title="Time To Hire"><option value="">Time To Hire: all</option></select>
+            <select id="trackingStatus"><option value="">All Statuses</option></select>
+            <select id="trackingRecruiter"><option value="">All Recruiters</option></select>
+            <select id="trackingTTS" title="Time To Submit"><option value="">Time To Submit: All</option></select>
+            <select id="trackingTTF" title="Time To Fill"><option value="">Time To Fill: All</option></select>
+            <select id="trackingTTH" title="Time To Hire"><option value="">Time To Hire: All</option></select>
             <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
-              <input type="checkbox" id="trackingOnlyActive" checked> Active only
+              <input type="checkbox" id="trackingOnlyActive" checked> Active Only
             </label>
-            <select id="trackingPresetSelect"><option value="">Saved filters…</option></select>
-            <button class="btn ghost small" type="button" id="trackingSaveFilterBtn">Save filters</button>
-            <button class="btn ghost small" type="button" id="trackingDeleteFilterBtn">Delete saved</button>
+            <select id="trackingPresetSelect"><option value="">Saved Filters…</option></select>
+            <button class="btn ghost small" type="button" id="trackingSaveFilterBtn">Save Filters</button>
+            <button class="btn ghost small" type="button" id="trackingDeleteFilterBtn">Delete Saved</button>
             <span class="count" id="trackingCount"></span>
           </div>
           <div style="overflow-x:auto;">
             <table class="data" id="trackingTable">
               <thead><tr>
-                <th>Position</th><th>Hiring manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
-                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last update</th>
+                <th>Position</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
+                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Update</th>
               </tr></thead>
               <tbody></tbody>
             </table>
@@ -516,7 +536,7 @@
       <!-- ======================= SSOT MANAGEMENT ======================= -->
       <section class="view" id="view-manage">
         <div class="callout">
-          <b>How this section works:</b> this creates brand-new entities only (a new position or a new recruiter). It's not for updating an existing position, that happens from Tracking. Connect to Microsoft 365 with the button at the top to save what you create here straight to the shared Excel file.
+          <b>How this section works:</b> this creates brand-new entities only (a new position or a new recruiter). It's not for updating an existing position, that happens from Tracking. Connect to Microsoft 365 with the button at the top to save what you create here straight to the shared file.
         </div>
 
         <div class="grid-2">
@@ -524,21 +544,21 @@
             <h3>New Position (Requisition)</h3>
             <div class="panel-sub">Added as a new row in the Positions sheet</div>
             <div class="form-grid">
-              <div class="form-field"><label>Position title</label><input type="text" id="newPosTitle" placeholder="e.g. Backend Engineer"></div>
-              <div class="form-field"><label>Job code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
+              <div class="form-field"><label>Position Title</label><input type="text" id="newPosTitle" placeholder="e.g. Backend Engineer"></div>
+              <div class="form-field"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
-              <div class="form-field"><label>Hiring manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
-              <div class="form-field"><label>Assigned recruiter</label><select id="newPosRecruiter"><option>Nicolás Patarroyo</option></select></div>
+              <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
+              <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"><option>Nicolás Patarroyo</option></select></div>
               <div class="form-field"><label>Country</label><input type="text" id="newPosCountry" placeholder="e.g. Canada"></div>
-              <div class="form-field"><label>Work arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
-              <div class="form-field"><label>City (only if Hybrid or On-site)</label><input type="text" id="newPosCity" placeholder="e.g. Calgary, AB"></div>
-              <div class="form-field"><label>Initial status</label><select id="newPosStatus"><option>Sourcing</option></select></div>
-              <div class="form-field"><label>Kickoff date (email/call with HM)</label><input type="date" id="newPosKickoff"></div>
-              <div class="form-field full"><label>Intake meeting date</label><input type="date" id="newPosIntake"></div>
-              <div class="form-field full"><label>Initial remark (optional)</label><textarea rows="2" id="newPosRemark" placeholder="Kickoff context…"></textarea></div>
+              <div class="form-field"><label>Work Arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
+              <div class="form-field"><label>City (Only If Hybrid Or On-Site)</label><input type="text" id="newPosCity" placeholder="e.g. Calgary, AB"></div>
+              <div class="form-field"><label>Initial Status</label><select id="newPosStatus"><option>Sourcing</option></select></div>
+              <div class="form-field"><label>Kickoff Date (Email/Call With HM)</label><input type="date" id="newPosKickoff"></div>
+              <div class="form-field full"><label>Intake Meeting Date</label><input type="date" id="newPosIntake"></div>
+              <div class="form-field full"><label>Initial Remark (Optional)</label><textarea rows="2" id="newPosRemark" placeholder="Kickoff context…"></textarea></div>
             </div>
             <div class="form-actions">
-              <button class="btn primary" type="button" id="createPositionBtn">Create position</button>
+              <button class="btn primary" type="button" id="createPositionBtn">Create Position</button>
               <button class="btn ghost" type="button" id="clearPositionBtn">Clear</button>
             </div>
             <div class="panel-sub" id="createPositionMsg" style="margin-top:8px;"></div>
@@ -548,20 +568,20 @@
             <h3>New Recruiter</h3>
             <div class="panel-sub">Added to the recruiter list used across the app</div>
             <div class="form-grid">
-              <div class="form-field full"><label>Full name</label><input type="text" id="newRecName" placeholder="e.g. Juan Torres"></div>
+              <div class="form-field full"><label>Full Name</label><input type="text" id="newRecName" placeholder="e.g. Juan Torres"></div>
               <div class="form-field full"><label>Email</label><input type="email" id="newRecEmail" placeholder="juan.torres@company.com"></div>
             </div>
             <div class="form-actions">
-              <button class="btn primary" type="button" id="createRecruiterBtn">Add recruiter</button>
+              <button class="btn primary" type="button" id="createRecruiterBtn">Add Recruiter</button>
               <button class="btn ghost" type="button" id="clearRecruiterBtn">Clear</button>
             </div>
             <div class="panel-sub" id="createRecruiterMsg" style="margin-top:8px;"></div>
 
-            <h3 style="margin-top:26px;">New status or holiday</h3>
+            <h3 style="margin-top:26px;">New Status Or Holiday</h3>
             <div class="panel-sub">Edits the shared configuration (Config sheet)</div>
             <div class="form-grid">
-              <div class="form-field"><label>New status</label><input type="text" placeholder="e.g. Backfill"></div>
-              <div class="form-field"><label>New holiday</label><input type="date"></div>
+              <div class="form-field"><label>New Status</label><input type="text" placeholder="e.g. Backfill"></div>
+              <div class="form-field"><label>New Holiday</label><input type="date"></div>
             </div>
             <div class="form-actions">
               <button class="btn ghost" type="button" disabled title="Not connected yet, coming soon">Add to Config</button>
@@ -600,7 +620,7 @@
       </div>
       <button class="modal-close" id="modalClose" type="button">×</button>
     </div>
-    <div class="modal-note" id="modalNote">Not connected to Microsoft 365 — updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the real Excel file.</div>
+    <div class="alert-banner tier-yellow compact" id="modalNote">Not connected to Microsoft 365, updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the shared file.</div>
 
     <div id="modalEditInTrackingZone" style="display:none; margin-bottom:14px;">
       <button type="button" id="modalEditInTrackingBtn" class="btn ghost small">Edit in Tracking →</button>
@@ -611,23 +631,23 @@
     <div class="modal-section-title">SLA <span id="pivotSlaBadge"></span></div>
     <div class="sla-grid" id="modalSlaGrid"></div>
 
-    <div class="modal-section-title" id="modalStatusTitle">Update status</div>
+    <div class="modal-section-title" id="modalStatusTitle">Update Status</div>
     <div class="status-update-row" id="modalStatusSection">
       <select id="modalStatusSelect"></select>
-      <button class="btn primary small" id="modalStatusSave" type="button">Save status</button>
+      <button class="btn primary small" id="modalStatusSave" type="button">Save Status</button>
     </div>
 
     <div class="modal-section-title">Activity</div>
     <ul class="timeline" id="modalTimeline"></ul>
 
-    <div class="modal-section-title" id="modalRemarkTitle">Add a remark</div>
+    <div class="modal-section-title" id="modalRemarkTitle">Add A Remark</div>
     <div class="add-remark" id="modalRemarkSection">
       <textarea id="modalRemarkText" rows="2" placeholder="What changed, what's next…"></textarea>
-      <button class="btn primary small" id="modalRemarkSave" type="button">Add remark</button>
+      <button class="btn primary small" id="modalRemarkSave" type="button">Add Remark</button>
     </div>
 
     <div class="modal-danger-zone" id="modalDeleteZone">
-      <button type="button" id="modalDeleteBtn" class="link-danger">Delete this requisition</button>
+      <button type="button" id="modalDeleteBtn" class="link-danger">Delete This Requisition</button>
     </div>
   </div>
 </div>
@@ -770,7 +790,7 @@ function formatLocation(p){
   return `${p.country} (${arr})`;
 }
 function locationOnly(p){
-  return p.city ? `${p.city}, ${p.country}` : (p.country || "—");
+  return p.city ? `${p.city}, ${p.country}` : (p.country || "-");
 }
 const ARRANGEMENT_COLORS = { "Remote": "var(--stage-blue)", "Hybrid": "var(--stage-purple)", "On-site": "var(--good)" };
 function arrangementBadge(p){
@@ -788,7 +808,10 @@ function statusChip(status){
    ============================================================ */
 function renderKpis(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
-  const hiredYtd = POSITIONS.filter(p=>p.status==="Hired").length;
+  // "Hired (YTD)" antes contaba TODAS las posiciones con status Hired sin filtrar por fecha,
+  // asi que el "(YTD)" del nombre era falso. Ahora si filtra por el hire date real de este ano.
+  const thisYear = new Date().getFullYear();
+  const hiredYtd = POSITIONS.filter(p=>p.status==="Hired" && p.hire && parseD(p.hire).getFullYear()===thisYear).length;
   let atRisk=0, outOfSla=0;
   active.forEach(p=>{
     const s = computeSla(p);
@@ -798,12 +821,12 @@ function renderKpis(){
   const fellThrough = POSITIONS.filter(p=>p.fill && p.status==="Fell Through").length;
 
   const tiles = [
-    {label:"Active positions", value: active.length, cls:""},
-    {label:"Hired (YTD)", value: hiredYtd, cls:"good"},
-    {label:"Pending offers", value: POSITIONS.filter(p=>p.status==="Offer Request").length, cls:""},
-    {label:"At SLA risk", value: atRisk, cls: atRisk>0 ? "warning":""},
-    {label:"Out of SLA", value: outOfSla, cls: outOfSla>0 ? "critical":""},
-    {label:"Filled without Hire (risk)", value: fellThrough, cls: fellThrough>0 ? "critical":""},
+    {label:"Active Positions", value: active.length, cls:""},
+    {label:"Hires This Year", value: hiredYtd, cls:"good"},
+    {label:"Offers Pending Decision", value: POSITIONS.filter(p=>p.status==="Offer Request").length, cls:""},
+    {label:"At SLA Risk", value: atRisk, cls: atRisk>0 ? "warning":""},
+    {label:"Out Of SLA", value: outOfSla, cls: outOfSla>0 ? "critical":""},
+    {label:"Offers Fell Through", value: fellThrough, cls: fellThrough>0 ? "critical":""},
   ];
   document.getElementById("kpiRow").innerHTML = tiles.map(t=>`
     <div class="kpi-tile">
@@ -872,7 +895,7 @@ function renderEstadoChart(){
   const stages = STATUS_ORDER.filter(s=>!TERMINAL.includes(s));
   const counts = stages.map(s=>({label:s, value: active.filter(p=>p.status===s).length})).filter(r=>r.value>0);
   const colors = counts.map(c=>STAGE_COLORS[c.label] || "var(--neutral)");
-  renderDonut("chartEstado", counts, colors, "Active", 140, null, (row)=>{
+  renderDonut("chartEstado", counts, colors, "Active", 110, null, (row)=>{
     openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
       active.filter(p=>p.status===row.label));
   });
@@ -888,6 +911,32 @@ function renderReclutadorChart(){
   });
 }
 
+function renderPipelineTotals(){
+  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const onClickRow = (row)=>{
+    const matches = active.filter(p=>(p[row.key]||0) > 0).sort((a,b)=>(b[row.key]||0)-(a[row.key]||0));
+    openQuickList(row.label, `${row.value} total across ${matches.length} position${matches.length===1?"":"s"}`, matches);
+  };
+  const rowsFor = (metrics)=> metrics.map(m=>({
+    label: m.label,
+    key: m.key,
+    value: active.reduce((sum,p)=> sum + (p[m.key] || 0), 0),
+  }));
+  // Direct apps suele ser un orden de magnitud mayor que sourced, y sourced a su vez mucho
+  // mayor que submitted/active/rejected. En una sola barlist con escala compartida, esas
+  // ultimas tres quedan como lineas invisibles. Se separan en dos grupos con escala propia
+  // (mismo patron que BY COUNTRY / BY ARRANGEMENT en Position By Location).
+  renderBarlist("chartPipelineTotalsTop", rowsFor([
+    {key:"sourced", label:"Sourced"},
+    {key:"directApps", label:"Direct apps"},
+  ]), "var(--brand)", onClickRow);
+  renderBarlist("chartPipelineTotalsProcess", rowsFor([
+    {key:"submittedCount", label:"Submitted"},
+    {key:"activeCount", label:"Active"},
+    {key:"rejectedCount", label:"Rejected"},
+  ]), "var(--brand)", onClickRow);
+}
+
 function renderHiredLocChart(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
   const ramp = ["var(--seq-200)","var(--seq-300)","var(--seq-400)","var(--seq-500)","var(--seq-600)"];
@@ -898,12 +947,12 @@ function renderHiredLocChart(){
   });
   const rows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
   if(rows.length){
-    renderDonut("chartHiredLoc", rows, ramp, "Active", 100, null, (row)=>{
+    renderDonut("chartHiredLoc", rows, ramp, "Active", 70, null, (row)=>{
       openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
         active.filter(p=>(p.country||"Unknown")===row.label));
     });
   } else {
-    renderDonut("chartHiredLoc", [{label:"No active positions", value:1}], ["var(--grid)"], "Active", 100);
+    renderDonut("chartHiredLoc", [{label:"No active positions", value:1}], ["var(--grid)"], "Active", 70);
   }
 
   const byArrangement = { "Remote": 0, "Hybrid": 0, "On-site": 0 };
@@ -937,10 +986,10 @@ function renderSlaChart(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
   const metrics = [
     {key:"TTS", label:"Time To Submit (TTS)", tag:"official", tagLabel:"Official SLA"},
-    {key:"TTF", label:"Time To Fill (TTF)", tag:"internal", tagLabel:"Internal goal"},
-    {key:"TTH", label:"Time To Hire (TTH)", tag:"internal", tagLabel:"Internal goal"},
+    {key:"TTF", label:"Time To Fill (TTF)", tag:"internal", tagLabel:"Internal Goal"},
+    {key:"TTH", label:"Time To Hire (TTH)", tag:"internal", tagLabel:"Internal Goal"},
   ];
-  const STATUS_WORD = {within:"within SLA", risk:"at risk", out:"out of SLA", none:"not started"};
+  const STATUS_WORD = {within:"Within SLA", risk:"At Risk", out:"Out Of SLA", none:"Not Started"};
   const html = metrics.map(m=>{
     const counts = {within:0, risk:0, out:0, none:0};
     active.forEach(p=>{ counts[computeSla(p)[m.key].status]++; });
@@ -961,16 +1010,16 @@ function renderSlaChart(){
   document.getElementById("chartSla").innerHTML = html + `
     <div class="stackbar-legend">
       <span><span class="dot" style="background:var(--good)"></span>Within SLA</span>
-      <span><span class="dot" style="background:var(--warning)"></span>At risk</span>
-      <span><span class="dot" style="background:var(--critical)"></span>Out of SLA</span>
-      <span><span class="dot" style="background:var(--neutral)"></span>Not started</span>
+      <span><span class="dot" style="background:var(--warning)"></span>At Risk</span>
+      <span><span class="dot" style="background:var(--critical)"></span>Out Of SLA</span>
+      <span><span class="dot" style="background:var(--neutral)"></span>Not Started</span>
     </div>`;
   document.querySelectorAll("#chartSla .clickable-stat").forEach(seg=>{
     seg.addEventListener("click", ()=>{
       const key = seg.dataset.metric, status = seg.dataset.status;
       const m = metrics.find(x=>x.key===key);
       const matches = active.filter(p=>computeSla(p)[key].status===status);
-      openQuickList(`${m.label} — ${STATUS_WORD[status]}`, `${matches.length} position${matches.length===1?"":"s"}`, matches);
+      openQuickList(`${m.label} (${STATUS_WORD[status]})`, `${matches.length} position${matches.length===1?"":"s"}`, matches);
     });
   });
 }
@@ -1128,7 +1177,7 @@ function fillSelectOnce(sel, values){
   }
 }
 
-const SLA_FILTER_OPTIONS = [["within","Within SLA"],["risk","At risk"],["out","Out of SLA"],["none","Not started"]];
+const SLA_FILTER_OPTIONS = [["within","Within SLA"],["risk","At Risk"],["out","Out Of SLA"],["none","Not Started"]];
 function fillSlaSelectOnce(sel){
   if(sel.options.length<=1){
     SLA_FILTER_OPTIONS.forEach(([v,l])=>{ const o=document.createElement("option"); o.value=v; o.textContent=l; sel.appendChild(o); });
@@ -1178,7 +1227,7 @@ function renderPositions(){
       <td class="cell-position">${posLabel(p)}</td><td>${p.client}</td><td>${p.hiringManager}</td><td>${p.recruiter}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
-      <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${p.lastRemark||''}">${p.lastRemark||'—'}</td>
+      <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${p.lastRemark||''}">${p.lastRemark||'-'}</td>
       <td>${p.status==="Hired" ? "Yes" : "No"}</td>
     </tr>`;
   }).join("");
@@ -1216,7 +1265,7 @@ function renderTrackingActivity(){
     <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; padding:8px 10px; margin:2px 0;" : ""}">
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
-      <span class="tl-text"><b>${posLabel(e.position)}</b> — ${e.text}${e.author?` <span style="color:var(--text-muted);">— ${e.author}</span>`:""}</span>
+      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${e.text}${e.author?` <span style="color:var(--text-muted);">(${e.author})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity in the last 7 days.</li>`;
 }
 
@@ -1239,7 +1288,7 @@ function renderNeedsAttention(){
   });
   const list = document.getElementById("needsAttentionList");
   if(!rows.length){
-    list.innerHTML = `<div class="panel-sub" style="margin:0;">Nothing urgent right now — every active position is within SLA or hasn't started its clock yet.</div>`;
+    list.innerHTML = `<div class="panel-sub" style="margin:0;">Nothing urgent right now. Every active position is within SLA or hasn't started its clock yet.</div>`;
     return;
   }
   list.innerHTML = rows.map(({p, s, worstKey})=>`
@@ -1296,7 +1345,7 @@ function renderTracking(){
       <td class="cell-position">${posLabel(p)}</td><td>${p.hiringManager}</td><td>${p.recruiter}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
-      <td style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${last ? last.text : ''}">${last ? last.text : '—'}</td>
+      <td style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${last ? last.text : ''}">${last ? last.text : '-'}</td>
     </tr>`;
   }).join("");
   document.querySelectorAll("#trackingTable tbody tr.clickable").forEach(tr=>{
@@ -1311,8 +1360,8 @@ function buildTimeline(p){
   const entries = [];
   if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
   if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
-  if(p.fill)   entries.push({date:p.fill,   type:"auto", text:"Offer accepted — position filled."});
-  if(p.hire)   entries.push({date:p.hire,   type:"auto", text:"Placement confirmed — candidate hired."});
+  if(p.fill)   entries.push({date:p.fill,   type:"auto", text:"Offer accepted, position filled."});
+  if(p.hire)   entries.push({date:p.hire,   type:"auto", text:"Placement confirmed, candidate hired."});
   const manualDate = p.hire || p.fill || p.submit || p.intake;
   if(manualDate && p.lastRemark) entries.push({date:manualDate, type:"manual", author:p.recruiter, text:p.lastRemark});
   (p.extra || []).forEach(e=> entries.push(e));
@@ -1381,63 +1430,63 @@ function renderDetailModal(){
   document.getElementById("modalSub").textContent = `${p.client} · ${formatLocation(p)}`;
 
   const positionFacts = [
-    {label:"Hiring manager", value:p.hiringManager},
+    {label:"Hiring Manager", value:p.hiringManager},
     {label:"Recruiter", value:p.recruiter},
     {label:"Status", value:statusChip(p.status)},
     {label:"Location", value:locationOnly(p)},
-    {label:"Work arrangement", value:arrangementBadge(p)},
+    {label:"Work Arrangement", value:arrangementBadge(p)},
   ];
-  if(p.productLine) positionFacts.push({label:"Product line", value:p.productLine});
-  if(p.salaryRange) positionFacts.push({label:"Salary range", value:p.salaryRange});
+  if(p.productLine) positionFacts.push({label:"Product Line", value:p.productLine});
+  if(p.salaryRange) positionFacts.push({label:"Salary Range", value:p.salaryRange});
 
   const pipelineFacts = [];
   if(p.sourced != null) pipelineFacts.push({label:"Sourced", value:p.sourced});
-  if(p.directApps != null) pipelineFacts.push({label:"Direct apps", value:p.directApps});
+  if(p.directApps != null) pipelineFacts.push({label:"Direct Apps", value:p.directApps});
   if(p.submittedCount != null) pipelineFacts.push({label:"Submitted", value:p.submittedCount});
   if(p.activeCount != null) pipelineFacts.push({label:"Active", value:p.activeCount});
   if(p.rejectedCount != null) pipelineFacts.push({label:"Rejected", value:p.rejectedCount});
 
   const outcomeFacts = [];
-  if(p.placedCandidate) outcomeFacts.push({label:"Placed candidate", value:p.placedCandidate});
-  if(p.finalComp) outcomeFacts.push({label:"Final compensation", value:p.finalComp});
+  if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:p.placedCandidate});
+  if(p.finalComp) outcomeFacts.push({label:"Final Compensation", value:p.finalComp});
 
   const isView = activeDetailMode === "view";
   const timelineHtml = isView
     ? factsSection("Timeline", [
-        {label:"Kickoff date", value:p.kickoff || "—"},
-        {label:"Intake meeting", value:p.intake || "—"},
-        {label:"Submit date", value:p.submit || "—"},
-        {label:"Fill date", value:p.fill || "—"},
-        {label:"Hire date", value:p.hire || "—"},
+        {label:"Kickoff Date", value:p.kickoff || "-"},
+        {label:"Intake Meeting", value:p.intake || "-"},
+        {label:"Submit Date", value:p.submit || "-"},
+        {label:"Fill Date", value:p.fill || "-"},
+        {label:"Hire Date", value:p.hire || "-"},
       ])
     : `<div class="modal-section-title">Timeline</div>
     <div class="facts-grid">
-      <div><div class="fact-label">Kickoff date</div><input type="date" class="fact-date-input" id="editKickoff" value="${p.kickoff||''}"></div>
-      <div><div class="fact-label">Intake meeting</div><input type="date" class="fact-date-input" id="editIntake" value="${p.intake||''}"></div>
-      <div><div class="fact-label">Submit date</div><input type="date" class="fact-date-input" id="editSubmit" value="${p.submit||''}"></div>
-      <div><div class="fact-label">Fill date</div><input type="date" class="fact-date-input" id="editFill" value="${p.fill||''}"></div>
-      <div><div class="fact-label">Hire date</div><input type="date" class="fact-date-input" id="editHire" value="${p.hire||''}"></div>
+      <div><div class="fact-label">Kickoff Date</div><input type="date" class="fact-date-input" id="editKickoff" value="${p.kickoff||''}"></div>
+      <div><div class="fact-label">Intake Meeting</div><input type="date" class="fact-date-input" id="editIntake" value="${p.intake||''}"></div>
+      <div><div class="fact-label">Submit Date</div><input type="date" class="fact-date-input" id="editSubmit" value="${p.submit||''}"></div>
+      <div><div class="fact-label">Fill Date</div><input type="date" class="fact-date-input" id="editFill" value="${p.fill||''}"></div>
+      <div><div class="fact-label">Hire Date</div><input type="date" class="fact-date-input" id="editHire" value="${p.hire||''}"></div>
     </div>
     <div style="margin-bottom:18px;">
-      <button class="btn primary small" id="modalDatesSave" type="button">Save dates</button>
+      <button class="btn primary small" id="modalDatesSave" type="button">Save Dates</button>
       <span id="modalDatesMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
     </div>`;
 
   document.getElementById("modalFacts").innerHTML =
     factsSection("Position", positionFacts) +
     timelineHtml +
-    factsSection("Pipeline (from Spott)", pipelineFacts) +
+    factsSection("Pipeline (From Spott)", pipelineFacts) +
     factsSection("Outcome", outcomeFacts);
   if(!isView) document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
 
   const s = computeSla(p);
   document.getElementById("pivotSlaBadge").innerHTML = isSlaExceptionApproved(p)
-    ? `<span class="tag official" title="Full batch was rejected and attributed to the client per the Intake Summary — TTF/TTH targets get +${PIVOT_SLA_ALLOWANCE_DAYS} calendar days.">Pivot SLA active (+${PIVOT_SLA_ALLOWANCE_DAYS}d)</span>`
+    ? `<span class="tag official" title="Full batch was rejected and attributed to the client per the Intake Summary. TTF/TTH targets get +${PIVOT_SLA_ALLOWANCE_DAYS} calendar days.">Pivot SLA active (+${PIVOT_SLA_ALLOWANCE_DAYS}d)</span>`
     : "";
   const slaCards = [
     {key:"TTS", label:"Time To Submit (TTS)", tag:"Official SLA"},
-    {key:"TTF", label:"Time To Fill (TTF)", tag:"Internal goal"},
-    {key:"TTH", label:"Time To Hire (TTH)", tag:"Internal goal"},
+    {key:"TTF", label:"Time To Fill (TTF)", tag:"Internal Goal"},
+    {key:"TTH", label:"Time To Hire (TTH)", tag:"Internal Goal"},
   ];
   document.getElementById("modalSlaGrid").innerHTML = slaCards.map(c=>`
     <div class="sla-card">
@@ -1453,7 +1502,7 @@ function renderDetailModal(){
     <li>
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
-      <span class="tl-text">${e.text}${e.author?` <span style="color:var(--text-muted);">— ${e.author}</span>`:""}</span>
+      <span class="tl-text">${e.text}${e.author?` <span style="color:var(--text-muted);">(${e.author})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity logged yet.</li>`;
 
   document.getElementById("modalRemarkText").value = "";
@@ -1502,10 +1551,10 @@ async function saveModalDates(){
       for(const f of changed){
         await graphUpdatePositionField(p.id, f.col, f.value || "");
       }
-      msg.textContent = "Saved to Excel.";
+      msg.textContent = "Saved.";
     } catch(err){
       console.error(err);
-      msg.textContent = "Could not save to Excel: " + err.message;
+      msg.textContent = "Could not save: " + err.message;
     }
   } else {
     msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
@@ -1527,6 +1576,7 @@ async function saveModalStatus(){
     renderKpis();
     renderEstadoChart();
     renderReclutadorChart();
+    renderPipelineTotals();
     renderHiredLocChart();
     renderSlaChart();
     renderSlaMeter();
@@ -1536,7 +1586,7 @@ async function saveModalStatus(){
         await graphAppendHistorial(p.id, p.title, remarkText, "You");
       } catch(err){
         console.error(err);
-        alert("Could not save the status change to Excel. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
+        alert("Could not save the status change. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
       }
     }
   }
@@ -1558,7 +1608,7 @@ async function saveModalRemark(){
       await graphAppendHistorial(p.id, p.title, text, "You");
     } catch(err){
       console.error(err);
-      alert("Could not save the remark to Excel. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
+      alert("Could not save the remark. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
     }
   }
 }
@@ -1577,7 +1627,7 @@ document.getElementById("modalEditInTrackingBtn").addEventListener("click", ()=>
 async function deleteActivePosition(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
-  const sure = confirm(`Delete ${p.title} ${p.id}? This removes it completely from the tracker and the Excel file. This can't be undone from here.`);
+  const sure = confirm(`Delete ${p.title} ${p.id}? This removes it completely from the tracker and the shared file. This can't be undone from here.`);
   if(!sure) return;
   const btn = document.getElementById("modalDeleteBtn");
   btn.disabled = true;
@@ -1592,7 +1642,7 @@ async function deleteActivePosition(){
     closeDetailModal();
   } catch(err){
     console.error(err);
-    alert("Could not delete this position from Excel.\n\n"+err.message);
+    alert("Could not delete this position.\n\n"+err.message);
   } finally {
     btn.disabled = false;
   }
@@ -1631,7 +1681,7 @@ function refreshPresetSelect(view){
   const sel = document.getElementById(view + "PresetSelect");
   const current = sel.value;
   const presets = getPresets(view);
-  sel.innerHTML = '<option value="">Saved filters…</option>' +
+  sel.innerHTML = '<option value="">Saved Filters…</option>' +
     Object.keys(presets).map(n=>`<option value="${n}">${n}</option>`).join("");
   if(presets[current]) sel.value = current;
 }
@@ -1711,6 +1761,7 @@ function renderAll(){
   renderKpis();
   renderEstadoChart();
   renderReclutadorChart();
+  renderPipelineTotals();
   renderHiredLocChart();
   renderSlaChart();
   renderSlaMeter();
@@ -1757,14 +1808,18 @@ function setConnectionUi(connected, label){
     pill.classList.remove("demo");
     pill.style.background = "var(--brand-wash)";
     pill.style.color = "var(--brand-dark)";
-    btn.textContent = "Reload from Excel";
+    btn.textContent = "Reload Data";
     banner.style.display = "none";
-    modalNote.textContent = "Connected to Microsoft 365 — changes here are saved straight to the shared Excel file.";
+    modalNote.textContent = "Connected to Microsoft 365, changes here are saved straight to the shared file.";
+    modalNote.classList.remove("tier-yellow");
+    modalNote.classList.add("tier-good");
   } else {
     pill.textContent = "Not connected";
     btn.textContent = "Connect Microsoft 365";
     banner.style.display = "";
-    modalNote.textContent = 'Not connected to Microsoft 365 — updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the real Excel file.';
+    modalNote.textContent = 'Not connected to Microsoft 365, updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the shared file.';
+    modalNote.classList.remove("tier-good");
+    modalNote.classList.add("tier-yellow");
   }
 }
 
@@ -2055,7 +2110,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     return;
   }
   if(!isConnected()){
-    msg.textContent = "Connect to Microsoft 365 first (button at the top) to save this to Excel.";
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to save this.";
     msg.style.color = "var(--critical)";
     return;
   }
@@ -2107,7 +2162,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
     return;
   }
   if(!isConnected()){
-    msg.textContent = "Connect to Microsoft 365 first (button at the top) to save this to Excel.";
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to save this.";
     msg.style.color = "var(--critical)";
     return;
   }
