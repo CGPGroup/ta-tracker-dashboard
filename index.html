@@ -139,6 +139,7 @@
   .kpi-value.good { color: var(--good); }
   .kpi-value.warning { color: var(--warning); }
   .kpi-value.critical { color: var(--critical); }
+  .kpi-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; }
 
   /* ---------- Panels / charts ---------- */
   .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 16px; align-items: start; }
@@ -808,12 +809,6 @@ function statusChip(status){
    ============================================================ */
 function renderKpis(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
-  // Esta fila es de pulso semanal, no un resumen anual, asi que "Hired (YTD)" no pertenecia
-  // aqui. Mismo corte de 7 dias que usa renderTrackingActivity, para quedar consistentes.
-  const kpiCutoff = new Date();
-  kpiCutoff.setDate(kpiCutoff.getDate() - 7);
-  const kpiCutoffStr = kpiCutoff.toISOString().slice(0,10);
-  const hiredThisWeek = POSITIONS.filter(p=>p.status==="Hired" && p.hire && p.hire >= kpiCutoffStr).length;
   let atRisk=0, outOfSla=0;
   active.forEach(p=>{
     const s = computeSla(p);
@@ -822,9 +817,19 @@ function renderKpis(){
   });
   const fellThrough = POSITIONS.filter(p=>p.fill && p.status==="Fell Through").length;
 
+  // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
+  // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
+  // pipeline de submissions: con batches de 3 a 5 candidatos por posicion (promedio 3.5, regla
+  // de Nicolas), N posiciones activas deberian tener un PISO de N*3.5 submitted acumulados.
+  // Es un minimo, no un rango, mas submitted nunca es malo. Por debajo del minimo es señal
+  // real de under-sourcing agregado (complementa, no reemplaza, el TTS por posicion).
+  const submittedTotal = active.reduce((sum,p)=> sum + (p.submittedCount || 0), 0);
+  const minExpected = Math.round(active.length * 3.5);
+  const submittedCls = active.length===0 ? "" : (submittedTotal < minExpected ? "warning" : "good");
+
   const tiles = [
     {label:"Active Positions", value: active.length, cls:""},
-    {label:"Hires This Week", value: hiredThisWeek, cls:"good"},
+    {label:"Submitted Vs Expected", value: submittedTotal, cls: submittedCls, sub: active.length ? `Expected ≥${minExpected} for ${active.length} active` : ""},
     {label:"Offers Pending Decision", value: POSITIONS.filter(p=>p.status==="Offer Request").length, cls:""},
     {label:"At SLA Risk", value: atRisk, cls: atRisk>0 ? "warning":""},
     {label:"Out Of SLA", value: outOfSla, cls: outOfSla>0 ? "critical":""},
@@ -834,6 +839,7 @@ function renderKpis(){
     <div class="kpi-tile">
       <div class="kpi-label">${t.label}</div>
       <div class="kpi-value ${t.cls}">${t.value}</div>
+      ${t.sub ? `<div class="kpi-sub">${t.sub}</div>` : ""}
     </div>`).join("");
 }
 
