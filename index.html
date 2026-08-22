@@ -111,7 +111,7 @@
 
   .banner-demo {
     background: rgba(211,163,85,0.08); border: 1px solid rgba(211,163,85,0.28); color: var(--warning);
-    border-radius: var(--radius); padding: 8px 14px; font-size: 11px; font-weight: 500 !important;
+    border-radius: var(--radius); padding: 8px 14px; font-size: 11px; font-weight: 700 !important;
     margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
   }
   .banner-demo::before { content: "⚠"; font-size: 12px; }
@@ -162,7 +162,7 @@
   .stackbar > div { height: 100%; }
   .stackbar-legend { display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--text-secondary); }
   .stackbar-legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .stackbar-counts { font-size: 10.5px; font-weight: 500 !important; color: var(--text-muted); margin-top: 5px; }
+  .stackbar-counts { font-size: 10.5px; font-weight: 700 !important; color: var(--text-muted); margin-top: 5px; }
 
   .meter-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px 0 4px; }
   .meter-value { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -214,7 +214,7 @@
   table.data tr.clickable:hover td { background: var(--brand-wash); }
 
   .pos-title { font-weight: 600; }
-  .pos-code { color: var(--text-muted); font-weight: 500; font-size: 11.5px; margin-left: 5px; }
+  .pos-code { color: var(--text-muted); font-weight: 700; font-size: 11.5px; margin-left: 5px; }
   td.cell-position { white-space: nowrap; }
 
   .status-chip {
@@ -254,7 +254,7 @@
 
   .callout {
     background: var(--brand-wash); border: 1px solid rgba(217,119,87,0.30); border-radius: var(--radius);
-    padding: 12px 16px; font-size: 11px; font-weight: 500 !important; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;
+    padding: 12px 16px; font-size: 11px; font-weight: 700 !important; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;
   }
   .callout b { color: var(--text-primary); font-weight: 700 !important; }
 
@@ -277,7 +277,7 @@
   .modal-close:hover { color: var(--text-primary); }
   .modal-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
   .modal-note {
-    background: var(--surface-2); border-radius: 8px; padding: 7px 12px; font-size: 10.5px; font-weight: 500 !important;
+    background: var(--surface-2); border-radius: 8px; padding: 7px 12px; font-size: 10.5px; font-weight: 700 !important;
     color: var(--text-muted); margin-bottom: 18px;
   }
   .facts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; margin-bottom: 18px; }
@@ -1078,7 +1078,7 @@ function renderPlacementsMonth(){
   document.getElementById("chartPlacementsMonth").innerHTML = `
     <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
       <div style="font-size:32px; color:var(--brand); line-height:1;">${thisMonthCount}</div>
-      <div style="font-size:11.5px; font-weight:500 !important; color:${deltaColor};">${deltaText}</div>
+      <div style="font-size:11.5px; font-weight:700 !important; color:${deltaColor};">${deltaText}</div>
     </div>
     <div class="barlist">
       <div class="barlist-row clickable-stat" data-which="last">
@@ -1110,7 +1110,7 @@ function renderPendingOffers(){
   list.innerHTML = offers.map(p=>{
     const s = computeSla(p);
     return `<div class="pending-offer-row clickable-stat" data-id="${p.id}">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:500 !important; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${p.hiringManager}</div></div>
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${p.hiringManager}</div></div>
       ${slaChip(s.TTF)}
     </div>`;
   }).join("");
@@ -1244,7 +1244,7 @@ function renderNeedsAttention(){
   }
   list.innerHTML = rows.map(({p, s, worstKey})=>`
     <div class="pending-offer-row">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:500 !important; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${p.lastRemark ? p.lastRemark.slice(0,90) : "No remark yet"}</div></div>
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${p.lastRemark ? p.lastRemark.slice(0,90) : "No remark yet"}</div></div>
       ${slaChip(s[worstKey])}
     </div>`).join("");
 }
