@@ -1039,17 +1039,17 @@ function renderSlaMeter(){
   else if(rate < 90) color = "var(--warning)";
 
   const rows = [
-    {label:"Clean Across All SLAs", value: onTrack},
-    {label:"Missed At Least One SLA Target", value: outOfSla},
+    {label:"Met All 3 SLAs (TTS/TTF/TTH)", value: onTrack},
+    {label:"Missed 1+ SLA (TTS/TTF/TTH)", value: outOfSla},
   ].filter(r=>r.value>0);
   renderDonut(
     "chartSlaCompliance",
     rows.length ? rows : [{label:"No active positions", value:1}],
     [color, "var(--grid)"],
     null, 100,
-    {value: rate + "%", label: "Compliant"},
+    {value: rate + "%", label: "SLA Compliant"},
     rows.length ? (row)=>{
-      const matches = row.label==="Clean Across All SLAs"
+      const matches = row.label==="Met All 3 SLAs (TTS/TTF/TTH)"
         ? active.filter(p=>!missedAnyIds.has(p.id))
         : active.filter(p=>missedAnyIds.has(p.id));
       openQuickList(row.label, `${matches.length} position${matches.length===1?"":"s"}`, matches);
