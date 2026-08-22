@@ -410,7 +410,7 @@
             </div>
             <div class="panel">
               <h3>SLA Compliance</h3>
-              <div class="panel-sub">Active positions that haven't missed any SLA target today</div>
+              <div class="panel-sub">Share of active positions that haven't missed any of their 3 SLA targets (TTS, TTF, TTH). The rest have missed at least one.</div>
               <div id="chartSlaCompliance"></div>
             </div>
             <div class="panel">
@@ -1040,7 +1040,7 @@ function renderSlaMeter(){
 
   const rows = [
     {label:"Clean Across All SLAs", value: onTrack},
-    {label:"Missed At Least One", value: outOfSla},
+    {label:"Missed At Least One SLA Target", value: outOfSla},
   ].filter(r=>r.value>0);
   renderDonut(
     "chartSlaCompliance",
