@@ -409,14 +409,9 @@
               <div class="barlist" id="chartEstado"></div>
             </div>
             <div class="panel">
-              <h3>Candidate Pipeline Totals</h3>
-              <div class="panel-sub">Sourced, submitted, active, and rejected candidates added up across all active positions (provisional, from Spott)</div>
-              <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">TOP OF FUNNEL</div>
-              <div class="barlist" id="chartPipelineTotalsTop"></div>
-              <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--grid);">
-                <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">IN PROCESS</div>
-                <div class="barlist" id="chartPipelineTotalsProcess"></div>
-              </div>
+              <h3>SLA Compliance</h3>
+              <div class="panel-sub">Active positions that haven't missed any SLA target today</div>
+              <div id="chartSlaCompliance"></div>
             </div>
             <div class="panel">
               <h3>Pending Offers</h3>
@@ -433,7 +428,6 @@
             <div class="panel">
               <h3>SLA Health</h3>
               <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target (TTS in business days; TTF/TTH in calendar days)</div>
-              <div class="panel-sub" id="slaCleanSummary" style="margin-top:2px; margin-bottom:8px;"></div>
               <div id="chartSla"></div>
             </div>
             <div class="panel">
@@ -940,32 +934,6 @@ function renderReclutadorChart(){
   });
 }
 
-function renderPipelineTotals(){
-  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
-  const onClickRow = (row)=>{
-    const matches = active.filter(p=>(p[row.key]||0) > 0).sort((a,b)=>(b[row.key]||0)-(a[row.key]||0));
-    openQuickList(row.label, `${row.value} total across ${matches.length} position${matches.length===1?"":"s"}`, matches);
-  };
-  const rowsFor = (metrics)=> metrics.map(m=>({
-    label: m.label,
-    key: m.key,
-    value: active.reduce((sum,p)=> sum + (p[m.key] || 0), 0),
-  }));
-  // Direct apps suele ser un orden de magnitud mayor que sourced, y sourced a su vez mucho
-  // mayor que submitted/active/rejected. En una sola barlist con escala compartida, esas
-  // ultimas tres quedan como lineas invisibles. Se separan en dos grupos con escala propia
-  // (mismo patron que BY COUNTRY / BY ARRANGEMENT en Position By Location).
-  renderBarlist("chartPipelineTotalsTop", rowsFor([
-    {key:"sourced", label:"Sourced"},
-    {key:"directApps", label:"Direct apps"},
-  ]), "var(--brand)", onClickRow);
-  renderBarlist("chartPipelineTotalsProcess", rowsFor([
-    {key:"submittedCount", label:"Submitted"},
-    {key:"activeCount", label:"Active"},
-    {key:"rejectedCount", label:"Rejected"},
-  ]), "var(--brand)", onClickRow);
-}
-
 function renderHiredLocChart(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
   const ramp = ["var(--seq-200)","var(--seq-300)","var(--seq-400)","var(--seq-500)","var(--seq-600)"];
@@ -1052,39 +1020,41 @@ function renderSlaChart(){
   });
 }
 
-// SLA Health y SLA Compliance eran dos paneles separados que competian por espacio y se
-// solapaban: las 3 barras ya muestran cuantas posiciones estan out/at risk por metrica, asi
-// que el unico dato que la vieja SLA Compliance agregaba de verdad (no derivable de las
-// barras) es el conteo de posiciones distintas que incumplieron al menos un target. Ese dato
-// ahora vive como una linea compacta clickeable arriba de las barras de SLA Health, en vez de
-// un panel/donut aparte.
+// Dato agregado que no es derivable de las 3 barras de SLA Health (una posicion puede
+// contar en varias barras a la vez): cuantas posiciones distintas no han incumplido NINGUN
+// target. Se enmarca en positivo ("SLA Compliance") a proposito, es la version segura de
+// mostrar rendimiento del libro completo sin exponer numeros crudos de conversion de
+// candidatos (eso fue lo que preocupo a Nicolas de "Candidate Pipeline Totals").
 function renderSlaMeter(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
-  const summaryEl = document.getElementById("slaCleanSummary");
-  if(!active.length){
-    summaryEl.innerHTML = "No active positions right now.";
-    return;
-  }
   const missedAnyIds = new Set(active.filter(p=>{
     const s = computeSla(p);
     return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
   }).map(p=>p.id));
   const outOfSla = missedAnyIds.size;
   const onTrack = active.length - outOfSla;
-  const rate = Math.round((onTrack / active.length) * 100);
+  const rate = active.length ? Math.round((onTrack / active.length) * 100) : 100;
   let color = "var(--good)";
   if(rate < 75) color = "var(--critical)";
   else if(rate < 90) color = "var(--warning)";
 
-  summaryEl.innerHTML = `<b style="color:${color};">${rate}% of active positions</b> haven't missed any SLA target (<span class="clickable-stat" data-which="clean">${onTrack} clean</span>, <span class="clickable-stat" data-which="missed">${outOfSla} missed at least one</span>).`;
-  summaryEl.querySelectorAll(".clickable-stat").forEach(el=>{
-    el.addEventListener("click", ()=>{
-      const which = el.dataset.which;
-      const matches = which==="clean" ? active.filter(p=>!missedAnyIds.has(p.id)) : active.filter(p=>missedAnyIds.has(p.id));
-      const title = which==="clean" ? "Clean across all SLAs" : "Missed at least one SLA";
-      openQuickList(title, `${matches.length} position${matches.length===1?"":"s"}`, matches);
-    });
-  });
+  const rows = [
+    {label:"Clean Across All SLAs", value: onTrack},
+    {label:"Missed At Least One", value: outOfSla},
+  ].filter(r=>r.value>0);
+  renderDonut(
+    "chartSlaCompliance",
+    rows.length ? rows : [{label:"No active positions", value:1}],
+    [color, "var(--grid)"],
+    null, 100,
+    {value: rate + "%", label: "Compliant"},
+    rows.length ? (row)=>{
+      const matches = row.label==="Clean Across All SLAs"
+        ? active.filter(p=>!missedAnyIds.has(p.id))
+        : active.filter(p=>missedAnyIds.has(p.id));
+      openQuickList(row.label, `${matches.length} position${matches.length===1?"":"s"}`, matches);
+    } : null
+  );
 }
 
 function renderHiresTrend(){
@@ -1608,7 +1578,6 @@ async function saveModalStatus(){
     renderKpis();
     renderEstadoChart();
     renderReclutadorChart();
-    renderPipelineTotals();
     renderHiredLocChart();
     renderSlaChart();
     renderSlaMeter();
@@ -1793,7 +1762,6 @@ function renderAll(){
   renderKpis();
   renderEstadoChart();
   renderReclutadorChart();
-  renderPipelineTotals();
   renderHiredLocChart();
   renderSlaChart();
   renderSlaMeter();
