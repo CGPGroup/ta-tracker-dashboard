@@ -410,7 +410,7 @@
             </div>
             <div class="panel">
               <h3>SLA Compliance</h3>
-              <div class="panel-sub">Share of active positions that haven't missed any of their 3 SLA targets (TTS, TTF, TTH). The rest have missed at least one.</div>
+              <div class="panel-sub">Share of active positions on time on every SLA target (submit, fill, and hire deadlines). The rest are running behind on at least one.</div>
               <div id="chartSlaCompliance"></div>
             </div>
             <div class="panel">
@@ -1038,18 +1038,20 @@ function renderSlaMeter(){
   if(rate < 75) color = "var(--critical)";
   else if(rate < 90) color = "var(--warning)";
 
+  // Nombres en lenguaje llano a proposito: TTS/TTF/TTH es jerga que nadie fuera de
+  // reclutamiento entiende, "on time" / "behind schedule" no necesita explicacion.
   const rows = [
-    {label:"Met All 3 SLAs (TTS/TTF/TTH)", value: onTrack},
-    {label:"Missed 1+ SLA (TTS/TTF/TTH)", value: outOfSla},
+    {label:"On Time", value: onTrack},
+    {label:"Behind Schedule", value: outOfSla},
   ].filter(r=>r.value>0);
   renderDonut(
     "chartSlaCompliance",
     rows.length ? rows : [{label:"No active positions", value:1}],
     [color, "var(--grid)"],
     null, 100,
-    {value: rate + "%", label: "SLA Compliant"},
+    {value: rate + "%", label: "On Time"},
     rows.length ? (row)=>{
-      const matches = row.label==="Met All 3 SLAs (TTS/TTF/TTH)"
+      const matches = row.label==="On Time"
         ? active.filter(p=>!missedAnyIds.has(p.id))
         : active.filter(p=>missedAnyIds.has(p.id));
       openQuickList(row.label, `${matches.length} position${matches.length===1?"":"s"}`, matches);
