@@ -808,10 +808,12 @@ function statusChip(status){
    ============================================================ */
 function renderKpis(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
-  // "Hired (YTD)" antes contaba TODAS las posiciones con status Hired sin filtrar por fecha,
-  // asi que el "(YTD)" del nombre era falso. Ahora si filtra por el hire date real de este ano.
-  const thisYear = new Date().getFullYear();
-  const hiredYtd = POSITIONS.filter(p=>p.status==="Hired" && p.hire && parseD(p.hire).getFullYear()===thisYear).length;
+  // Esta fila es de pulso semanal, no un resumen anual, asi que "Hired (YTD)" no pertenecia
+  // aqui. Mismo corte de 7 dias que usa renderTrackingActivity, para quedar consistentes.
+  const kpiCutoff = new Date();
+  kpiCutoff.setDate(kpiCutoff.getDate() - 7);
+  const kpiCutoffStr = kpiCutoff.toISOString().slice(0,10);
+  const hiredThisWeek = POSITIONS.filter(p=>p.status==="Hired" && p.hire && p.hire >= kpiCutoffStr).length;
   let atRisk=0, outOfSla=0;
   active.forEach(p=>{
     const s = computeSla(p);
@@ -822,7 +824,7 @@ function renderKpis(){
 
   const tiles = [
     {label:"Active Positions", value: active.length, cls:""},
-    {label:"Hires This Year", value: hiredYtd, cls:"good"},
+    {label:"Hires This Week", value: hiredThisWeek, cls:"good"},
     {label:"Offers Pending Decision", value: POSITIONS.filter(p=>p.status==="Offer Request").length, cls:""},
     {label:"At SLA Risk", value: atRisk, cls: atRisk>0 ? "warning":""},
     {label:"Out Of SLA", value: outOfSla, cls: outOfSla>0 ? "critical":""},
