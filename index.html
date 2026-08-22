@@ -2016,9 +2016,27 @@ async function loadFromGraph(){
   renderAll();
 }
 
+// Busca en vivo en cuAL fila de la Tabla vive una posicion, en vez de confiar en el indice
+// que quedo guardado en memoria desde el ultimo loadFromGraph(). Si alguien mas borro una
+// posicion mientras esta pestana estaba abierta, las filas de abajo se corrieron una hacia
+// arriba; sin esta busqueda en vivo, un guardado tardio podria escribir sobre la fila
+// equivocada. Con ella, cada guardado siempre apunta a la fila correcta en ese momento, sin
+// necesidad de que nadie recargue la pagina antes de guardar.
+async function resolveRowIndex(positionId){
+  const resp = await graphFetch(`${workbookBase()}/tables('PositionsTable')/columns('Position ID')/range?$select=values`);
+  const values = resp.values || [];
+  for(let i = 1; i < values.length; i++){
+    if(values[i][0] === positionId){
+      POSITIONS_ROW_INDEX[positionId] = i - 1; // refresca el cache local de paso
+      return i - 1;
+    }
+  }
+  return undefined;
+}
+
 async function graphUpdatePositionField(positionId, columnLetter, value){
-  const rowIndex = POSITIONS_ROW_INDEX[positionId];
-  if(rowIndex === undefined) throw new Error("Position not found in the loaded table, reload from Excel first.");
+  const rowIndex = await resolveRowIndex(positionId);
+  if(rowIndex === undefined) throw new Error("This position no longer exists in the shared file (someone may have deleted it). Reload the data before trying again.");
   // PATCH directo sobre la celda (fuera de la Tabla, usando range del worksheet) es mas
   // simple que recalcular columnas dentro de la Tabla; la fila de datos empieza en la 2.
   const excelRow = rowIndex + 2;
@@ -2080,8 +2098,8 @@ async function graphAppendRecruiter(name, email){
 }
 
 async function graphDeletePosition(positionId){
-  const rowIndex = POSITIONS_ROW_INDEX[positionId];
-  if(rowIndex === undefined) throw new Error("Position not found in the loaded table, reload from Excel first.");
+  const rowIndex = await resolveRowIndex(positionId);
+  if(rowIndex === undefined) throw new Error("This position no longer exists in the shared file (someone may have already deleted it).");
   await graphFetch(`${workbookBase()}/tables('PositionsTable')/rows/itemAt(index=${rowIndex})`, {
     method: "DELETE",
   });
