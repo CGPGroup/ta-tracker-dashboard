@@ -45,6 +45,9 @@
     background: var(--page);
     color: var(--text-primary);
   }
+  /* Los controles nativos (input/select/textarea/button) no heredan la fuente por defecto en
+     la mayoria de navegadores; esto obliga a que usen la misma tipografia que el resto. */
+  input, select, textarea, button { font-family: inherit; }
 
   /* ---------- Shell ---------- */
   .shell { display: flex; min-height: 100vh; }
@@ -129,8 +132,12 @@
   .kpi-value.critical { color: var(--critical); }
 
   /* ---------- Panels / charts ---------- */
-  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 16px; }
-  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 16px; align-items: start; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
+  /* Layout tipo "masonry" para el Dashboard: los paneles se acomodan sin dejar huecos
+     cuando un vecino es mas corto (a diferencia de un grid de filas fijas). */
+  .masonry-2col { column-count: 2; column-gap: 16px; }
+  .masonry-2col .panel { break-inside: avoid; margin-bottom: 16px; }
 
   .panel {
     background: var(--surface-1); border-radius: var(--radius);
@@ -280,6 +287,15 @@
     font-family: inherit; font-size: 13px; padding: 6px 8px; width: 100%;
     border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text-primary);
   }
+  .clickable-stat { cursor: pointer; transition: opacity .12s; }
+  .clickable-stat:hover { opacity: 0.72; }
+  .stackbar-counts .clickable-stat:hover { text-decoration: underline; opacity: 1; }
+  .quick-list-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--grid); cursor: pointer;
+  }
+  .quick-list-row:last-child { border-bottom: none; }
+  .quick-list-row:hover .pos-title { color: var(--brand); }
   .sla-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
   .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
   .sla-card .sla-name { font-size: 10.5px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
@@ -315,6 +331,7 @@
   @media (max-width: 1080px) {
     .kpi-row { grid-template-columns: repeat(3, 1fr); }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .masonry-2col { column-count: 1; }
     .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
   }
 
@@ -377,7 +394,7 @@
       <section class="view active" id="view-dashboard">
         <div class="kpi-row" id="kpiRow"></div>
 
-        <div class="grid-2">
+        <div class="masonry-2col">
           <div class="panel">
             <h3>Active Pipeline By Status</h3>
             <div class="panel-sub">Open positions, grouped by funnel stage</div>
@@ -386,25 +403,14 @@
           <div class="panel">
             <h3>SLA Health</h3>
             <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target (TTS in business days; TTF/TTH in calendar days)</div>
+            <div class="panel-sub" id="slaCleanSummary" style="margin-top:2px; margin-bottom:14px;"></div>
             <div id="chartSla"></div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="panel">
-            <h3>SLA Compliance</h3>
-            <div class="panel-sub">Active positions that haven't passed any SLA target today</div>
-            <div id="chartSlaCompliance"></div>
-            <div class="panel-sub" id="slaComplianceCaption" style="margin-top:12px; margin-bottom:0;"></div>
           </div>
           <div class="panel">
             <h3>Active Workload By Recruiter</h3>
             <div class="panel-sub">Open positions currently assigned to each recruiter</div>
             <div class="barlist" id="chartReclutador"></div>
           </div>
-        </div>
-
-        <div class="grid-2">
           <div class="panel">
             <h3>Pending Offers</h3>
             <div class="panel-sub">Positions currently waiting on an offer decision</div>
@@ -415,20 +421,18 @@
             <div class="panel-sub">Confirmed hires, this month vs last month</div>
             <div id="chartPlacementsMonth"></div>
           </div>
-        </div>
-
-        <div class="grid-2">
           <div class="panel">
             <h3>Hires Per Month (2026)</h3>
             <div class="panel-sub">Confirmed placements per month, year to date</div>
             <div id="chartHiresTrend"></div>
           </div>
           <div class="panel">
-            <h3>Positions By Location</h3>
+            <h3>Position By Location/Work Arrangement</h3>
             <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
+            <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
             <div class="barlist" id="chartHiredLoc"></div>
             <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--grid);">
-              <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY WORK ARRANGEMENT</div>
+              <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
               <div class="barlist" id="chartWorkArrangement"></div>
             </div>
           </div>
@@ -572,6 +576,20 @@
 </div>
 </div>
 
+<!-- ======================= QUICK LIST PREVIEW MODAL (drill-down from charts/stats) ======================= -->
+<div class="modal-overlay" id="quickListModal">
+  <div class="modal-card" style="max-width:560px;">
+    <div class="modal-head">
+      <div>
+        <h2 id="quickListTitle" style="margin:0; font-size:16px;"></h2>
+        <div class="modal-sub" id="quickListSub"></div>
+      </div>
+      <button class="modal-close" id="quickListClose" type="button">&times;</button>
+    </div>
+    <div class="modal-body" id="quickListBody" style="padding:8px 24px 24px;"></div>
+  </div>
+</div>
+
 <!-- ======================= POSITION DETAIL MODAL ======================= -->
 <div class="modal-overlay" id="detailModal">
   <div class="modal-card">
@@ -583,6 +601,10 @@
       <button class="modal-close" id="modalClose" type="button">×</button>
     </div>
     <div class="modal-note" id="modalNote">Not connected to Microsoft 365 — updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the real Excel file.</div>
+
+    <div id="modalEditInTrackingZone" style="display:none; margin-bottom:14px;">
+      <button type="button" id="modalEditInTrackingBtn" class="btn ghost small">Edit in Tracking →</button>
+    </div>
 
     <div id="modalFacts"></div>
 
@@ -790,17 +812,22 @@ function renderKpis(){
     </div>`).join("");
 }
 
-function renderBarlist(elId, rows, colorVar){
+function renderBarlist(elId, rows, colorVar, onClickRow){
   const max = Math.max(1, ...rows.map(r=>r.value));
-  document.getElementById(elId).innerHTML = rows.map(r=>`
-    <div class="barlist-row">
+  document.getElementById(elId).innerHTML = rows.map((r,i)=>`
+    <div class="barlist-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
       <div class="barlist-label" title="${r.label}">${r.label}</div>
       <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${colorVar};"></div></div>
       <div class="barlist-value">${r.value}</div>
     </div>`).join("");
+  if(onClickRow){
+    document.querySelectorAll(`#${elId} .barlist-row`).forEach((el,i)=>{
+      el.addEventListener("click", ()=>onClickRow(rows[i]));
+    });
+  }
 }
 
-function renderDonut(elId, rows, colors, totalLabel, size, centerOverride){
+function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onClickRow){
   size = size || 140;
   const total = rows.reduce((s,r)=>s+r.value,0) || 1;
   const r = 45, cx = 60, cy = 60, sw = 18;
@@ -810,12 +837,12 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride){
     const frac = row.value/total;
     const dash = frac*circ;
     const gap = circ-dash;
-    const el = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="${sw}" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
+    const el = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="${sw}" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" ${onClickRow?`class="clickable-stat" data-idx="${i}"`:""}></circle>`;
     offset += dash;
     return el;
   }).join("");
   const legend = rows.map((row,i)=>`
-    <div class="donut-legend-row">
+    <div class="donut-legend-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
       <span class="dot" style="background:${colors[i % colors.length]}"></span>
       <span class="donut-legend-label" title="${row.label}">${row.label}</span>
       <span class="donut-legend-value">${row.value}</span>
@@ -833,6 +860,11 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride){
       </div>
       <div class="donut-legend">${legend}</div>
     </div>`;
+  if(onClickRow){
+    document.querySelectorAll(`#${elId} .clickable-stat`).forEach(el=>{
+      el.addEventListener("click", ()=>onClickRow(rows[+el.dataset.idx]));
+    });
+  }
 }
 
 function renderEstadoChart(){
@@ -840,14 +872,20 @@ function renderEstadoChart(){
   const stages = STATUS_ORDER.filter(s=>!TERMINAL.includes(s));
   const counts = stages.map(s=>({label:s, value: active.filter(p=>p.status===s).length})).filter(r=>r.value>0);
   const colors = counts.map(c=>STAGE_COLORS[c.label] || "var(--neutral)");
-  renderDonut("chartEstado", counts, colors, "Active");
+  renderDonut("chartEstado", counts, colors, "Active", 140, null, (row)=>{
+    openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
+      active.filter(p=>p.status===row.label));
+  });
 }
 
 function renderReclutadorChart(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
   const rows = RECRUITERS.map(r=>({label:r, value: active.filter(p=>p.recruiter===r).length}))
     .sort((a,b)=>b.value-a.value);
-  renderBarlist("chartReclutador", rows, "var(--brand)");
+  renderBarlist("chartReclutador", rows, "var(--brand)", (row)=>{
+    openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
+      active.filter(p=>p.recruiter===row.label));
+  });
 }
 
 function renderHiredLocChart(){
@@ -860,7 +898,10 @@ function renderHiredLocChart(){
   });
   const rows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
   if(rows.length){
-    renderDonut("chartHiredLoc", rows, ramp, "Active", 100);
+    renderDonut("chartHiredLoc", rows, ramp, "Active", 100, null, (row)=>{
+      openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
+        active.filter(p=>(p.country||"Unknown")===row.label));
+    });
   } else {
     renderDonut("chartHiredLoc", [{label:"No active positions", value:1}], ["var(--grid)"], "Active", 100);
   }
@@ -873,16 +914,23 @@ function renderHiredLocChart(){
   const arrRows = Object.entries(byArrangement)
     .filter(([,v])=>v>0)
     .map(([label,value])=>({label,value}));
-  document.getElementById("chartWorkArrangement").innerHTML = arrRows.length ? arrRows.map(r=>{
+  document.getElementById("chartWorkArrangement").innerHTML = arrRows.length ? arrRows.map((r,i)=>{
     const max = Math.max(...arrRows.map(x=>x.value), 1);
     const color = ARRANGEMENT_COLORS[r.label] || "var(--neutral)";
     return `
-    <div class="barlist-row">
+    <div class="barlist-row clickable-stat" data-idx="${i}">
       <div class="barlist-label">${r.label}</div>
       <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${color};"></div></div>
       <div class="barlist-value">${r.value}</div>
     </div>`;
   }).join("") : `<div class="panel-sub" style="margin:0;">No active positions.</div>`;
+  document.querySelectorAll("#chartWorkArrangement .barlist-row").forEach((el,i)=>{
+    el.addEventListener("click", ()=>{
+      const row = arrRows[i];
+      openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
+        active.filter(p=>(p.workArrangement||"Remote")===row.label));
+    });
+  });
 }
 
 function renderSlaChart(){
@@ -892,16 +940,14 @@ function renderSlaChart(){
     {key:"TTF", label:"Time To Fill (TTF)", tag:"internal", tagLabel:"Internal goal"},
     {key:"TTH", label:"Time To Hire (TTH)", tag:"internal", tagLabel:"Internal goal"},
   ];
+  const STATUS_WORD = {within:"within SLA", risk:"at risk", out:"out of SLA", none:"not started"};
   const html = metrics.map(m=>{
     const counts = {within:0, risk:0, out:0, none:0};
     active.forEach(p=>{ counts[computeSla(p)[m.key].status]++; });
     const total = active.length || 1;
-    const seg = (k)=> `<div style="width:${(counts[k]/total*100).toFixed(2)}%; background:${STATUS_META[k].color};"></div>`;
-    const parts = [];
-    if(counts.within) parts.push(`${counts.within} within`);
-    if(counts.risk) parts.push(`${counts.risk} at risk`);
-    if(counts.out) parts.push(`${counts.out} out of SLA`);
-    if(counts.none) parts.push(`${counts.none} not started`);
+    const seg = (k)=> `<div class="clickable-stat" data-metric="${m.key}" data-status="${k}" style="width:${(counts[k]/total*100).toFixed(2)}%; background:${STATUS_META[k].color};"></div>`;
+    const part = (k, label)=> counts[k] ? `<span class="clickable-stat" data-metric="${m.key}" data-status="${k}">${counts[k]} ${label}</span>` : "";
+    const parts = [part("within","within"), part("risk","at risk"), part("out","out of SLA"), part("none","not started")].filter(Boolean);
     return `
       <div class="stackbar-wrap">
         <div class="stackbar-title">
@@ -919,56 +965,49 @@ function renderSlaChart(){
       <span><span class="dot" style="background:var(--critical)"></span>Out of SLA</span>
       <span><span class="dot" style="background:var(--neutral)"></span>Not started</span>
     </div>`;
+  document.querySelectorAll("#chartSla .clickable-stat").forEach(seg=>{
+    seg.addEventListener("click", ()=>{
+      const key = seg.dataset.metric, status = seg.dataset.status;
+      const m = metrics.find(x=>x.key===key);
+      const matches = active.filter(p=>computeSla(p)[key].status===status);
+      openQuickList(`${m.label} — ${STATUS_WORD[status]}`, `${matches.length} position${matches.length===1?"":"s"}`, matches);
+    });
+  });
 }
 
+// SLA Health y SLA Compliance eran dos paneles separados que competian por espacio y se
+// solapaban: las 3 barras ya muestran cuantas posiciones estan out/at risk por metrica, asi
+// que el unico dato que la vieja SLA Compliance agregaba de verdad (no derivable de las
+// barras) es el conteo de posiciones distintas que incumplieron al menos un target. Ese dato
+// ahora vive como una linea compacta clickeable arriba de las barras de SLA Health, en vez de
+// un panel/donut aparte.
 function renderSlaMeter(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
-  let outOfSla = 0, missedTTS = 0, missedTTF = 0, missedTTH = 0;
-  active.forEach(p=>{
-    const s = computeSla(p);
-    let missedAny = false;
-    if(s.TTS.status==="out"){ missedTTS++; missedAny = true; }
-    if(s.TTF.status==="out"){ missedTTF++; missedAny = true; }
-    if(s.TTH.status==="out"){ missedTTH++; missedAny = true; }
-    if(missedAny) outOfSla++;
-  });
-  const onTrack = active.length - outOfSla;
-  const rate = active.length ? Math.round((onTrack / active.length) * 100) : 100;
-  let color = "var(--good)", ratePhrase = "healthy, no action needed";
-  if(rate < 75){ color = "var(--critical)"; ratePhrase = "something to prioritize this week"; }
-  else if(rate < 90){ color = "var(--warning)"; ratePhrase = "worth keeping an eye on"; }
-  const rows = [
-    {label:"On track", value: onTrack},
-    {label:"Missed at least one SLA", value: outOfSla},
-  ].filter(r=>r.value>0);
-  renderDonut(
-    "chartSlaCompliance",
-    rows.length ? rows : [{label:"No active positions", value:1}],
-    [color, "var(--grid)"],
-    null, 140,
-    {value: rate + "%", label: "On track"}
-  );
-
-  const capEl = document.getElementById("slaComplianceCaption");
+  const summaryEl = document.getElementById("slaCleanSummary");
   if(!active.length){
-    capEl.innerHTML = "No active positions right now.";
+    summaryEl.innerHTML = "No active positions right now.";
     return;
   }
-  let html = `
-    <div style="margin-bottom:8px;">
-      <b style="color:${color};">${rate}% on track</b> (${onTrack} of ${active.length} active positions haven't missed any SLA target) — ${ratePhrase}.
-    </div>`;
-  if(outOfSla > 0){
-    const items = [];
-    if(missedTTS) items.push(`<li><b>${missedTTS}</b> missed Time To Submit (TTS)</li>`);
-    if(missedTTF) items.push(`<li><b>${missedTTF}</b> missed Time To Fill (TTF)</li>`);
-    if(missedTTH) items.push(`<li><b>${missedTTH}</b> missed Time To Hire (TTH)</li>`);
-    html += `
-    <div style="margin-bottom:4px;"><b style="color:var(--critical);">${outOfSla}</b> position${outOfSla>1?"s":""} missed at least one SLA target, broken down by which one:</div>
-    <ul style="margin:0 0 6px 16px; padding:0;">${items.join("")}</ul>
-    <div style="color:var(--text-muted);">A position can miss more than one target, so these numbers can add up to more than ${outOfSla}.</div>`;
-  }
-  capEl.innerHTML = html;
+  const missedAnyIds = new Set(active.filter(p=>{
+    const s = computeSla(p);
+    return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
+  }).map(p=>p.id));
+  const outOfSla = missedAnyIds.size;
+  const onTrack = active.length - outOfSla;
+  const rate = Math.round((onTrack / active.length) * 100);
+  let color = "var(--good)";
+  if(rate < 75) color = "var(--critical)";
+  else if(rate < 90) color = "var(--warning)";
+
+  summaryEl.innerHTML = `<b style="color:${color};">${rate}% of active positions</b> haven't missed any SLA target (<span class="clickable-stat" data-which="clean">${onTrack} clean</span>, <span class="clickable-stat" data-which="missed">${outOfSla} missed at least one</span>).`;
+  summaryEl.querySelectorAll(".clickable-stat").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const which = el.dataset.which;
+      const matches = which==="clean" ? active.filter(p=>!missedAnyIds.has(p.id)) : active.filter(p=>missedAnyIds.has(p.id));
+      const title = which==="clean" ? "Clean across all SLAs" : "Missed at least one SLA";
+      openQuickList(title, `${matches.length} position${matches.length===1?"":"s"}`, matches);
+    });
+  });
 }
 
 function renderHiresTrend(){
@@ -1026,8 +1065,9 @@ function renderPlacementsMonth(){
   const lastMonthDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
   const isLastMonth = (d)=> d.getFullYear()===lastMonthDate.getFullYear() && d.getMonth()===lastMonthDate.getMonth();
 
-  const thisMonthCount = POSITIONS.filter(p=>p.status==="Hired" && p.hire && isThisMonth(parseD(p.hire))).length;
-  const lastMonthCount = POSITIONS.filter(p=>p.status==="Hired" && p.hire && isLastMonth(parseD(p.hire))).length;
+  const thisMonthPositions = POSITIONS.filter(p=>p.status==="Hired" && p.hire && isThisMonth(parseD(p.hire)));
+  const lastMonthPositions = POSITIONS.filter(p=>p.status==="Hired" && p.hire && isLastMonth(parseD(p.hire)));
+  const thisMonthCount = thisMonthPositions.length, lastMonthCount = lastMonthPositions.length;
   const max = Math.max(1, thisMonthCount, lastMonthCount);
   const monthNameThis = now.toLocaleString("en-US", {month:"short"});
   const monthNameLast = lastMonthDate.toLocaleString("en-US", {month:"short"});
@@ -1041,17 +1081,23 @@ function renderPlacementsMonth(){
       <div style="font-size:11.5px; font-weight:500 !important; color:${deltaColor};">${deltaText}</div>
     </div>
     <div class="barlist">
-      <div class="barlist-row">
+      <div class="barlist-row clickable-stat" data-which="last">
         <div class="barlist-label">${monthNameLast}</div>
         <div class="barlist-track"><div class="barlist-fill" style="width:${(lastMonthCount/max*100).toFixed(1)}%; background:var(--baseline);"></div></div>
         <div class="barlist-value">${lastMonthCount}</div>
       </div>
-      <div class="barlist-row">
+      <div class="barlist-row clickable-stat" data-which="this">
         <div class="barlist-label">${monthNameThis}</div>
         <div class="barlist-track"><div class="barlist-fill" style="width:${(thisMonthCount/max*100).toFixed(1)}%; background:var(--brand);"></div></div>
         <div class="barlist-value">${thisMonthCount}</div>
       </div>
     </div>`;
+  document.querySelector('#chartPlacementsMonth [data-which="last"]').addEventListener("click", ()=>{
+    openQuickList(`Hired in ${monthNameLast}`, `${lastMonthCount} position${lastMonthCount===1?"":"s"}`, lastMonthPositions);
+  });
+  document.querySelector('#chartPlacementsMonth [data-which="this"]').addEventListener("click", ()=>{
+    openQuickList(`Hired in ${monthNameThis}`, `${thisMonthCount} position${thisMonthCount===1?"":"s"}`, thisMonthPositions);
+  });
 }
 
 function renderPendingOffers(){
@@ -1063,11 +1109,14 @@ function renderPendingOffers(){
   }
   list.innerHTML = offers.map(p=>{
     const s = computeSla(p);
-    return `<div class="pending-offer-row">
+    return `<div class="pending-offer-row clickable-stat" data-id="${p.id}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:500 !important; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${p.hiringManager}</div></div>
       ${slaChip(s.TTF)}
     </div>`;
   }).join("");
+  list.querySelectorAll(".pending-offer-row").forEach(row=>{
+    row.addEventListener("click", ()=>openDetailModal(row.dataset.id, "view", false, true));
+  });
 }
 
 /* ============================================================
@@ -1134,7 +1183,7 @@ function renderPositions(){
     </tr>`;
   }).join("");
   document.querySelectorAll("#positionsTable tbody tr.clickable").forEach(tr=>{
-    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, "view"));
+    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, "view", true));
   });
 }
 
@@ -1275,10 +1324,14 @@ function buildTimeline(p){
 
 let activeDetailId = null;
 let activeDetailMode = "edit";
+let activeDetailAllowDelete = false;
+let activeDetailFromDashboard = false;
 
-function openDetailModal(id, mode){
+function openDetailModal(id, mode, allowDelete, fromDashboard){
   activeDetailId = id;
   activeDetailMode = mode || "edit";
+  activeDetailAllowDelete = allowDelete || false;
+  activeDetailFromDashboard = fromDashboard || false;
   renderDetailModal();
   document.getElementById("detailModal").classList.add("open");
 }
@@ -1286,6 +1339,34 @@ function closeDetailModal(){
   document.getElementById("detailModal").classList.remove("open");
   activeDetailId = null;
 }
+// Preview / drill-down: se abre desde un click en cualquier estadistica, segmento de grafica,
+// o fila de lista (SLA Health, Active Pipeline By Status, Active Workload By Recruiter,
+// Placements This Month, Positions By Location...). Muestra una lista corta de las
+// posiciones que cumplen ese criterio; cada fila abre el modal de detalle completo de esa posicion.
+function openQuickList(title, sub, positions){
+  document.getElementById("quickListTitle").textContent = title;
+  document.getElementById("quickListSub").textContent = sub || `${positions.length} position${positions.length===1?"":"s"}`;
+  const body = document.getElementById("quickListBody");
+  body.innerHTML = positions.length ? positions.map(p => `
+    <div class="quick-list-row" data-id="${p.id}">
+      <div>${posLabel(p)}<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${locationOnly(p)}</div></div>
+      ${statusChip(p.status)}
+    </div>`).join("") : `<div class="panel-sub" style="margin:0;">Nothing matches this right now.</div>`;
+  body.querySelectorAll(".quick-list-row").forEach(row=>{
+    row.addEventListener("click", ()=>{
+      closeQuickList();
+      openDetailModal(row.dataset.id, "view", false, true);
+    });
+  });
+  document.getElementById("quickListModal").classList.add("open");
+}
+function closeQuickList(){
+  document.getElementById("quickListModal").classList.remove("open");
+}
+document.getElementById("quickListClose").addEventListener("click", closeQuickList);
+document.getElementById("quickListModal").addEventListener("click", (e)=>{
+  if(e.target.id === "quickListModal") closeQuickList();
+});
 function factsSection(title, facts){
   if(!facts.length) return "";
   return `
@@ -1381,9 +1462,10 @@ function renderDetailModal(){
   document.getElementById("modalStatusSection").style.display = isView ? "none" : "";
   document.getElementById("modalRemarkTitle").style.display = isView ? "none" : "";
   document.getElementById("modalRemarkSection").style.display = isView ? "none" : "";
-  // Eliminar una posicion solo es posible desde Positions (modo "view"), nunca desde
-  // Tracking, para que no sea algo que se haga sin querer en el flujo de trabajo diario.
-  document.getElementById("modalDeleteZone").style.display = isView ? "" : "none";
+  // Eliminar una posicion solo es posible desde Positions, nunca desde Tracking ni desde
+  // los drill-down del Dashboard, para que no sea algo que se haga sin querer.
+  document.getElementById("modalDeleteZone").style.display = activeDetailAllowDelete ? "" : "none";
+  document.getElementById("modalEditInTrackingZone").style.display = activeDetailFromDashboard ? "" : "none";
 }
 
 async function saveModalDates(){
@@ -1485,6 +1567,12 @@ document.getElementById("modalClose").addEventListener("click", closeDetailModal
 document.getElementById("detailModal").addEventListener("click", (e)=>{ if(e.target.id==="detailModal") closeDetailModal(); });
 document.getElementById("modalStatusSave").addEventListener("click", saveModalStatus);
 document.getElementById("modalRemarkSave").addEventListener("click", saveModalRemark);
+document.getElementById("modalEditInTrackingBtn").addEventListener("click", ()=>{
+  const id = activeDetailId;
+  closeDetailModal();
+  activateView("tracking");
+  openDetailModal(id, "edit", false, false);
+});
 
 async function deleteActivePosition(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
@@ -1587,16 +1675,15 @@ const TITLES = {
   tracking: ["Tracking", "Codes, SLA, and the latest activity per position"],
   manage: ["SSOT Management", "Add new positions, recruiters, and configuration"],
 };
+function activateView(view){
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("view-"+view).classList.add("active");
+  document.getElementById("topbarTitle").textContent = TITLES[view][0];
+  document.getElementById("topbarSub").textContent = TITLES[view][1];
+}
 document.querySelectorAll(".nav-item").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    document.querySelectorAll(".nav-item").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-    const view = btn.dataset.view;
-    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-    document.getElementById("view-"+view).classList.add("active");
-    document.getElementById("topbarTitle").textContent = TITLES[view][0];
-    document.getElementById("topbarSub").textContent = TITLES[view][1];
-  });
+  btn.addEventListener("click", ()=> activateView(btn.dataset.view));
 });
 
 document.getElementById("positionsSearch").addEventListener("input", renderPositions);
