@@ -541,6 +541,7 @@
             <div class="form-grid">
               <div class="form-field"><label>Position Title</label><input type="text" id="newPosTitle" placeholder="e.g. Backend Engineer"></div>
               <div class="form-field"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
+              <div class="form-field"><label>Spott Job ID (Optional)</label><input type="text" id="newPosSpottId" placeholder="e.g. 3a3dd134-484a-4afa-b9d7-c089060e2316"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
               <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"><option>Nicolás Patarroyo</option></select></div>
@@ -673,17 +674,17 @@ let LOCATIONS = ["Canada","Australia","United States"];
 const CLIENT = "Irth Solutions";
 
 let POSITIONS = [
-  {id:"RD-007", title:"Senior Software Engineer", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, productLine:"AIP", salaryRange:"CAD $128,000 – $178,000", sourced:24, directApps:172, submittedCount:3, activeCount:2, rejectedCount:1, placedCandidate:null, finalComp:null, kickoff:"2026-07-08", intake:"2026-07-16", submit:null, fill:null, hire:null, lastRemark:"One candidate rejected for AI-generated interview answers. Decision on remaining 2 candidates on hold pending an internal HR matter on the hiring manager's side.", slaException:"No", extra:[]},
-  {id:"RD-008", title:"Senior Database Engineer", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Filled", country:"Canada", workArrangement:"Remote", city:null, productLine:"AIP", salaryRange:"CAD $128,000 – $178,000", sourced:42, directApps:205, submittedCount:4, activeCount:0, rejectedCount:null, placedCandidate:"Jagdish Chaudhary", finalComp:"CAD $165,000", kickoff:"2026-06-18", intake:"2026-06-25", submit:null, fill:null, hire:null, lastRemark:"Placed within approved range; thin LinkedIn-visible talent pool (only ~75 professionals nationally with this exact title).", slaException:"No", extra:[]},
-  {id:"RD-009", title:"QA Assurance Analyst", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, productLine:"AIP", salaryRange:"CAD $106,000 – $156,000", sourced:25, directApps:414, submittedCount:4, activeCount:3, rejectedCount:1, placedCandidate:null, finalComp:null, kickoff:"2026-07-08", intake:"2026-07-16", submit:null, fill:null, hire:null, lastRemark:"Manual / functional testing role (JD was AI-generated and overstated automation requirements); API testing is a nice-to-have, not a requirement.", slaException:"No", extra:[]},
-  {id:"RD-010", title:"Forward Deployed Engineer / Implementation Engineer (HC 1 of 2)", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, productLine:"AIP", salaryRange:"CAD $140,000 – $190,000", sourced:45, directApps:20, submittedCount:4, activeCount:2, rejectedCount:2, placedCandidate:null, finalComp:null, kickoff:"2026-07-08", intake:"2026-07-16", submit:null, fill:null, hire:null, lastRemark:"Domain expertise (hands-on ILI / pipeline-integrity data) is the primary requirement; technical stack (SQL, scripting) is secondary. Part of a 2-headcount requisition (see RD-011); pipeline is shared/sourced jointly across both headcounts.", slaException:"No", extra:[]},
-  {id:"RD-011", title:"Forward Deployed Engineer / Implementation Engineer (HC 2 of 2)", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, productLine:"AIP", salaryRange:"CAD $140,000 – $190,000", sourced:45, directApps:20, submittedCount:4, activeCount:2, rejectedCount:2, placedCandidate:null, finalComp:null, kickoff:"2026-07-08", intake:"2026-07-16", submit:null, fill:null, hire:null, lastRemark:"Domain expertise (hands-on ILI / pipeline-integrity data) is the primary requirement; technical stack (SQL, scripting) is secondary. Part of a 2-headcount requisition (see RD-010); one of the two headcounts may be filled by an internal referral. Pipeline is shared/sourced jointly across both headcounts.", slaException:"No", extra:[]},
-  {id:"RD-013", title:"Full Stack Developer (Node.js / React)", client:"Irth Solutions", hiringManager:"Carl Perreault", recruiter:"Nicolás Patarroyo", status:"Offer Request", country:"Canada", workArrangement:"Remote", city:null, productLine:"Boréalis", salaryRange:"CAD $75,000", sourced:25, directApps:56, submittedCount:4, activeCount:1, rejectedCount:3, placedCandidate:"Benjamin Cotte (offer stage, not yet signed)", finalComp:null, kickoff:"2026-07-16", intake:"2026-07-21", submit:null, fill:null, hire:null, lastRemark:"Search constrained by bilingualism requirement (English/French); candidates without a formal degree considered if strong on experience and technical stack. (Quebec preferred; other Eastern Time provinces acceptable.)", slaException:"No", extra:[]},
-  {id:"RD-071", title:"Senior QA Engineer, Mobile Applications", client:"Irth Solutions", hiringManager:"Garima Neema", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, productLine:"AIP", salaryRange:"CAD $180,000 (Canada) / USD $130,000 (US)", sourced:24, directApps:56, submittedCount:4, activeCount:3, rejectedCount:0, placedCandidate:null, finalComp:null, kickoff:"2026-06-18", intake:null, submit:null, fill:null, hire:null, lastRemark:"Approved CAD range sits well above Canadian market benchmarks per compensation analysis (flagged for HR/Garima review). Search re-scoped from US-only to Canada-primary. (Spott kickoff-date field said: \"Background context shared; no formal intake meeting held\") (Quebec preferred; Canada primary, US EST/CST considered.)", slaException:"No", extra:[]},
-  {id:"CE-016", title:"Business Analyst, APAC", client:"Irth Solutions", hiringManager:"José Zepeda", recruiter:"Nicolás Patarroyo", status:"Filled", country:"Australia", workArrangement:"Remote", city:null, productLine:"AIP", salaryRange:"Contractor (full-time)", sourced:52, directApps:157, submittedCount:6, activeCount:0, rejectedCount:null, placedCandidate:"Milind Sharma", finalComp:null, kickoff:"2026-06-22", intake:"2026-06-30", submit:null, fill:null, hire:null, lastRemark:"Placed as full-time contractor (standard structure for Australia — superannuation, ABN, GST considerations applied). Backup candidate was Nupina Kannangara.", slaException:"No", extra:[]},
-  {id:"CE-020", title:"Implementation Consultant (Calgary) — externally posted as \"Inline Inspection Engineer\"", client:"Irth Solutions", hiringManager:"Brandon Charrier / Sameer Bhatia", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Hybrid", city:"Calgary, AB", productLine:"AIP", salaryRange:"CAD $140,000 (~10% above Calgary market)", sourced:25, directApps:2, submittedCount:5, activeCount:5, rejectedCount:0, placedCandidate:null, finalComp:null, kickoff:"2026-07-23", intake:"2026-07-28", submit:null, fill:null, hire:null, lastRemark:"Sourcing strategy pivoted after calibration call: prioritizing domain expertise (oil & gas / pipeline integrity) over implementation experience, given an extremely narrow local talent pool (~10-15 people). Assigned to Silvia Arenas as dedicated recruiter.", slaException:"No", extra:[]},
-  {id:"GA-030", title:"Rippling & Finance Systems Consultant (Temp)", client:"Irth Solutions", hiringManager:"ET Cummings", recruiter:"Nicolás Patarroyo", status:"Filled", country:"United States", workArrangement:"Remote", city:null, productLine:"Internal / Corporate", salaryRange:"Not specified", sourced:49, directApps:2, submittedCount:2, activeCount:0, rejectedCount:null, placedCandidate:"(Candidate identified by ET Cummings)", finalComp:null, kickoff:"2026-06-26", intake:"2026-07-02", submit:null, fill:null, hire:null, lastRemark:"Candidate started as planned on August 4, 2026.", slaException:"No", extra:[]},
-  {id:"SM-111", title:"Product Marketing Manager, Damage Prevention", client:"Irth Solutions", hiringManager:"Josh Fuller / Jeff Law", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"United States", workArrangement:"Remote", city:null, productLine:"Damage Prevention", salaryRange:"USD $110,000 – $130,000", sourced:50, directApps:3, submittedCount:3, activeCount:2, rejectedCount:1, placedCandidate:null, finalComp:null, kickoff:"2026-08-03", intake:"2026-08-06", submit:null, fill:null, hire:null, lastRemark:"Two finalists remain after one rejection; hiring manager indicated a preferred candidate with the other as a strong backup. Decision expected imminently. (Spott kickoff-date field said: \"Aug 4, 2026 (intake Aug 6)\")", slaException:"No", extra:[]},
+  {id:"RD-007", title:"Senior Software Engineer", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, spottJobId:null, productLine:"AIP", salaryRange:"CAD $128,000 – $178,000", sourced:24, directApps:172, submittedCount:3, activeCount:2, rejectedCount:1, placedCandidate:null, finalComp:null, kickoff:"2026-07-08", intake:"2026-07-16", submit:null, fill:null, hire:null, lastRemark:"One candidate rejected for AI-generated interview answers. Decision on remaining 2 candidates on hold pending an internal HR matter on the hiring manager's side.", slaException:"No", extra:[]},
+  {id:"RD-008", title:"Senior Database Engineer", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Filled", country:"Canada", workArrangement:"Remote", city:null, spottJobId:null, productLine:"AIP", salaryRange:"CAD $128,000 – $178,000", sourced:42, directApps:205, submittedCount:4, activeCount:0, rejectedCount:null, placedCandidate:"Jagdish Chaudhary", finalComp:"CAD $165,000", kickoff:"2026-06-18", intake:"2026-06-25", submit:null, fill:null, hire:null, lastRemark:"Placed within approved range; thin LinkedIn-visible talent pool (only ~75 professionals nationally with this exact title).", slaException:"No", extra:[]},
+  {id:"RD-009", title:"QA Assurance Analyst", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, spottJobId:null, productLine:"AIP", salaryRange:"CAD $106,000 – $156,000", sourced:25, directApps:414, submittedCount:4, activeCount:3, rejectedCount:1, placedCandidate:null, finalComp:null, kickoff:"2026-07-08", intake:"2026-07-16", submit:null, fill:null, hire:null, lastRemark:"Manual / functional testing role (JD was AI-generated and overstated automation requirements); API testing is a nice-to-have, not a requirement.", slaException:"No", extra:[]},
+  {id:"RD-010", title:"Forward Deployed Engineer / Implementation Engineer (HC 1 of 2)", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, spottJobId:null, productLine:"AIP", salaryRange:"CAD $140,000 – $190,000", sourced:45, directApps:20, submittedCount:4, activeCount:2, rejectedCount:2, placedCandidate:null, finalComp:null, kickoff:"2026-07-08", intake:"2026-07-16", submit:null, fill:null, hire:null, lastRemark:"Domain expertise (hands-on ILI / pipeline-integrity data) is the primary requirement; technical stack (SQL, scripting) is secondary. Part of a 2-headcount requisition (see RD-011); pipeline is shared/sourced jointly across both headcounts.", slaException:"No", extra:[]},
+  {id:"RD-011", title:"Forward Deployed Engineer / Implementation Engineer (HC 2 of 2)", client:"Irth Solutions", hiringManager:"Ketan Shah", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, spottJobId:null, productLine:"AIP", salaryRange:"CAD $140,000 – $190,000", sourced:45, directApps:20, submittedCount:4, activeCount:2, rejectedCount:2, placedCandidate:null, finalComp:null, kickoff:"2026-07-08", intake:"2026-07-16", submit:null, fill:null, hire:null, lastRemark:"Domain expertise (hands-on ILI / pipeline-integrity data) is the primary requirement; technical stack (SQL, scripting) is secondary. Part of a 2-headcount requisition (see RD-010); one of the two headcounts may be filled by an internal referral. Pipeline is shared/sourced jointly across both headcounts.", slaException:"No", extra:[]},
+  {id:"RD-013", title:"Full Stack Developer (Node.js / React)", client:"Irth Solutions", hiringManager:"Carl Perreault", recruiter:"Nicolás Patarroyo", status:"Offer Request", country:"Canada", workArrangement:"Remote", city:null, spottJobId:null, productLine:"Boréalis", salaryRange:"CAD $75,000", sourced:25, directApps:56, submittedCount:4, activeCount:1, rejectedCount:3, placedCandidate:"Benjamin Cotte (offer stage, not yet signed)", finalComp:null, kickoff:"2026-07-16", intake:"2026-07-21", submit:null, fill:null, hire:null, lastRemark:"Search constrained by bilingualism requirement (English/French); candidates without a formal degree considered if strong on experience and technical stack. (Quebec preferred; other Eastern Time provinces acceptable.)", slaException:"No", extra:[]},
+  {id:"RD-071", title:"Senior QA Engineer, Mobile Applications", client:"Irth Solutions", hiringManager:"Garima Neema", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Remote", city:null, spottJobId:null, productLine:"AIP", salaryRange:"CAD $180,000 (Canada) / USD $130,000 (US)", sourced:24, directApps:56, submittedCount:4, activeCount:3, rejectedCount:0, placedCandidate:null, finalComp:null, kickoff:"2026-06-18", intake:null, submit:null, fill:null, hire:null, lastRemark:"Approved CAD range sits well above Canadian market benchmarks per compensation analysis (flagged for HR/Garima review). Search re-scoped from US-only to Canada-primary. (Spott kickoff-date field said: \"Background context shared; no formal intake meeting held\") (Quebec preferred; Canada primary, US EST/CST considered.)", slaException:"No", extra:[]},
+  {id:"CE-016", title:"Business Analyst, APAC", client:"Irth Solutions", hiringManager:"José Zepeda", recruiter:"Nicolás Patarroyo", status:"Filled", country:"Australia", workArrangement:"Remote", city:null, spottJobId:null, productLine:"AIP", salaryRange:"Contractor (full-time)", sourced:52, directApps:157, submittedCount:6, activeCount:0, rejectedCount:null, placedCandidate:"Milind Sharma", finalComp:null, kickoff:"2026-06-22", intake:"2026-06-30", submit:null, fill:null, hire:null, lastRemark:"Placed as full-time contractor (standard structure for Australia — superannuation, ABN, GST considerations applied). Backup candidate was Nupina Kannangara.", slaException:"No", extra:[]},
+  {id:"CE-020", title:"Implementation Consultant (Calgary) — externally posted as \"Inline Inspection Engineer\"", client:"Irth Solutions", hiringManager:"Brandon Charrier / Sameer Bhatia", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"Canada", workArrangement:"Hybrid", city:"Calgary, AB", spottJobId:null, productLine:"AIP", salaryRange:"CAD $140,000 (~10% above Calgary market)", sourced:25, directApps:2, submittedCount:5, activeCount:5, rejectedCount:0, placedCandidate:null, finalComp:null, kickoff:"2026-07-23", intake:"2026-07-28", submit:null, fill:null, hire:null, lastRemark:"Sourcing strategy pivoted after calibration call: prioritizing domain expertise (oil & gas / pipeline integrity) over implementation experience, given an extremely narrow local talent pool (~10-15 people). Assigned to Silvia Arenas as dedicated recruiter.", slaException:"No", extra:[]},
+  {id:"GA-030", title:"Rippling & Finance Systems Consultant (Temp)", client:"Irth Solutions", hiringManager:"ET Cummings", recruiter:"Nicolás Patarroyo", status:"Filled", country:"United States", workArrangement:"Remote", city:null, spottJobId:null, productLine:"Internal / Corporate", salaryRange:"Not specified", sourced:49, directApps:2, submittedCount:2, activeCount:0, rejectedCount:null, placedCandidate:"(Candidate identified by ET Cummings)", finalComp:null, kickoff:"2026-06-26", intake:"2026-07-02", submit:null, fill:null, hire:null, lastRemark:"Candidate started as planned on August 4, 2026.", slaException:"No", extra:[]},
+  {id:"SM-111", title:"Product Marketing Manager, Damage Prevention", client:"Irth Solutions", hiringManager:"Josh Fuller / Jeff Law", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"United States", workArrangement:"Remote", city:null, spottJobId:null, productLine:"Damage Prevention", salaryRange:"USD $110,000 – $130,000", sourced:50, directApps:3, submittedCount:3, activeCount:2, rejectedCount:1, placedCandidate:null, finalComp:null, kickoff:"2026-08-03", intake:"2026-08-06", submit:null, fill:null, hire:null, lastRemark:"Two finalists remain after one rejection; hiring manager indicated a preferred candidate with the other as a strong backup. Decision expected imminently. (Spott kickoff-date field said: \"Aug 4, 2026 (intake Aug 6)\")", slaException:"No", extra:[]},
 ];
 
 let HOLIDAYS_SET = new Set(["2026-01-01","2026-01-12","2026-03-23","2026-04-02","2026-04-03","2026-05-01","2026-05-18","2026-06-08","2026-06-15","2026-06-29","2026-07-20","2026-08-07","2026-08-17","2026-10-12","2026-11-02","2026-11-16","2026-12-08","2026-12-25"]);
@@ -1440,6 +1441,7 @@ function renderDetailModal(){
     {label:"Location", value:locationOnly(p)},
     {label:"Work Arrangement", value:arrangementBadge(p)},
   ];
+  if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value:p.spottJobId});
   if(p.productLine) positionFacts.push({label:"Product Line", value:p.productLine});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:p.salaryRange});
 
@@ -1476,12 +1478,28 @@ function renderDetailModal(){
       <span id="modalDatesMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
     </div>`;
 
+  // Editable solo en modo edicion (Tracking), para poder completar el Spott Job ID de las
+  // posiciones que ya existen (no llego con el export original) sin tener que tocar el
+  // Excel a mano. En modo vista ya se ve como parte de "Position" arriba si esta seteado.
+  const spottIdEditHtml = isView ? "" : `
+    <div class="facts-grid" style="margin-bottom:10px;">
+      <div class="form-field full"><label>Spott Job ID</label><input type="text" id="editSpottJobId" placeholder="e.g. 3a3dd134-484a-4afa-b9d7-c089060e2316" value="${p.spottJobId||''}"></div>
+    </div>
+    <div style="margin-bottom:18px;">
+      <button class="btn primary small" id="modalSpottIdSave" type="button">Save Spott ID</button>
+      <span id="modalSpottIdMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
+    </div>`;
+
   document.getElementById("modalFacts").innerHTML =
     factsSection("Position", positionFacts) +
+    spottIdEditHtml +
     timelineHtml +
     factsSection("Pipeline (From Spott)", pipelineFacts) +
     factsSection("Outcome", outcomeFacts);
-  if(!isView) document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
+  if(!isView){
+    document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
+    document.getElementById("modalSpottIdSave").addEventListener("click", saveModalSpottId);
+  }
 
   const s = computeSla(p);
   document.getElementById("pivotSlaBadge").innerHTML = isSlaExceptionApproved(p)
@@ -1555,6 +1573,33 @@ async function saveModalDates(){
       for(const f of changed){
         await graphUpdatePositionField(p.id, f.col, f.value || "");
       }
+      msg.textContent = "Saved.";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+  }
+}
+async function saveModalSpottId(){
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const raw = document.getElementById("editSpottJobId").value.trim();
+  const newVal = raw || null;
+  if(newVal === (p.spottJobId || null)){
+    document.getElementById("modalSpottIdMsg").textContent = "No changes to save.";
+    return;
+  }
+  p.spottJobId = newVal;
+  renderDetailModal();
+  // renderDetailModal() reconstruye modalFacts (incluido este span), hay que volver a
+  // buscarlo despues de re-renderizar o el mensaje se pierde en un nodo viejo.
+  const msg = document.getElementById("modalSpottIdMsg");
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    try {
+      await graphUpdatePositionField(p.id, "AM", newVal || "");
       msg.textContent = "Saved.";
     } catch(err){
       console.error(err);
@@ -1953,6 +1998,9 @@ async function loadFromGraph(){
       country: r[idx("Country")],
       workArrangement: r[idx("Work Arrangement")],
       city: r[idx("City")],
+      // idx() da -1 si la columna todavia no existe en el Excel real (falta el paso manual
+      // de agregarla); r[-1] es undefined en JS, no truena, simplemente no se muestra.
+      spottJobId: r[idx("Spott Job ID")],
       productLine: r[idx("Product Line")],
       salaryRange: r[idx("Salary Range")],
       sourced: r[idx("Sourced")],
@@ -2114,6 +2162,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   const msg = document.getElementById("createPositionMsg");
   const title = document.getElementById("newPosTitle").value.trim();
   const code = document.getElementById("newPosCode").value.trim();
+  const spottJobId = document.getElementById("newPosSpottId").value.trim() || null;
   const hm = document.getElementById("newPosHM").value.trim();
   const recruiter = document.getElementById("newPosRecruiter").value;
   const country = document.getElementById("newPosCountry").value.trim();
@@ -2143,7 +2192,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // rellena con las formulas reales despues de crear la fila (ver esa funcion)
     // X-Z: Last Remark, Last Remark Date, Pivot SLA Approved
     // AA: Kickoff Date | AB-AJ: campos de Spott (se llenan despues a mano si aplica)
-    // AK-AL: Work Arrangement, City
+    // AK-AL: Work Arrangement, City | AM: Spott Job ID (id real de Spott, no el Job Code)
     const row = [
       code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
       null,null,null,null,null,null,null,null,null,null,null,null,
@@ -2151,6 +2200,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       kickoff,
       null, null, null, null, null, null, null, null, null,
       workArrangement, city,
+      spottJobId,
     ];
     await graphAppendPosition(row);
     msg.textContent = "Position created. Reloading data…";
@@ -2158,6 +2208,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     await loadFromGraph();
     document.getElementById("newPosTitle").value = "";
     document.getElementById("newPosCode").value = "";
+    document.getElementById("newPosSpottId").value = "";
     document.getElementById("newPosHM").value = "";
     document.getElementById("newPosRemark").value = "";
     msg.textContent = "Position created and loaded.";
@@ -2168,7 +2219,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosHM","newPosRemark","newPosKickoff","newPosIntake","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosSpottId","newPosHM","newPosRemark","newPosKickoff","newPosIntake","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("createPositionMsg").textContent = "";
 });
 
