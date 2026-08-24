@@ -548,7 +548,7 @@
               <div class="form-field"><label>Country</label><input type="text" id="newPosCountry" placeholder="e.g. Canada"></div>
               <div class="form-field"><label>Work Arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
               <div class="form-field"><label>City (Only If Hybrid Or On-Site)</label><input type="text" id="newPosCity" placeholder="e.g. Calgary, AB"></div>
-              <div class="form-field"><label>Initial Status</label><select id="newPosStatus"><option>Sourcing</option></select></div>
+              <div class="form-field"><label>Initial Status</label><select id="newPosStatus"></select></div>
               <div class="form-field"><label>Kickoff Date (Email/Call With HM)</label><input type="date" id="newPosKickoff"></div>
               <div class="form-field full"><label>Intake Meeting Date</label><input type="date" id="newPosIntake"></div>
               <div class="form-field full"><label>Initial Remark (Optional)</label><textarea rows="2" id="newPosRemark" placeholder="Kickoff context…"></textarea></div>
@@ -652,8 +652,15 @@
 /* ============================================================
    SAMPLE DATA (replace with the real Excel export)
    ============================================================ */
-const STATUS_ORDER = ["Sourcing","Screening","Hiring Manager Interview","Technical Interview","Offer Request","Filled","Hired","Fell Through","On Hold","Cancelled"];
+// Los primeros 3 statuses cubren el tramo previo a que arranque el sourcing real (regla no
+// negociable del master prompt: nada de sourcing antes del intake meeting). El motor de SLA
+// no necesita cambios para esto: computeSla() ya devuelve "Not started" en TTS/TTF/TTH
+// mientras el campo Intake Date siga vacio, que es justo el caso en estos 3 statuses.
+const STATUS_ORDER = ["Req Assigned","Intake Requested","Intake Pending","Sourcing","Screening","Hiring Manager Interview","Technical Interview","Offer Request","Filled","Hired","Fell Through","On Hold","Cancelled"];
 const STAGE_COLORS = {
+  "Req Assigned": "var(--seq-100)",
+  "Intake Requested": "var(--seq-200)",
+  "Intake Pending": "var(--seq-300)",
   "Sourcing": "var(--stage-blue)",
   "Screening": "var(--stage-teal)",
   "Hiring Manager Interview": "var(--brand)",
@@ -2158,6 +2165,10 @@ setConnectionUi(false);
 trysilentConnect();
 
 /* ---- SSOT Management: crear posicion / reclutador ---- */
+// "Req Assigned" es el punto de partida real de una posicion nueva (asignada, pero el
+// intake ni se ha pedido), asi que es el default aqui, no "Sourcing".
+fillSelectOnce(document.getElementById("newPosStatus"), STATUS_ORDER);
+document.getElementById("newPosStatus").value = "Req Assigned";
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
   const msg = document.getElementById("createPositionMsg");
   const title = document.getElementById("newPosTitle").value.trim();
