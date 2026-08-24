@@ -83,6 +83,27 @@
   .nav-item.active { background: rgba(217,119,87,0.22); color: #fff; border-left: 3px solid var(--brand); }
   .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
 
+  .recruiter-picker-label {
+    margin-top: 16px; padding: 0 12px; font-size: 10.5px; font-weight: 700;
+    color: #7c756d; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .recruiter-picker { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+  .recruiter-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; user-select: none;
+    border-left: 3px solid transparent; background: none;
+  }
+  .recruiter-row:hover { background: rgba(255,255,255,0.06); }
+  .recruiter-row.active { background: rgba(217,119,87,0.22); border-left: 3px solid var(--brand); }
+  .recruiter-avatar {
+    width: 26px; height: 26px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 700; color: #fff; overflow: hidden;
+    background-size: cover; background-position: center;
+  }
+  .recruiter-name { font-size: 12.5px; font-weight: 700; color: #c9c9c9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recruiter-row:hover .recruiter-name, .recruiter-row.active .recruiter-name { color: #fff; }
+
   .sidebar-foot {
     margin-top: auto; padding: 12px 8px 4px;
     font-size: 11px; color: #8c8c8c; line-height: 1.5;
@@ -374,6 +395,8 @@
       <button class="nav-item" data-view="tracking"><span class="nav-ic">▥</span> Tracking</button>
       <button class="nav-item" data-view="manage"><span class="nav-ic">＋</span> SSOT Management</button>
     </nav>
+    <div class="recruiter-picker-label">Jump To Recruiter</div>
+    <div class="recruiter-picker" id="recruiterPicker"></div>
     <div class="sidebar-foot">
       Single Source Of Truth: The Team's Shared Data.<br>
       Connect Microsoft 365 above to see live, always up to date numbers.
@@ -566,6 +589,7 @@
             <div class="form-grid">
               <div class="form-field full"><label>Full Name</label><input type="text" id="newRecName" placeholder="e.g. Juan Torres"></div>
               <div class="form-field full"><label>Email</label><input type="email" id="newRecEmail" placeholder="juan.torres@company.com"></div>
+              <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="newRecPhoto" placeholder="Leave blank to use initials instead"></div>
             </div>
             <div class="form-actions">
               <button class="btn primary" type="button" id="createRecruiterBtn">Add Recruiter</button>
@@ -675,6 +699,7 @@ const STAGE_COLORS = {
 const TERMINAL = ["Hired","Cancelled","Fell Through"];
 
 let RECRUITERS = ["Nicolás Patarroyo"];
+let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
 let MY_RECRUITER_NAME = null; // se llena al conectar, si tu correo coincide con un reclutador
 let trackingRecruiterAutoApplied = false;
 let LOCATIONS = ["Canada","Australia","United States"];
@@ -1812,6 +1837,46 @@ document.getElementById("trackingOnlyActive").addEventListener("change", renderT
 /* ============================================================
    Init (datos locales / de ejemplo)
    ============================================================ */
+// Avatares del sidebar (foto si hay URL guardada, iniciales con color fijo por nombre si no).
+// El color es un hash simple del nombre, asi que cada persona siempre cae en el mismo color
+// entre sesiones sin tener que guardar un color aparte en el Excel.
+const AVATAR_PALETTE = ["var(--stage-blue)","var(--stage-teal)","var(--stage-purple)","var(--stage-mauve)","var(--brand)","var(--seq-500)","var(--good)","var(--warning)"];
+function initialsFor(name){
+  return name.split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+}
+function colorForName(name){
+  let hash = 0;
+  for(let i=0;i<name.length;i++) hash = (hash*31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+function renderRecruiterPicker(){
+  const el = document.getElementById("recruiterPicker");
+  el.innerHTML = RECRUITERS.map(name=>{
+    const photo = RECRUITER_PHOTOS[name];
+    const avatarStyle = photo ? `background-image:url('${photo}');` : `background:${colorForName(name)};`;
+    return `
+    <div class="recruiter-row" data-name="${name}">
+      <div class="recruiter-avatar" style="${avatarStyle}">${photo ? "" : initialsFor(name)}</div>
+      <div class="recruiter-name">${name}</div>
+    </div>`;
+  }).join("");
+  // Clic en un reclutador: salta a Tracking ya filtrado a sus posiciones, reutilizando el
+  // mismo filtro que ya existe ahi (no se duplica el Dashboard entero por persona).
+  el.querySelectorAll(".recruiter-row").forEach(row=>{
+    row.addEventListener("click", ()=>{
+      const name = row.dataset.name;
+      activateView("tracking");
+      const sel = document.getElementById("trackingRecruiter");
+      fillSelectOnce(sel, RECRUITERS);
+      sel.value = name;
+      trackingRecruiterAutoApplied = true; // no dejar que el auto-filtro por email lo pise
+      renderTracking();
+      el.querySelectorAll(".recruiter-row").forEach(r=>r.classList.remove("active"));
+      row.classList.add("active");
+    });
+  });
+}
+
 function renderAll(){
   renderKpis();
   renderEstadoChart();
@@ -1824,6 +1889,7 @@ function renderAll(){
   renderPendingOffers();
   renderPositions();
   renderTracking();
+  renderRecruiterPicker();
 }
 renderAll();
 
@@ -2056,6 +2122,12 @@ async function loadFromGraph(){
     const recResp = await graphFetch(`${workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
     const newRecruiters = recResp.value.map(r => r.values[0][0]).filter(Boolean);
     if(newRecruiters.length) RECRUITERS = newRecruiters;
+    const newPhotos = {};
+    recResp.value.forEach(r => {
+      const row = r.values[0];
+      if(row[0] && row[3]) newPhotos[row[0]] = row[3];
+    });
+    RECRUITER_PHOTOS = newPhotos;
     // Si el correo con el que iniciaste sesion coincide con el de un reclutador en esa
     // hoja, usamos su nombre para filtrar Tracking automaticamente por defecto.
     const myEmail = (graphAccount && graphAccount.username || "").toLowerCase();
@@ -2145,10 +2217,10 @@ async function graphAppendPosition(row){
   });
 }
 
-async function graphAppendRecruiter(name, email){
+async function graphAppendRecruiter(name, email, photoUrl){
   await graphFetch(`${workbookBase()}/tables('RecruitersTable')/rows/add`, {
     method: "POST",
-    body: JSON.stringify({ values: [[name, email || "", "Yes"]] }),
+    body: JSON.stringify({ values: [[name, email || "", "Yes", photoUrl || ""]] }),
   });
 }
 
@@ -2238,6 +2310,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   const msg = document.getElementById("createRecruiterMsg");
   const name = document.getElementById("newRecName").value.trim();
   const email = document.getElementById("newRecEmail").value.trim();
+  const photoUrl = document.getElementById("newRecPhoto").value.trim();
   if(!name){
     msg.textContent = "Full name is required.";
     msg.style.color = "var(--critical)";
@@ -2251,12 +2324,13 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   msg.textContent = "Saving…";
   msg.style.color = "var(--text-muted)";
   try {
-    await graphAppendRecruiter(name, email);
+    await graphAppendRecruiter(name, email, photoUrl);
     msg.textContent = "Recruiter added. Reloading data…";
     msg.style.color = "var(--good)";
     await loadFromGraph();
     document.getElementById("newRecName").value = "";
     document.getElementById("newRecEmail").value = "";
+    document.getElementById("newRecPhoto").value = "";
     msg.textContent = "Recruiter added and loaded.";
   } catch(err){
     console.error(err);
@@ -2265,7 +2339,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   }
 });
 document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
-  ["newRecName","newRecEmail"].forEach(id => document.getElementById(id).value = "");
+  ["newRecName","newRecEmail","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("createRecruiterMsg").textContent = "";
 });
 </script>
