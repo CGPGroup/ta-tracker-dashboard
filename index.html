@@ -110,6 +110,30 @@
     border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
   }
 
+  .team-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  .team-card {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    width: 120px; padding: 16px 10px; border-radius: 10px; cursor: pointer;
+    background: var(--surface-2); border: 1px solid var(--border); text-align: center;
+  }
+  .team-card:hover { border-color: var(--brand); }
+  .team-card.active { border-color: var(--brand); background: rgba(217,119,87,0.14); }
+  .team-avatar {
+    width: 52px; height: 52px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff;
+    background-size: cover; background-position: center;
+  }
+  .team-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .team-title { font-size: 10.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+  .scope-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: rgba(217,119,87,0.10); border: 1px solid rgba(217,119,87,0.32);
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px;
+  }
+  .scope-banner b { color: var(--text-primary); }
+
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
   .topbar {
@@ -422,6 +446,12 @@
 
       <!-- ======================= DASHBOARD ======================= -->
       <section class="view active" id="view-dashboard">
+        <div class="scope-banner" id="dashboardScopeBanner" style="display:none;"></div>
+        <div class="panel" id="teamPanel">
+          <h3>Team</h3>
+          <div class="panel-sub">Click a recruiter to see their own dashboard</div>
+          <div class="team-grid" id="teamGrid"></div>
+        </div>
         <div class="kpi-row" id="kpiRow"></div>
 
         <div class="dash-cols">
@@ -590,6 +620,7 @@
             <div class="form-grid">
               <div class="form-field full"><label>Full Name</label><input type="text" id="newRecName" placeholder="e.g. Juan Torres"></div>
               <div class="form-field full"><label>Email</label><input type="email" id="newRecEmail" placeholder="juan.torres@company.com"></div>
+              <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="newRecTitle" placeholder="e.g. Talent Partner"></div>
               <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="newRecPhoto" placeholder="Leave blank to use initials instead"></div>
             </div>
             <div class="form-actions">
@@ -739,10 +770,87 @@ function updateStatusDateUI(prefix, status, prefillValue){
     input.value = "";
   }
 }
+// Sin conexion (pruebas locales, o la app recien cargo) se trata como admin: no hay una
+// identidad real que comprobar todavia, y bloquear tu propio uso local no aporta nada.
+function isAdmin(){
+  const email = (graphAccount && graphAccount.username || "").toLowerCase();
+  return !email || email === ADMIN_EMAIL;
+}
+
+// Cuando activeDashboardScope tiene un nombre, el Dashboard (KPIs, graficas, SLA) se calcula
+// solo con las posiciones de ese reclutador en vez del libro completo. null = vista de equipo.
+let activeDashboardScope = null;
+function dashboardPositions(){
+  return activeDashboardScope ? POSITIONS.filter(p=>p.recruiter===activeDashboardScope) : POSITIONS;
+}
+function renderDashboardPanels(){
+  renderKpis();
+  renderEstadoChart();
+  renderReclutadorChart();
+  renderHiredLocChart();
+  renderSlaChart();
+  renderSlaMeter();
+  renderHiresTrend();
+  renderPlacementsMonth();
+  renderPendingOffers();
+}
+// Reutilizado tanto por la fila del sidebar como por el boton "Edit My Requisitions" del
+// dashboard personal: salta a Tracking ya filtrado y editable para ese reclutador.
+function jumpToRecruiterTracking(name){
+  activateView("tracking");
+  const sel = document.getElementById("trackingRecruiter");
+  fillSelectOnce(sel, RECRUITERS);
+  sel.value = name;
+  trackingRecruiterAutoApplied = true;
+  renderTracking();
+}
+function setDashboardScope(name){
+  activeDashboardScope = name;
+  activateView("dashboard");
+  renderDashboardPanels();
+  renderTeamPanel();
+  const banner = document.getElementById("dashboardScopeBanner");
+  if(!name){
+    banner.style.display = "none";
+    return;
+  }
+  const count = POSITIONS.filter(p=>p.recruiter===name).length;
+  const isMe = MY_RECRUITER_NAME === name;
+  banner.style.display = "";
+  banner.innerHTML = `
+    <span>Viewing <b>${name}'s</b> dashboard &middot; ${count} position${count===1?"":"s"}</span>
+    <span style="display:flex; gap:8px;">
+      ${isMe ? `<button class="btn primary small" id="scopeEditBtn" type="button">Edit My Requisitions →</button>` : ""}
+      <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Dashboard</button>
+    </span>`;
+  document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
+  if(isMe) document.getElementById("scopeEditBtn").addEventListener("click", ()=> jumpToRecruiterTracking(name));
+}
+function renderTeamPanel(){
+  const el = document.getElementById("teamGrid");
+  el.innerHTML = RECRUITERS.map(name=>{
+    const photo = RECRUITER_PHOTOS[name];
+    const avatarStyle = photo ? `background-image:url('${photo}');` : `background:${colorForName(name)};`;
+    const title = RECRUITER_TITLES[name] || "Recruiter";
+    return `
+    <div class="team-card${activeDashboardScope===name?' active':''}" data-name="${name}">
+      <div class="team-avatar" style="${avatarStyle}">${photo ? "" : initialsFor(name)}</div>
+      <div class="team-name">${name}</div>
+      <div class="team-title">${title}</div>
+    </div>`;
+  }).join("");
+  el.querySelectorAll(".team-card").forEach(card=>{
+    card.addEventListener("click", ()=> setDashboardScope(card.dataset.name));
+  });
+}
 const TERMINAL = ["Hired","Cancelled","Fell Through"];
 
 let RECRUITERS = ["Nicolás Patarroyo"];
 let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
+let RECRUITER_TITLES = {}; // nombre -> cargo (opcional, se muestra en la tarjeta de Team)
+// Unico admin del tracker por ahora (Nicolas): solo esta cuenta puede eliminar requisitions
+// desde Positions. Es una barrera de interfaz, no seguridad real (ver isAdmin()).
+const ADMIN_EMAIL = "nicolas.patarroyo.ramirez@cgpgroupus.com";
 let MY_RECRUITER_NAME = null; // se llena al conectar, si tu correo coincide con un reclutador
 let trackingRecruiterAutoApplied = false;
 let LOCATIONS = ["Canada","Australia","United States"];
@@ -886,14 +994,14 @@ function statusChip(status){
    DASHBOARD: KPIs + charts
    ============================================================ */
 function renderKpis(){
-  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   let atRisk=0, outOfSla=0;
   active.forEach(p=>{
     const s = computeSla(p);
     if(["TTS","TTF","TTH"].some(k=>s[k].status==="risk")) atRisk++;
     if(["TTS","TTF","TTH"].some(k=>s[k].status==="out")) outOfSla++;
   });
-  const fellThrough = POSITIONS.filter(p=>p.fill && p.status==="Fell Through").length;
+  const fellThrough = dashboardPositions().filter(p=>p.fill && p.status==="Fell Through").length;
 
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
@@ -908,7 +1016,7 @@ function renderKpis(){
   const tiles = [
     {label:"Active Positions", value: active.length, cls:""},
     {label:"Submitted Vs Expected", value: submittedTotal, cls: submittedCls, sub: active.length ? `Expected ≥${minExpected} for ${active.length} active` : ""},
-    {label:"Offers Pending Decision", value: POSITIONS.filter(p=>p.status==="Offer Request").length, cls:""},
+    {label:"Offers Pending Decision", value: dashboardPositions().filter(p=>p.status==="Offer Request").length, cls:""},
     {label:"At SLA Risk", value: atRisk, cls: atRisk>0 ? "warning":"", onClick: atRisk>0 ? ()=>{
       const matches = active.filter(p=>["TTS","TTF","TTH"].some(k=>computeSla(p)[k].status==="risk"));
       openQuickList("At SLA Risk", `${matches.length} position${matches.length===1?"":"s"}`, matches, slaFlags);
@@ -990,7 +1098,7 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
 }
 
 function renderEstadoChart(){
-  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const stages = STATUS_ORDER.filter(s=>!TERMINAL.includes(s));
   const counts = stages.map(s=>({label:s, value: active.filter(p=>p.status===s).length})).filter(r=>r.value>0);
   const colors = counts.map(c=>STAGE_COLORS[c.label] || "var(--neutral)");
@@ -1001,7 +1109,7 @@ function renderEstadoChart(){
 }
 
 function renderReclutadorChart(){
-  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const rows = RECRUITERS.map(r=>({label:r, value: active.filter(p=>p.recruiter===r).length}))
     .sort((a,b)=>b.value-a.value);
   renderBarlist("chartReclutador", rows, "var(--brand)", (row)=>{
@@ -1011,7 +1119,7 @@ function renderReclutadorChart(){
 }
 
 function renderHiredLocChart(){
-  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const ramp = ["var(--seq-200)","var(--seq-300)","var(--seq-400)","var(--seq-500)","var(--seq-600)"];
   const byCountry = {};
   active.forEach(p=>{
@@ -1056,7 +1164,7 @@ function renderHiredLocChart(){
 }
 
 function renderSlaChart(){
-  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const metrics = [
     {key:"TTS", label:"Time To Submit (TTS)", tag:"official", tagLabel:"Official SLA"},
     {key:"TTF", label:"Time To Fill (TTF)", tag:"internal", tagLabel:"Internal Goal"},
@@ -1102,7 +1210,7 @@ function renderSlaChart(){
 // mostrar rendimiento del libro completo sin exponer numeros crudos de conversion de
 // candidatos (eso fue lo que preocupo a Nicolas de "Candidate Pipeline Totals").
 function renderSlaMeter(){
-  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const missedAnyIds = new Set(active.filter(p=>{
     const s = computeSla(p);
     return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
@@ -1138,7 +1246,7 @@ function renderSlaMeter(){
 function renderHiresTrend(){
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug"];
   const counts = new Array(months.length).fill(0);
-  POSITIONS.filter(p=>p.status==="Hired" && p.hire).forEach(p=>{
+  dashboardPositions().filter(p=>p.status==="Hired" && p.hire).forEach(p=>{
     const d = parseD(p.hire);
     if(d.getFullYear()===2026 && d.getMonth() < months.length) counts[d.getMonth()]++;
   });
@@ -1190,8 +1298,8 @@ function renderPlacementsMonth(){
   const lastMonthDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
   const isLastMonth = (d)=> d.getFullYear()===lastMonthDate.getFullYear() && d.getMonth()===lastMonthDate.getMonth();
 
-  const thisMonthPositions = POSITIONS.filter(p=>p.status==="Hired" && p.hire && isThisMonth(parseD(p.hire)));
-  const lastMonthPositions = POSITIONS.filter(p=>p.status==="Hired" && p.hire && isLastMonth(parseD(p.hire)));
+  const thisMonthPositions = dashboardPositions().filter(p=>p.status==="Hired" && p.hire && isThisMonth(parseD(p.hire)));
+  const lastMonthPositions = dashboardPositions().filter(p=>p.status==="Hired" && p.hire && isLastMonth(parseD(p.hire)));
   const thisMonthCount = thisMonthPositions.length, lastMonthCount = lastMonthPositions.length;
   const max = Math.max(1, thisMonthCount, lastMonthCount);
   const monthNameThis = now.toLocaleString("en-US", {month:"short"});
@@ -1226,7 +1334,7 @@ function renderPlacementsMonth(){
 }
 
 function renderPendingOffers(){
-  const offers = POSITIONS.filter(p=>p.status==="Offer Request");
+  const offers = dashboardPositions().filter(p=>p.status==="Offer Request");
   const list = document.getElementById("listPendingOffers");
   if(!offers.length){
     list.innerHTML = `<div class="panel-sub" style="margin:0;">No positions waiting on an offer decision right now.</div>`;
@@ -1308,7 +1416,7 @@ function renderPositions(){
     </tr>`;
   }).join("");
   document.querySelectorAll("#positionsTable tbody tr.clickable").forEach(tr=>{
-    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, "view", true));
+    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, "view", isAdmin()));
   });
 }
 
@@ -1932,17 +2040,11 @@ function renderRecruiterPicker(){
       <div class="recruiter-name">${name}</div>
     </div>`;
   }).join("");
-  // Clic en un reclutador: salta a Tracking ya filtrado a sus posiciones, reutilizando el
-  // mismo filtro que ya existe ahi (no se duplica el Dashboard entero por persona).
+  // Clic en un reclutador: salta directo a Tracking ya filtrado y editable (atajo rapido de
+  // navegacion, distinto del dashboard personal de solo-lectura que abre la tarjeta de Team).
   el.querySelectorAll(".recruiter-row").forEach(row=>{
     row.addEventListener("click", ()=>{
-      const name = row.dataset.name;
-      activateView("tracking");
-      const sel = document.getElementById("trackingRecruiter");
-      fillSelectOnce(sel, RECRUITERS);
-      sel.value = name;
-      trackingRecruiterAutoApplied = true; // no dejar que el auto-filtro por email lo pise
-      renderTracking();
+      jumpToRecruiterTracking(row.dataset.name);
       el.querySelectorAll(".recruiter-row").forEach(r=>r.classList.remove("active"));
       row.classList.add("active");
     });
@@ -1950,15 +2052,8 @@ function renderRecruiterPicker(){
 }
 
 function renderAll(){
-  renderKpis();
-  renderEstadoChart();
-  renderReclutadorChart();
-  renderHiredLocChart();
-  renderSlaChart();
-  renderSlaMeter();
-  renderHiresTrend();
-  renderPlacementsMonth();
-  renderPendingOffers();
+  renderDashboardPanels();
+  renderTeamPanel();
   renderPositions();
   renderTracking();
   renderRecruiterPicker();
@@ -2197,11 +2292,14 @@ async function loadFromGraph(){
     const newRecruiters = recResp.value.map(r => r.values[0][0]).filter(Boolean);
     if(newRecruiters.length) RECRUITERS = newRecruiters;
     const newPhotos = {};
+    const newTitles = {};
     recResp.value.forEach(r => {
       const row = r.values[0];
       if(row[0] && row[3]) newPhotos[row[0]] = row[3];
+      if(row[0] && row[4]) newTitles[row[0]] = row[4];
     });
     RECRUITER_PHOTOS = newPhotos;
+    RECRUITER_TITLES = newTitles;
     // Si el correo con el que iniciaste sesion coincide con el de un reclutador en esa
     // hoja, usamos su nombre para filtrar Tracking automaticamente por defecto.
     const myEmail = (graphAccount && graphAccount.username || "").toLowerCase();
@@ -2291,10 +2389,10 @@ async function graphAppendPosition(row){
   });
 }
 
-async function graphAppendRecruiter(name, email, photoUrl){
+async function graphAppendRecruiter(name, email, photoUrl, jobTitle){
   await graphFetch(`${workbookBase()}/tables('RecruitersTable')/rows/add`, {
     method: "POST",
-    body: JSON.stringify({ values: [[name, email || "", "Yes", photoUrl || ""]] }),
+    body: JSON.stringify({ values: [[name, email || "", "Yes", photoUrl || "", jobTitle || ""]] }),
   });
 }
 
@@ -2403,6 +2501,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   const msg = document.getElementById("createRecruiterMsg");
   const name = document.getElementById("newRecName").value.trim();
   const email = document.getElementById("newRecEmail").value.trim();
+  const jobTitle = document.getElementById("newRecTitle").value.trim();
   const photoUrl = document.getElementById("newRecPhoto").value.trim();
   if(!name){
     msg.textContent = "Full name is required.";
@@ -2417,12 +2516,13 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   msg.textContent = "Saving…";
   msg.style.color = "var(--text-muted)";
   try {
-    await graphAppendRecruiter(name, email, photoUrl);
+    await graphAppendRecruiter(name, email, photoUrl, jobTitle);
     msg.textContent = "Recruiter added. Reloading data…";
     msg.style.color = "var(--good)";
     await loadFromGraph();
     document.getElementById("newRecName").value = "";
     document.getElementById("newRecEmail").value = "";
+    document.getElementById("newRecTitle").value = "";
     document.getElementById("newRecPhoto").value = "";
     msg.textContent = "Recruiter added and loaded.";
   } catch(err){
@@ -2432,7 +2532,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   }
 });
 document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
-  ["newRecName","newRecEmail","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
+  ["newRecName","newRecEmail","newRecTitle","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("createRecruiterMsg").textContent = "";
 });
 </script>
