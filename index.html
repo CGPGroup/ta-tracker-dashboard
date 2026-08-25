@@ -1372,12 +1372,15 @@ function renderBarlist(elId, rows, colorVar, onClickRow){
 
 function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onClickRow){
   size = size || 140;
-  const total = rows.reduce((s,r)=>s+r.value,0) || 1;
+  // realTotal es la suma de verdad (puede ser 0); arcTotal nunca es 0, solo para que la
+  // division de abajo no truene cuando se dibuja el placeholder gris de "sin datos".
+  const realTotal = rows.reduce((s,r)=>s+(r.realValue !== undefined ? r.realValue : r.value),0);
+  const arcTotal = rows.reduce((s,r)=>s+r.value,0) || 1;
   const r = 45, cx = 60, cy = 60, sw = 18;
   const circ = 2*Math.PI*r;
   let offset = 0;
   const arcs = rows.map((row,i)=>{
-    const frac = row.value/total;
+    const frac = row.value/arcTotal;
     const dash = frac*circ;
     const gap = circ-dash;
     const el = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="${sw}" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" ${onClickRow?`class="clickable-stat" data-idx="${i}"`:""}></circle>`;
@@ -1388,9 +1391,9 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
     <div class="donut-legend-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
       <span class="dot" style="background:${colors[i % colors.length]}"></span>
       <span class="donut-legend-label" title="${row.label}">${row.label}</span>
-      <span class="donut-legend-value">${row.value}</span>
+      <span class="donut-legend-value">${row.realValue !== undefined ? row.realValue : row.value}</span>
     </div>`).join("");
-  const centerValue = centerOverride ? centerOverride.value : total;
+  const centerValue = centerOverride ? centerOverride.value : realTotal;
   const centerLabel = centerOverride ? centerOverride.label : (totalLabel || "Total");
   // El texto del centro escala con el tamaño real del donut (antes era casi fijo), para que
   // no quede apretado cuando el donut se dibuja chico (ej. 70px en Position By Location).
@@ -1475,7 +1478,7 @@ function renderHiredLocChart(){
         active.filter(p=>(p.country||"Unknown")===row.label));
     });
   } else {
-    renderDonut("chartHiredLoc", [{label:"No active positions", value:1}], ["var(--grid)"], "Active", 70);
+    renderDonut("chartHiredLoc", [{label:"No active positions", value:1, realValue:0}], ["var(--grid)"], "Active", 70);
   }
 
   const byArrangement = { "Remote": 0, "Hybrid": 0, "On-site": 0 };
@@ -1553,13 +1556,19 @@ function renderSlaChart(){
 // candidatos (eso fue lo que preocupo a Nicolas de "Candidate Pipeline Totals").
 function renderSlaMeter(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  // Sin posiciones activas no hay nada que medir todavia; mostrar "100%" ahi se leeria como
+  // un logro real en vez de "no hay datos", asi que este caso se muestra aparte, en gris.
+  if(!active.length){
+    renderDonut("chartSlaCompliance", [{label:"No active positions", value:1, realValue:0}], ["var(--grid)"], null, 100, {value:"-", label:"No Data"});
+    return;
+  }
   const missedAnyIds = new Set(active.filter(p=>{
     const s = computeSla(p);
     return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
   }).map(p=>p.id));
   const outOfSla = missedAnyIds.size;
   const onTrack = active.length - outOfSla;
-  const rate = active.length ? Math.round((onTrack / active.length) * 100) : 100;
+  const rate = Math.round((onTrack / active.length) * 100);
   let color = "var(--good)";
   if(rate < 75) color = "var(--critical)";
   else if(rate < 90) color = "var(--warning)";
@@ -1572,16 +1581,16 @@ function renderSlaMeter(){
   ].filter(r=>r.value>0);
   renderDonut(
     "chartSlaCompliance",
-    rows.length ? rows : [{label:"No active positions", value:1}],
+    rows,
     [color, "var(--grid)"],
     null, 100,
     {value: rate + "%", label: "On Time"},
-    rows.length ? (row)=>{
+    (row)=>{
       const matches = row.label==="On Time"
         ? active.filter(p=>!missedAnyIds.has(p.id))
         : active.filter(p=>missedAnyIds.has(p.id));
       openQuickList(row.label, `${matches.length} position${matches.length===1?"":"s"}`, matches);
-    } : null
+    }
   );
 }
 
@@ -1589,10 +1598,16 @@ function renderSlaMeter(){
 // (ver COMPLETION_TARGETS): aceptar la asignacion y pedir el intake dentro de 1 dia habil.
 function renderCompletionChart(){
   const assigned = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && p.kickoff);
+  // Igual que en renderSlaMeter(): sin requisitions asignadas todavia, "100%" se leeria como
+  // un logro real en vez de "no hay datos", asi que este caso se muestra aparte, en gris.
+  if(!assigned.length){
+    renderDonut("chartCompletion", [{label:"No assigned requisitions", value:1, realValue:0}], ["var(--grid)"], null, 100, {value:"-", label:"No Data"});
+    return;
+  }
   const lateIds = new Set(assigned.filter(p=>computeCompletion(p).step1.status==="out").map(p=>p.id));
   const late = lateIds.size;
   const onTime = assigned.length - late;
-  const rate = assigned.length ? Math.round((onTime / assigned.length) * 100) : 100;
+  const rate = Math.round((onTime / assigned.length) * 100);
   let color = "var(--good)";
   if(rate < 75) color = "var(--critical)";
   else if(rate < 90) color = "var(--warning)";
@@ -1603,16 +1618,16 @@ function renderCompletionChart(){
   ].filter(r=>r.value>0);
   renderDonut(
     "chartCompletion",
-    rows.length ? rows : [{label:"No assigned requisitions", value:1}],
+    rows,
     [color, "var(--grid)"],
     null, 100,
     {value: rate + "%", label: "On Time"},
-    rows.length ? (row)=>{
+    (row)=>{
       const matches = row.label==="On Time"
         ? assigned.filter(p=>!lateIds.has(p.id))
         : assigned.filter(p=>lateIds.has(p.id));
       openQuickList(row.label, `${matches.length} position${matches.length===1?"":"s"}`, matches);
-    } : null
+    }
   );
 }
 
@@ -2853,7 +2868,7 @@ async function loadFromGraph(){
     const recResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
     const recRows = recResp.value.map(r => r.values[0]);
     const { newRecruiters, newPhotos, newTitles } = parseRecruitersTable(recRows);
-    if(newRecruiters.length) RECRUITERS = newRecruiters;
+    RECRUITERS = newRecruiters;
     RECRUITER_PHOTOS = newPhotos;
     RECRUITER_TITLES = newTitles;
     // Si el correo con el que iniciaste sesion coincide con el de un reclutador en esa
@@ -2885,7 +2900,7 @@ async function tryLoadPublicSnapshot(){
     if(data.historial) mergeLatestRemarks(newPositions, data.historial.headers, data.historial.rows);
     if(data.recruiters){
       const { newRecruiters, newPhotos, newTitles } = parseRecruitersTable(data.recruiters.rows);
-      if(newRecruiters.length) RECRUITERS = newRecruiters;
+      RECRUITERS = newRecruiters;
       RECRUITER_PHOTOS = newPhotos;
       RECRUITER_TITLES = newTitles;
     }
