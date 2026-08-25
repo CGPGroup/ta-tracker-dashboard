@@ -142,7 +142,7 @@
   }
   .pill.demo { background: rgba(211,163,85,0.14); color: var(--warning); }
 
-  .content { padding: 22px 24px 60px; max-width: 1320px; margin: 0 auto; width: 100%; }
+  .content { padding: 22px 32px 60px; width: 100%; }
 
   /* Sistema de alertas reutilizable: cualquier aviso/advertencia en el tracker (banner de
      pagina completa o nota chiquita dentro de un modal) debe usar .alert-banner + un nivel
@@ -188,12 +188,12 @@
   /* Tracking: lista a la izquierda, detalle fijo a la derecha (no tapa la lista al abrir una
      posicion). El mismo #detailModal que usan Positions/Dashboard se "acopla" aqui via JS
      (dockDetailModal()) en vez de duplicar todo su render. */
-  .tracking-split { display: flex; gap: 16px; align-items: flex-start; }
-  .tracking-list-col { flex: 1; min-width: 0; }
-  .tracking-detail-col { width: 420px; flex: none; position: sticky; top: 20px; }
-  @media (max-width: 1100px) {
+  .tracking-split { display: flex; gap: 20px; align-items: flex-start; }
+  .tracking-list-col { flex: 1.1; min-width: 0; }
+  .tracking-detail-col { flex: 1; min-width: 460px; max-width: 640px; position: sticky; top: 20px; }
+  @media (max-width: 1300px) {
     .tracking-split { flex-direction: column; }
-    .tracking-detail-col { width: 100%; position: static; }
+    .tracking-detail-col { width: 100%; max-width: none; min-width: 0; position: static; }
   }
   .modal-overlay.docked {
     position: static; display: block !important; background: none; padding: 0;
