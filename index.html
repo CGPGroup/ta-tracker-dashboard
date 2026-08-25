@@ -188,11 +188,14 @@
   /* Tracking: lista a la izquierda, detalle fijo a la derecha (no tapa la lista al abrir una
      posicion). El mismo #detailModal que usan Positions/Dashboard se "acopla" aqui via JS
      (dockDetailModal()) en vez de duplicar todo su render. */
+  /* El detalle domina el espacio a proposito: una vez abres un req, la lista ya no aporta
+     nada que el detalle no muestre tambien, asi que el detalle se lleva el doble. */
   .tracking-split { display: flex; gap: 20px; align-items: flex-start; }
-  .tracking-list-col { flex: 1.1; min-width: 0; }
-  .tracking-detail-col { flex: 1; min-width: 460px; max-width: 640px; position: sticky; top: 20px; }
+  .tracking-list-col { flex: 1; min-width: 280px; max-width: 460px; }
+  .tracking-detail-col { flex: 2; min-width: 520px; max-width: 980px; position: sticky; top: 20px; }
   @media (max-width: 1300px) {
     .tracking-split { flex-direction: column; }
+    .tracking-list-col { max-width: none; }
     .tracking-detail-col { width: 100%; max-width: none; min-width: 0; position: static; }
   }
   .modal-overlay.docked {
@@ -434,7 +437,7 @@
   <div class="main">
     <div class="topbar">
       <div>
-        <h1 id="topbarTitle">Dashboard</h1>
+        <h1 id="topbarTitle">Team Dashboard</h1>
         <div class="sub" id="topbarSub">Overview of all active positions</div>
       </div>
       <div class="topbar-right">
@@ -2346,7 +2349,9 @@ function activateView(view){
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById("view-"+view).classList.add("active");
-  document.getElementById("topbarTitle").textContent = TITLES[view][0];
+  document.getElementById("topbarTitle").textContent = view === "dashboard"
+    ? (activeDashboardScope ? "Recruiter Dashboard" : "Team Dashboard")
+    : TITLES[view][0];
   document.getElementById("topbarSub").textContent = view === "tracking" && activeDashboardScope
     ? `${activeDashboardScope}'s requisitions — codes, SLA, and the latest activity`
     : TITLES[view][1];
