@@ -675,6 +675,22 @@
               <button class="btn ghost" type="button" disabled title="Not connected yet, coming soon">Add to Config</button>
             </div>
             <div class="panel-sub" style="margin-top:8px;">Not wired up yet, statuses and holidays still need to be added directly in the Config sheet for now.</div>
+
+            <h3 style="margin-top:26px;">Share Tracker Access</h3>
+            <div class="panel-sub">For anyone who needs to see or use the tracker without being a recruiter in it — a stakeholder, an exec, a coordinator. Shares the shared file with their email and sends them the tracker link, without adding them to the Team list.</div>
+            <div class="form-grid">
+              <div class="form-field full"><label>Email</label><input type="email" id="shareAccessEmail" placeholder="e.g. nicole@irthsolutions.com"></div>
+              <div class="form-field full"><label>Access Level</label>
+                <select id="shareAccessRole">
+                  <option value="read">Can view only</option>
+                  <option value="write">Can edit</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn primary" type="button" id="shareAccessBtn">Share Access</button>
+            </div>
+            <div class="panel-sub" id="shareAccessMsg" style="margin-top:8px;"></div>
           </div>
         </div>
       </section>
@@ -2974,6 +2990,34 @@ document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
   ["newRecName","newRecEmail","newRecTitle","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newRecShare").checked = true;
   document.getElementById("createRecruiterMsg").textContent = "";
+});
+
+document.getElementById("shareAccessBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("shareAccessMsg");
+  const email = document.getElementById("shareAccessEmail").value.trim();
+  const role = document.getElementById("shareAccessRole").value;
+  if(!email){
+    msg.textContent = "An email is required.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(!isConnected()){
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to do this.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  msg.textContent = "Sharing…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    await graphShareFile(email, role, TRACKER_URL);
+    msg.textContent = "Shared. They'll get an email with access and the tracker link.";
+    msg.style.color = "var(--good)";
+    document.getElementById("shareAccessEmail").value = "";
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not share: " + err.message;
+    msg.style.color = "var(--critical)";
+  }
 });
 </script>
 </body>
