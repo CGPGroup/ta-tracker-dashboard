@@ -2773,7 +2773,7 @@ async function loadFromGraph(){
 // tracker sin loguearse (Nicole, Immy, Sara, Chris Watkins...): el Worker guarda su propia
 // credencial de Graph de forma segura y solo expone los datos ya armados, nunca el archivo
 // completo ni ninguna credencial. Vacio hasta que Nicolas lo despliegue y me pase la URL.
-const PUBLIC_READ_URL = "";
+const PUBLIC_READ_URL = "https://ta-tracker-public-read.nicolaspatarroyoramirez.workers.dev";
 async function tryLoadPublicSnapshot(){
   if(!PUBLIC_READ_URL) return false;
   try {
