@@ -181,9 +181,8 @@
   .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
   /* Layout tipo "masonry" para el Dashboard: los paneles se acomodan sin dejar huecos
      cuando un vecino es mas corto (a diferencia de un grid de filas fijas). */
-  .dash-cols { display: flex; gap: 12px; align-items: stretch; }
+  .dash-cols { display: flex; gap: 12px; align-items: flex-start; }
   .dash-col { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; }
-  .dash-col .panel:last-child { flex: 1; display: flex; flex-direction: column; }
 
   /* Tracking: lista a la izquierda, detalle fijo a la derecha (no tapa la lista al abrir una
      posicion). El mismo #detailModal que usan Positions/Dashboard se "acopla" aqui via JS
@@ -1587,16 +1586,16 @@ function renderHiresTrend(){
     `<line x1="${padL}" x2="${w-padR}" y1="${yFor(v).toFixed(1)}" y2="${yFor(v).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`
   ).join("");
   const gridLabels = gridVals.map(v=>
-    `<text x="${padL-8}" y="${(yFor(v)+4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--text-muted)">${v}</text>`
+    `<text x="${padL-8}" y="${(yFor(v)+3).toFixed(1)}" text-anchor="end" font-size="7" fill="var(--text-muted)">${v}</text>`
   ).join("");
   const xLabels = points.map((p,i)=>
-    `<text x="${p.x.toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="10" fill="var(--text-muted)">${months[i]}</text>`
+    `<text x="${p.x.toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="7" fill="var(--text-muted)">${months[i]}</text>`
   ).join("");
   const dots = points.map(p=>
-    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="2"/>`
+    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="1.5"/>`
   ).join("");
   const last = points[points.length-1];
-  const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary)">${last.v}</text>`;
+  const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-8).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="var(--text-primary)">${last.v}</text>`;
 
   document.getElementById("chartHiresTrend").innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
