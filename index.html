@@ -639,6 +639,7 @@
               <div class="form-field"><label>Position Title</label><input type="text" id="newPosTitle" placeholder="e.g. Backend Engineer"></div>
               <div class="form-field"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
               <div class="form-field"><label>Spott Job ID (Optional)</label><input type="text" id="newPosSpottId" placeholder="e.g. 3a3dd134-484a-4afa-b9d7-c089060e2316"></div>
+              <div class="form-field full"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
               <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"><option>Nicolás Patarroyo</option></select></div>
@@ -708,6 +709,16 @@
               <button class="btn primary" type="button" id="shareAccessBtn">Share Access</button>
             </div>
             <div class="panel-sub" id="shareAccessMsg" style="margin-top:8px;"></div>
+
+            <h3 style="margin-top:26px; color:var(--critical);">Danger Zone: Reset All Data</h3>
+            <div class="panel-sub">Permanently deletes every position, historial entry, and recruiter from the shared file, for starting fresh with test data. This can't be undone from here.</div>
+            <div class="form-grid">
+              <div class="form-field full"><label>Type DELETE ALL To Confirm</label><input type="text" id="resetAllConfirm" placeholder="DELETE ALL"></div>
+            </div>
+            <div class="form-actions">
+              <button class="link-danger" type="button" id="resetAllBtn" style="border:1px solid var(--critical); border-radius:8px; padding:8px 14px;">Delete Everything</button>
+            </div>
+            <div class="panel-sub" id="resetAllMsg" style="margin-top:8px;"></div>
           </div>
         </div>
       </section>
@@ -2027,6 +2038,7 @@ function renderDetailModal(){
     {label:"Work Arrangement", value:arrangementBadge(p)},
   ];
   if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value:p.spottJobId});
+  if(p.careersUrl) positionFacts.push({label:"Irth Careers Page", value:`<a href="${p.careersUrl}" target="_blank" rel="noopener">View Posting ↗</a>`});
   if(p.productLine) positionFacts.push({label:"Product Line", value:p.productLine});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:p.salaryRange});
 
@@ -2079,15 +2091,26 @@ function renderDetailModal(){
       <span id="modalSpottIdMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
     </div>`;
 
+  const careersUrlEditHtml = isView ? "" : `
+    <div class="facts-grid" style="margin-bottom:10px;">
+      <div class="form-field full"><label>Irth Careers Page URL</label><input type="text" id="editCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF" value="${p.careersUrl||''}"></div>
+    </div>
+    <div style="margin-bottom:18px;">
+      <button class="btn primary small" id="modalCareersUrlSave" type="button">Save Careers Page URL</button>
+      <span id="modalCareersUrlMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
+    </div>`;
+
   document.getElementById("modalFacts").innerHTML =
     factsSection("Position", positionFacts) +
     spottIdEditHtml +
+    careersUrlEditHtml +
     timelineHtml +
     factsSection("Pipeline (From Spott)", pipelineFacts) +
     factsSection("Outcome", outcomeFacts);
   if(!isView){
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("modalSpottIdSave").addEventListener("click", saveModalSpottId);
+    document.getElementById("modalCareersUrlSave").addEventListener("click", saveModalCareersUrl);
   }
 
   const s = computeSla(p);
@@ -2229,6 +2252,33 @@ async function saveModalSpottId(){
     msg.textContent = "Saving…";
     try {
       await graphUpdatePositionField(p.id, "AM", newVal || "");
+      msg.textContent = "Saved.";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+  }
+}
+async function saveModalCareersUrl(){
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const raw = document.getElementById("editCareersUrl").value.trim();
+  const newVal = raw || null;
+  if(newVal === (p.careersUrl || null)){
+    document.getElementById("modalCareersUrlMsg").textContent = "No changes to save.";
+    return;
+  }
+  p.careersUrl = newVal;
+  renderDetailModal();
+  // renderDetailModal() reconstruye modalFacts (incluido este span), hay que volver a
+  // buscarlo despues de re-renderizar o el mensaje se pierde en un nodo viejo.
+  const msg = document.getElementById("modalCareersUrlMsg");
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    try {
+      await graphUpdatePositionField(p.id, "AQ", newVal || "");
       msg.textContent = "Saved.";
     } catch(err){
       console.error(err);
@@ -2732,6 +2782,7 @@ function parsePositionsTable(posHeaders, posRows){
       // idx() da -1 si la columna todavia no existe en el Excel real (falta el paso manual
       // de agregarla); r[-1] es undefined en JS, no truena, simplemente no se muestra.
       spottJobId: r[idx("Spott Job ID")],
+      careersUrl: r[idx("Irth Careers Page")],
       productLine: r[idx("Product Line")],
       salaryRange: r[idx("Salary Range")],
       sourced: r[idx("Sourced")],
@@ -2946,6 +2997,18 @@ async function graphDeletePosition(positionId){
   });
 }
 
+// Borra todas las filas de una tabla, de la ultima a la primera: borrando de atras hacia
+// adelante, los indices de las filas que faltan por borrar nunca se corren.
+async function graphClearTable(tableName){
+  const resp = await graphFetch(`${await workbookBase()}/tables('${tableName}')/rows?$select=values`);
+  const count = (resp.value || []).length;
+  for(let i = count - 1; i >= 0; i--){
+    await graphFetch(`${await workbookBase()}/tables('${tableName}')/rows/itemAt(index=${i})`, {
+      method: "DELETE",
+    });
+  }
+}
+
 document.getElementById("connectBtn").addEventListener("click", connectM365);
 setConnectionUi(false);
 trysilentConnect();
@@ -2964,6 +3027,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   const title = document.getElementById("newPosTitle").value.trim();
   const code = document.getElementById("newPosCode").value.trim();
   const spottJobId = document.getElementById("newPosSpottId").value.trim() || null;
+  const careersUrl = document.getElementById("newPosCareersUrl").value.trim() || null;
   const hm = document.getElementById("newPosHM").value.trim();
   const recruiter = document.getElementById("newPosRecruiter").value;
   const country = document.getElementById("newPosCountry").value.trim();
@@ -3005,6 +3069,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // AK-AL: Work Arrangement, City | AM: Spott Job ID (id real de Spott, no el Job Code)
     // AN: Intake Requested Date | AO: Intake Meeting Scheduled Date
     // AP: Recruiter Accepted Date (siempre vacio aqui, una posicion nueva nunca nace ya aceptada)
+    // AQ: Irth Careers Page (Workable) URL, si la columna ya existe en el Excel real
     const row = [
       code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
       null,null,null,null,null,null,null,null,null,null,null,null,
@@ -3015,6 +3080,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       spottJobId,
       intakeRequestedDate, intakeScheduledDate,
       null,
+      careersUrl,
     ];
     await graphAppendPosition(row);
     msg.textContent = "Position created. Reloading data…";
@@ -3023,6 +3089,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     document.getElementById("newPosTitle").value = "";
     document.getElementById("newPosCode").value = "";
     document.getElementById("newPosSpottId").value = "";
+    document.getElementById("newPosCareersUrl").value = "";
     document.getElementById("newPosHM").value = "";
     document.getElementById("newPosRemark").value = "";
     document.getElementById("newPosStatus").value = "Kickoff";
@@ -3035,7 +3102,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosSpottId","newPosHM","newPosRemark","newPosStatusDateInput","newPosIntake","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosSpottId","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosIntake","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newPosStatus").value = "Kickoff";
   updateStatusDateUI("newPos", "Kickoff", null);
   document.getElementById("createPositionMsg").textContent = "";
@@ -3123,6 +3190,49 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
     console.error(err);
     msg.textContent = "Could not share: " + err.message;
     msg.style.color = "var(--critical)";
+  }
+});
+
+document.getElementById("resetAllBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("resetAllMsg");
+  const confirmInput = document.getElementById("resetAllConfirm");
+  if(confirmInput.value.trim() !== "DELETE ALL"){
+    msg.textContent = 'Type "DELETE ALL" (exactly) in the box above first.';
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(!isConnected()){
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to do this.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(!isAdmin()){
+    msg.textContent = "Only the tracker admin can reset all data.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const sure = confirm("This deletes EVERY position, historial entry, and recruiter from the shared file, for everyone. This can't be undone from here. Are you completely sure?");
+  if(!sure) return;
+
+  const btn = document.getElementById("resetAllBtn");
+  btn.disabled = true;
+  msg.textContent = "Deleting everything…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    await graphClearTable("HistorialTable");
+    await graphClearTable("PositionsTable");
+    await graphClearTable("RecruitersTable");
+    msg.textContent = "Everything deleted. Reloading…";
+    msg.style.color = "var(--good)";
+    confirmInput.value = "";
+    await loadFromGraph();
+    msg.textContent = "Done. The shared file is now empty.";
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not finish the reset: " + err.message;
+    msg.style.color = "var(--critical)";
+  } finally {
+    btn.disabled = false;
   }
 });
 </script>
