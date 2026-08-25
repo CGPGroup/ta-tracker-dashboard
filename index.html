@@ -339,6 +339,16 @@
     padding: 12px 16px; font-size: 11px; font-weight: 700 !important; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;
   }
   .callout b { color: var(--text-primary); font-weight: 700 !important; }
+  .callout.prose { font-weight: 400 !important; }
+  .callout.prose b { font-weight: 700 !important; }
+
+  /* ---------- Process & SLA Guide ---------- */
+  .guide-wrap { max-width: 860px; }
+  .guide-wrap p, .guide-wrap li { font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); }
+  .guide-wrap li b, .guide-wrap p b { color: var(--text-primary); }
+  .guide-wrap ul, .guide-wrap ol { margin: 6px 0 0; padding-left: 20px; }
+  .guide-wrap ul li, .guide-wrap ol li { margin-bottom: 7px; }
+  .guide-wrap ul li:last-child, .guide-wrap ol li:last-child { margin-bottom: 0; }
 
   .view { display: none; }
   .view.active { display: block; }
@@ -444,6 +454,7 @@
       <button class="nav-item" data-view="positions"><span class="nav-ic">▤</span> Positions</button>
       <button class="nav-item" data-view="tracking" style="display:none;"><span class="nav-ic">▥</span> Tracking</button>
       <button class="nav-item" data-view="manage"><span class="nav-ic">＋</span> SSOT Management</button>
+      <button class="nav-item" data-view="guide"><span class="nav-ic">§</span> Process & SLA Guide</button>
     </nav>
     <div class="sidebar-foot">
       You're seeing live data already.<br>
@@ -717,6 +728,106 @@
               <button class="link-danger" type="button" id="resetAllBtn" style="border:1px solid var(--critical); border-radius:8px; padding:8px 14px;">Delete Everything</button>
             </div>
             <div class="panel-sub" id="resetAllMsg" style="margin-top:8px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-guide">
+        <div class="guide-wrap">
+          <div class="callout prose"><b>What this is:</b> not instructions for using the tracker, this is the actual Irth requisition process end to end, who does what, when sourcing is allowed to start, and exactly how every SLA and allowance is defined. Source: the Irth Solutions Recruiting Workflows master prompt and the Recruitment Workflow Guide agreed with Cornerstone's VP of Recruitment and Irth's Talent Acquisition team.</div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>Who's Involved</h3>
+            <div class="panel-sub">The people and tools behind every requisition</div>
+            <ul>
+              <li><b>Cornerstone (us):</b> the RPO running this account end to end: JD review, market research and comp benchmarking, sourcing, screening, submissions, weekly reporting, and keeping the pipeline current in Spott.</li>
+              <li><b>Irth Solutions:</b> the client. A SaaS platform for critical infrastructure (pipeline integrity, damage prevention, land management).</li>
+              <li><b>Irth's Talent Acquisition team, Kesha Brown and Immy Nader:</b> they publish and manage the requisition on Irth's careers page (via Workable), send the formal assignment email, and are the bridge for any request to edit a JD that's already published. They are not the hiring manager.</li>
+              <li><b>The Hiring Manager:</b> owns alignment and decisions: intake, reviewing every submitted candidate, approving or rejecting them, giving feedback within SLA, and flagging any change in scope or requirements.</li>
+              <li><b>The Candidate:</b> completes the Workable application, confirms location and work authorization, attends scheduled interviews, and responds to Cornerstone's outreach.</li>
+              <li><b>KeyStone:</b> the AI sourcing tool, also used to publish the role to LinkedIn.</li>
+              <li><b>Spott:</b> the ATS where the entire pipeline is actually managed, regardless of where a candidate came from.</li>
+              <li><b>Workable:</b> Irth's careers page, and the system the hiring manager actually uses to review and approve submitted candidates.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>The Process, Start To Finish</h3>
+            <div class="panel-sub">Every requisition follows the same sequence, no step is ever assumed just because another one already happened</div>
+            <ol>
+              <li><b>Assignment.</b> A requisition technically exists the moment it's created in Workable, but it isn't formally assigned until Irth's Talent Coordinator (Kesha or Immy) sends the assignment email, copying both the recruiter and the hiring manager. In practice, this is often preceded by a heads-up call where Immy confirms the requisitions are ready and already live on Irth's careers page, that live posting is exactly what a requisition's "Irth Careers Page" link points to. This assignment email is what the tracker calls <b>Kickoff</b>, and its date is the Kickoff Date.</li>
+              <li><b>Kickoff reply.</b> Once assigned, the Lead Talent Partner replies on that same email thread, introducing Cornerstone as the RPO to the hiring manager, naming the assigned recruiter, and explaining exactly how sourcing, submissions, feedback, and SLAs will work. This reply always follows the same fixed template, nothing here is improvised per role.</li>
+              <li><b>Intake meeting requested, then held.</b> The recruiter asks for a 30-45 minute intake meeting (or, if the hiring manager can't make time, a short written substitute). <b>Non-negotiable rule: sourcing never starts before this happens</b>, not even if the role looks obvious or familiar. The JD alone is a starting point, almost always optimistic; the intake is what gives the real context to source against.</li>
+              <li><b>Sourcing.</b> Starts only after the intake. Passive candidates are sourced manually in KeyStone; active candidates are the ones who apply directly through the LinkedIn posting.</li>
+              <li><b>Screening, batching, submission.</b> Screened candidates get invited to complete their official Workable application, that's what creates the "Submitted" profile the hiring manager actually reviews.</li>
+              <li><b>Feedback loop.</b> The hiring manager approves or rejects each submitted candidate, logged in Workable's Review tab.</li>
+              <li><b>Offer to Hire.</b> Ends when the candidate is confirmed hired, with the placement counted on their actual start date, not when they sign the offer.</li>
+            </ol>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>Passive Vs. Active Candidates</h3>
+            <div class="panel-sub">Why the pipeline tracks two different sourcing paths</div>
+            <ul>
+              <li><b>Passive:</b> sourced manually in KeyStone and added to a shortlist. They're automatically invited to either an AI interview or a Screening Interview with the recruiter.</li>
+              <li><b>Active:</b> candidates who apply directly through the role's LinkedIn posting. They only count as an applicant once they click "Finish your application" on the careers page, anyone who starts a profile but doesn't finish it is never added to the pipeline.</li>
+              <li>Either way, the actual call that gets booked with a recruiter is always a <b>Screening Interview</b>, there's no separate "intro call" format, regardless of whether the candidate completed the AI interview first.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>SLAs & Targets</h3>
+            <div class="panel-sub">What each metric actually measures, and where its clock starts</div>
+            <div class="callout prose"><b>Time To Submit (TTS)</b> is the official KPI on this account. Its clock starts the business day after the intake meeting, never at kickoff. Target: <b>7-9 business days</b> for the first batch.</div>
+            <p style="margin:12px 0 0;">Time To Fill and Time To Hire are internal health metrics, not contractual KPIs with the client, they exist to flag when a requisition needs attention.</p>
+            <ul>
+              <li><b>Time To Fill (TTF):</b> same start point as TTS, ends when Irth confirms by email that the hiring manager sent the Offer Request. This is the edge of Cornerstone's scope in the process. Target: <b>30-40 calendar days.</b></li>
+              <li><b>Time To Hire (TTH):</b> same start point, ends on the candidate's actual first day, not when they sign the offer (a candidate can still fall through between those two dates). Target: <b>40-50 calendar days.</b></li>
+            </ul>
+            <p style="margin:12px 0 0; font-weight:700; color:var(--text-primary);">Health buckets (reference only, not a hard pass/fail rule):</p>
+            <ul>
+              <li>30-35 days: excellent</li>
+              <li>36-40 days: healthy, on track</li>
+              <li>41-45 days: at risk, needs attention</li>
+              <li>46+ days, with no Pivot SLA in play: outside the expected range</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>The Pivot SLA</h3>
+            <div class="panel-sub">The one allowance that can extend TTF/TTH, and exactly when it applies</div>
+            <p>If a hiring manager rejects <b>100% of a batch</b>, that can mean the recruiter missed, or it can mean the intake itself wasn't tight enough, and if it's the latter, it isn't fair to hold the recruiter to the original clock.</p>
+            <ul>
+              <li><b>Allowance:</b> +11 to 13 calendar days on TTF/TTH, equivalent to a full new sourcing cycle. Applies once per requisition.</li>
+              <li><b>Attribution is decided against the Intake Summary</b>, the one document that acts as the objective record of what was actually agreed: if the rejected batch matched what was agreed there and the hiring manager rejected it anyway (new criteria, change of mind), the allowance applies. If the batch didn't match what was agreed, the recruiter is attributed and the clock keeps running with no allowance.</li>
+              <li>If the real issue is a genuinely limited talent pool or uncompetitive approved compensation, Talent Mapping and/or Compensation Market Analysis are used as evidence, both to justify the allowance and to reset expectations with the hiring manager.</li>
+              <li><b>Approval:</b> the Lead Talent Partner on the account has full authority to approve this, no escalation needed. If another recruiter is working the requisition, they present the case to the Lead, who decides.</li>
+              <li>This only ever applies once per requisition. If the same batch-rejection pattern repeats after the allowance was already used, that's no longer an alignment problem, it's a deeper issue that needs to be escalated, not another allowance.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>Batch Cadence</h3>
+            <div class="panel-sub">Why candidates are delivered in small, deliberate batches</div>
+            <ul>
+              <li><b>First batch:</b> 3-5 pre-screened candidates, 7-9 business days from the intake meeting.</li>
+              <li><b>Follow-up batches</b> (only if the previous batch was rejected in full): 3-5 more candidates every 5 business days, pulled from the pipeline already in progress, sourcing never restarts from zero.</li>
+              <li><b>Why 3-5 and not more:</b> a small batch is a promise that every profile is worth the hiring manager's time. A batch of 10+ signals the screening wasn't rigorous enough.</li>
+              <li>The hiring manager doesn't shortlist, they receive an already-curated batch and only approve or reject each one. Rejection reasons get logged and used to sharpen the next batch.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>Feedback SLA</h3>
+            <div class="panel-sub">How long a hiring manager has to respond, and what happens if they don't</div>
+            <p>After any interview stage (especially technical rounds), feedback, positive or negative, is expected within <b>1-3 business days</b>, logged directly in Workable's Review tab as a formal evaluation (this is a SOC 2 compliance requirement, not just a courtesy).</p>
+            <p style="margin-top:10px;">If it doesn't arrive on time, the first move is a courteous follow-up. Escalation only happens after a full week with no response and two reminders already sent, first to <b>Kesha Brown</b>, and if there's still no response, to <b>Nicole Bell</b> as the final point of contact.</p>
+          </div>
+
+          <div class="panel" style="margin-bottom:0;">
+            <h3>Changing A JD After It's Published</h3>
+            <div class="panel-sub">Who actually owns the JD once it's live on Irth's careers page</div>
+            <p>The JD that Irth publishes on Workable when the requisition is created is the official source of truth, it can't just be overwritten. If a hiring manager asks for a change to it (this usually comes up after they see the Intake Summary), that request goes to Kesha Brown or Immy Nader, since they're the only ones who can actually edit what's published. Cornerstone's own Internal JD is a working copy for the team's use, faithful to that original, never a replacement for it.</p>
           </div>
         </div>
       </section>
@@ -2478,6 +2589,7 @@ const TITLES = {
   positions: ["Positions", "Every requisition that exists, in any status"],
   tracking: ["Tracking", "Codes, SLA, and the latest activity per position"],
   manage: ["SSOT Management", "Add new positions, recruiters, and configuration"],
+  guide: ["Process & SLA Guide", "How the requisition process actually works end to end, and how every SLA is defined"],
 };
 function activateView(view){
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
