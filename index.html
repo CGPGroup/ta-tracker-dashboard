@@ -994,8 +994,12 @@ function setDashboardScope(name){
 // reclutador) para que no quede como un banner facil de ignorar.
 function openProfileGate(name){
   document.getElementById("gateTitle").textContent = name;
+  // "Aceptar" es una accion que solo le corresponde tomar al reclutador mismo — cualquiera
+  // mas (o nadie logueado, el caso mas comun ahora que hay gente viendo sin conectarse) solo
+  // deberia poder VER que hay pendiente, nunca un boton para actuar en su nombre.
+  const isMe = MY_RECRUITER_NAME === name;
   const positions = POSITIONS.filter(p=>p.recruiter===name);
-  const pending = positions.filter(p=>p.kickoff && !p.recruiterAcceptedDate);
+  const pending = isMe ? positions.filter(p=>p.kickoff && !p.recruiterAcceptedDate) : [];
   const {slaRows, completionRows} = buildAttentionRows(positions);
   let html = "";
   if(pending.length){
