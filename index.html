@@ -649,6 +649,15 @@
               <div class="form-field full"><label>Email</label><input type="email" id="newRecEmail" placeholder="juan.torres@company.com"></div>
               <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="newRecTitle" placeholder="e.g. Talent Partner"></div>
               <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="newRecPhoto" placeholder="Leave blank to use initials instead"></div>
+              <div class="form-field full">
+                <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+                  <input type="checkbox" id="newRecShare" checked> Share the shared file with them by email, and send them the tracker link
+                </label>
+                <select id="newRecShareRole" style="margin-top:6px;">
+                  <option value="write">Can edit (they'll update their own reqs)</option>
+                  <option value="read">Can view only</option>
+                </select>
+              </div>
             </div>
             <div class="form-actions">
               <button class="btn primary" type="button" id="createRecruiterBtn">Add Recruiter</button>
@@ -2443,6 +2452,7 @@ const MSAL_CONFIG = {
 // Ruta del archivo dentro de "mi OneDrive" (root). Si mas adelante se mueve a un
 // sitio de SharePoint compartido, esta es la unica seccion que hay que cambiar.
 const EXCEL_FILE_PATH = "/TA Tracker/TA_Tracker.xlsx";
+const TRACKER_URL = "https://iot-db.github.io/ta-tracker-dashboard/";
 const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite"];
 
 const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
@@ -2512,10 +2522,8 @@ function filePathSegment(){
 // Se resuelve una vez por sesion y se cachea: buscar por path cada vez es lo que rompia el
 // acceso de invitados externos (ver mas abajo).
 let RESOLVED_DRIVE_ID = null, RESOLVED_ITEM_ID = null;
-async function workbookBase(){
-  if(RESOLVED_DRIVE_ID && RESOLVED_ITEM_ID){
-    return `/drives/${RESOLVED_DRIVE_ID}/items/${RESOLVED_ITEM_ID}/workbook`;
-  }
+async function resolveFileIds(){
+  if(RESOLVED_DRIVE_ID && RESOLVED_ITEM_ID) return;
   // Primer intento: el archivo esta en el OneDrive propio de quien se conecto (el caso de
   // Nicolas, dueño real del archivo). Si la cuenta conectada es una invitada externa (ej. un
   // correo de Irth al que solo se le compartio el archivo), esta ruta no existe en SU drive y
@@ -2531,7 +2539,32 @@ async function workbookBase(){
     RESOLVED_DRIVE_ID = match.remoteItem.parentReference.driveId;
     RESOLVED_ITEM_ID = match.remoteItem.id;
   }
+}
+async function workbookBase(){
+  await resolveFileIds();
   return `/drives/${RESOLVED_DRIVE_ID}/items/${RESOLVED_ITEM_ID}/workbook`;
+}
+// Sin ":/workbook", para acciones sobre el archivo mismo (ej. invitar a alguien a verlo/
+// editarlo) en vez de sobre su contenido.
+async function fileItemBase(){
+  await resolveFileIds();
+  return `/drives/${RESOLVED_DRIVE_ID}/items/${RESOLVED_ITEM_ID}`;
+}
+// Comparte el archivo real con un correo (ademas de guardarlo como reclutador en el tracker),
+// para que no haya que ir a OneDrive a mano cada vez que se suma alguien nuevo. role: "write"
+// para reclutadores que van a editar sus propias posiciones, "read" para alguien que solo
+// necesita verlo (ej. Nicole/Immy si algun dia solo quieren mirar, no editar).
+async function graphShareFile(email, role, siteUrl){
+  await graphFetch(`${await fileItemBase()}/invite`, {
+    method: "POST",
+    body: JSON.stringify({
+      requireSignIn: true,
+      sendInvitation: true,
+      roles: [role],
+      recipients: [{ email }],
+      message: `You've been added to the Irth TA Tracker. Once you accept this, connect Microsoft 365 from the dashboard here to see live data: ${siteUrl}`,
+    }),
+  });
 }
 
 async function connectM365(){
@@ -2892,8 +2925,15 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   const email = document.getElementById("newRecEmail").value.trim();
   const jobTitle = document.getElementById("newRecTitle").value.trim();
   const photoUrl = document.getElementById("newRecPhoto").value.trim();
+  const shouldShare = document.getElementById("newRecShare").checked;
+  const shareRole = document.getElementById("newRecShareRole").value;
   if(!name){
     msg.textContent = "Full name is required.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(shouldShare && !email){
+    msg.textContent = "An email is required to share the file with them.";
     msg.style.color = "var(--critical)";
     return;
   }
@@ -2906,6 +2946,16 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   msg.style.color = "var(--text-muted)";
   try {
     await graphAppendRecruiter(name, email, photoUrl, jobTitle);
+    let shareNote = "";
+    if(shouldShare){
+      try {
+        await graphShareFile(email, shareRole, TRACKER_URL);
+        shareNote = " File shared and invite emailed.";
+      } catch(shareErr){
+        console.error(shareErr);
+        shareNote = " Recruiter saved, but sharing the file failed: " + shareErr.message;
+      }
+    }
     msg.textContent = "Recruiter added. Reloading data…";
     msg.style.color = "var(--good)";
     await loadFromGraph();
@@ -2913,7 +2963,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
     document.getElementById("newRecEmail").value = "";
     document.getElementById("newRecTitle").value = "";
     document.getElementById("newRecPhoto").value = "";
-    msg.textContent = "Recruiter added and loaded.";
+    msg.textContent = "Recruiter added and loaded." + shareNote;
   } catch(err){
     console.error(err);
     msg.textContent = "Could not save: " + err.message;
@@ -2922,6 +2972,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
 });
 document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
   ["newRecName","newRecEmail","newRecTitle","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("newRecShare").checked = true;
   document.getElementById("createRecruiterMsg").textContent = "";
 });
 </script>
