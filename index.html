@@ -424,6 +424,7 @@
       <!-- ======================= DASHBOARD ======================= -->
       <section class="view active" id="view-dashboard">
         <div class="scope-banner" id="dashboardScopeBanner" style="display:none;"></div>
+        <div id="pendingAssignmentZone"></div>
         <div class="panel" id="teamPanel">
           <h3>Team</h3>
           <div class="panel-sub">Click a recruiter to see their own dashboard</div>
@@ -442,6 +443,11 @@
               <h3>SLA Compliance</h3>
               <div class="panel-sub">Share of active positions on time on every SLA target (submit, fill, and hire deadlines). The rest are running behind on at least one.</div>
               <div id="chartSlaCompliance"></div>
+            </div>
+            <div class="panel">
+              <h3>Requisition Completion</h3>
+              <div class="panel-sub">Share of assigned requisitions where the recruiter accepted and requested the intake meeting within 1 business day of Kickoff.</div>
+              <div id="chartCompletion"></div>
             </div>
             <div class="panel">
               <h3>Pending Offers</h3>
@@ -520,7 +526,7 @@
       <section class="view" id="view-tracking">
         <div class="panel" style="margin-bottom:16px;">
           <h3>Needs Attention</h3>
-          <div class="panel-sub">Active positions that are out of SLA or at risk, most urgent first.</div>
+          <div class="panel-sub">Active positions out of SLA or at risk, plus requisitions falling behind on Kickoff/Intake follow-up, most urgent first.</div>
           <div id="needsAttentionList"></div>
         </div>
         <div class="panel" style="margin-bottom:16px;">
@@ -660,6 +666,10 @@
     <div class="modal-section-title">SLA <span id="pivotSlaBadge"></span></div>
     <div class="sla-grid" id="modalSlaGrid"></div>
 
+    <div class="modal-section-title" id="modalCompletionTitle">Requisition Completion</div>
+    <div class="sla-grid" id="modalCompletionGrid"></div>
+    <div id="modalCompletionAlert"></div>
+
     <div class="modal-section-title" id="modalStatusTitle">Update Status</div>
     <div id="modalStatusSection">
       <div class="status-update-row">
@@ -761,15 +771,73 @@ function dashboardPositions(){
   return activeDashboardScope ? POSITIONS.filter(p=>p.recruiter===activeDashboardScope) : POSITIONS;
 }
 function renderDashboardPanels(){
+  renderPendingAssignments();
   renderKpis();
   renderEstadoChart();
   renderReclutadorChart();
   renderHiredLocChart();
   renderSlaChart();
   renderSlaMeter();
+  renderCompletionChart();
   renderHiresTrend();
   renderPlacementsMonth();
   renderPendingOffers();
+}
+// Mensajes de confirmacion tras aceptar una asignacion, se muestran hasta que el reclutador
+// los descarta (no se guardan en ningun lado, solo viven en esta pestana/sesion).
+let acceptedConfirmations = [];
+function renderPendingAssignments(){
+  const zone = document.getElementById("pendingAssignmentZone");
+  let html = "";
+  if(MY_RECRUITER_NAME){
+    const pending = POSITIONS.filter(p=>p.recruiter===MY_RECRUITER_NAME && p.kickoff && !p.recruiterAcceptedDate);
+    if(pending.length){
+      html += `<div class="alert-banner tier-orange" style="flex-direction:column; align-items:stretch;">
+        <div><b>You have ${pending.length} new assignment${pending.length===1?"":"s"}</b> waiting on your acceptance.</div>
+        ${pending.map(p=>`
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <span>${posLabel(p)} <span style="color:var(--text-muted);">— assigned ${p.kickoff}</span></span>
+            <button class="btn primary small" type="button" data-accept-id="${p.id}">Accept</button>
+          </div>`).join("")}
+      </div>`;
+    }
+  }
+  acceptedConfirmations.forEach(c=>{
+    html += `<div class="alert-banner tier-good" style="flex-direction:column; align-items:stretch;">
+      <div>${c.title} — accepted. The kickoff email reply has already been sent to the hiring manager confirming you as the assigned recruiter and explaining the SLAs. Please introduce yourself in that same email thread, then request the intake meeting.</div>
+      <div style="text-align:right;"><button class="btn ghost small" type="button" data-dismiss-id="${c.id}">Got It</button></div>
+    </div>`;
+  });
+  zone.innerHTML = html;
+  zone.querySelectorAll("[data-accept-id]").forEach(btn=>{
+    btn.addEventListener("click", ()=> acceptAssignment(btn.dataset.acceptId));
+  });
+  zone.querySelectorAll("[data-dismiss-id]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      acceptedConfirmations = acceptedConfirmations.filter(c=>c.id!==btn.dataset.dismissId);
+      renderPendingAssignments();
+    });
+  });
+}
+async function acceptAssignment(positionId){
+  const p = POSITIONS.find(x=>x.id===positionId);
+  if(!p) return;
+  const today = new Date().toISOString().slice(0,10);
+  p.recruiterAcceptedDate = today;
+  const remarkText = "Accepted the assignment.";
+  p.extra = p.extra || [];
+  p.extra.push({date: today, type:"manual", author:"You", text:remarkText});
+  acceptedConfirmations.push({id:p.id, title:posLabel(p)});
+  renderPendingAssignments();
+  if(isConnected()){
+    try {
+      await graphUpdatePositionField(p.id, "AP", today);
+      await graphAppendHistorial(p.id, p.title, remarkText, "You");
+    } catch(err){
+      console.error(err);
+      alert("Could not save your acceptance. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
+    }
+  }
 }
 // Reutilizado tanto por la fila del sidebar como por el boton "Edit My Requisitions" del
 // dashboard personal: salta a Tracking ya filtrado y editable para ese reclutador.
@@ -853,6 +921,13 @@ let RISK_THRESHOLD = 0.85;
 // TTF y TTH se miden en dias CALENDARIO (no habiles) desde el mismo punto de partida que TTS.
 // Targets = techo de cada rango del master prompt: TTF 30-40 dias calendario, TTH 40-50 dias calendario.
 let SLA_TARGETS = { TTS: 9, TTF: 40, TTH: 50 };
+// Metas del tramo previo al sourcing (Kickoff -> Intake), en dias habiles, confirmadas por
+// Nicolas (no vienen del master prompt, ese solo cubre TTS/TTF/TTH desde el intake en
+// adelante). Solo "acceptRequest" es 100% responsabilidad del reclutador (aceptar + pedir el
+// intake); hmResponse/intakeHeld dependen del hiring manager, asi que no cuentan como falla
+// del reclutador, solo generan un recordatorio para que le haga push o escale con Immy Nader.
+const COMPLETION_TARGETS = { acceptRequest: 1, hmResponse: 3, intakeHeld: 5 };
+const ESCALATION_CONTACT = "Immy Nader";
 // "Pivot SLA": allowance de dias calendario que se suma al target de TTF/TTH cuando la posicion
 // tiene "SLA Exception Approved?" = Yes (batch completo rechazado, atribuible al cliente segun
 // el Resumen de Intake). El master prompt documenta un rango de 11 a 13 dias; usamos el punto
@@ -928,6 +1003,48 @@ function slaFor(p, key, closeDateStr){
 }
 function computeSla(p){
   return { TTS: slaFor(p,"TTS",p.submit), TTF: slaFor(p,"TTF",p.fill), TTH: slaFor(p,"TTH",p.hire) };
+}
+
+// Checklist del tramo Kickoff -> Intake (ver COMPLETION_TARGETS arriba). step1 es la unica
+// pieza que se marca como incumplimiento real del reclutador (within/out); step2/step3 son
+// solo recordatorios de seguimiento (waiting/overdue), nunca "culpa" del reclutador.
+function computeCompletion(p){
+  const kickoff = parseD(p.kickoff);
+  const requested = parseD(p.intakeRequestedDate);
+  const scheduled = parseD(p.intakeScheduledDate);
+  const held = parseD(p.intake);
+  const today = new Date();
+
+  let step1 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.acceptRequest};
+  if(kickoff){
+    const elapsed = bizDaysBetween(kickoff, requested || today);
+    step1 = {status: elapsed<=COMPLETION_TARGETS.acceptRequest ? "within" : "out", elapsed, target:COMPLETION_TARGETS.acceptRequest};
+  }
+
+  let step2 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.hmResponse, escalate:false};
+  if(requested){
+    const done = !!(scheduled || held);
+    const elapsed = bizDaysBetween(requested, scheduled || held || today);
+    step2 = {status: done ? "done" : (elapsed>COMPLETION_TARGETS.hmResponse ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.hmResponse, escalate: !done && elapsed>COMPLETION_TARGETS.hmResponse};
+  }
+
+  let step3 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.intakeHeld, overdue:false};
+  if(requested){
+    const elapsed = bizDaysBetween(requested, held || today);
+    step3 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld};
+  }
+
+  return {step1, step2, step3};
+}
+// Texto tipo slaFlags() pero para el checklist de arriba: solo aparece algo si hay una falla
+// real del reclutador (step1 out) o un recordatorio de seguimiento pendiente (step2/step3).
+function completionFlags(p){
+  const c = computeCompletion(p);
+  const flags = [];
+  if(c.step1.status==="out") flags.push(`🚩 Accept & Request Intake: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
+  if(c.step2.escalate) flags.push(`🔔 Escalate To ${ESCALATION_CONTACT}: HM hasn't responded in ${c.step2.elapsed} business days (target ${c.step2.target})`);
+  if(c.step3.overdue) flags.push(`⛔ Intake Overdue: ${c.step3.elapsed} business days since requested (target ${c.step3.target})`);
+  return flags;
 }
 
 const STATUS_META = {
@@ -1220,6 +1337,37 @@ function renderSlaMeter(){
   );
 }
 
+// El unico paso de Requisition Completion que cuenta como incumplimiento real del reclutador
+// (ver COMPLETION_TARGETS): aceptar la asignacion y pedir el intake dentro de 1 dia habil.
+function renderCompletionChart(){
+  const assigned = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && p.kickoff);
+  const lateIds = new Set(assigned.filter(p=>computeCompletion(p).step1.status==="out").map(p=>p.id));
+  const late = lateIds.size;
+  const onTime = assigned.length - late;
+  const rate = assigned.length ? Math.round((onTime / assigned.length) * 100) : 100;
+  let color = "var(--good)";
+  if(rate < 75) color = "var(--critical)";
+  else if(rate < 90) color = "var(--warning)";
+
+  const rows = [
+    {label:"On Time", value: onTime},
+    {label:"Late", value: late},
+  ].filter(r=>r.value>0);
+  renderDonut(
+    "chartCompletion",
+    rows.length ? rows : [{label:"No assigned requisitions", value:1}],
+    [color, "var(--grid)"],
+    null, 100,
+    {value: rate + "%", label: "On Time"},
+    rows.length ? (row)=>{
+      const matches = row.label==="On Time"
+        ? assigned.filter(p=>!lateIds.has(p.id))
+        : assigned.filter(p=>lateIds.has(p.id));
+      openQuickList(row.label, `${matches.length} position${matches.length===1?"":"s"}`, matches);
+    } : null
+  );
+}
+
 function renderHiresTrend(){
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug"];
   const counts = new Array(months.length).fill(0);
@@ -1441,22 +1589,38 @@ function attentionInfo(p){
 }
 function renderNeedsAttention(){
   const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
-  const rows = active.map(p=>({p, ...attentionInfo(p)})).filter(r=>r.worst==="out"||r.worst==="risk");
+  const slaRows = active.map(p=>({p, ...attentionInfo(p)})).filter(r=>r.worst==="out"||r.worst==="risk");
   const order = {out:0, risk:1};
-  rows.sort((a,b)=>{
+  slaRows.sort((a,b)=>{
     if(order[a.worst]!==order[b.worst]) return order[a.worst]-order[b.worst];
     return (b.s[b.worstKey].elapsed||0) - (a.s[a.worstKey].elapsed||0);
   });
+  // Los problemas de Requisition Completion pasan ANTES del intake, los de SLA pasan DESPUES
+  // (TTS/TTF/TTH no arrancan hasta que hay intake) — nunca se solapan en la misma posicion.
+  const slaIds = new Set(slaRows.map(r=>r.p.id));
+  const completionRows = active.filter(p=>!slaIds.has(p.id) && completionFlags(p).length>0);
+
   const list = document.getElementById("needsAttentionList");
-  if(!rows.length){
-    list.innerHTML = `<div class="panel-sub" style="margin:0;">Nothing urgent right now. Every active position is within SLA or hasn't started its clock yet.</div>`;
+  if(!slaRows.length && !completionRows.length){
+    list.innerHTML = `<div class="panel-sub" style="margin:0;">Nothing urgent right now. Every active position is within SLA, on track with Requisition Completion, or hasn't started its clock yet.</div>`;
     return;
   }
-  list.innerHTML = rows.map(({p, s, worstKey})=>`
+  const slaHtml = slaRows.map(({p, s, worstKey})=>`
     <div class="pending-offer-row clickable-stat" data-id="${p.id}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${slaFlags(p)}</div></div>
       ${slaChip(s[worstKey])}
     </div>`).join("");
+  const completionHtml = completionRows.map(p=>{
+    const c = computeCompletion(p);
+    const cls = (c.step1.status==="out" || c.step3.overdue) ? "out" : "risk";
+    const label = c.step1.status==="out" ? "Not Accepted/Requested" : (c.step2.escalate ? "Escalate" : "Overdue");
+    return `
+    <div class="pending-offer-row clickable-stat" data-id="${p.id}">
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
+      <span class="sla-chip ${cls}"><span class="dot" style="background:${STATUS_META[cls].color}"></span>${label}</span>
+    </div>`;
+  }).join("");
+  list.innerHTML = slaHtml + completionHtml;
   list.querySelectorAll(".pending-offer-row").forEach(row=>{
     row.addEventListener("click", ()=> openDetailModal(row.dataset.id));
   });
@@ -1679,6 +1843,33 @@ function renderDetailModal(){
       <div class="sla-name"><span>${c.label}</span><span class="tag ${c.tag==="Official SLA"?"official":"internal"}">${c.tag}</span></div>
       ${slaChip(s[c.key])}
     </div>`).join("");
+
+  const completionVisible = !!p.kickoff;
+  document.getElementById("modalCompletionTitle").style.display = completionVisible ? "" : "none";
+  if(completionVisible){
+    const c = computeCompletion(p);
+    const step1Chip = c.step1.status==="none" ? `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`
+      : `<span class="sla-chip ${c.step1.status==="within"?"within":"out"}"><span class="dot" style="background:${STATUS_META[c.step1.status==="within"?"within":"out"].color}"></span>${c.step1.elapsed}d/${c.step1.target}d</span>`;
+    const followUpChip = (status)=> status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done</span>`
+      : status==="overdue" ? `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Overdue</span>`
+      : status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting</span>`
+      : `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`;
+    const completionCards = [
+      {label:"Accept & Request Intake", tag:"Recruiter Owned", chip: step1Chip},
+      {label:"HM Responds With Availability", tag:"Follow-Up Only", chip: followUpChip(c.step2.status)},
+      {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step3.status)},
+    ];
+    document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
+      <div class="sla-card">
+        <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}">${cc.tag}</span></div>
+        ${cc.chip}
+      </div>`).join("");
+    const alerts = [];
+    if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
+    if(c.step2.escalate) alerts.push({tier:"tier-orange", text:`The hiring manager hasn't responded to the intake request in ${c.step2.elapsed} business days (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
+    if(c.step3.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step3.elapsed} business days since it was requested (target ${c.step3.target}, one work week). Please push the hiring manager for a date.`});
+    document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">${a.text}</div>`).join("");
+  }
 
   const statusSelect = document.getElementById("modalStatusSelect");
   statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${st}" ${st===p.status?"selected":""}>${st}</option>`).join("");
@@ -2207,6 +2398,7 @@ async function loadFromGraph(){
       kickoff: excelValToDateStr(r[idx("Kickoff Date")]),
       intakeRequestedDate: excelValToDateStr(r[idx("Intake Requested Date")]),
       intakeScheduledDate: excelValToDateStr(r[idx("Intake Meeting Scheduled Date")]),
+      recruiterAcceptedDate: excelValToDateStr(r[idx("Recruiter Accepted Date")]),
       intake: excelValToDateStr(r[idx("Intake Date")]),
       submit: excelValToDateStr(r[idx("Submit Date")]),
       fill: excelValToDateStr(r[idx("Fill Date")]),
@@ -2416,6 +2608,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // AA: Kickoff Date | AB-AJ: campos de Spott (se llenan despues a mano si aplica)
     // AK-AL: Work Arrangement, City | AM: Spott Job ID (id real de Spott, no el Job Code)
     // AN: Intake Requested Date | AO: Intake Meeting Scheduled Date
+    // AP: Recruiter Accepted Date (siempre vacio aqui, una posicion nueva nunca nace ya aceptada)
     const row = [
       code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
       null,null,null,null,null,null,null,null,null,null,null,null,
@@ -2425,6 +2618,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       workArrangement, city,
       spottJobId,
       intakeRequestedDate, intakeScheduledDate,
+      null,
     ];
     await graphAppendPosition(row);
     msg.textContent = "Position created. Reloading data…";
