@@ -112,6 +112,11 @@
   .team-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .team-title { font-size: 10.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 
+  .recent-reqs-title { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 20px 0 6px; padding: 0 4px; }
+  .recent-req-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
+  .recent-req-row:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+  .recent-req-row .rr-code { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+
   .scope-banner {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     background: rgba(217,119,87,0.10); border: 1px solid rgba(217,119,87,0.32);
@@ -179,6 +184,22 @@
   .dash-cols { display: flex; gap: 16px; align-items: stretch; }
   .dash-col { display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 0; }
   .dash-col .panel:last-child { flex: 1; display: flex; flex-direction: column; }
+
+  /* Tracking: lista a la izquierda, detalle fijo a la derecha (no tapa la lista al abrir una
+     posicion). El mismo #detailModal que usan Positions/Dashboard se "acopla" aqui via JS
+     (dockDetailModal()) en vez de duplicar todo su render. */
+  .tracking-split { display: flex; gap: 16px; align-items: flex-start; }
+  .tracking-list-col { flex: 1; min-width: 0; }
+  .tracking-detail-col { width: 420px; flex: none; position: sticky; top: 20px; }
+  @media (max-width: 1100px) {
+    .tracking-split { flex-direction: column; }
+    .tracking-detail-col { width: 100%; position: static; }
+  }
+  .modal-overlay.docked {
+    position: static; display: block !important; background: none; padding: 0;
+    inset: auto; z-index: auto; overflow: visible;
+  }
+  .modal-overlay.docked .modal-card { max-width: none; width: 100%; }
 
   .panel {
     background: var(--surface-1); border-radius: var(--radius);
@@ -401,7 +422,7 @@
     <nav class="nav">
       <button class="nav-item active" data-view="dashboard"><span class="nav-ic">▣</span> Dashboard</button>
       <button class="nav-item" data-view="positions"><span class="nav-ic">▤</span> Positions</button>
-      <button class="nav-item" data-view="tracking"><span class="nav-ic">▥</span> Tracking</button>
+      <button class="nav-item" data-view="tracking" style="display:none;"><span class="nav-ic">▥</span> Tracking</button>
       <button class="nav-item" data-view="manage"><span class="nav-ic">＋</span> SSOT Management</button>
     </nav>
     <div class="sidebar-foot">
@@ -434,6 +455,7 @@
             <div class="team-rail-title">Team</div>
             <div class="team-rail-sub">Click a recruiter to see their own dashboard</div>
             <div class="team-grid" id="teamGrid"></div>
+            <div id="recentReqsZone"></div>
           </aside>
           <div class="dashboard-main">
             <div class="scope-banner" id="dashboardScopeBanner" style="display:none;"></div>
@@ -474,17 +496,22 @@
                   <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target (TTS in business days; TTF/TTH in calendar days)</div>
                   <div id="chartSla"></div>
                 </div>
-                <div class="panel">
+                <div class="panel" id="panelWorkloadByRecruiter">
                   <h3>Active Workload By Recruiter</h3>
                   <div class="panel-sub">Open positions currently assigned to each recruiter</div>
                   <div class="barlist" id="chartReclutador"></div>
+                </div>
+                <div class="panel" id="panelAvgTts" style="display:none;">
+                  <h3>Average Time To Submit</h3>
+                  <div class="panel-sub">Their own average TTS across active positions where submitting has started, vs the 9 business day target.</div>
+                  <div id="chartAvgTts"></div>
                 </div>
                 <div class="panel">
                   <h3>Placements This Month</h3>
                   <div class="panel-sub">Confirmed hires, this month vs last month</div>
                   <div id="chartPlacementsMonth"></div>
                 </div>
-                <div class="panel">
+                <div class="panel" id="panelPositionByLocation">
                   <h3>Position By Location/Work Arrangement</h3>
                   <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
                   <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
@@ -536,41 +563,45 @@
       <section class="view" id="view-tracking">
         <div class="panel" style="margin-bottom:16px;">
           <h3>Needs Attention</h3>
-          <div class="panel-sub">Active positions out of SLA or at risk, plus requisitions falling behind on Kickoff/Intake follow-up, most urgent first.</div>
+          <div class="panel-sub">Your active positions out of SLA or at risk, plus requisitions falling behind on Kickoff/Intake follow-up, most urgent first.</div>
           <div id="needsAttentionList"></div>
         </div>
         <div class="panel" style="margin-bottom:16px;">
           <h3>Recent Activity</h3>
-          <div class="panel-sub">Everything logged across all positions in the last 7 days, most recent first.</div>
+          <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
           <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
         </div>
-        <div class="panel">
-          <h3>Tracking</h3>
-          <div class="panel-sub">Codes, SLA, and the latest activity for every position, in one place. Click a row to open its detail, add a remark, or update its status.</div>
-          <div class="toolbar">
-            <input type="text" id="trackingSearch" placeholder="Search by position, hiring manager, or recruiter…">
-            <select id="trackingStatus"><option value="">All Statuses</option></select>
-            <select id="trackingRecruiter"><option value="">All Recruiters</option></select>
-            <select id="trackingTTS" title="Time To Submit"><option value="">Time To Submit: All</option></select>
-            <select id="trackingTTF" title="Time To Fill"><option value="">Time To Fill: All</option></select>
-            <select id="trackingTTH" title="Time To Hire"><option value="">Time To Hire: All</option></select>
-            <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
-              <input type="checkbox" id="trackingOnlyActive" checked> Active Only
-            </label>
-            <select id="trackingPresetSelect"><option value="">Saved Filters…</option></select>
-            <button class="btn ghost small" type="button" id="trackingSaveFilterBtn">Save Filters</button>
-            <button class="btn ghost small" type="button" id="trackingDeleteFilterBtn">Delete Saved</button>
-            <span class="count" id="trackingCount"></span>
+        <div class="tracking-split">
+          <div class="tracking-list-col">
+            <div class="panel">
+              <h3>Tracking</h3>
+              <div class="panel-sub">Codes, SLA, and the latest activity for your positions, in one place. Click a row to see its detail on the right, add a remark, or update its status.</div>
+              <div class="toolbar">
+                <input type="text" id="trackingSearch" placeholder="Search by position or hiring manager…">
+                <select id="trackingStatus"><option value="">All Statuses</option></select>
+                <select id="trackingTTS" title="Time To Submit"><option value="">Time To Submit: All</option></select>
+                <select id="trackingTTF" title="Time To Fill"><option value="">Time To Fill: All</option></select>
+                <select id="trackingTTH" title="Time To Hire"><option value="">Time To Hire: All</option></select>
+                <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+                  <input type="checkbox" id="trackingOnlyActive" checked> Active Only
+                </label>
+                <select id="trackingPresetSelect"><option value="">Saved Filters…</option></select>
+                <button class="btn ghost small" type="button" id="trackingSaveFilterBtn">Save Filters</button>
+                <button class="btn ghost small" type="button" id="trackingDeleteFilterBtn">Delete Saved</button>
+                <span class="count" id="trackingCount"></span>
+              </div>
+              <div style="overflow-x:auto;">
+                <table class="data" id="trackingTable">
+                  <thead><tr>
+                    <th>Position</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
+                    <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Update</th>
+                  </tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
           </div>
-          <div style="overflow-x:auto;">
-            <table class="data" id="trackingTable">
-              <thead><tr>
-                <th>Position</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
-                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Update</th>
-              </tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+          <div class="tracking-detail-col" id="trackingDetailHost"></div>
         </div>
       </section>
 
@@ -709,6 +740,23 @@
   </div>
 </div>
 
+<!-- ======================= PROFILE ENTRY GATE (before entering a recruiter's dashboard) ======================= -->
+<div class="modal-overlay" id="profileGateModal">
+  <div class="modal-card" style="max-width:640px;">
+    <div class="modal-head">
+      <div>
+        <h2 id="gateTitle" style="margin:0; font-size:16px;"></h2>
+        <div class="modal-sub" id="gateSub">Here's what's pending before you go in.</div>
+      </div>
+      <button class="modal-close" id="gateClose" type="button">&times;</button>
+    </div>
+    <div id="gateBody"></div>
+    <div class="form-actions" style="margin-top:18px;">
+      <button class="btn primary" type="button" id="gateContinueBtn">Continue To Dashboard →</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    SAMPLE DATA (replace with the real Excel export)
@@ -773,6 +821,13 @@ function isAdmin(){
   const email = (graphAccount && graphAccount.username || "").toLowerCase();
   return !email || email === ADMIN_EMAIL;
 }
+// Cualquiera puede ENTRAR al perfil/dashboard de cualquier reclutador (para ver), pero solo
+// puede editar (status, remarks, fechas) si su cuenta de MS365 conectada es literalmente esa
+// persona. Sin conexion (pruebas locales) se trata como editable, mismo criterio que isAdmin().
+function trackingCanEdit(){
+  if(!isConnected()) return true;
+  return !!activeDashboardScope && MY_RECRUITER_NAME === activeDashboardScope;
+}
 
 // Cuando activeDashboardScope tiene un nombre, el Dashboard (KPIs, graficas, SLA) se calcula
 // solo con las posiciones de ese reclutador en vez del libro completo. null = vista de equipo.
@@ -789,9 +844,31 @@ function renderDashboardPanels(){
   renderSlaChart();
   renderSlaMeter();
   renderCompletionChart();
+  renderAvgTtsChart();
   renderHiresTrend();
   renderPlacementsMonth();
   renderPendingOffers();
+}
+// Solo tiene sentido dentro de un perfil (panelAvgTts esta oculto en la vista de equipo), pero
+// no cuesta nada calcularlo siempre.
+function renderAvgTtsChart(){
+  const positions = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  const withTts = positions.map(p=>slaFor(p,"TTS",p.submit)).filter(s=>s.status!=="none");
+  const target = SLA_TARGETS.TTS;
+  const el = document.getElementById("chartAvgTts");
+  if(!withTts.length){
+    el.innerHTML = `<div class="panel-sub" style="margin:0;">No positions with an active TTS clock yet.</div>`;
+    return;
+  }
+  const avg = Math.round(withTts.reduce((sum,s)=>sum+(s.elapsed||0),0) / withTts.length);
+  let color = "var(--good)";
+  if(avg > target) color = "var(--critical)";
+  else if(avg >= target * RISK_THRESHOLD) color = "var(--warning)";
+  el.innerHTML = `
+    <div style="display:flex; align-items:baseline; gap:10px;">
+      <div style="font-size:32px; color:${color}; line-height:1;">${avg}d</div>
+      <div style="font-size:11.5px; color:var(--text-muted);">avg vs ${target}d target &middot; ${withTts.length} position${withTts.length===1?"":"s"}</div>
+    </div>`;
 }
 // Mensajes de confirmacion tras aceptar una asignacion, se muestran hasta que el reclutador
 // los descarta (no se guardan en ningun lado, solo viven en esta pestana/sesion).
@@ -849,37 +926,112 @@ async function acceptAssignment(positionId){
     }
   }
 }
-// Reutilizado tanto por la fila del sidebar como por el boton "Edit My Requisitions" del
-// dashboard personal: salta a Tracking ya filtrado y editable para ese reclutador.
+// Usado por el boton "Edit My Requisitions" del dashboard personal: activeDashboardScope ya
+// esta seteado al reclutador correcto para cuando esto se llama, asi que Tracking (que
+// siempre esta filtrado por dashboardPositions()) ya muestra exactamente lo suyo.
 function jumpToRecruiterTracking(name){
   activateView("tracking");
-  const sel = document.getElementById("trackingRecruiter");
-  fillSelectOnce(sel, RECRUITERS);
-  sel.value = name;
-  trackingRecruiterAutoApplied = true;
-  renderTracking();
 }
+// Tracking solo existe dentro del perfil de un reclutador (nunca en la vista de equipo), asi
+// que el tab entero se oculta sin scope, y si estabas ahi cuando alguien le da "Back To Team
+// Dashboard" hay que sacarte de una vista que ya no deberia ser alcanzable.
 function setDashboardScope(name){
+  const wasOnTracking = document.getElementById("view-tracking").classList.contains("active");
   activeDashboardScope = name;
-  activateView("dashboard");
+  document.querySelector('.nav-item[data-view="tracking"]').style.display = name ? "" : "none";
+  document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
+  document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
+  document.getElementById("panelAvgTts").style.display = name ? "" : "none";
+  activateView((name && wasOnTracking) ? "tracking" : "dashboard");
   renderDashboardPanels();
   renderTeamPanel();
+  renderRecentReqs();
   const banner = document.getElementById("dashboardScopeBanner");
   if(!name){
     banner.style.display = "none";
     return;
   }
   const count = POSITIONS.filter(p=>p.recruiter===name).length;
-  const isMe = MY_RECRUITER_NAME === name;
   banner.style.display = "";
   banner.innerHTML = `
     <span>Viewing <b>${name}'s</b> dashboard &middot; ${count} position${count===1?"":"s"}</span>
     <span style="display:flex; gap:8px;">
-      ${isMe ? `<button class="btn primary small" id="scopeEditBtn" type="button">Edit My Requisitions →</button>` : ""}
+      <button class="btn primary small" id="scopeEditBtn" type="button">Open Tracking →</button>
       <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Dashboard</button>
     </span>`;
   document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
-  if(isMe) document.getElementById("scopeEditBtn").addEventListener("click", ()=> jumpToRecruiterTracking(name));
+  document.getElementById("scopeEditBtn").addEventListener("click", ()=> jumpToRecruiterTracking(name));
+}
+// Pantalla intermedia entre hacer clic en una tarjeta de Team y realmente entrar al perfil:
+// un resumen de lo pendiente (nuevas asignaciones por aceptar + Needs Attention de ESE
+// reclutador) para que no quede como un banner facil de ignorar.
+function openProfileGate(name){
+  document.getElementById("gateTitle").textContent = name;
+  const positions = POSITIONS.filter(p=>p.recruiter===name);
+  const pending = positions.filter(p=>p.kickoff && !p.recruiterAcceptedDate);
+  const {slaRows, completionRows} = buildAttentionRows(positions);
+  let html = "";
+  if(pending.length){
+    html += `<div class="modal-section-title">New Assignments</div>` + pending.map(p=>`
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0;">
+        <span>${posLabel(p)} <span style="color:var(--text-muted);">— assigned ${p.kickoff}</span></span>
+        <button class="btn primary small" type="button" data-gate-accept-id="${p.id}">Accept</button>
+      </div>`).join("");
+  }
+  if(slaRows.length || completionRows.length){
+    html += `<div class="modal-section-title">Needs Attention</div>` + attentionRowsHtml(slaRows, completionRows);
+  }
+  if(!pending.length && !slaRows.length && !completionRows.length){
+    html += `<div class="panel-sub" style="margin:0;">Nothing pending, this book is in good shape.</div>`;
+  }
+  const body = document.getElementById("gateBody");
+  body.innerHTML = html;
+  body.querySelectorAll("[data-gate-accept-id]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      await acceptAssignment(btn.dataset.gateAcceptId);
+      openProfileGate(name);
+    });
+  });
+  body.querySelectorAll(".pending-offer-row").forEach(row=>{
+    row.addEventListener("click", ()=>{
+      closeProfileGate();
+      setDashboardScope(name);
+      activateView("tracking");
+      openDetailModal(row.dataset.id, trackingCanEdit() ? "edit" : "view");
+    });
+  });
+  document.getElementById("profileGateModal").classList.add("open");
+}
+function closeProfileGate(){
+  document.getElementById("profileGateModal").classList.remove("open");
+}
+document.getElementById("gateClose").addEventListener("click", closeProfileGate);
+document.getElementById("profileGateModal").addEventListener("click", (e)=>{ if(e.target.id==="profileGateModal") closeProfileGate(); });
+document.getElementById("gateContinueBtn").addEventListener("click", ()=>{
+  const name = document.getElementById("gateTitle").textContent;
+  closeProfileGate();
+  setDashboardScope(name);
+});
+function renderRecentReqs(){
+  const zone = document.getElementById("recentReqsZone");
+  if(!activeDashboardScope){ zone.innerHTML = ""; return; }
+  const recent = dashboardPositions().slice()
+    .sort((a,b)=> (b.kickoff||"").localeCompare(a.kickoff||""))
+    .slice(0, 10);
+  if(!recent.length){ zone.innerHTML = ""; return; }
+  zone.innerHTML = `
+    <div class="recent-reqs-title">Recently Assigned</div>
+    ${recent.map(p=>`
+      <div class="recent-req-row" data-id="${p.id}">
+        <div>${p.title}</div>
+        <div class="rr-code">${p.id} &middot; ${p.status}</div>
+      </div>`).join("")}`;
+  zone.querySelectorAll(".recent-req-row").forEach(row=>{
+    row.addEventListener("click", ()=>{
+      activateView("tracking");
+      openDetailModal(row.dataset.id, trackingCanEdit() ? "edit" : "view");
+    });
+  });
 }
 function renderTeamPanel(){
   const el = document.getElementById("teamGrid");
@@ -895,7 +1047,7 @@ function renderTeamPanel(){
     </div>`;
   }).join("");
   el.querySelectorAll(".team-card").forEach(card=>{
-    card.addEventListener("click", ()=> setDashboardScope(card.dataset.name));
+    card.addEventListener("click", ()=> openProfileGate(card.dataset.name));
   });
 }
 const TERMINAL = ["Hired","Cancelled","Fell Through"];
@@ -906,8 +1058,11 @@ let RECRUITER_TITLES = {}; // nombre -> cargo (opcional, se muestra en la tarjet
 // Unico admin del tracker por ahora (Nicolas): solo esta cuenta puede eliminar requisitions
 // desde Positions. Es una barrera de interfaz, no seguridad real (ver isAdmin()).
 const ADMIN_EMAIL = "nicolas.patarroyo.ramirez@cgpgroupus.com";
+// Declarado aqui (no donde vive el resto de la integracion con Graph, mas abajo) porque
+// isConnected()/isAdmin()/trackingCanEdit() ya lo necesitan desde el primer renderAll() al
+// cargar la pagina, antes de que el bloque de MSAL se ejecute.
+let graphAccount = null;
 let MY_RECRUITER_NAME = null; // se llena al conectar, si tu correo coincide con un reclutador
-let trackingRecruiterAutoApplied = false;
 let LOCATIONS = ["Canada","Australia","United States"];
 const CLIENT = "Irth Solutions";
 
@@ -1567,7 +1722,7 @@ function renderTrackingActivity(){
   cutoff.setDate(cutoff.getDate() - 7);
   const cutoffStr = cutoff.toISOString().slice(0,10);
   const entries = [];
-  POSITIONS.forEach(p=>{
+  dashboardPositions().forEach(p=>{
     buildTimeline(p).forEach(e=>{
       if(e.date >= cutoffStr) entries.push({...e, position: p});
     });
@@ -1597,8 +1752,11 @@ function attentionInfo(p){
   });
   return {s, worst, worstKey};
 }
-function renderNeedsAttention(){
-  const active = POSITIONS.filter(p=>!TERMINAL.includes(p.status));
+// Compartido entre el panel Needs Attention (Tracking, ya filtrado al reclutador del perfil
+// activo) y la pantalla de entrada al perfil (Profile Gate), que necesita lo mismo pero para
+// un reclutador puntual antes de que activeDashboardScope quede seteado.
+function buildAttentionRows(positions){
+  const active = positions.filter(p=>!TERMINAL.includes(p.status));
   const slaRows = active.map(p=>({p, ...attentionInfo(p)})).filter(r=>r.worst==="out"||r.worst==="risk");
   const order = {out:0, risk:1};
   slaRows.sort((a,b)=>{
@@ -1609,12 +1767,9 @@ function renderNeedsAttention(){
   // (TTS/TTF/TTH no arrancan hasta que hay intake) — nunca se solapan en la misma posicion.
   const slaIds = new Set(slaRows.map(r=>r.p.id));
   const completionRows = active.filter(p=>!slaIds.has(p.id) && completionFlags(p).length>0);
-
-  const list = document.getElementById("needsAttentionList");
-  if(!slaRows.length && !completionRows.length){
-    list.innerHTML = `<div class="panel-sub" style="margin:0;">Nothing urgent right now. Every active position is within SLA, on track with Requisition Completion, or hasn't started its clock yet.</div>`;
-    return;
-  }
+  return {slaRows, completionRows};
+}
+function attentionRowsHtml(slaRows, completionRows){
   const slaHtml = slaRows.map(({p, s, worstKey})=>`
     <div class="pending-offer-row clickable-stat" data-id="${p.id}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${slaFlags(p)}</div></div>
@@ -1630,41 +1785,41 @@ function renderNeedsAttention(){
       <span class="sla-chip ${cls}"><span class="dot" style="background:${STATUS_META[cls].color}"></span>${label}</span>
     </div>`;
   }).join("");
-  list.innerHTML = slaHtml + completionHtml;
+  return slaHtml + completionHtml;
+}
+function renderNeedsAttention(){
+  const {slaRows, completionRows} = buildAttentionRows(dashboardPositions());
+  const list = document.getElementById("needsAttentionList");
+  if(!slaRows.length && !completionRows.length){
+    list.innerHTML = `<div class="panel-sub" style="margin:0;">Nothing urgent right now. Every active position is within SLA, on track with Requisition Completion, or hasn't started its clock yet.</div>`;
+    return;
+  }
+  list.innerHTML = attentionRowsHtml(slaRows, completionRows);
   list.querySelectorAll(".pending-offer-row").forEach(row=>{
-    row.addEventListener("click", ()=> openDetailModal(row.dataset.id));
+    row.addEventListener("click", ()=> openDetailModal(row.dataset.id, trackingCanEdit() ? "edit" : "view"));
   });
 }
 function renderTracking(){
   renderNeedsAttention();
   renderTrackingActivity();
   const statusSel = document.getElementById("trackingStatus");
-  const recSel = document.getElementById("trackingRecruiter");
   const ttsSel = document.getElementById("trackingTTS");
   const ttfSel = document.getElementById("trackingTTF");
   const tthSel = document.getElementById("trackingTTH");
   fillSelectOnce(statusSel, STATUS_ORDER);
-  fillSelectOnce(recSel, RECRUITERS);
   fillSlaSelectOnce(ttsSel);
   fillSlaSelectOnce(ttfSel);
   fillSlaSelectOnce(tthSel);
 
-  // Por defecto, Tracking muestra solo tus propias posiciones (si te reconocimos por
-  // correo), Positions sigue siendo el lugar para ver todo. Solo se aplica una vez, para
-  // no pisar un filtro que ya hayas cambiado tu mismo.
-  if(MY_RECRUITER_NAME && !trackingRecruiterAutoApplied){
-    recSel.value = MY_RECRUITER_NAME;
-    trackingRecruiterAutoApplied = true;
-  }
-
   const q = document.getElementById("trackingSearch").value.trim().toLowerCase();
-  const est = statusSel.value, rec = recSel.value;
+  const est = statusSel.value;
   const ttsF = ttsSel.value, ttfF = ttfSel.value, tthF = tthSel.value;
   const onlyActive = document.getElementById("trackingOnlyActive").checked;
-  const rows = POSITIONS.filter(p=>{
+  // dashboardPositions() ya viene filtrado al reclutador del perfil activo (Tracking solo se
+  // puede ver dentro de un perfil), asi que no hace falta un select de "Recruiter" aparte.
+  const rows = dashboardPositions().filter(p=>{
     if(onlyActive && TERMINAL.includes(p.status)) return false;
     if(est && p.status!==est) return false;
-    if(rec && p.recruiter!==rec) return false;
     if(ttsF || ttfF || tthF){
       const s = computeSla(p);
       if(ttsF && s.TTS.status!==ttsF) return false;
@@ -1687,7 +1842,7 @@ function renderTracking(){
     </tr>`;
   }).join("");
   document.querySelectorAll("#trackingTable tbody tr.clickable").forEach(tr=>{
-    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id));
+    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, trackingCanEdit() ? "edit" : "view"));
   });
 }
 
@@ -1723,8 +1878,30 @@ function openDetailModal(id, mode, allowDelete, fromDashboard){
   document.getElementById("detailModal").classList.add("open");
 }
 function closeDetailModal(){
-  document.getElementById("detailModal").classList.remove("open");
+  const modal = document.getElementById("detailModal");
+  modal.classList.remove("open");
   activeDetailId = null;
+  if(modal.classList.contains("docked")) renderDetailPlaceholder();
+}
+// Estado vacio del panel de Tracking (docked) antes de elegir una posicion, o despues de
+// cerrarla con la X. En modal flotante esto nunca se ve (closeDetailModal ya lo oculta).
+function renderDetailPlaceholder(){
+  document.getElementById("modalTitle").textContent = "Select A Requisition";
+  document.getElementById("modalSub").textContent = "";
+  document.getElementById("modalNote").style.display = "none";
+  document.getElementById("modalEditInTrackingZone").style.display = "none";
+  document.getElementById("modalFacts").innerHTML = `<div class="panel-sub" style="margin:0;">Click a requisition on the left to see its details, update its status, or add a remark.</div>`;
+  document.getElementById("pivotSlaBadge").innerHTML = "";
+  document.getElementById("modalSlaGrid").innerHTML = "";
+  document.getElementById("modalCompletionTitle").style.display = "none";
+  document.getElementById("modalCompletionGrid").innerHTML = "";
+  document.getElementById("modalCompletionAlert").innerHTML = "";
+  document.getElementById("modalStatusTitle").style.display = "none";
+  document.getElementById("modalStatusSection").style.display = "none";
+  document.getElementById("modalRemarkTitle").style.display = "none";
+  document.getElementById("modalRemarkSection").style.display = "none";
+  document.getElementById("modalTimeline").innerHTML = "";
+  document.getElementById("modalDeleteZone").style.display = "none";
 }
 // Preview / drill-down: se abre desde un click en cualquier estadistica, segmento de grafica,
 // o fila de lista (SLA Health, Active Pipeline By Status, Active Workload By Recruiter,
@@ -2056,10 +2233,12 @@ document.getElementById("detailModal").addEventListener("click", (e)=>{ if(e.tar
 document.getElementById("modalStatusSave").addEventListener("click", saveModalStatus);
 document.getElementById("modalRemarkSave").addEventListener("click", saveModalRemark);
 document.getElementById("modalEditInTrackingBtn").addEventListener("click", ()=>{
-  const id = activeDetailId;
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
   closeDetailModal();
+  setDashboardScope(p.recruiter);
   activateView("tracking");
-  openDetailModal(id, "edit", false, false);
+  openDetailModal(p.id, trackingCanEdit() ? "edit" : "view", false, false);
 });
 
 async function deleteActivePosition(){
@@ -2092,7 +2271,7 @@ document.getElementById("modalDeleteBtn").addEventListener("click", deleteActive
    ============================================================ */
 const FILTER_FIELD_IDS = {
   positions: ["positionsSearch","positionsStatus","positionsRecruiter","positionsHM","positionsLocation","positionsTTS","positionsTTF","positionsTTH","positionsPlacement"],
-  tracking: ["trackingSearch","trackingStatus","trackingRecruiter","trackingTTS","trackingTTF","trackingTTH","trackingOnlyActive"],
+  tracking: ["trackingSearch","trackingStatus","trackingTTS","trackingTTF","trackingTTH","trackingOnlyActive"],
 };
 function presetsKey(view){ return `ta_tracker_saved_filters_${view}`; }
 function getPresets(view){
@@ -2168,7 +2347,31 @@ function activateView(view){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById("view-"+view).classList.add("active");
   document.getElementById("topbarTitle").textContent = TITLES[view][0];
-  document.getElementById("topbarSub").textContent = TITLES[view][1];
+  document.getElementById("topbarSub").textContent = view === "tracking" && activeDashboardScope
+    ? `${activeDashboardScope}'s requisitions — codes, SLA, and the latest activity`
+    : TITLES[view][1];
+  dockDetailModal(view === "tracking");
+  // renderTracking() no se dispara solo al cambiar de vista/perfil (solo con los filtros del
+  // toolbar) — sin esto, el flag de "editable" (identidad conectada vs activeDashboardScope)
+  // queda pegado al valor que tenia la ULTIMA vez que se renderizo, no al actual.
+  if(view === "tracking") renderTracking();
+}
+// Tracking usa el mismo #detailModal que Positions/Dashboard, pero "acoplado" como panel fijo
+// a la derecha de la lista en vez de como ventana flotante — mover el nodo (no clonarlo)
+// preserva todos los listeners ya enganchados a sus ids internos.
+function dockDetailModal(shouldDock){
+  const modal = document.getElementById("detailModal");
+  const isDocked = modal.classList.contains("docked");
+  if(shouldDock && !isDocked){
+    modal.classList.add("docked");
+    document.getElementById("trackingDetailHost").appendChild(modal);
+    if(!activeDetailId) renderDetailPlaceholder();
+  } else if(!shouldDock && isDocked){
+    modal.classList.remove("docked");
+    modal.classList.remove("open");
+    document.body.appendChild(modal);
+    activeDetailId = null;
+  }
 }
 document.querySelectorAll(".nav-item").forEach(btn=>{
   btn.addEventListener("click", ()=> activateView(btn.dataset.view));
@@ -2186,7 +2389,6 @@ document.getElementById("positionsPlacement").addEventListener("change", renderP
 
 document.getElementById("trackingSearch").addEventListener("input", renderTracking);
 document.getElementById("trackingStatus").addEventListener("change", renderTracking);
-document.getElementById("trackingRecruiter").addEventListener("change", renderTracking);
 document.getElementById("trackingTTS").addEventListener("change", renderTracking);
 document.getElementById("trackingTTF").addEventListener("change", renderTracking);
 document.getElementById("trackingTTH").addEventListener("change", renderTracking);
@@ -2236,7 +2438,6 @@ const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite"];
 
 const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
 let msalReady = msalInstance.initialize();
-let graphAccount = null;
 
 function isConnected(){ return !!graphAccount; }
 
