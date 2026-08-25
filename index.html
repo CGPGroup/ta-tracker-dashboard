@@ -643,13 +643,12 @@
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
               <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"><option>Nicolás Patarroyo</option></select></div>
-              <div class="form-field"><label>Country</label><input type="text" id="newPosCountry" placeholder="e.g. Canada"></div>
+              <div class="form-field"><label>Country/Market</label><input type="text" id="newPosCountry" placeholder="e.g. Canada"></div>
               <div class="form-field"><label>Work Arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
               <div class="form-field"><label>City (Only If Hybrid Or On-Site)</label><input type="text" id="newPosCity" placeholder="e.g. Calgary, AB"></div>
               <div class="form-field"><label>Initial Status</label><select id="newPosStatus"></select></div>
               <div class="panel-sub full" id="newPosStatusSubtitle" style="margin:-6px 0 0;"></div>
               <div class="form-field" id="newPosStatusDateWrap" style="display:none;"><label id="newPosStatusDateLabel"></label><input type="date" id="newPosStatusDateInput"></div>
-              <div class="form-field full"><label>Intake Meeting Date (Once It Actually Happens)</label><input type="date" id="newPosIntake"></div>
               <div class="form-field full"><label>Initial Remark (Optional)</label><textarea rows="2" id="newPosRemark" placeholder="Kickoff context…"></textarea></div>
             </div>
             <div class="form-actions">
@@ -833,7 +832,7 @@ const STATUS_SUBTITLE = {
 // resto de statuses no la piden). key = campo en el objeto de la posicion, col = columna real
 // en PositionsTable.
 const STATUS_DATE_FIELD = {
-  "Kickoff": {key:"kickoff", col:"AA", label:"Date The Req Was Formally Assigned (Always By Email)"},
+  "Kickoff": {key:"kickoff", col:"AA", label:"Kickoff Date"},
   "Intake Meeting Requested": {key:"intakeRequestedDate", col:"AN", label:"Date You Replied Requesting The Intake"},
   "Intake Pending": {key:"intakeScheduledDate", col:"AO", label:"Date The Intake Was Scheduled For"},
 };
@@ -3039,7 +3038,6 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   const kickoff = status === "Kickoff" ? statusDateVal : null;
   const intakeRequestedDate = status === "Intake Meeting Requested" ? statusDateVal : null;
   const intakeScheduledDate = status === "Intake Pending" ? statusDateVal : null;
-  const intake = document.getElementById("newPosIntake").value || null;
   const remark = document.getElementById("newPosRemark").value.trim();
 
   if(!title || !code){
@@ -3071,9 +3069,9 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // AP: Recruiter Accepted Date (siempre vacio aqui, una posicion nueva nunca nace ya aceptada)
     // AQ: Irth Careers Page (Workable) URL, si la columna ya existe en el Excel real
     const row = [
-      code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
+      code, title, "Irth Solutions", hm, recruiter, country, status, null, null, null, null,
       null,null,null,null,null,null,null,null,null,null,null,null,
-      remark || "", intake, "No",
+      remark || "", null, "No",
       kickoff,
       null, null, null, null, null, null, null, null, null,
       workArrangement, city,
@@ -3102,7 +3100,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosSpottId","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosIntake","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosSpottId","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newPosStatus").value = "Kickoff";
   updateStatusDateUI("newPos", "Kickoff", null);
   document.getElementById("createPositionMsg").textContent = "";
