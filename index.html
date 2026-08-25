@@ -1043,7 +1043,7 @@ function completionFlags(p){
   const flags = [];
   if(c.step1.status==="out") flags.push(`🚩 Accept & Request Intake: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
   if(c.step2.escalate) flags.push(`🔔 Escalate To ${ESCALATION_CONTACT}: HM hasn't responded in ${c.step2.elapsed} business days (target ${c.step2.target})`);
-  if(c.step3.overdue) flags.push(`⛔ Intake Overdue: ${c.step3.elapsed} business days since requested (target ${c.step3.target})`);
+  if(c.step3.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Intake overdue, ${c.step3.elapsed} business days since requested (target ${c.step3.target})`);
   return flags;
 }
 
@@ -1613,7 +1613,7 @@ function renderNeedsAttention(){
   const completionHtml = completionRows.map(p=>{
     const c = computeCompletion(p);
     const cls = (c.step1.status==="out" || c.step3.overdue) ? "out" : "risk";
-    const label = c.step1.status==="out" ? "Not Accepted/Requested" : (c.step2.escalate ? "Escalate" : "Overdue");
+    const label = c.step1.status==="out" ? "Not Accepted/Requested" : (c.step2.escalate || c.step3.overdue ? "Escalate" : "Overdue");
     return `
     <div class="pending-offer-row clickable-stat" data-id="${p.id}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
@@ -1867,7 +1867,7 @@ function renderDetailModal(){
     const alerts = [];
     if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
     if(c.step2.escalate) alerts.push({tier:"tier-orange", text:`The hiring manager hasn't responded to the intake request in ${c.step2.elapsed} business days (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
-    if(c.step3.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step3.elapsed} business days since it was requested (target ${c.step3.target}, one work week). Please push the hiring manager for a date.`});
+    if(c.step3.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step3.elapsed} business days since it was requested (target ${c.step3.target}, one work week). Please escalate to ${ESCALATION_CONTACT} so the hiring manager makes time sooner.`});
     document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">${a.text}</div>`).join("");
   }
 
