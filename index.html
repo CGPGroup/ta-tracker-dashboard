@@ -89,6 +89,12 @@
     border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
   }
 
+  .dashboard-body { display: flex; align-items: flex-start; gap: 20px; }
+  .team-rail { width: 260px; flex: none; }
+  .team-rail-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .team-rail-sub { font-size: 11px; color: var(--text-muted); margin: 2px 0 12px; }
+  .dashboard-main { flex: 1; min-width: 0; }
+  @media (max-width: 900px) { .dashboard-body { flex-direction: column; } .team-rail { width: 100%; } }
   .team-grid { display: flex; flex-wrap: wrap; gap: 12px; }
   .team-card {
     display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -423,67 +429,71 @@
 
       <!-- ======================= DASHBOARD ======================= -->
       <section class="view active" id="view-dashboard">
-        <div class="scope-banner" id="dashboardScopeBanner" style="display:none;"></div>
-        <div id="pendingAssignmentZone"></div>
-        <div class="panel" id="teamPanel">
-          <h3>Team</h3>
-          <div class="panel-sub">Click a recruiter to see their own dashboard</div>
-          <div class="team-grid" id="teamGrid"></div>
-        </div>
-        <div class="kpi-row" id="kpiRow"></div>
+        <div class="dashboard-body">
+          <aside class="team-rail">
+            <div class="team-rail-title">Team</div>
+            <div class="team-rail-sub">Click a recruiter to see their own dashboard</div>
+            <div class="team-grid" id="teamGrid"></div>
+          </aside>
+          <div class="dashboard-main">
+            <div class="scope-banner" id="dashboardScopeBanner" style="display:none;"></div>
+            <div id="pendingAssignmentZone"></div>
+            <div class="kpi-row" id="kpiRow"></div>
 
-        <div class="dash-cols">
-          <div class="dash-col">
-            <div class="panel">
-              <h3>Active Pipeline By Status</h3>
-              <div class="panel-sub">Open positions, grouped by funnel stage</div>
-              <div class="barlist" id="chartEstado"></div>
-            </div>
-            <div class="panel">
-              <h3>SLA Compliance</h3>
-              <div class="panel-sub">Share of active positions on time on every SLA target (submit, fill, and hire deadlines). The rest are running behind on at least one.</div>
-              <div id="chartSlaCompliance"></div>
-            </div>
-            <div class="panel">
-              <h3>Requisition Completion</h3>
-              <div class="panel-sub">Share of assigned requisitions where the recruiter accepted and requested the intake meeting within 1 business day of Kickoff.</div>
-              <div id="chartCompletion"></div>
-            </div>
-            <div class="panel">
-              <h3>Pending Offers</h3>
-              <div class="panel-sub">Positions currently waiting on an offer decision</div>
-              <div id="listPendingOffers"></div>
-            </div>
-            <div class="panel">
-              <h3>Hires Per Month (2026)</h3>
-              <div class="panel-sub">Confirmed placements per month, year to date</div>
-              <div id="chartHiresTrend"></div>
-            </div>
-          </div>
-          <div class="dash-col">
-            <div class="panel">
-              <h3>SLA Health</h3>
-              <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target (TTS in business days; TTF/TTH in calendar days)</div>
-              <div id="chartSla"></div>
-            </div>
-            <div class="panel">
-              <h3>Active Workload By Recruiter</h3>
-              <div class="panel-sub">Open positions currently assigned to each recruiter</div>
-              <div class="barlist" id="chartReclutador"></div>
-            </div>
-            <div class="panel">
-              <h3>Placements This Month</h3>
-              <div class="panel-sub">Confirmed hires, this month vs last month</div>
-              <div id="chartPlacementsMonth"></div>
-            </div>
-            <div class="panel">
-              <h3>Position By Location/Work Arrangement</h3>
-              <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
-              <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
-              <div class="barlist" id="chartHiredLoc"></div>
-              <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
-                <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
-                <div class="barlist" id="chartWorkArrangement"></div>
+            <div class="dash-cols">
+              <div class="dash-col">
+                <div class="panel">
+                  <h3>Active Pipeline By Status</h3>
+                  <div class="panel-sub">Open positions, grouped by funnel stage</div>
+                  <div class="barlist" id="chartEstado"></div>
+                </div>
+                <div class="panel">
+                  <h3>SLA Compliance</h3>
+                  <div class="panel-sub">Share of active positions on time on every SLA target (submit, fill, and hire deadlines). The rest are running behind on at least one.</div>
+                  <div id="chartSlaCompliance"></div>
+                </div>
+                <div class="panel">
+                  <h3>Requisition Completion</h3>
+                  <div class="panel-sub">Share of assigned requisitions where the recruiter accepted and requested the intake meeting within 1 business day of Kickoff.</div>
+                  <div id="chartCompletion"></div>
+                </div>
+                <div class="panel">
+                  <h3>Pending Offers</h3>
+                  <div class="panel-sub">Positions currently waiting on an offer decision</div>
+                  <div id="listPendingOffers"></div>
+                </div>
+                <div class="panel">
+                  <h3>Hires Per Month (2026)</h3>
+                  <div class="panel-sub">Confirmed placements per month, year to date</div>
+                  <div id="chartHiresTrend"></div>
+                </div>
+              </div>
+              <div class="dash-col">
+                <div class="panel">
+                  <h3>SLA Health</h3>
+                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target (TTS in business days; TTF/TTH in calendar days)</div>
+                  <div id="chartSla"></div>
+                </div>
+                <div class="panel">
+                  <h3>Active Workload By Recruiter</h3>
+                  <div class="panel-sub">Open positions currently assigned to each recruiter</div>
+                  <div class="barlist" id="chartReclutador"></div>
+                </div>
+                <div class="panel">
+                  <h3>Placements This Month</h3>
+                  <div class="panel-sub">Confirmed hires, this month vs last month</div>
+                  <div id="chartPlacementsMonth"></div>
+                </div>
+                <div class="panel">
+                  <h3>Position By Location/Work Arrangement</h3>
+                  <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
+                  <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
+                  <div class="barlist" id="chartHiredLoc"></div>
+                  <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
+                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
+                    <div class="barlist" id="chartWorkArrangement"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
