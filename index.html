@@ -638,7 +638,6 @@
             <div class="form-grid">
               <div class="form-field"><label>Position Title</label><input type="text" id="newPosTitle" placeholder="e.g. Backend Engineer"></div>
               <div class="form-field"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
-              <div class="form-field"><label>Spott Job ID (Optional)</label><input type="text" id="newPosSpottId" placeholder="e.g. 3a3dd134-484a-4afa-b9d7-c089060e2316"></div>
               <div class="form-field full"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
@@ -3025,7 +3024,6 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   const msg = document.getElementById("createPositionMsg");
   const title = document.getElementById("newPosTitle").value.trim();
   const code = document.getElementById("newPosCode").value.trim();
-  const spottJobId = document.getElementById("newPosSpottId").value.trim() || null;
   const careersUrl = document.getElementById("newPosCareersUrl").value.trim() || null;
   const hm = document.getElementById("newPosHM").value.trim();
   const recruiter = document.getElementById("newPosRecruiter").value;
@@ -3075,7 +3073,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       kickoff,
       null, null, null, null, null, null, null, null, null,
       workArrangement, city,
-      spottJobId,
+      null,
       intakeRequestedDate, intakeScheduledDate,
       null,
       careersUrl,
@@ -3086,7 +3084,6 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     await loadFromGraph();
     document.getElementById("newPosTitle").value = "";
     document.getElementById("newPosCode").value = "";
-    document.getElementById("newPosSpottId").value = "";
     document.getElementById("newPosCareersUrl").value = "";
     document.getElementById("newPosHM").value = "";
     document.getElementById("newPosRemark").value = "";
@@ -3100,7 +3097,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosSpottId","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newPosStatus").value = "Kickoff";
   updateStatusDateUI("newPos", "Kickoff", null);
   document.getElementById("createPositionMsg").textContent = "";
