@@ -2626,7 +2626,12 @@ async function trysilentConnect(){
     console.error("handleRedirectPromise failed:", err);
   }
   const accounts = msalInstance.getAllAccounts();
-  if(accounts.length === 0) return;
+  if(accounts.length === 0){
+    // Nadie logueado en este navegador: en vez de dejar la data de ejemplo quemada, intenta
+    // el proxy publico de solo lectura (ver PUBLIC_READ_URL) para gente que solo necesita ver.
+    await tryLoadPublicSnapshotAndRender();
+    return;
+  }
   graphAccount = accounts[0];
   try {
     setConnectionUi(true, "Connecting…");
@@ -2636,6 +2641,7 @@ async function trysilentConnect(){
     console.error(err);
     graphAccount = null;
     setConnectionUi(false);
+    await tryLoadPublicSnapshotAndRender();
   }
 }
 
@@ -2652,15 +2658,13 @@ function excelValToDateStr(v){
   return null;
 }
 
-async function loadFromGraph(){
-  // Positions
-  const posResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/rows?$select=values`);
-  const posHeaderResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/headerRowRange`);
-  const posHeaders = posHeaderResp.values[0];
-  const posRows = posResp.value.map(r => r.values[0]);
-
+// Convierte filas crudas de PositionsTable (headers + rows, ya "desenvueltas" de la forma
+// {values:[[...]]} que devuelve Graph) en los objetos de posicion que usa el resto de la app.
+// Compartido entre loadFromGraph() (autenticado) y tryLoadPublicSnapshot() (proxy publico de
+// solo lectura), para que el mapeo de columnas viva en un solo lugar.
+function parsePositionsTable(posHeaders, posRows){
   const idx = (name) => posHeaders.indexOf(name);
-  const newPositions = posRows.map((r, rowNum) => {
+  return posRows.map((r, rowNum) => {
     const id = r[idx("Position ID")];
     POSITIONS_ROW_INDEX[id] = rowNum;
     return {
@@ -2698,50 +2702,65 @@ async function loadFromGraph(){
       extra: [],
     };
   }).filter(p => p.id);
+}
+// Reemplaza el ultimo remark de cada posicion por el mas reciente segun HistorialTable.
+function mergeLatestRemarks(positions, histHeaders, histRows){
+  const hIdx = (name) => histHeaders.indexOf(name);
+  const validIds = new Set(positions.map(p => p.id));
+  const latestByPos = {};
+  histRows.forEach(row => {
+    const pid = row[hIdx("Position ID")];
+    if(!validIds.has(pid)) return;
+    const dateStr = excelValToDateStr(row[hIdx("Date")]);
+    const remark = row[hIdx("Remark")];
+    if(!remark) return;
+    if(!latestByPos[pid] || (dateStr && dateStr >= latestByPos[pid].date)){
+      latestByPos[pid] = { date: dateStr, remark };
+    }
+  });
+  positions.forEach(p => { if(latestByPos[p.id]) p.lastRemark = latestByPos[p.id].remark; });
+}
+// Filas de RecruitersTable (A Name, B Email, C Active?, D Photo URL, E Job Title) -> las 3
+// piezas que el resto de la app necesita.
+function parseRecruitersTable(recRows){
+  const newRecruiters = recRows.map(row => row[0]).filter(Boolean);
+  const newPhotos = {}, newTitles = {};
+  recRows.forEach(row => {
+    if(row[0] && row[3]) newPhotos[row[0]] = row[3];
+    if(row[0] && row[4]) newTitles[row[0]] = row[4];
+  });
+  return { newRecruiters, newPhotos, newTitles };
+}
 
-  // Historial: se usa para reemplazar el ultimo remark por el mas reciente real
+async function loadFromGraph(){
+  const posResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/rows?$select=values`);
+  const posHeaderResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/headerRowRange`);
+  const posHeaders = posHeaderResp.values[0];
+  const posRows = posResp.value.map(r => r.values[0]);
+  const newPositions = parsePositionsTable(posHeaders, posRows);
+
   try {
     const histResp = await graphFetch(`${await workbookBase()}/tables('HistorialTable')/rows?$select=values`);
     const histHeaderResp = await graphFetch(`${await workbookBase()}/tables('HistorialTable')/headerRowRange`);
     const histHeaders = histHeaderResp.values[0];
-    const hIdx = (name) => histHeaders.indexOf(name);
-    const validIds = new Set(newPositions.map(p => p.id));
-    const latestByPos = {};
-    histResp.value.forEach(r => {
-      const row = r.values[0];
-      const pid = row[hIdx("Position ID")];
-      if(!validIds.has(pid)) return;
-      const dateStr = excelValToDateStr(row[hIdx("Date")]);
-      const remark = row[hIdx("Remark")];
-      if(!remark) return;
-      if(!latestByPos[pid] || (dateStr && dateStr >= latestByPos[pid].date)){
-        latestByPos[pid] = { date: dateStr, remark };
-      }
-    });
-    newPositions.forEach(p => { if(latestByPos[p.id]) p.lastRemark = latestByPos[p.id].remark; });
+    const histRows = histResp.value.map(r => r.values[0]);
+    mergeLatestRemarks(newPositions, histHeaders, histRows);
   } catch(err){ console.warn("Could not load Historial (non-fatal):", err); }
 
-  // Recruiters
   let myRecruiterName = null;
   try {
     const recResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
-    const newRecruiters = recResp.value.map(r => r.values[0][0]).filter(Boolean);
+    const recRows = recResp.value.map(r => r.values[0]);
+    const { newRecruiters, newPhotos, newTitles } = parseRecruitersTable(recRows);
     if(newRecruiters.length) RECRUITERS = newRecruiters;
-    const newPhotos = {};
-    const newTitles = {};
-    recResp.value.forEach(r => {
-      const row = r.values[0];
-      if(row[0] && row[3]) newPhotos[row[0]] = row[3];
-      if(row[0] && row[4]) newTitles[row[0]] = row[4];
-    });
     RECRUITER_PHOTOS = newPhotos;
     RECRUITER_TITLES = newTitles;
     // Si el correo con el que iniciaste sesion coincide con el de un reclutador en esa
     // hoja, usamos su nombre para filtrar Tracking automaticamente por defecto.
     const myEmail = (graphAccount && graphAccount.username || "").toLowerCase();
     if(myEmail){
-      const match = recResp.value.find(r => (r.values[0][1] || "").toLowerCase() === myEmail);
-      if(match) myRecruiterName = match.values[0][0];
+      const match = recRows.find(row => (row[1] || "").toLowerCase() === myEmail);
+      if(match) myRecruiterName = match[0];
     }
   } catch(err){ console.warn("Could not load Recruiters (non-fatal):", err); }
   MY_RECRUITER_NAME = myRecruiterName;
@@ -2749,6 +2768,41 @@ async function loadFromGraph(){
   LOCATIONS = [...new Set(newPositions.map(p => p.country).filter(Boolean))];
   POSITIONS = newPositions;
   renderAll();
+}
+// Proxy publico de solo lectura (Cloudflare Worker), para gente que solo necesita VER el
+// tracker sin loguearse (Nicole, Immy, Sara, Chris Watkins...): el Worker guarda su propia
+// credencial de Graph de forma segura y solo expone los datos ya armados, nunca el archivo
+// completo ni ninguna credencial. Vacio hasta que Nicolas lo despliegue y me pase la URL.
+const PUBLIC_READ_URL = "";
+async function tryLoadPublicSnapshot(){
+  if(!PUBLIC_READ_URL) return false;
+  try {
+    const resp = await fetch(PUBLIC_READ_URL);
+    if(!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    const newPositions = parsePositionsTable(data.positions.headers, data.positions.rows);
+    if(data.historial) mergeLatestRemarks(newPositions, data.historial.headers, data.historial.rows);
+    if(data.recruiters){
+      const { newRecruiters, newPhotos, newTitles } = parseRecruitersTable(data.recruiters.rows);
+      if(newRecruiters.length) RECRUITERS = newRecruiters;
+      RECRUITER_PHOTOS = newPhotos;
+      RECRUITER_TITLES = newTitles;
+    }
+    LOCATIONS = [...new Set(newPositions.map(p => p.country).filter(Boolean))];
+    POSITIONS = newPositions;
+    return true;
+  } catch(err){
+    console.warn("Could not load the public read-only snapshot, falling back to sample data:", err);
+    return false;
+  }
+}
+async function tryLoadPublicSnapshotAndRender(){
+  const ok = await tryLoadPublicSnapshot();
+  if(ok){
+    renderAll();
+    document.getElementById("demoBanner").innerHTML =
+      "Showing live data (read-only). Only recruiters connecting with Microsoft 365 above can make changes.";
+  }
 }
 
 // Busca en vivo en cuAL fila de la Tabla vive una posicion, en vez de confiar en el indice
