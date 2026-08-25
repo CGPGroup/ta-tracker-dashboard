@@ -83,27 +83,6 @@
   .nav-item.active { background: rgba(217,119,87,0.22); color: #fff; border-left: 3px solid var(--brand); }
   .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
 
-  .recruiter-picker-label {
-    margin-top: 16px; padding: 0 12px; font-size: 10.5px; font-weight: 700;
-    color: #7c756d; text-transform: uppercase; letter-spacing: 0.03em;
-  }
-  .recruiter-picker { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
-  .recruiter-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 12px; border-radius: 8px; cursor: pointer; user-select: none;
-    border-left: 3px solid transparent; background: none;
-  }
-  .recruiter-row:hover { background: rgba(255,255,255,0.06); }
-  .recruiter-row.active { background: rgba(217,119,87,0.22); border-left: 3px solid var(--brand); }
-  .recruiter-avatar {
-    width: 26px; height: 26px; border-radius: 50%; flex: none;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10.5px; font-weight: 700; color: #fff; overflow: hidden;
-    background-size: cover; background-position: center;
-  }
-  .recruiter-name { font-size: 12.5px; font-weight: 700; color: #c9c9c9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .recruiter-row:hover .recruiter-name, .recruiter-row.active .recruiter-name { color: #fff; }
-
   .sidebar-foot {
     margin-top: auto; padding: 12px 8px 4px;
     font-size: 11px; color: #8c8c8c; line-height: 1.5;
@@ -419,8 +398,6 @@
       <button class="nav-item" data-view="tracking"><span class="nav-ic">▥</span> Tracking</button>
       <button class="nav-item" data-view="manage"><span class="nav-ic">＋</span> SSOT Management</button>
     </nav>
-    <div class="recruiter-picker-label">Jump To Recruiter</div>
-    <div class="recruiter-picker" id="recruiterPicker"></div>
     <div class="sidebar-foot">
       Single Source Of Truth: The Team's Shared Data.<br>
       Connect Microsoft 365 above to see live, always up to date numbers.
@@ -2029,34 +2006,11 @@ function colorForName(name){
   for(let i=0;i<name.length;i++) hash = (hash*31 + name.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
-function renderRecruiterPicker(){
-  const el = document.getElementById("recruiterPicker");
-  el.innerHTML = RECRUITERS.map(name=>{
-    const photo = RECRUITER_PHOTOS[name];
-    const avatarStyle = photo ? `background-image:url('${photo}');` : `background:${colorForName(name)};`;
-    return `
-    <div class="recruiter-row" data-name="${name}">
-      <div class="recruiter-avatar" style="${avatarStyle}">${photo ? "" : initialsFor(name)}</div>
-      <div class="recruiter-name">${name}</div>
-    </div>`;
-  }).join("");
-  // Clic en un reclutador: salta directo a Tracking ya filtrado y editable (atajo rapido de
-  // navegacion, distinto del dashboard personal de solo-lectura que abre la tarjeta de Team).
-  el.querySelectorAll(".recruiter-row").forEach(row=>{
-    row.addEventListener("click", ()=>{
-      jumpToRecruiterTracking(row.dataset.name);
-      el.querySelectorAll(".recruiter-row").forEach(r=>r.classList.remove("active"));
-      row.classList.add("active");
-    });
-  });
-}
-
 function renderAll(){
   renderDashboardPanels();
   renderTeamPanel();
   renderPositions();
   renderTracking();
-  renderRecruiterPicker();
 }
 renderAll();
 
