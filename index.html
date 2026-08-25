@@ -2431,7 +2431,11 @@ renderAll();
 const MSAL_CONFIG = {
   auth: {
     clientId: "218de17a-fdce-4e90-a75f-65d09250ba9e",
-    authority: "https://login.microsoftonline.com/242ae368-a0e0-411f-9c46-cf0c4f7fa575",
+    // "/organizations" en vez del tenant especifico de CGP: deja entrar cuentas de trabajo/
+    // escuela de CUALQUIER organizacion (ej. Irth), no solo CGP. Requiere que el App
+    // Registration en Azure tambien este puesto en "Accounts in any organizational directory"
+    // (ver instrucciones a Nicolas), si no, MSAL tira error de configuracion al cargar.
+    authority: "https://login.microsoftonline.com/organizations",
     redirectUri: "https://iot-db.github.io/ta-tracker-dashboard/",
   },
   cache: { cacheLocation: "sessionStorage" },
@@ -2505,8 +2509,29 @@ function filePathSegment(){
   // Codifica el path para usarlo dentro de la URL de Graph: /me/drive/root:{path}:/workbook/...
   return EXCEL_FILE_PATH.split("/").map(encodeURIComponent).join("/");
 }
-function workbookBase(){
-  return `/me/drive/root:${filePathSegment()}:/workbook`;
+// Se resuelve una vez por sesion y se cachea: buscar por path cada vez es lo que rompia el
+// acceso de invitados externos (ver mas abajo).
+let RESOLVED_DRIVE_ID = null, RESOLVED_ITEM_ID = null;
+async function workbookBase(){
+  if(RESOLVED_DRIVE_ID && RESOLVED_ITEM_ID){
+    return `/drives/${RESOLVED_DRIVE_ID}/items/${RESOLVED_ITEM_ID}/workbook`;
+  }
+  // Primer intento: el archivo esta en el OneDrive propio de quien se conecto (el caso de
+  // Nicolas, dueño real del archivo). Si la cuenta conectada es una invitada externa (ej. un
+  // correo de Irth al que solo se le compartio el archivo), esta ruta no existe en SU drive y
+  // Graph responde 404 — ahi se cae al segundo intento, buscandolo en "compartido conmigo".
+  try {
+    const item = await graphFetch(`/me/drive/root:${filePathSegment()}`);
+    RESOLVED_DRIVE_ID = item.parentReference.driveId;
+    RESOLVED_ITEM_ID = item.id;
+  } catch(err){
+    const shared = await graphFetch(`/me/drive/sharedWithMe`);
+    const match = (shared.value || []).find(x => x.name === "TA_Tracker.xlsx");
+    if(!match) throw new Error("Could not find TA_Tracker.xlsx in your OneDrive or in files shared with you. Ask Nicolás to share it with your account.");
+    RESOLVED_DRIVE_ID = match.remoteItem.parentReference.driveId;
+    RESOLVED_ITEM_ID = match.remoteItem.id;
+  }
+  return `/drives/${RESOLVED_DRIVE_ID}/items/${RESOLVED_ITEM_ID}/workbook`;
 }
 
 async function connectM365(){
@@ -2580,8 +2605,8 @@ function excelValToDateStr(v){
 
 async function loadFromGraph(){
   // Positions
-  const posResp = await graphFetch(`${workbookBase()}/tables('PositionsTable')/rows?$select=values`);
-  const posHeaderResp = await graphFetch(`${workbookBase()}/tables('PositionsTable')/headerRowRange`);
+  const posResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/rows?$select=values`);
+  const posHeaderResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/headerRowRange`);
   const posHeaders = posHeaderResp.values[0];
   const posRows = posResp.value.map(r => r.values[0]);
 
@@ -2627,8 +2652,8 @@ async function loadFromGraph(){
 
   // Historial: se usa para reemplazar el ultimo remark por el mas reciente real
   try {
-    const histResp = await graphFetch(`${workbookBase()}/tables('HistorialTable')/rows?$select=values`);
-    const histHeaderResp = await graphFetch(`${workbookBase()}/tables('HistorialTable')/headerRowRange`);
+    const histResp = await graphFetch(`${await workbookBase()}/tables('HistorialTable')/rows?$select=values`);
+    const histHeaderResp = await graphFetch(`${await workbookBase()}/tables('HistorialTable')/headerRowRange`);
     const histHeaders = histHeaderResp.values[0];
     const hIdx = (name) => histHeaders.indexOf(name);
     const validIds = new Set(newPositions.map(p => p.id));
@@ -2650,7 +2675,7 @@ async function loadFromGraph(){
   // Recruiters
   let myRecruiterName = null;
   try {
-    const recResp = await graphFetch(`${workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
+    const recResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
     const newRecruiters = recResp.value.map(r => r.values[0][0]).filter(Boolean);
     if(newRecruiters.length) RECRUITERS = newRecruiters;
     const newPhotos = {};
@@ -2684,7 +2709,7 @@ async function loadFromGraph(){
 // equivocada. Con ella, cada guardado siempre apunta a la fila correcta en ese momento, sin
 // necesidad de que nadie recargue la pagina antes de guardar.
 async function resolveRowIndex(positionId){
-  const resp = await graphFetch(`${workbookBase()}/tables('PositionsTable')/columns('Position ID')/range?$select=values`);
+  const resp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/columns('Position ID')/range?$select=values`);
   const values = resp.values || [];
   for(let i = 1; i < values.length; i++){
     if(values[i][0] === positionId){
@@ -2702,7 +2727,7 @@ async function graphUpdatePositionField(positionId, columnLetter, value){
   // simple que recalcular columnas dentro de la Tabla; la fila de datos empieza en la 2.
   const excelRow = rowIndex + 2;
   const address = `${columnLetter}${excelRow}`;
-  await graphFetch(`${workbookBase()}/worksheets('Positions')/range(address='${address}')`, {
+  await graphFetch(`${await workbookBase()}/worksheets('Positions')/range(address='${address}')`, {
     method: "PATCH",
     body: JSON.stringify({ values: [[value]] }),
   });
@@ -2710,7 +2735,7 @@ async function graphUpdatePositionField(positionId, columnLetter, value){
 
 async function graphAppendHistorial(positionId, positionTitle, remark, author){
   const today = new Date().toISOString().slice(0,10);
-  await graphFetch(`${workbookBase()}/tables('HistorialTable')/rows/add`, {
+  await graphFetch(`${await workbookBase()}/tables('HistorialTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
       values: [[positionId, `${positionTitle} ${positionId}`, today, "manual", remark, author]],
@@ -2719,7 +2744,7 @@ async function graphAppendHistorial(positionId, positionTitle, remark, author){
 }
 
 async function graphAppendPosition(row){
-  const result = await graphFetch(`${workbookBase()}/tables('PositionsTable')/rows/add`, {
+  const result = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({ values: [row] }),
   });
@@ -2745,14 +2770,14 @@ async function graphAppendPosition(row){
      `=IF(G${excelRow}="Hired","Yes","No")`,
      `=IF(AND(${N}<>"Out of SLA",${Q}<>"Out of SLA",${T}<>"Out of SLA"),"Yes","No")`],
   ];
-  await graphFetch(`${workbookBase()}/worksheets('Positions')/range(address='L${excelRow}:W${excelRow}')`, {
+  await graphFetch(`${await workbookBase()}/worksheets('Positions')/range(address='L${excelRow}:W${excelRow}')`, {
     method: "PATCH",
     body: JSON.stringify({ values: formulas }),
   });
 }
 
 async function graphAppendRecruiter(name, email, photoUrl, jobTitle){
-  await graphFetch(`${workbookBase()}/tables('RecruitersTable')/rows/add`, {
+  await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({ values: [[name, email || "", "Yes", photoUrl || "", jobTitle || ""]] }),
   });
@@ -2761,7 +2786,7 @@ async function graphAppendRecruiter(name, email, photoUrl, jobTitle){
 async function graphDeletePosition(positionId){
   const rowIndex = await resolveRowIndex(positionId);
   if(rowIndex === undefined) throw new Error("This position no longer exists in the shared file (someone may have already deleted it).");
-  await graphFetch(`${workbookBase()}/tables('PositionsTable')/rows/itemAt(index=${rowIndex})`, {
+  await graphFetch(`${await workbookBase()}/tables('PositionsTable')/rows/itemAt(index=${rowIndex})`, {
     method: "DELETE",
   });
 }
