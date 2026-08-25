@@ -1439,7 +1439,7 @@ function renderReclutadorChart(){
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : initialsFor(r.label)}</div>
       <div class="workload-name" title="${r.label}">${r.label}</div>
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${workloadColor(r.value)};"></div></div>
-      <div class="workload-count">${r.value} req${r.value===1?"":"s"}</div>
+      <div class="workload-count">${r.value} Req${r.value===1?"":"s"}</div>
     </div>`;
   }).join("");
   document.querySelectorAll("#chartReclutador .workload-card").forEach(el=>{
