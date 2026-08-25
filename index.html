@@ -1568,7 +1568,7 @@ function renderHiresTrend(){
     if(d.getFullYear()===2026 && d.getMonth() < months.length) counts[d.getMonth()]++;
   });
 
-  const w=560, h=130, padL=30, padR=16, padT=16, padB=24;
+  const w=560, h=85, padL=30, padR=16, padT=12, padB=18;
   const rawMax = Math.max(...counts, 1);
   const niceMax = Math.max(2, Math.ceil(rawMax/2)*2);
   const stepX = (w - padL - padR) / (months.length - 1);
