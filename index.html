@@ -109,8 +109,8 @@
     font-size: 18px; font-weight: 700; color: #fff;
     background-size: cover; background-position: center;
   }
-  .team-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-  .team-title { font-size: 10.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .team-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
+  .team-title { font-size: 10.5px; color: var(--text-muted); white-space: normal; word-break: break-word; max-width: 100%; }
 
   .recent-reqs-title { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 20px 0 6px; padding: 0 4px; }
   .recent-req-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
@@ -212,7 +212,7 @@
 
   .barlist { display: flex; flex-direction: column; gap: 6px; }
   .barlist-row { display: grid; grid-template-columns: 108px 1fr 34px; align-items: center; gap: 10px; }
-  .barlist-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .barlist-label { font-size: 12px; color: var(--text-secondary); white-space: normal; word-break: break-word; }
   .barlist-track { position: relative; height: 16px; background: var(--grid); border-radius: 4px; overflow: hidden; }
   .barlist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px 0 0 4px; }
   .barlist-value { font-size: 12px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
@@ -230,7 +230,7 @@
     font-size: 13px; font-weight: 700; color: #fff;
     background-size: cover; background-position: center;
   }
-  .workload-name { font-size: 11px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .workload-name { font-size: 11px; font-weight: 700; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
   .workload-count { font-size: 10.5px; color: var(--text-muted); }
@@ -265,7 +265,7 @@
   .donut-center-label { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
   .donut-legend { display: flex; flex-direction: column; gap: 9px; min-width: 140px; }
   .donut-legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-  .donut-legend-label { flex: 1; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .donut-legend-label { flex: 1; color: var(--text-secondary); white-space: normal; word-break: break-word; }
   .donut-legend-value { font-variant-numeric: tabular-nums; }
 
   .pending-offer-row {
@@ -296,8 +296,8 @@
   table.data tr.clickable:hover td { background: var(--brand-wash); }
 
   .pos-title { font-weight: 600; }
-  .pos-code { color: var(--text-muted); font-weight: 700; font-size: 11.5px; margin-left: 5px; }
-  td.cell-position { white-space: nowrap; }
+  .pos-code { color: var(--text-muted); font-weight: 700; font-size: 11.5px; margin-left: 5px; white-space: nowrap; }
+  td.cell-position { white-space: normal; min-width: 220px; }
 
   .status-chip {
     display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 3px 9px 3px 8px; border-radius: 999px;
