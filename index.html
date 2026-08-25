@@ -2655,6 +2655,12 @@ function rowsToObjects(headerRow, rows){
 function excelValToDateStr(v){
   if(v === null || v === undefined || v === "") return null;
   if(typeof v === "string") return v.slice(0,10);
+  if(typeof v === "number"){
+    // Graph a veces devuelve un serial de Excel (dias desde 1899-12-30, con el bug del año
+    // bisiesto 1900 que Excel preserva por compatibilidad) en vez del string ya formateado.
+    // 25569 = dias entre esa fecha base y 1970-01-01 (epoch de JS).
+    return new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0,10);
+  }
   return null;
 }
 
