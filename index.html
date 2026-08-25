@@ -217,6 +217,18 @@
   .barlist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px 0 0 4px; }
   .barlist-value { font-size: 12px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 
+  .workload-row { display: grid; grid-template-columns: 26px 108px 1fr 24px; align-items: center; gap: 10px; padding: 3px 0; cursor: pointer; }
+  .workload-avatar {
+    width: 26px; height: 26px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 700; color: #fff;
+    background-size: cover; background-position: center;
+  }
+  .workload-name { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .workload-track { position: relative; height: 16px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+  .workload-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px 0 0 4px; }
+  .workload-value { font-size: 12px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
   .stackbar-wrap { margin-bottom: 6px; }
   .stackbar-title { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
   .stackbar-title .tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; }
@@ -1398,13 +1410,38 @@ function renderEstadoChart(){
   });
 }
 
+// El limite recomendado es 10 reqs activas por reclutador (regla de Nicolas), asi que la
+// barra se llena contra ese techo fijo (no contra "quien tiene mas hoy"), y el color marca
+// que tan cerca esta cada quien de ese limite: verde 1-4, amarillo 5-6, naranja 7-9, rojo 10+.
+const WORKLOAD_CAP = 10;
+function workloadColor(v){
+  if(v >= 10) return "var(--critical)";
+  if(v >= 7) return "var(--brand)";
+  if(v >= 5) return "var(--warning)";
+  return "var(--good)";
+}
 function renderReclutadorChart(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const rows = RECRUITERS.map(r=>({label:r, value: active.filter(p=>p.recruiter===r).length}))
     .sort((a,b)=>b.value-a.value);
-  renderBarlist("chartReclutador", rows, "var(--brand)", (row)=>{
-    openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
-      active.filter(p=>p.recruiter===row.label));
+  document.getElementById("chartReclutador").innerHTML = rows.map(r=>{
+    const photo = RECRUITER_PHOTOS[r.label];
+    const avatarStyle = photo ? `background-image:url('${photo}');` : `background:${colorForName(r.label)};`;
+    const pct = Math.min(100, (r.value / WORKLOAD_CAP) * 100);
+    return `
+    <div class="workload-row clickable-stat" data-label="${r.label}">
+      <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : initialsFor(r.label)}</div>
+      <div class="workload-name" title="${r.label}">${r.label}</div>
+      <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${workloadColor(r.value)};"></div></div>
+      <div class="workload-value">${r.value}</div>
+    </div>`;
+  }).join("");
+  document.querySelectorAll("#chartReclutador .workload-row").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const label = el.dataset.label;
+      const matches = active.filter(p=>p.recruiter===label);
+      openQuickList(label, `${matches.length} active position${matches.length===1?"":"s"}`, matches);
+    });
   });
 }
 
