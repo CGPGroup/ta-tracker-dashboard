@@ -1643,17 +1643,17 @@ function linkifyIfUrl(val, linkLabel){
     ? `<a href="${escapeHtml(val)}" target="_blank" rel="noopener">${linkLabel} ↗</a>`
     : escapeHtml(val);
 }
-// Fila compacta para un campo de "un solo link por posicion" en modo edicion: si ya tiene
+// Celda compacta para un campo de "un solo link por posicion" en modo edicion: si ya tiene
 // valor, se muestra como link + boton "Edit" (nunca el formulario de captura permanentemente
 // abierto); si esta vacio, el boton dice "Add". Ambos casos abren el mismo modal generico.
-function editableLinkRow(label, value, linkLabel, editBtnId){
+// Devuelve solo la celda (sin envolver su propio facts-grid) para que las tres URLs de una
+// posicion (Irth, Spott, LinkedIn) puedan mostrarse juntas en una sola fila de 3 columnas.
+function urlFactCell(label, value, linkLabel, editBtnId){
   const display = value ? linkifyIfUrl(value, linkLabel) : `<span style="color:var(--text-muted);">Not set</span>`;
   return `
-    <div class="facts-grid" style="margin-bottom:14px;">
-      <div>
-        <div class="fact-label">${escapeHtml(label)}</div>
-        <div class="fact-value">${display} <button class="fact-edit-link" type="button" id="${editBtnId}">${value ? "Edit" : "Add"}</button></div>
-      </div>
+    <div>
+      <div class="fact-label">${escapeHtml(label)}</div>
+      <div class="fact-value">${display} <button class="fact-edit-link" type="button" id="${editBtnId}">${value ? "Edit" : "Add"}</button></div>
     </div>`;
 }
 function formatLocation(p){
@@ -2479,18 +2479,24 @@ function renderDetailModal(){
   document.getElementById("modalSub").textContent = `${p.client} · ${formatLocation(p)}`;
   const isView = activeDetailMode === "view";
 
-  const positionFacts = [
-    {label:"Hiring Manager", value:escapeHtml(p.hiringManager)},
-    {label:"Recruiter", value:escapeHtml(p.recruiter)},
-    {label:"Status", value:statusChip(p.status)},
-    {label:"Location", value:locationOnly(p)},
-    {label:"Work Arrangement", value:arrangementBadge(p)},
-  ];
-  // En modo edicion, Spott Job ID/Careers Page ya se muestran aparte via editableLinkRow()
-  // (con su boton Edit) — repetirlos aqui tambien salia redundante, dos filas por campo.
+  const positionFacts = [];
+  // En modo edicion, Hiring Manager/Location/Work Arrangement se muestran como campos editables
+  // mas abajo (basicInfoEditHtml) en vez de texto fijo aqui, para poder corregirlos sin tener
+  // que ir al Excel (ej. un req marcado United States que en realidad era para Canada).
+  if(isView) positionFacts.push({label:"Hiring Manager", value:escapeHtml(p.hiringManager)});
+  positionFacts.push({label:"Recruiter", value:escapeHtml(p.recruiter)});
+  positionFacts.push({label:"Status", value:statusChip(p.status)});
   if(isView){
-    if(p.spottJobId) positionFacts.push({label:"Spott Job URL", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
+    positionFacts.push({label:"Location", value:locationOnly(p)});
+    positionFacts.push({label:"Work Arrangement", value:arrangementBadge(p)});
+  }
+  // En modo edicion, Irth/Spott/LinkedIn ya se muestran aparte via urlFactCell() (con su boton
+  // Edit) — repetirlos aqui tambien salia redundante, dos filas por campo. Orden: Irth primero
+  // (la pagina publica de la vacante), luego Spott (el sistema interno), luego LinkedIn.
+  if(isView){
     if(p.careersUrl) positionFacts.push({label:"Irth Careers Page URL", value: linkifyIfUrl(p.careersUrl, "View Posting")});
+    if(p.spottJobId) positionFacts.push({label:"Spott Job URL", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
+    if(p.linkedinRecruiterUrl) positionFacts.push({label:"LinkedIn Recruiter URL", value: linkifyIfUrl(p.linkedinRecruiterUrl, "View Job Post")});
   }
   if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
@@ -2531,22 +2537,56 @@ function renderDetailModal(){
       <span id="modalDatesMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
     </div>`;
 
+  // Hiring Manager/Country/City/Work Arrangement editables solo en modo edicion (Tracking),
+  // mismo patron que Timeline: inputs siempre visibles con un boton "Save Basic Info" propio,
+  // en vez de un modal aparte, porque son varios campos relacionados que suelen corregirse juntos.
+  const basicInfoEditHtml = isView ? "" : `
+    <div class="facts-grid" style="margin-bottom:14px;">
+      <div>
+        <div class="fact-label">Hiring Manager</div>
+        <input type="text" class="fact-date-input" id="editHiringManager" value="${escapeHtml(p.hiringManager || "")}">
+      </div>
+      <div>
+        <div class="fact-label">Country</div>
+        <input type="text" class="fact-date-input" id="editCountry" value="${escapeHtml(p.country || "")}">
+      </div>
+      <div>
+        <div class="fact-label">City</div>
+        <input type="text" class="fact-date-input" id="editCity" value="${escapeHtml(p.city || "")}">
+      </div>
+      <div>
+        <div class="fact-label">Work Arrangement</div>
+        <select class="fact-date-input" id="editWorkArrangement">
+          ${["Remote","Hybrid","On-site"].map(a=>`<option value="${a}" ${a===(p.workArrangement||"Remote")?"selected":""}>${a}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:18px;">
+      <button class="btn primary small" id="modalBasicInfoSave" type="button">Save Basic Info</button>
+      <span id="modalBasicInfoMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
+    </div>`;
+
   // Editable solo en modo edicion (Tracking). Si ya tiene valor, se muestra compacto (link +
   // boton Edit) en vez de dejar el formulario de captura siempre abierto ocupando espacio;
-  // Edit/Add abren el modal generico de un solo campo. En modo vista ya se ve como parte de
-  // "Position" arriba si esta seteado.
-  const spottIdEditHtml = isView ? "" : editableLinkRow("Spott Job URL", p.spottJobId, "View In Spott", "editSpottIdBtn");
-  const careersUrlEditHtml = isView ? "" : editableLinkRow("Irth Careers Page URL", p.careersUrl, "View Posting", "editCareersUrlBtn");
+  // Edit/Add abren el modal generico de un solo campo. Las tres van juntas en una sola fila
+  // de 3 columnas: Irth primero, luego Spott, luego LinkedIn.
+  const urlFactsHtml = isView ? "" : `
+    <div class="facts-grid" style="margin-bottom:14px;">
+      ${urlFactCell("Irth Careers Page URL", p.careersUrl, "View Posting", "editCareersUrlBtn")}
+      ${urlFactCell("Spott Job URL", p.spottJobId, "View In Spott", "editSpottIdBtn")}
+      ${urlFactCell("LinkedIn Recruiter URL", p.linkedinRecruiterUrl, "View Job Post", "editLinkedinUrlBtn")}
+    </div>`;
 
   document.getElementById("modalFacts").innerHTML =
     factsSection("", positionFacts) +
-    spottIdEditHtml +
-    careersUrlEditHtml +
+    basicInfoEditHtml +
+    urlFactsHtml +
     timelineHtml +
     factsSection("Pipeline (From Spott)", pipelineFacts) +
     factsSection("Outcome", outcomeFacts);
   if(!isView){
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
+    document.getElementById("modalBasicInfoSave").addEventListener("click", saveModalBasicInfo);
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit Spott Job URL",
@@ -2573,6 +2613,22 @@ function renderDetailModal(){
         onSave: async (newVal)=>{
           p.careersUrl = newVal;
           if(isConnected()) await graphUpdatePositionField(p.id, "AQ", newVal || "");
+          renderDetailModal();
+          renderPositions();
+          renderTracking();
+        },
+      });
+    });
+    document.getElementById("editLinkedinUrlBtn").addEventListener("click", ()=>{
+      openEditFieldModal({
+        title: "Edit LinkedIn Recruiter URL",
+        label: "LinkedIn Recruiter URL",
+        placeholder: "e.g. https://www.linkedin.com/talent/hire/2073225554/job-post?jobId=4434730580",
+        value: p.linkedinRecruiterUrl,
+        requireUrl: true,
+        onSave: async (newVal)=>{
+          p.linkedinRecruiterUrl = newVal;
+          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "LinkedIn Recruiter URL", newVal || "");
           renderDetailModal();
           renderPositions();
           renderTracking();
@@ -2710,8 +2766,59 @@ async function saveModalDates(){
   }
 }
 // saveModalSpottId()/saveModalCareersUrl() (los formularios inline de siempre abiertos) se
-// reemplazaron por editableLinkRow() + el modal generico (openEditFieldModal en el wiring de
+// reemplazaron por urlFactCell() + el modal generico (openEditFieldModal en el wiring de
 // SSOT Management), ver renderDetailModal().
+async function saveModalBasicInfo(){
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const fields = [
+    {key:"hiringManager", inputId:"editHiringManager", header:"Hiring Manager"},
+    {key:"country", inputId:"editCountry", header:"Country"},
+    {key:"city", inputId:"editCity", header:"City"},
+    {key:"workArrangement", inputId:"editWorkArrangement", header:"Work Arrangement"},
+  ];
+  const changed = [];
+  fields.forEach(f=>{
+    const raw = document.getElementById(f.inputId).value.trim();
+    const newVal = raw || null;
+    if(newVal !== (p[f.key] || null)){
+      p[f.key] = newVal;
+      changed.push({...f, value: newVal});
+    }
+  });
+  if(!changed.length){
+    const m = document.getElementById("modalBasicInfoMsg");
+    m.textContent = "No changes to save.";
+    m.style.color = "var(--text-muted)";
+    return;
+  }
+  // Country es la fuente del filtro de ubicacion (LOCATIONS); si cambio, se recalcula antes de
+  // re-renderizar para que el nuevo pais quede disponible ahi tambien.
+  if(changed.some(f=>f.key==="country")){
+    LOCATIONS = [...new Set(POSITIONS.map(x=>x.country).filter(Boolean))];
+  }
+  renderAll();
+  renderDetailModal();
+  const msg = document.getElementById("modalBasicInfoMsg");
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      for(const f of changed){
+        await graphUpdatePositionFieldByHeader(p.id, f.header, f.value || "");
+      }
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+}
 async function saveModalStatus(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
@@ -3348,6 +3455,9 @@ function parsePositionsTable(posHeaders, posRows){
       // de agregarla); r[-1] es undefined en JS, no truena, simplemente no se muestra.
       spottJobId: r[idx("Spott Job ID")],
       careersUrl: r[idx("Irth Careers Page")],
+      // Columna nueva/opcional: si el archivo real todavia no la tiene, idx() devuelve -1 y
+      // r[-1] es undefined, asi que simplemente se muestra como "Not set" sin romper nada.
+      linkedinRecruiterUrl: r[idx("LinkedIn Recruiter URL")] || null,
       productLine: r[idx("Product Line")],
       salaryRange: r[idx("Salary Range")],
       sourced: r[idx("Sourced")],
@@ -3505,6 +3615,28 @@ async function graphUpdatePositionField(positionId, columnLetter, value){
     method: "PATCH",
     body: JSON.stringify({ values: [[value]] }),
   });
+}
+// Convierte un indice de columna (0-based) a su letra de Excel (0->A, 25->Z, 26->AA...).
+function excelColumnLetter(index){
+  let n = index + 1, s = "";
+  while(n > 0){
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+// Igual que graphUpdatePositionField(), pero resuelve la letra de columna en vivo a partir del
+// texto del encabezado en vez de tenerla harcodeada. Se usa para campos nuevos/menos estables
+// (Hiring Manager, Country, City, Work Arrangement, LinkedIn Recruiter URL) cuya columna exacta
+// en el archivo real de Nicolas no vale la pena asumir de antemano — solo hace falta que el
+// encabezado en Excel diga exactamente ese texto, sin importar en que columna quede.
+async function graphUpdatePositionFieldByHeader(positionId, headerName, value){
+  const headerResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/headerRowRange`);
+  const headers = (headerResp.values && headerResp.values[0]) || [];
+  const i = headers.indexOf(headerName);
+  if(i < 0) throw new Error(`Column "${headerName}" was not found in the shared file. Add a column with exactly that header text, then try again.`);
+  await graphUpdatePositionField(positionId, excelColumnLetter(i), value);
 }
 
 // Mismo patron que resolveRowIndex(), pero RecruitersTable no tiene un ID estable como
