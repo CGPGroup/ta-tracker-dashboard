@@ -117,6 +117,7 @@
     border: none; background: none; text-align: left; width: 100%;
     border-left: 3px solid transparent;
   }
+  .nav-item { transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
   .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
   .nav-item.active { background: rgba(224,112,63,0.22); color: #fff; border-left: 3px solid var(--brand); }
   .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
@@ -148,8 +149,9 @@
     display: flex; flex-direction: column; align-items: center; gap: 8px;
     width: 120px; padding: 16px 10px; border-radius: 10px; cursor: pointer;
     background: var(--surface-2); border: 1px solid var(--border); text-align: center;
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   }
-  .team-card:hover { border-color: var(--brand); }
+  .team-card:hover { border-color: var(--brand); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.28); }
   .team-card.active { border-color: var(--brand); background: rgba(224,112,63,0.14); }
   .team-avatar {
     width: 52px; height: 52px; border-radius: 50%; flex: none;
@@ -235,21 +237,37 @@
   /* Tracking: lista a la izquierda, detalle fijo a la derecha (no tapa la lista al abrir una
      posicion). El mismo #detailModal que usan Positions/Dashboard se "acopla" aqui via JS
      (dockDetailModal()) en vez de duplicar todo su render. */
-  /* El detalle domina el espacio a proposito: una vez abres un req, la lista ya no aporta
-     nada que el detalle no muestre tambien, asi que el detalle se lleva el doble. */
-  .tracking-split { display: flex; gap: 20px; align-items: flex-start; }
-  .tracking-list-col { flex: 1; min-width: 280px; max-width: 460px; }
-  .tracking-detail-col { flex: 2; min-width: 520px; max-width: 980px; position: sticky; top: 20px; }
+  /* El detalle domina el espacio por default (una vez abres un req, la lista ya no aporta
+     nada que el detalle no muestre tambien), pero el ancho real ahora lo decide quien lo usa
+     arrastrando el separador, no un ratio fijo — en pantallas muy anchas un ratio fijo dejaba
+     espacio muerto sin usar. La preferencia se guarda por navegador (ver trackingSplitInit()). */
+  .tracking-split { display: flex; align-items: flex-start; }
+  .tracking-list-col { flex: none; width: 380px; min-width: 280px; max-width: 700px; }
+  .tracking-resize-handle {
+    width: 14px; flex: none; align-self: stretch; cursor: col-resize;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tracking-resize-handle::after {
+    content: ""; width: 3px; height: 44px; border-radius: 3px;
+    background: var(--border); transition: background 0.15s ease, height 0.15s ease;
+  }
+  .tracking-resize-handle:hover::after, .tracking-resize-handle.dragging::after {
+    background: var(--brand); height: 60px;
+  }
+  .tracking-detail-col { flex: 1; min-width: 400px; position: sticky; top: 20px; }
   @media (max-width: 1300px) {
     .tracking-split { flex-direction: column; }
-    .tracking-list-col { max-width: none; }
+    .tracking-list-col { width: 100%; max-width: none; }
+    .tracking-resize-handle { display: none; }
     .tracking-detail-col { width: 100%; max-width: none; min-width: 0; position: static; }
   }
   .modal-overlay.docked {
     position: static; display: block !important; background: none; padding: 0;
     inset: auto; z-index: auto; overflow: visible;
+    /* Acoplado = panel fijo en Tracking, no un popup — siempre visible, nunca animado. */
+    opacity: 1 !important; visibility: visible !important; pointer-events: auto !important;
   }
-  .modal-overlay.docked .modal-card { max-width: none; width: 100%; }
+  .modal-overlay.docked .modal-card { max-width: none; width: 100%; transform: none !important; }
 
   .panel {
     background: var(--surface-1); border-radius: var(--radius);
@@ -376,7 +394,7 @@
     color: var(--text-muted); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--grid);
     white-space: nowrap;
   }
-  table.data td { padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  table.data td { padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; transition: background 0.12s ease; }
   table.data tr:hover td { background: var(--surface-2); }
   table.data tr.clickable { cursor: pointer; }
   table.data tr.clickable:hover td { background: var(--brand-wash); }
@@ -414,10 +432,13 @@
   .btn {
     font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 18px;
     border-radius: 9px; border: none; cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
   }
+  .btn:active { transform: scale(0.97); }
   .btn.primary { background: var(--brand); color: #fff; }
   .btn.primary:hover { background: var(--brand-dark); }
   .btn.ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn.ghost:hover { border-color: var(--brand); color: var(--text-primary); }
   .btn.small { padding: 7px 13px; font-size: 12.5px; }
 
   .callout {
@@ -440,14 +461,25 @@
   .view.active { display: block; }
 
   /* ---------- Detail modal ---------- */
+  /* display queda en flex siempre (no display:none) para poder animar opacity/transform al
+     abrir y cerrar — display no se puede transicionar. visibility+pointer-events se encargan
+     de que siga sin interactuar ni recibir foco mientras esta cerrado. */
   .modal-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     align-items: flex-start; justify-content: center; padding: 40px 20px; z-index: 50; overflow-y: auto;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 0.16s ease, visibility 0.16s ease;
   }
-  .modal-overlay.open { display: flex; }
+  .modal-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
   .modal-card {
     background: var(--surface-1); border-radius: var(--radius); box-shadow: var(--shadow);
     width: 100%; max-width: 780px; padding: 22px 26px 26px; border: 1px solid var(--border);
+    transform: translateY(8px) scale(0.98);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .modal-overlay.open .modal-card { transform: translateY(0) scale(1); }
+  @media (prefers-reduced-motion: reduce) {
+    .modal-overlay, .modal-card { transition: none; }
   }
   .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
   .modal-head h2 { font-size: 18px; margin: 0; }
@@ -467,6 +499,9 @@
     border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text-primary);
   }
   .clickable-stat { cursor: pointer; transition: opacity .12s; }
+  /* Cualquier span de estado tipo "Saving…"/"Saved."/error (todos terminan su id en "Msg")
+     cambia de color con un fundido corto en vez de saltar de golpe de gris a verde/rojo. */
+  [id$="Msg"] { transition: color 0.2s ease; }
   .clickable-stat:hover { opacity: 0.72; }
   .stackbar-counts .clickable-stat:hover { text-decoration: underline; opacity: 1; }
   .quick-list-row {
@@ -755,6 +790,7 @@
               </div>
             </div>
           </div>
+          <div class="tracking-resize-handle" id="trackingResizeHandle"></div>
           <div class="tracking-detail-col" id="trackingDetailHost"></div>
         </div>
       </section>
@@ -2844,6 +2880,42 @@ function setupFilterPresets(view, renderFn){
 }
 setupFilterPresets("positions", renderPositions);
 setupFilterPresets("tracking", renderTracking);
+
+/* ============================================================
+   Tracking: separador arrastrable entre la lista y el detalle
+   ============================================================ */
+(function initTrackingResize(){
+  const listCol = document.querySelector(".tracking-list-col");
+  const handle = document.getElementById("trackingResizeHandle");
+  const STORAGE_KEY = "ta_tracker_tracking_list_width";
+  const MIN = 280, MAX = 700;
+  const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+  if(saved && saved >= MIN && saved <= MAX) listCol.style.width = saved + "px";
+
+  let dragging = false, startX = 0, startWidth = 0;
+  handle.addEventListener("mousedown", (e)=>{
+    dragging = true;
+    startX = e.clientX;
+    startWidth = listCol.getBoundingClientRect().width;
+    handle.classList.add("dragging");
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", (e)=>{
+    if(!dragging) return;
+    const next = Math.min(MAX, Math.max(MIN, startWidth + (e.clientX - startX)));
+    listCol.style.width = next + "px";
+  });
+  document.addEventListener("mouseup", ()=>{
+    if(!dragging) return;
+    dragging = false;
+    handle.classList.remove("dragging");
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+    try { localStorage.setItem(STORAGE_KEY, Math.round(listCol.getBoundingClientRect().width)); } catch(e){}
+  });
+})();
 
 /* ============================================================
    Navigation
