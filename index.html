@@ -1077,7 +1077,10 @@ let acceptedConfirmations = [];
 function renderPendingAssignments(){
   const zone = document.getElementById("pendingAssignmentZone");
   let html = "";
-  if(MY_RECRUITER_NAME){
+  // Solo en TU PROPIO dashboard (no en el Team Dashboard, ni en el perfil de otro recruiter
+  // que estes mirando de paso) — es una accion que solo tu puedes tomar, asi que no tiene
+  // sentido que aparezca en ningun otro contexto.
+  if(MY_RECRUITER_NAME && activeDashboardScope === MY_RECRUITER_NAME){
     const pending = POSITIONS.filter(p=>p.recruiter===MY_RECRUITER_NAME && p.kickoff && !p.recruiterAcceptedDate);
     if(pending.length){
       html += `<div class="alert-banner tier-orange" style="flex-direction:column; align-items:stretch;">
