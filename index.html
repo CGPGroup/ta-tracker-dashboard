@@ -692,6 +692,19 @@
             </div>
             <div class="panel-sub" id="createRecruiterMsg" style="margin-top:8px;"></div>
 
+            <h3 style="margin-top:26px;">Edit Recruiter</h3>
+            <div class="panel-sub">Updates email, job title, or photo for someone already on the team. Renaming isn't supported here yet, ask if you need to fix a typo in a name.</div>
+            <div class="form-grid">
+              <div class="form-field full"><label>Recruiter</label><select id="editRecSelect"></select></div>
+              <div class="form-field full"><label>Email</label><input type="email" id="editRecEmail" placeholder="juan.torres@company.com"></div>
+              <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="editRecTitle" placeholder="e.g. Talent Partner"></div>
+              <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="editRecPhoto" placeholder="Leave blank to use initials instead"></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn primary" type="button" id="saveRecruiterBtn">Save Changes</button>
+            </div>
+            <div class="panel-sub" id="editRecruiterMsg" style="margin-top:8px;"></div>
+
             <h3 style="margin-top:26px;">New Status Or Holiday</h3>
             <div class="panel-sub">Edits the shared configuration (Config sheet)</div>
             <div class="form-grid">
@@ -1224,6 +1237,7 @@ const TERMINAL = ["Hired","Cancelled","Fell Through"];
 let RECRUITERS = ["Nicolás Patarroyo"];
 let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
 let RECRUITER_TITLES = {}; // nombre -> cargo (opcional, se muestra en la tarjeta de Team)
+let RECRUITER_EMAILS = {}; // nombre -> email, para poder precargar el formulario de Edit Recruiter
 // Unico admin del tracker por ahora (Nicolas): solo esta cuenta puede eliminar requisitions
 // desde Positions. Es una barrera de interfaz, no seguridad real (ver isAdmin()).
 const ADMIN_EMAIL = "nicolas.patarroyo.ramirez@cgpgroupus.com";
@@ -2670,8 +2684,25 @@ function renderNewPosRecruiterSelect(){
   sel.innerHTML = RECRUITERS.map(r=>`<option value="${r}">${r}</option>`).join("");
   if(RECRUITERS.includes(prev)) sel.value = prev;
 }
+// Precarga los campos de Edit Recruiter con lo que ya se sabe de ese nombre, para poder
+// comparar contra lo que quede escrito al momento de guardar (y no reescribir sin necesidad
+// los campos que no cambiaron).
+function prefillEditRecruiterFields(name){
+  document.getElementById("editRecEmail").value = RECRUITER_EMAILS[name] || "";
+  document.getElementById("editRecTitle").value = RECRUITER_TITLES[name] || "";
+  document.getElementById("editRecPhoto").value = RECRUITER_PHOTOS[name] || "";
+}
+function renderEditRecruiterSelect(){
+  const sel = document.getElementById("editRecSelect");
+  const prev = sel.value;
+  sel.innerHTML = RECRUITERS.map(r=>`<option value="${r}">${r}</option>`).join("");
+  const next = RECRUITERS.includes(prev) ? prev : (RECRUITERS[0] || "");
+  sel.value = next;
+  prefillEditRecruiterFields(next);
+}
 function renderAll(){
   renderNewPosRecruiterSelect();
+  renderEditRecruiterSelect();
   renderDashboardPanels();
   renderTeamPanel();
   renderPositions();
@@ -2982,16 +3013,17 @@ function mergeLatestRemarks(positions, histHeaders, histRows){
   });
   positions.forEach(p => { if(latestByPos[p.id]) p.lastRemark = latestByPos[p.id].remark; });
 }
-// Filas de RecruitersTable (A Name, B Email, C Active?, D Photo URL, E Job Title) -> las 3
+// Filas de RecruitersTable (A Name, B Email, C Active?, D Photo URL, E Job Title) -> las 4
 // piezas que el resto de la app necesita.
 function parseRecruitersTable(recRows){
   const newRecruiters = recRows.map(row => row[0]).filter(Boolean);
-  const newPhotos = {}, newTitles = {};
+  const newPhotos = {}, newTitles = {}, newEmails = {};
   recRows.forEach(row => {
+    if(row[0] && row[1]) newEmails[row[0]] = row[1];
     if(row[0] && row[3]) newPhotos[row[0]] = row[3];
     if(row[0] && row[4]) newTitles[row[0]] = row[4];
   });
-  return { newRecruiters, newPhotos, newTitles };
+  return { newRecruiters, newPhotos, newTitles, newEmails };
 }
 
 async function loadFromGraph(){
@@ -3013,10 +3045,11 @@ async function loadFromGraph(){
   try {
     const recResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
     const recRows = recResp.value.map(r => r.values[0]);
-    const { newRecruiters, newPhotos, newTitles } = parseRecruitersTable(recRows);
+    const { newRecruiters, newPhotos, newTitles, newEmails } = parseRecruitersTable(recRows);
     RECRUITERS = newRecruiters;
     RECRUITER_PHOTOS = newPhotos;
     RECRUITER_TITLES = newTitles;
+    RECRUITER_EMAILS = newEmails;
     // Si el correo con el que iniciaste sesion coincide con el de un reclutador en esa
     // hoja, usamos su nombre para filtrar Tracking automaticamente por defecto.
     const myEmail = (graphAccount && graphAccount.username || "").toLowerCase();
@@ -3045,10 +3078,11 @@ async function tryLoadPublicSnapshot(){
     const newPositions = parsePositionsTable(data.positions.headers, data.positions.rows);
     if(data.historial) mergeLatestRemarks(newPositions, data.historial.headers, data.historial.rows);
     if(data.recruiters){
-      const { newRecruiters, newPhotos, newTitles } = parseRecruitersTable(data.recruiters.rows);
+      const { newRecruiters, newPhotos, newTitles, newEmails } = parseRecruitersTable(data.recruiters.rows);
       RECRUITERS = newRecruiters;
       RECRUITER_PHOTOS = newPhotos;
       RECRUITER_TITLES = newTitles;
+      RECRUITER_EMAILS = newEmails;
     }
     LOCATIONS = [...new Set(newPositions.map(p => p.country).filter(Boolean))];
     POSITIONS = newPositions;
@@ -3093,6 +3127,29 @@ async function graphUpdatePositionField(positionId, columnLetter, value){
   const excelRow = rowIndex + 2;
   const address = `${columnLetter}${excelRow}`;
   await graphFetch(`${await workbookBase()}/worksheets('Positions')/range(address='${address}')`, {
+    method: "PATCH",
+    body: JSON.stringify({ values: [[value]] }),
+  });
+}
+
+// Mismo patron que resolveRowIndex(), pero RecruitersTable no tiene un ID estable como
+// Position ID — se busca en vivo por Nombre (columna A) en su lugar. Si hay dos reclutadores
+// con el mismo nombre exacto esto edita el primero que encuentre, misma limitacion que ya
+// tienen RECRUITER_PHOTOS/RECRUITER_TITLES (tambien indexados por nombre).
+async function resolveRecruiterRowIndex(name){
+  const resp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/columns('Name')/range?$select=values`);
+  const values = resp.values || [];
+  for(let i = 1; i < values.length; i++){
+    if(values[i][0] === name) return i - 1;
+  }
+  return undefined;
+}
+async function graphUpdateRecruiterField(name, columnLetter, value){
+  const rowIndex = await resolveRecruiterRowIndex(name);
+  if(rowIndex === undefined) throw new Error("This recruiter no longer exists in the shared file (someone may have removed them). Reload the data before trying again.");
+  const excelRow = rowIndex + 2;
+  const address = `${columnLetter}${excelRow}`;
+  await graphFetch(`${await workbookBase()}/worksheets('Recruiters')/range(address='${address}')`, {
     method: "PATCH",
     body: JSON.stringify({ values: [[value]] }),
   });
@@ -3340,6 +3397,52 @@ document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
   ["newRecName","newRecEmail","newRecTitle","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newRecShare").checked = true;
   document.getElementById("createRecruiterMsg").textContent = "";
+});
+
+document.getElementById("editRecSelect").addEventListener("change", (e)=>{
+  prefillEditRecruiterFields(e.target.value);
+  document.getElementById("editRecruiterMsg").textContent = "";
+});
+document.getElementById("saveRecruiterBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("editRecruiterMsg");
+  const name = document.getElementById("editRecSelect").value;
+  if(!name){
+    msg.textContent = "No recruiters to edit yet, add one first.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const email = document.getElementById("editRecEmail").value.trim();
+  const title = document.getElementById("editRecTitle").value.trim();
+  const photo = document.getElementById("editRecPhoto").value.trim();
+  if(!isConnected()){
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to save this.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const changes = [];
+  if(email !== (RECRUITER_EMAILS[name] || "")) changes.push({col:"B", value: email});
+  if(photo !== (RECRUITER_PHOTOS[name] || "")) changes.push({col:"D", value: photo});
+  if(title !== (RECRUITER_TITLES[name] || "")) changes.push({col:"E", value: title});
+  if(!changes.length){
+    msg.textContent = "No changes to save.";
+    msg.style.color = "var(--text-muted)";
+    return;
+  }
+  msg.textContent = "Saving…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    for(const c of changes){
+      await graphUpdateRecruiterField(name, c.col, c.value);
+    }
+    msg.textContent = "Saved. Reloading data…";
+    msg.style.color = "var(--good)";
+    await loadFromGraph();
+    msg.textContent = "Saved.";
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not save: " + err.message;
+    msg.style.color = "var(--critical)";
+  }
 });
 
 document.getElementById("shareAccessBtn").addEventListener("click", async () => {
