@@ -3144,12 +3144,24 @@ async function resolveRecruiterRowIndex(name){
   }
   return undefined;
 }
+// El nombre real de la pestaña de la hoja puede no ser literalmente "Recruiters" (a diferencia
+// de "Positions", que ya se sabe correcto) — se resuelve una vez por sesion preguntandole a
+// Graph directamente cual es el worksheet dueño de RecruitersTable, en vez de asumirlo.
+let RECRUITERS_WORKSHEET_NAME = null;
+async function recruitersWorksheetName(){
+  if(!RECRUITERS_WORKSHEET_NAME){
+    const ws = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/worksheet`);
+    RECRUITERS_WORKSHEET_NAME = ws.name;
+  }
+  return RECRUITERS_WORKSHEET_NAME;
+}
 async function graphUpdateRecruiterField(name, columnLetter, value){
   const rowIndex = await resolveRecruiterRowIndex(name);
   if(rowIndex === undefined) throw new Error("This recruiter no longer exists in the shared file (someone may have removed them). Reload the data before trying again.");
+  const wsName = await recruitersWorksheetName();
   const excelRow = rowIndex + 2;
   const address = `${columnLetter}${excelRow}`;
-  await graphFetch(`${await workbookBase()}/worksheets('Recruiters')/range(address='${address}')`, {
+  await graphFetch(`${await workbookBase()}/worksheets('${wsName}')/range(address='${address}')`, {
     method: "PATCH",
     body: JSON.stringify({ values: [[value]] }),
   });
