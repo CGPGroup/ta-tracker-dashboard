@@ -79,12 +79,12 @@
     transition: opacity 0.4s ease, visibility 0.4s ease;
   }
   .app-loading-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-  .app-loading-logos { display: flex; align-items: center; gap: 22px; margin-bottom: 4px; }
-  .app-loading-logo-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
+  .app-loading-logos { display: flex; align-items: center; gap: 26px; margin-bottom: 6px; }
+  .app-loading-logo-stack { display: flex; flex-direction: column; align-items: center; gap: 11px; }
   .app-loading-logo { height: auto; width: auto; display: block; }
-  .app-loading-logo.cgp { height: 32px; }
-  .app-loading-logo.keystone { height: 15px; }
-  .app-loading-logo.irth { height: 34px; }
+  .app-loading-logo.cgp { height: 42px; }
+  .app-loading-logo.keystone { height: 20px; }
+  .app-loading-logo.irth { height: 44px; }
   .app-loading-plus { font-size: 20px; font-weight: 700; color: var(--text-muted); }
   .app-loading-title { font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: 0.02em; }
   .app-loading-spinner {
@@ -3484,14 +3484,21 @@ async function graphClearTable(tableName){
 
 document.getElementById("connectBtn").addEventListener("click", connectM365);
 setConnectionUi(false);
+// Cuando la data real (Graph o el proxy publico) esta cacheada/es rapida, trysilentConnect()
+// puede resolver en unos pocos cientos de ms, muy rapido para realmente ver la pantalla de
+// carga. Se fuerza un minimo de tiempo visible para que siempre se alcance a leer/ver bien.
+const APP_LOADING_MIN_MS = 1100;
+const appLoadingStartedAt = Date.now();
 function hideAppLoadingOverlay(){
   const el = document.getElementById("appLoadingOverlay");
-  if(el) el.classList.add("hidden");
+  if(!el) return;
+  const wait = Math.max(0, APP_LOADING_MIN_MS - (Date.now() - appLoadingStartedAt));
+  setTimeout(()=> el.classList.add("hidden"), wait);
 }
 trysilentConnect().finally(hideAppLoadingOverlay);
 // Red de seguridad: si algo se cuelga de forma inesperada (conexion lenta, error no
 // capturado en algun punto de la cadena), la pantalla de carga no debe quedar pegada para
-// siempre — a los 8s se revela la app igual, con lo que haya cargado hasta ese momento.
+// siempre, a los 8s se revela la app igual, con lo que haya cargado hasta ese momento.
 setTimeout(hideAppLoadingOverlay, 8000);
 
 /* ---- SSOT Management: crear posicion / reclutador ---- */
