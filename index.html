@@ -2489,8 +2489,8 @@ function renderDetailModal(){
   // En modo edicion, Spott Job ID/Careers Page ya se muestran aparte via editableLinkRow()
   // (con su boton Edit) — repetirlos aqui tambien salia redundante, dos filas por campo.
   if(isView){
-    if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
-    if(p.careersUrl) positionFacts.push({label:"Irth Careers Page", value: linkifyIfUrl(p.careersUrl, "View Posting")});
+    if(p.spottJobId) positionFacts.push({label:"Spott Job URL", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
+    if(p.careersUrl) positionFacts.push({label:"Irth Careers Page URL", value: linkifyIfUrl(p.careersUrl, "View Posting")});
   }
   if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
@@ -2535,8 +2535,8 @@ function renderDetailModal(){
   // boton Edit) en vez de dejar el formulario de captura siempre abierto ocupando espacio;
   // Edit/Add abren el modal generico de un solo campo. En modo vista ya se ve como parte de
   // "Position" arriba si esta seteado.
-  const spottIdEditHtml = isView ? "" : editableLinkRow("Spott Job ID", p.spottJobId, "View In Spott", "editSpottIdBtn");
-  const careersUrlEditHtml = isView ? "" : editableLinkRow("Irth Careers Page", p.careersUrl, "View Posting", "editCareersUrlBtn");
+  const spottIdEditHtml = isView ? "" : editableLinkRow("Spott Job URL", p.spottJobId, "View In Spott", "editSpottIdBtn");
+  const careersUrlEditHtml = isView ? "" : editableLinkRow("Irth Careers Page URL", p.careersUrl, "View Posting", "editCareersUrlBtn");
 
   document.getElementById("modalFacts").innerHTML =
     factsSection("", positionFacts) +
@@ -2549,7 +2549,7 @@ function renderDetailModal(){
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
       openEditFieldModal({
-        title: "Edit Spott Job ID",
+        title: "Edit Spott Job URL",
         label: "Spott Job URL",
         placeholder: "Paste the full Spott job URL, not the short code from the # button",
         value: p.spottJobId,
