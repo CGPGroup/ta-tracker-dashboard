@@ -294,6 +294,34 @@
   .toolbar input[type="text"] { min-width: 220px; }
   .toolbar .count { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 
+  /* ---------- Filtros: panel secundario "More Filters" + chips de filtros activos ---------- */
+  .filter-more-btn { position: relative; }
+  .filter-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 16px; height: 16px; padding: 0 4px; margin-left: 6px;
+    border-radius: 999px; background: var(--brand); color: #fff; font-size: 10px; font-weight: 700;
+  }
+  .filter-more-panel {
+    margin-bottom: 14px; margin-top: -4px; padding: 12px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+  }
+  .filter-more-divider { width: 1px; align-self: stretch; background: var(--border); }
+  .filter-chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: -6px 0 14px; }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 10px;
+    border-radius: 999px; background: var(--brand-wash); color: var(--brand-dark);
+    font-size: 11.5px; font-weight: 600;
+  }
+  .filter-chip button {
+    background: none; border: none; color: inherit; cursor: pointer; font-size: 14px;
+    line-height: 1; padding: 0 2px; opacity: 0.7; font-weight: 700;
+  }
+  .filter-chip button:hover { opacity: 1; }
+  .filter-chips-clear {
+    font-size: 11.5px; color: var(--text-muted); background: none; border: none; cursor: pointer;
+    text-decoration: underline; padding: 4px 2px; font-weight: 600;
+  }
+
   table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   table.data th {
     text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em;
@@ -577,17 +605,22 @@
             <input type="text" id="positionsSearch" placeholder="Search by position, hiring manager, or recruiter…">
             <select id="positionsStatus"><option value="">All Statuses</option></select>
             <select id="positionsRecruiter"><option value="">All Recruiters</option></select>
+            <button class="btn ghost small filter-more-btn" type="button" id="positionsMoreFiltersBtn">More Filters<span class="filter-badge" id="positionsMoreBadge" style="display:none;"></span></button>
+            <span class="count" id="positionsCount"></span>
+          </div>
+          <div class="toolbar filter-more-panel" id="positionsMorePanel" style="display:none;">
             <select id="positionsHM"><option value="">All Hiring Managers</option></select>
             <select id="positionsLocation"><option value="">All Countries</option></select>
             <select id="positionsTTS" title="Time To Submit"><option value="">Time To Submit: All</option></select>
             <select id="positionsTTF" title="Time To Fill"><option value="">Time To Fill: All</option></select>
             <select id="positionsTTH" title="Time To Hire"><option value="">Time To Hire: All</option></select>
             <select id="positionsPlacement"><option value="">Placement: All</option><option value="yes">Placement: Yes</option><option value="no">Placement: No</option></select>
+            <span class="filter-more-divider"></span>
             <select id="positionsPresetSelect"><option value="">Saved Filters…</option></select>
             <button class="btn ghost small" type="button" id="positionsSaveFilterBtn">Save Filters</button>
             <button class="btn ghost small" type="button" id="positionsDeleteFilterBtn">Delete Saved</button>
-            <span class="count" id="positionsCount"></span>
           </div>
+          <div class="filter-chips" id="positionsChips"></div>
           <div style="overflow-x:auto;">
             <table class="data" id="positionsTable">
               <thead><tr>
@@ -1924,9 +1957,40 @@ function renderPositions(){
   fillSlaSelectOnce(ttfSel);
   fillSlaSelectOnce(tthSel);
 
-  const q = document.getElementById("positionsSearch").value.trim().toLowerCase();
+  const searchEl = document.getElementById("positionsSearch");
+  const q = searchEl.value.trim().toLowerCase();
   const est = statusSel.value, rec = recSel.value, hm = hmSel.value, loc = locSel.value;
   const ttsF = ttsSel.value, ttfF = ttfSel.value, tthF = tthSel.value, placementF = placementSel.value;
+
+  // Panel de filtros secundarios: nunca se auto-cierra (no interrumpir a alguien ajustandolo),
+  // pero SI se auto-abre si trae un filtro activo (ej. al cargar un filtro guardado) para que
+  // nunca quede un filtro aplicado "escondido" sin que se note por que la tabla se ve distinta.
+  const secondaryCount = [hm, loc, ttsF, ttfF, tthF, placementF].filter(Boolean).length;
+  const moreBadge = document.getElementById("positionsMoreBadge");
+  moreBadge.style.display = secondaryCount ? "" : "none";
+  moreBadge.textContent = secondaryCount;
+  if(secondaryCount) document.getElementById("positionsMorePanel").style.display = "";
+
+  const slaLabel = v => (SLA_FILTER_OPTIONS.find(([val])=>val===v) || [])[1] || v;
+  const chips = [];
+  if(searchEl.value.trim()) chips.push({label:`Search: "${searchEl.value.trim()}"`, clear:()=>{ searchEl.value=""; }});
+  if(est) chips.push({label:`Status: ${est}`, clear:()=>{ statusSel.value=""; }});
+  if(rec) chips.push({label:`Recruiter: ${rec}`, clear:()=>{ recSel.value=""; }});
+  if(hm) chips.push({label:`Hiring Manager: ${hm}`, clear:()=>{ hmSel.value=""; }});
+  if(loc) chips.push({label:`Country: ${loc}`, clear:()=>{ locSel.value=""; }});
+  if(ttsF) chips.push({label:`Time To Submit: ${slaLabel(ttsF)}`, clear:()=>{ ttsSel.value=""; }});
+  if(ttfF) chips.push({label:`Time To Fill: ${slaLabel(ttfF)}`, clear:()=>{ ttfSel.value=""; }});
+  if(tthF) chips.push({label:`Time To Hire: ${slaLabel(tthF)}`, clear:()=>{ tthSel.value=""; }});
+  if(placementF) chips.push({label:`Placement: ${placementF==="yes"?"Yes":"No"}`, clear:()=>{ placementSel.value=""; }});
+  const chipsEl = document.getElementById("positionsChips");
+  chipsEl.innerHTML = chips.map((c,i)=>`<span class="filter-chip">${c.label}<button type="button" data-chip-idx="${i}">&times;</button></span>`).join("")
+    + (chips.length ? `<button type="button" class="filter-chips-clear" id="positionsClearAllChips">Clear all</button>` : "");
+  chipsEl.querySelectorAll("[data-chip-idx]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ chips[+btn.dataset.chipIdx].clear(); renderPositions(); });
+  });
+  const clearAllChipsBtn = document.getElementById("positionsClearAllChips");
+  if(clearAllChipsBtn) clearAllChipsBtn.addEventListener("click", ()=>{ chips.forEach(c=>c.clear()); renderPositions(); });
+
   const rows = POSITIONS.filter(p=>{
     if(est && p.status!==est) return false;
     if(rec && p.recruiter!==rec) return false;
@@ -2677,6 +2741,10 @@ document.getElementById("positionsTTS").addEventListener("change", renderPositio
 document.getElementById("positionsTTF").addEventListener("change", renderPositions);
 document.getElementById("positionsTTH").addEventListener("change", renderPositions);
 document.getElementById("positionsPlacement").addEventListener("change", renderPositions);
+document.getElementById("positionsMoreFiltersBtn").addEventListener("click", ()=>{
+  const panel = document.getElementById("positionsMorePanel");
+  panel.style.display = panel.style.display === "none" ? "" : "none";
+});
 
 document.getElementById("trackingSearch").addEventListener("input", renderTracking);
 document.getElementById("trackingStatus").addEventListener("change", renderTracking);
