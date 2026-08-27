@@ -242,7 +242,7 @@
      arrastrando el separador, no un ratio fijo — en pantallas muy anchas un ratio fijo dejaba
      espacio muerto sin usar. La preferencia se guarda por navegador (ver trackingSplitInit()). */
   .tracking-split { display: flex; align-items: flex-start; }
-  .tracking-list-col { flex: none; width: 380px; min-width: 280px; max-width: 700px; }
+  .tracking-list-col { flex: none; width: 900px; min-width: 280px; max-width: 940px; }
   .tracking-resize-handle {
     width: 14px; flex: none; align-self: stretch; cursor: col-resize;
     display: flex; align-items: center; justify-content: center;
@@ -254,7 +254,7 @@
   .tracking-resize-handle:hover::after, .tracking-resize-handle.dragging::after {
     background: var(--brand); height: 60px;
   }
-  .tracking-detail-col { flex: 1; min-width: 400px; position: sticky; top: 20px; }
+  .tracking-detail-col { flex: 1; min-width: 340px; position: sticky; top: 20px; }
   @media (max-width: 1300px) {
     .tracking-split { flex-direction: column; }
     .tracking-list-col { width: 100%; max-width: none; }
@@ -276,15 +276,20 @@
   .panel h3 { font-size: 13.5px; margin: 0 0 2px; font-weight: 700; }
   .panel .panel-sub { font-size: 11.5px; color: var(--text-muted); margin-bottom: 8px; }
 
-  .danger-zone-details { margin-top: 26px; }
-  .danger-zone-details summary {
-    font-size: 13.5px; font-weight: 700; color: var(--critical); cursor: pointer;
+  /* Patron base de "seccion desplegable" reusado por Danger Zone y por cualquier panel cuyo
+     contenido pueda crecer mucho (ej. Recent Activity) — el color normal es el mismo que un
+     <h3>; Danger Zone lo pisa a rojo aparte. */
+  .panel-details summary, .danger-zone-details summary {
+    font-size: 13.5px; font-weight: 700; color: var(--text-primary); cursor: pointer;
     list-style: none; display: flex; align-items: center; gap: 6px;
   }
-  .danger-zone-details summary::-webkit-details-marker { display: none; }
-  .danger-zone-details summary::before { content: "▸"; font-size: 11px; transition: transform 0.15s; }
-  .danger-zone-details[open] summary::before { transform: rotate(90deg); }
-  .danger-zone-details .panel-sub { margin-top: 8px; }
+  .panel-details summary::-webkit-details-marker, .danger-zone-details summary::-webkit-details-marker { display: none; }
+  .panel-details summary::before, .danger-zone-details summary::before { content: "▸"; font-size: 11px; transition: transform 0.15s; }
+  .panel-details[open] summary::before, .danger-zone-details[open] summary::before { transform: rotate(90deg); }
+  .panel-details .panel-sub, .danger-zone-details .panel-sub { margin-top: 8px; }
+  .panel-details-count { font-weight: 400; color: var(--text-muted); font-size: 12px; }
+  .danger-zone-details { margin-top: 26px; }
+  .danger-zone-details summary { color: var(--critical); }
 
   .barlist { display: flex; flex-direction: column; gap: 6px; }
   .barlist-row { display: grid; grid-template-columns: 108px 1fr 34px; align-items: center; gap: 10px; }
@@ -391,10 +396,10 @@
   table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   table.data th {
     text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em;
-    color: var(--text-muted); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--grid);
+    color: var(--text-muted); font-weight: 700; padding: 7px 8px; border-bottom: 1px solid var(--grid);
     white-space: nowrap;
   }
-  table.data td { padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; transition: background 0.12s ease; }
+  table.data td { padding: 7px 8px; border-bottom: 1px solid var(--grid); vertical-align: middle; transition: background 0.12s ease; }
   table.data tr:hover td { background: var(--surface-2); }
   table.data tr.clickable { cursor: pointer; }
   table.data tr.clickable:hover td { background: var(--brand-wash); }
@@ -485,8 +490,8 @@
   .modal-head h2 { font-size: 18px; margin: 0; }
   .modal-close { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 4px; }
   .modal-close:hover { color: var(--text-primary); }
-  .modal-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
-  .facts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; margin-bottom: 18px; }
+  .modal-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+  .facts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 16px; margin-bottom: 12px; }
   .fact-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 3px; }
   .fact-value { font-size: 13px; font-weight: 600; }
   .fact-edit-link {
@@ -751,9 +756,11 @@
           <div id="needsAttentionList"></div>
         </div>
         <div class="panel" style="margin-bottom:16px;">
-          <h3>Recent Activity</h3>
-          <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
-          <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
+          <details class="panel-details" id="recentActivityDetails">
+            <summary>Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></summary>
+            <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
+            <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
+          </details>
         </div>
         <div class="tracking-split">
           <div class="tracking-list-col">
@@ -782,7 +789,7 @@
               <div style="overflow-x:auto;">
                 <table class="data" id="trackingTable">
                   <thead><tr>
-                    <th>Position</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
+                    <th>Position</th><th>Hiring Manager</th><th>Location</th><th>Arrangement</th><th>Status</th>
                     <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Update</th>
                   </tr></thead>
                   <tbody></tbody>
@@ -2231,6 +2238,11 @@ function renderTrackingActivity(){
       <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
       <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity in the last 7 days.</li>`;
+  // Contador visible aunque el <details> este cerrado, para no tener que abrirlo solo para
+  // saber si vale la pena (y para que mucha actividad no obligue a colapsar el resto de la
+  // vista, que era justo la queja original).
+  document.getElementById("recentActivityCount").textContent = entries.length
+    ? `(${entries.length})` : "(none)";
 }
 
 function attentionInfo(p){
@@ -2353,7 +2365,7 @@ function renderTracking(){
     const t = buildTimeline(p);
     const last = t[t.length-1];
     return `<tr class="clickable" data-id="${escapeHtml(p.id)}">
-      <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
+      <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
       <td style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${last ? escapeHtml(last.text) : ''}">${last ? escapeHtml(last.text) : '-'}</td>
@@ -2450,10 +2462,13 @@ document.getElementById("quickListClose").addEventListener("click", closeQuickLi
 document.getElementById("quickListModal").addEventListener("click", (e)=>{
   if(e.target.id === "quickListModal") closeQuickList();
 });
+// title vacio/omitido salta el titulo de seccion por completo (ej. "Position", redundante
+// justo debajo del titulo del modal que ya dice cual posicion es), en vez de dejar un
+// <div> vacio que igual se come espacio vertical.
 function factsSection(title, facts){
   if(!facts.length) return "";
   return `
-    <div class="modal-section-title">${title}</div>
+    ${title ? `<div class="modal-section-title">${title}</div>` : ""}
     <div class="facts-grid">${facts.map(f=>`
       <div><div class="fact-label">${f.label}</div><div class="fact-value">${f.value}</div></div>`).join("")}</div>`;
 }
@@ -2462,6 +2477,7 @@ function renderDetailModal(){
   if(!p) return;
   document.getElementById("modalTitle").innerHTML = posLabel(p);
   document.getElementById("modalSub").textContent = `${p.client} · ${formatLocation(p)}`;
+  const isView = activeDetailMode === "view";
 
   const positionFacts = [
     {label:"Hiring Manager", value:escapeHtml(p.hiringManager)},
@@ -2470,8 +2486,12 @@ function renderDetailModal(){
     {label:"Location", value:locationOnly(p)},
     {label:"Work Arrangement", value:arrangementBadge(p)},
   ];
-  if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
-  if(p.careersUrl) positionFacts.push({label:"Irth Careers Page", value: linkifyIfUrl(p.careersUrl, "View Posting")});
+  // En modo edicion, Spott Job ID/Careers Page ya se muestran aparte via editableLinkRow()
+  // (con su boton Edit) — repetirlos aqui tambien salia redundante, dos filas por campo.
+  if(isView){
+    if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
+    if(p.careersUrl) positionFacts.push({label:"Irth Careers Page", value: linkifyIfUrl(p.careersUrl, "View Posting")});
+  }
   if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
 
@@ -2486,7 +2506,6 @@ function renderDetailModal(){
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
   if(p.finalComp) outcomeFacts.push({label:"Final Compensation", value:escapeHtml(p.finalComp)});
 
-  const isView = activeDetailMode === "view";
   const timelineHtml = isView
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
@@ -2520,7 +2539,7 @@ function renderDetailModal(){
   const careersUrlEditHtml = isView ? "" : editableLinkRow("Irth Careers Page", p.careersUrl, "View Posting", "editCareersUrlBtn");
 
   document.getElementById("modalFacts").innerHTML =
-    factsSection("Position", positionFacts) +
+    factsSection("", positionFacts) +
     spottIdEditHtml +
     careersUrlEditHtml +
     timelineHtml +
@@ -2531,9 +2550,10 @@ function renderDetailModal(){
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit Spott Job ID",
-        label: "Spott Job ID Or URL",
+        label: "Spott Job URL",
         placeholder: "Paste the full Spott job URL, not the short code from the # button",
         value: p.spottJobId,
+        requireUrl: true,
         onSave: async (newVal)=>{
           p.spottJobId = newVal;
           if(isConnected()) await graphUpdatePositionField(p.id, "AM", newVal || "");
@@ -2549,6 +2569,7 @@ function renderDetailModal(){
         label: "Irth Careers Page URL",
         placeholder: "e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF",
         value: p.careersUrl,
+        requireUrl: true,
         onSave: async (newVal)=>{
           p.careersUrl = newVal;
           if(isConnected()) await graphUpdatePositionField(p.id, "AQ", newVal || "");
@@ -2888,7 +2909,7 @@ setupFilterPresets("tracking", renderTracking);
   const listCol = document.querySelector(".tracking-list-col");
   const handle = document.getElementById("trackingResizeHandle");
   const STORAGE_KEY = "ta_tracker_tracking_list_width";
-  const MIN = 280, MAX = 700;
+  const MIN = 280, MAX = 940;
   const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
   if(saved && saved >= MIN && saved <= MAX) listCol.style.width = saved + "px";
 
@@ -3821,6 +3842,13 @@ document.getElementById("editFieldModalSave").addEventListener("click", async ()
   if(!editFieldModalCtx) return;
   const msg = document.getElementById("editFieldModalMsg");
   const newVal = document.getElementById("editFieldModalInput").value.trim() || null;
+  // Un codigo corto (ej. el que copia el boton "#" de Spott) no sirve para volver a entrar,
+  // asi que estos campos exigen una URL real, nunca lo aceptan a medias.
+  if(editFieldModalCtx.requireUrl && newVal && !/^https?:\/\//i.test(newVal)){
+    msg.textContent = "This needs to be the full URL (starting with http:// or https://), not a short code.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
   msg.textContent = "Saving…";
   msg.style.color = "var(--text-muted)";
   try {
