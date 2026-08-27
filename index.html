@@ -127,10 +127,15 @@
     border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
   }
   .sidebar-tagline {
-    color: var(--text-secondary); font-weight: 600; margin-bottom: 12px; padding-bottom: 12px;
+    color: var(--text-secondary); font-weight: 600; margin-bottom: 12px; padding-bottom: 14px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
   }
-  .cgp-credit-logo { height: 11px; width: auto; vertical-align: -1px; margin-left: 3px; }
+  .sidebar-cgp-credit { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
+  .sidebar-cgp-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .cgp-credit-logo { height: 24px; width: auto; }
 
   .dashboard-body { display: flex; align-items: flex-start; gap: 20px; }
   .team-rail { width: 260px; flex: none; }
@@ -555,7 +560,11 @@
       <button class="nav-item" data-view="guide"><span class="nav-ic">§</span> Process & SLA Guide</button>
     </nav>
     <div class="sidebar-foot">
-      <div class="sidebar-tagline">The Team's Single Source Of Truth<br>Managed by <img src="logos/cgp-group.svg" alt="CGP Group" class="cgp-credit-logo"></div>
+      <div class="sidebar-cgp-credit">
+        <div class="sidebar-cgp-label">Managed By</div>
+        <img src="logos/cgp-group.svg" alt="CGP Group" class="cgp-credit-logo">
+      </div>
+      <div class="sidebar-tagline">The Team's Single Source Of Truth</div>
       You're seeing live data already.<br>
       Connect Microsoft 365 above only if you need to make changes.
     </div>
