@@ -653,17 +653,22 @@
               <div class="toolbar">
                 <input type="text" id="trackingSearch" placeholder="Search by position or hiring manager…">
                 <select id="trackingStatus"><option value="">All Statuses</option></select>
+                <button class="btn ghost small filter-more-btn" type="button" id="trackingMoreFiltersBtn">More Filters<span class="filter-badge" id="trackingMoreBadge" style="display:none;"></span></button>
+                <span class="count" id="trackingCount"></span>
+              </div>
+              <div class="toolbar filter-more-panel" id="trackingMorePanel" style="display:none;">
                 <select id="trackingTTS" title="Time To Submit"><option value="">Time To Submit: All</option></select>
                 <select id="trackingTTF" title="Time To Fill"><option value="">Time To Fill: All</option></select>
                 <select id="trackingTTH" title="Time To Hire"><option value="">Time To Hire: All</option></select>
                 <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
                   <input type="checkbox" id="trackingOnlyActive" checked> Active Only
                 </label>
+                <span class="filter-more-divider"></span>
                 <select id="trackingPresetSelect"><option value="">Saved Filters…</option></select>
                 <button class="btn ghost small" type="button" id="trackingSaveFilterBtn">Save Filters</button>
                 <button class="btn ghost small" type="button" id="trackingDeleteFilterBtn">Delete Saved</button>
-                <span class="count" id="trackingCount"></span>
               </div>
+              <div class="filter-chips" id="trackingChips"></div>
               <div style="overflow-x:auto;">
                 <table class="data" id="trackingTable">
                   <thead><tr>
@@ -2124,10 +2129,38 @@ function renderTracking(){
   fillSlaSelectOnce(ttfSel);
   fillSlaSelectOnce(tthSel);
 
-  const q = document.getElementById("trackingSearch").value.trim().toLowerCase();
+  const searchEl = document.getElementById("trackingSearch");
+  const q = searchEl.value.trim().toLowerCase();
   const est = statusSel.value;
   const ttsF = ttsSel.value, ttfF = ttfSel.value, tthF = tthSel.value;
-  const onlyActive = document.getElementById("trackingOnlyActive").checked;
+  const onlyActiveEl = document.getElementById("trackingOnlyActive");
+  const onlyActive = onlyActiveEl.checked;
+
+  // Mismo patron que Positions: panel secundario nunca se auto-cierra, pero SI se auto-abre
+  // si trae un filtro activo, para que nunca quede uno "escondido" sin que se note.
+  const secondaryCount = [ttsF, ttfF, tthF].filter(Boolean).length + (onlyActive ? 0 : 1);
+  const moreBadge = document.getElementById("trackingMoreBadge");
+  moreBadge.style.display = secondaryCount ? "" : "none";
+  moreBadge.textContent = secondaryCount;
+  if(secondaryCount) document.getElementById("trackingMorePanel").style.display = "";
+
+  const slaLabel = v => (SLA_FILTER_OPTIONS.find(([val])=>val===v) || [])[1] || v;
+  const chips = [];
+  if(searchEl.value.trim()) chips.push({label:`Search: "${searchEl.value.trim()}"`, clear:()=>{ searchEl.value=""; }});
+  if(est) chips.push({label:`Status: ${est}`, clear:()=>{ statusSel.value=""; }});
+  if(ttsF) chips.push({label:`Time To Submit: ${slaLabel(ttsF)}`, clear:()=>{ ttsSel.value=""; }});
+  if(ttfF) chips.push({label:`Time To Fill: ${slaLabel(ttfF)}`, clear:()=>{ ttfSel.value=""; }});
+  if(tthF) chips.push({label:`Time To Hire: ${slaLabel(tthF)}`, clear:()=>{ tthSel.value=""; }});
+  if(!onlyActive) chips.push({label:`Showing All (Incl. Closed)`, clear:()=>{ onlyActiveEl.checked = true; }});
+  const chipsEl = document.getElementById("trackingChips");
+  chipsEl.innerHTML = chips.map((c,i)=>`<span class="filter-chip">${c.label}<button type="button" data-chip-idx="${i}">&times;</button></span>`).join("")
+    + (chips.length ? `<button type="button" class="filter-chips-clear" id="trackingClearAllChips">Clear all</button>` : "");
+  chipsEl.querySelectorAll("[data-chip-idx]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ chips[+btn.dataset.chipIdx].clear(); renderTracking(); });
+  });
+  const clearAllChipsBtn = document.getElementById("trackingClearAllChips");
+  if(clearAllChipsBtn) clearAllChipsBtn.addEventListener("click", ()=>{ chips.forEach(c=>c.clear()); renderTracking(); });
+
   // dashboardPositions() ya viene filtrado al reclutador del perfil activo (Tracking solo se
   // puede ver dentro de un perfil), asi que no hace falta un select de "Recruiter" aparte.
   const rows = dashboardPositions().filter(p=>{
@@ -2752,6 +2785,10 @@ document.getElementById("trackingTTS").addEventListener("change", renderTracking
 document.getElementById("trackingTTF").addEventListener("change", renderTracking);
 document.getElementById("trackingTTH").addEventListener("change", renderTracking);
 document.getElementById("trackingOnlyActive").addEventListener("change", renderTracking);
+document.getElementById("trackingMoreFiltersBtn").addEventListener("click", ()=>{
+  const panel = document.getElementById("trackingMorePanel");
+  panel.style.display = panel.style.display === "none" ? "" : "none";
+});
 
 /* ============================================================
    Init (datos locales / de ejemplo)
