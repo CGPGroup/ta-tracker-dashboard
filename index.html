@@ -457,6 +457,11 @@
   .facts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; margin-bottom: 18px; }
   .fact-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 3px; }
   .fact-value { font-size: 13px; font-weight: 600; }
+  .fact-edit-link {
+    background: none; border: none; cursor: pointer; padding: 0; margin-left: 8px;
+    font-size: 11px; font-weight: 600; color: var(--brand); text-decoration: underline;
+  }
+  .fact-edit-link:hover { color: var(--brand-dark); }
   .fact-date-input {
     font-family: inherit; font-size: 13px; padding: 6px 8px; width: 100%;
     border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text-primary);
@@ -1067,6 +1072,25 @@
   </div>
 </div>
 
+<!-- ======================= GENERIC SINGLE-FIELD EDIT MODAL ======================= -->
+<!-- Reutilizado por cualquier campo tipo "un solo link/valor por posicion" (Spott Job ID,
+     Irth Careers Page URL, y cualquier otro que se agregue despues) — ver openEditFieldModal(). -->
+<div class="modal-overlay" id="editFieldModal">
+  <div class="modal-card" style="max-width:480px;">
+    <div class="modal-head">
+      <div><h2 id="editFieldModalTitle" style="margin:0; font-size:16px;"></h2></div>
+      <button class="modal-close" id="editFieldModalClose" type="button">&times;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field full"><label id="editFieldModalLabel"></label><input type="text" id="editFieldModalInput"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="editFieldModalSave">Save</button>
+    </div>
+    <div class="panel-sub" id="editFieldModalMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    SAMPLE DATA (replace with the real Excel export)
@@ -1565,6 +1589,29 @@ function escapeHtml(str){
 }
 function posLabel(p){
   return `<span class="pos-title">${escapeHtml(p.title)}</span><span class="pos-code">${escapeHtml(p.id)}</span>`;
+}
+// Campos como Spott Job ID venian historicamente como un ID crudo (no un link), pero de aqui
+// en adelante deberian guardar la URL completa (pegada tal cual desde la barra de direcciones,
+// nunca un codigo corto tipo el que copia el boton "#" de Spott, ese no sirve para volver a
+// entrar). Si ya es una URL se muestra como link; si es un ID viejo, se muestra como texto.
+function linkifyIfUrl(val, linkLabel){
+  if(!val) return "";
+  return /^https?:\/\//i.test(val)
+    ? `<a href="${escapeHtml(val)}" target="_blank" rel="noopener">${linkLabel} ↗</a>`
+    : escapeHtml(val);
+}
+// Fila compacta para un campo de "un solo link por posicion" en modo edicion: si ya tiene
+// valor, se muestra como link + boton "Edit" (nunca el formulario de captura permanentemente
+// abierto); si esta vacio, el boton dice "Add". Ambos casos abren el mismo modal generico.
+function editableLinkRow(label, value, linkLabel, editBtnId){
+  const display = value ? linkifyIfUrl(value, linkLabel) : `<span style="color:var(--text-muted);">Not set</span>`;
+  return `
+    <div class="facts-grid" style="margin-bottom:14px;">
+      <div>
+        <div class="fact-label">${escapeHtml(label)}</div>
+        <div class="fact-value">${display} <button class="fact-edit-link" type="button" id="${editBtnId}">${value ? "Edit" : "Add"}</button></div>
+      </div>
+    </div>`;
 }
 function formatLocation(p){
   const arr = p.workArrangement || "Remote";
@@ -2387,8 +2434,8 @@ function renderDetailModal(){
     {label:"Location", value:locationOnly(p)},
     {label:"Work Arrangement", value:arrangementBadge(p)},
   ];
-  if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value:escapeHtml(p.spottJobId)});
-  if(p.careersUrl) positionFacts.push({label:"Irth Careers Page", value:`<a href="${escapeHtml(p.careersUrl)}" target="_blank" rel="noopener">View Posting ↗</a>`});
+  if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
+  if(p.careersUrl) positionFacts.push({label:"Irth Careers Page", value: linkifyIfUrl(p.careersUrl, "View Posting")});
   if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
 
@@ -2429,26 +2476,12 @@ function renderDetailModal(){
       <span id="modalDatesMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
     </div>`;
 
-  // Editable solo en modo edicion (Tracking), para poder completar el Spott Job ID de las
-  // posiciones que ya existen (no llego con el export original) sin tener que tocar el
-  // Excel a mano. En modo vista ya se ve como parte de "Position" arriba si esta seteado.
-  const spottIdEditHtml = isView ? "" : `
-    <div class="facts-grid" style="margin-bottom:10px;">
-      <div class="form-field full"><label>Spott Job ID</label><input type="text" id="editSpottJobId" placeholder="e.g. 3a3dd134-484a-4afa-b9d7-c089060e2316" value="${escapeHtml(p.spottJobId)}"></div>
-    </div>
-    <div style="margin-bottom:18px;">
-      <button class="btn primary small" id="modalSpottIdSave" type="button">Save Spott ID</button>
-      <span id="modalSpottIdMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
-    </div>`;
-
-  const careersUrlEditHtml = isView ? "" : `
-    <div class="facts-grid" style="margin-bottom:10px;">
-      <div class="form-field full"><label>Irth Careers Page URL</label><input type="text" id="editCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF" value="${escapeHtml(p.careersUrl)}"></div>
-    </div>
-    <div style="margin-bottom:18px;">
-      <button class="btn primary small" id="modalCareersUrlSave" type="button">Save Careers Page URL</button>
-      <span id="modalCareersUrlMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
-    </div>`;
+  // Editable solo en modo edicion (Tracking). Si ya tiene valor, se muestra compacto (link +
+  // boton Edit) en vez de dejar el formulario de captura siempre abierto ocupando espacio;
+  // Edit/Add abren el modal generico de un solo campo. En modo vista ya se ve como parte de
+  // "Position" arriba si esta seteado.
+  const spottIdEditHtml = isView ? "" : editableLinkRow("Spott Job ID", p.spottJobId, "View In Spott", "editSpottIdBtn");
+  const careersUrlEditHtml = isView ? "" : editableLinkRow("Irth Careers Page", p.careersUrl, "View Posting", "editCareersUrlBtn");
 
   document.getElementById("modalFacts").innerHTML =
     factsSection("Position", positionFacts) +
@@ -2459,8 +2492,36 @@ function renderDetailModal(){
     factsSection("Outcome", outcomeFacts);
   if(!isView){
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
-    document.getElementById("modalSpottIdSave").addEventListener("click", saveModalSpottId);
-    document.getElementById("modalCareersUrlSave").addEventListener("click", saveModalCareersUrl);
+    document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
+      openEditFieldModal({
+        title: "Edit Spott Job ID",
+        label: "Spott Job ID Or URL",
+        placeholder: "Paste the full Spott job URL, not the short code from the # button",
+        value: p.spottJobId,
+        onSave: async (newVal)=>{
+          p.spottJobId = newVal;
+          if(isConnected()) await graphUpdatePositionField(p.id, "AM", newVal || "");
+          renderDetailModal();
+          renderPositions();
+          renderTracking();
+        },
+      });
+    });
+    document.getElementById("editCareersUrlBtn").addEventListener("click", ()=>{
+      openEditFieldModal({
+        title: "Edit Irth Careers Page URL",
+        label: "Irth Careers Page URL",
+        placeholder: "e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF",
+        value: p.careersUrl,
+        onSave: async (newVal)=>{
+          p.careersUrl = newVal;
+          if(isConnected()) await graphUpdatePositionField(p.id, "AQ", newVal || "");
+          renderDetailModal();
+          renderPositions();
+          renderTracking();
+        },
+      });
+    });
   }
 
   const s = computeSla(p);
@@ -2591,72 +2652,9 @@ async function saveModalDates(){
     msg.style.color = "var(--warning)";
   }
 }
-async function saveModalSpottId(){
-  const p = POSITIONS.find(x=>x.id===activeDetailId);
-  if(!p) return;
-  const raw = document.getElementById("editSpottJobId").value.trim();
-  const newVal = raw || null;
-  if(newVal === (p.spottJobId || null)){
-    const m = document.getElementById("modalSpottIdMsg");
-    m.textContent = "No changes to save.";
-    m.style.color = "var(--text-muted)";
-    return;
-  }
-  p.spottJobId = newVal;
-  renderDetailModal();
-  // renderDetailModal() reconstruye modalFacts (incluido este span), hay que volver a
-  // buscarlo despues de re-renderizar o el mensaje se pierde en un nodo viejo.
-  const msg = document.getElementById("modalSpottIdMsg");
-  if(isConnected()){
-    msg.textContent = "Saving…";
-    msg.style.color = "var(--text-muted)";
-    try {
-      await graphUpdatePositionField(p.id, "AM", newVal || "");
-      msg.textContent = "Saved.";
-      msg.style.color = "var(--good)";
-    } catch(err){
-      console.error(err);
-      msg.textContent = "Could not save: " + err.message;
-      msg.style.color = "var(--critical)";
-    }
-  } else {
-    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
-    msg.style.color = "var(--warning)";
-  }
-}
-async function saveModalCareersUrl(){
-  const p = POSITIONS.find(x=>x.id===activeDetailId);
-  if(!p) return;
-  const raw = document.getElementById("editCareersUrl").value.trim();
-  const newVal = raw || null;
-  if(newVal === (p.careersUrl || null)){
-    const m = document.getElementById("modalCareersUrlMsg");
-    m.textContent = "No changes to save.";
-    m.style.color = "var(--text-muted)";
-    return;
-  }
-  p.careersUrl = newVal;
-  renderDetailModal();
-  // renderDetailModal() reconstruye modalFacts (incluido este span), hay que volver a
-  // buscarlo despues de re-renderizar o el mensaje se pierde en un nodo viejo.
-  const msg = document.getElementById("modalCareersUrlMsg");
-  if(isConnected()){
-    msg.textContent = "Saving…";
-    msg.style.color = "var(--text-muted)";
-    try {
-      await graphUpdatePositionField(p.id, "AQ", newVal || "");
-      msg.textContent = "Saved.";
-      msg.style.color = "var(--good)";
-    } catch(err){
-      console.error(err);
-      msg.textContent = "Could not save: " + err.message;
-      msg.style.color = "var(--critical)";
-    }
-  } else {
-    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
-    msg.style.color = "var(--warning)";
-  }
-}
+// saveModalSpottId()/saveModalCareersUrl() (los formularios inline de siempre abiertos) se
+// reemplazaron por editableLinkRow() + el modal generico (openEditFieldModal en el wiring de
+// SSOT Management), ver renderDetailModal().
 async function saveModalStatus(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
@@ -3722,6 +3720,52 @@ document.getElementById("openEditRecruiterBtn").addEventListener("click", openEd
 document.getElementById("editRecruiterClose").addEventListener("click", closeEditRecruiterModal);
 document.getElementById("editRecruiterModal").addEventListener("click", (e)=>{
   if(e.target.id === "editRecruiterModal") closeEditRecruiterModal();
+});
+
+// Modal generico de un solo campo: ctx.onSave recibe el nuevo valor (o null si se vacio) y es
+// responsable de mutar el objeto local Y de escribirlo a Graph si aplica (isConnected()) — asi
+// cada llamador decide su propia columna/objeto sin que este modal sepa nada de posiciones.
+let editFieldModalCtx = null;
+function openEditFieldModal(ctx){
+  editFieldModalCtx = ctx;
+  document.getElementById("editFieldModalTitle").textContent = ctx.title;
+  document.getElementById("editFieldModalLabel").textContent = ctx.label;
+  const input = document.getElementById("editFieldModalInput");
+  input.placeholder = ctx.placeholder || "";
+  input.value = ctx.value || "";
+  document.getElementById("editFieldModalMsg").textContent = "";
+  document.getElementById("editFieldModal").classList.add("open");
+  input.focus();
+}
+function closeEditFieldModal(){
+  document.getElementById("editFieldModal").classList.remove("open");
+  editFieldModalCtx = null;
+}
+document.getElementById("editFieldModalClose").addEventListener("click", closeEditFieldModal);
+document.getElementById("editFieldModal").addEventListener("click", (e)=>{
+  if(e.target.id === "editFieldModal") closeEditFieldModal();
+});
+document.getElementById("editFieldModalSave").addEventListener("click", async ()=>{
+  if(!editFieldModalCtx) return;
+  const msg = document.getElementById("editFieldModalMsg");
+  const newVal = document.getElementById("editFieldModalInput").value.trim() || null;
+  msg.textContent = "Saving…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    await editFieldModalCtx.onSave(newVal);
+    if(isConnected()){
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
+    } else {
+      msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+      msg.style.color = "var(--warning)";
+    }
+    setTimeout(closeEditFieldModal, 700);
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not save: " + err.message;
+    msg.style.color = "var(--critical)";
+  }
 });
 
 document.getElementById("editRecSelect").addEventListener("change", (e)=>{
