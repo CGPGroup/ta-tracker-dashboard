@@ -243,6 +243,10 @@
      espacio muerto sin usar. La preferencia se guarda por navegador (ver trackingSplitInit()). */
   .tracking-split { display: flex; align-items: flex-start; }
   .tracking-list-col { flex: none; width: 900px; min-width: 280px; max-width: 940px; }
+  /* Cap la lista de reqs a ~5-6 filas visibles sin scrollear la pagina entera; el resto (mas
+     posiciones, o la Activity de la seleccionada debajo) se ve haciendo scroll solo aqui. */
+  .tracking-table-scroll { overflow-x: auto; overflow-y: auto; max-height: 300px; }
+  .tracking-table-scroll thead th { position: sticky; top: 0; background: var(--surface-1); z-index: 1; }
   .tracking-resize-handle {
     width: 14px; flex: none; align-self: stretch; cursor: col-resize;
     display: flex; align-items: center; justify-content: center;
@@ -786,7 +790,7 @@
                 <button class="btn ghost small" type="button" id="trackingDeleteFilterBtn">Delete Saved</button>
               </div>
               <div class="filter-chips" id="trackingChips"></div>
-              <div style="overflow-x:auto;">
+              <div class="tracking-table-scroll">
                 <table class="data" id="trackingTable">
                   <thead><tr>
                     <th>Position</th><th>Hiring Manager</th><th>Location</th><th>Arrangement</th><th>Status</th>
@@ -795,6 +799,13 @@
                   <tbody></tbody>
                 </table>
               </div>
+            </div>
+            <!-- Actividad de la posicion seleccionada a la derecha (no de todas, eso ya lo cubre
+                 "Recent Activity" arriba) — se llena en renderTrackingSelectedActivity(). -->
+            <div class="panel" style="margin-top:16px;">
+              <h3 style="margin:0 0 2px;">Activity</h3>
+              <div class="panel-sub" id="trackingSelectedActivitySub">Select a requisition on the left to see its history here.</div>
+              <ul class="timeline" id="trackingSelectedActivityList"></ul>
             </div>
           </div>
           <div class="tracking-resize-handle" id="trackingResizeHandle"></div>
@@ -1045,8 +1056,13 @@
     <div class="sla-grid" id="modalCompletionGrid"></div>
     <div id="modalCompletionAlert"></div>
 
-    <div class="modal-section-title">Activity</div>
-    <ul class="timeline" id="modalTimeline"></ul>
+    <!-- En Tracking (docked) esto se oculta: la actividad de la posicion seleccionada vive en el
+         panel de la izquierda (#trackingSelectedActivityPanel) para dejar mas espacio vertical
+         a la lista de reqs. En Positions/Dashboard (modal flotante) se sigue viendo aqui. -->
+    <div id="modalActivityBlock">
+      <div class="modal-section-title">Activity</div>
+      <ul class="timeline" id="modalTimeline"></ul>
+    </div>
 
     <div class="modal-section-title" id="modalRemarkTitle">Add A Remark</div>
     <div class="add-remark" id="modalRemarkSection">
@@ -1085,6 +1101,39 @@
       <button class="btn primary" type="button" id="modalStatusSave">Save Status</button>
     </div>
     <div class="panel-sub" id="modalStatusMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- ======================= EDIT REQUISITION INFO MODAL ======================= -->
+<!-- Un solo boton "Edit Basic Info" para Hiring Manager/Country/City/Work Arrangement juntos
+     (a diferencia de Status, que tiene su propio Edit porque su flujo es distinto) — ver
+     editReqInfoBtn/openEditReqInfoModal() en renderDetailModal(). -->
+<div class="modal-overlay" id="editReqInfoModal">
+  <div class="modal-card" style="max-width:520px;">
+    <div class="modal-head">
+      <div><h2 style="margin:0; font-size:16px;">Edit Basic Info</h2></div>
+      <button class="modal-close" id="editReqInfoClose" type="button">&times;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field full">
+        <label>Hiring Manager</label>
+        <select id="reqInfoHmSelect"></select>
+        <input type="text" id="reqInfoHmInput" placeholder="Type the hiring manager's name">
+        <button type="button" class="fact-edit-link" id="reqInfoHmBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
+      </div>
+      <div class="form-field full">
+        <label>Country</label>
+        <select id="reqInfoCountrySelect"></select>
+        <input type="text" id="reqInfoCountryInput" placeholder="Type the country">
+        <button type="button" class="fact-edit-link" id="reqInfoCountryBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
+      </div>
+      <div class="form-field full"><label>City</label><input type="text" id="reqInfoCity" placeholder="e.g. Toronto (leave blank if not applicable)"></div>
+      <div class="form-field full"><label>Work Arrangement</label><select id="reqInfoWorkArrangement"></select></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="reqInfoSave">Save Changes</button>
+    </div>
+    <div class="panel-sub" id="reqInfoMsg" style="margin-top:8px;"></div>
   </div>
 </div>
 
@@ -2421,6 +2470,28 @@ function buildTimeline(p){
     return (a.type==="auto"?0:1) - (b.type==="auto"?0:1);
   });
 }
+function timelineListHtml(timeline){
+  return timeline.length ? timeline.map(e=>`
+    <li>
+      <span class="tl-date">${e.date}</span>
+      <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
+      <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
+    </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity logged yet.</li>`;
+}
+// Actividad de la posicion actualmente seleccionada en Tracking, mostrada en el panel de la
+// izquierda (debajo de la lista) en vez de en el panel de detalle de la derecha — p null limpia
+// el panel a su estado vacio (nada seleccionado todavia, o se cerro con la X).
+function renderTrackingSelectedActivity(p, timeline){
+  const sub = document.getElementById("trackingSelectedActivitySub");
+  const list = document.getElementById("trackingSelectedActivityList");
+  if(!p){
+    sub.textContent = "Select a requisition on the left to see its history here.";
+    list.innerHTML = "";
+    return;
+  }
+  sub.innerHTML = `${posLabel(p)} — most recent first.`;
+  list.innerHTML = timelineListHtml(timeline || buildTimeline(p).slice().reverse());
+}
 
 let activeDetailId = null;
 let activeDetailMode = "edit";
@@ -2439,6 +2510,7 @@ function closeDetailModal(){
   const modal = document.getElementById("detailModal");
   modal.classList.remove("open");
   document.getElementById("editStatusModal").classList.remove("open");
+  document.getElementById("editReqInfoModal").classList.remove("open");
   activeDetailId = null;
   if(modal.classList.contains("docked")) renderDetailPlaceholder();
 }
@@ -2459,6 +2531,7 @@ function renderDetailPlaceholder(){
   document.getElementById("modalRemarkSection").style.display = "none";
   document.getElementById("modalTimeline").innerHTML = "";
   document.getElementById("modalDeleteZone").style.display = "none";
+  renderTrackingSelectedActivity(null);
 }
 // Preview / drill-down: se abre desde un click en cualquier estadistica, segmento de grafica,
 // o fila de lista (SLA Health, Active Pipeline By Status, Active Workload By Recruiter,
@@ -2572,13 +2645,19 @@ function renderDetailModal(){
   // como un formulario de inputs siempre abierto con un boton de guardar aparte. Status entra
   // aqui tambien (antes vivia duplicado como una seccion "Update Status" fija mas abajo); su
   // Edit abre #editStatusModal en vez del modal generico, porque tiene una fecha condicional.
+  // Hiring Manager/Country/City/Work Arrangement se editan juntos con un solo boton al pie
+  // (abre #editReqInfoModal) — Nicolas pidio que no cada uno tuviera su propio Edit, solo
+  // Status lo conserva porque su edicion es su propio flujo (con fecha condicional).
   const basicInfoEditHtml = isView ? "" : `
-    <div class="facts-grid" style="margin-bottom:14px;">
-      ${editableFactCell("Hiring Manager", p.hiringManager ? escapeHtml(p.hiringManager) : "", "editHiringManagerBtn")}
+    <div class="facts-grid" style="margin-bottom:8px;">
+      <div><div class="fact-label">Hiring Manager</div><div class="fact-value">${p.hiringManager ? escapeHtml(p.hiringManager) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       ${editableFactCell("Status", statusChip(p.status), "editStatusBtn")}
-      ${editableFactCell("Country", p.country ? escapeHtml(p.country) : "", "editCountryBtn")}
-      ${editableFactCell("City", p.city ? escapeHtml(p.city) : "", "editCityBtn")}
-      ${editableFactCell("Work Arrangement", arrangementBadge(p), "editWorkArrangementBtn")}
+      <div><div class="fact-label">Country</div><div class="fact-value">${p.country ? escapeHtml(p.country) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
+      <div><div class="fact-label">City</div><div class="fact-value">${p.city ? escapeHtml(p.city) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
+      <div><div class="fact-label">Work Arrangement</div><div class="fact-value">${arrangementBadge(p)}</div></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <button type="button" class="btn ghost small" id="editReqInfoBtn">Edit Basic Info</button>
     </div>`;
 
   // Editable solo en modo edicion (Tracking). Si ya tiene valor, se muestra compacto (link +
@@ -2601,74 +2680,7 @@ function renderDetailModal(){
     factsSection("Outcome", outcomeFacts);
   if(!isView){
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
-    document.getElementById("editHiringManagerBtn").addEventListener("click", ()=>{
-      const options = [...new Set(POSITIONS.map(x=>x.hiringManager).filter(Boolean))].sort();
-      openEditFieldModal({
-        title: "Edit Hiring Manager",
-        label: "Hiring Manager",
-        placeholder: "Type the hiring manager's name",
-        value: p.hiringManager,
-        options,
-        allowNew: true,
-        onSave: async (newVal)=>{
-          p.hiringManager = newVal;
-          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Hiring Manager", newVal || "");
-          renderDetailModal();
-          renderPositions();
-          renderTracking();
-        },
-      });
-    });
-    document.getElementById("editCountryBtn").addEventListener("click", ()=>{
-      const options = [...new Set(POSITIONS.map(x=>x.country).filter(Boolean))].sort();
-      openEditFieldModal({
-        title: "Edit Country",
-        label: "Country",
-        placeholder: "Type the country",
-        value: p.country,
-        options,
-        allowNew: true,
-        onSave: async (newVal)=>{
-          p.country = newVal;
-          LOCATIONS = [...new Set(POSITIONS.map(x=>x.country).filter(Boolean))];
-          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Country", newVal || "");
-          renderDetailModal();
-          renderPositions();
-          renderTracking();
-        },
-      });
-    });
-    document.getElementById("editCityBtn").addEventListener("click", ()=>{
-      openEditFieldModal({
-        title: "Edit City",
-        label: "City",
-        placeholder: "e.g. Toronto (leave blank if not applicable)",
-        value: p.city,
-        onSave: async (newVal)=>{
-          p.city = newVal;
-          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "City", newVal || "");
-          renderDetailModal();
-          renderPositions();
-          renderTracking();
-        },
-      });
-    });
-    document.getElementById("editWorkArrangementBtn").addEventListener("click", ()=>{
-      openEditFieldModal({
-        title: "Edit Work Arrangement",
-        label: "Work Arrangement",
-        value: p.workArrangement || "Remote",
-        options: ["Remote","Hybrid","On-site"],
-        allowNew: false,
-        onSave: async (newVal)=>{
-          p.workArrangement = newVal;
-          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Work Arrangement", newVal || "");
-          renderDetailModal();
-          renderPositions();
-          renderTracking();
-        },
-      });
-    });
+    document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
     document.getElementById("editStatusBtn").addEventListener("click", ()=>{
       document.getElementById("editStatusModal").classList.add("open");
     });
@@ -2765,7 +2777,10 @@ function renderDetailModal(){
   }
 
   const statusSelect = document.getElementById("modalStatusSelect");
-  statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${st}" ${st===p.status?"selected":""}>${st}</option>`).join("");
+  // Un <option> no puede tener un <span> de punto de color adentro como los chips normales, pero
+  // Chrome/Edge si respetan color inline en <option> — un bullet "●" con ese color se acerca
+  // bastante al mismo lenguaje visual que el resto de la app.
+  statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${escapeHtml(st)}" style="color:${STAGE_COLORS[st] || "inherit"};" ${st===p.status?"selected":""}>● ${escapeHtml(st)}</option>`).join("");
   document.getElementById("modalStatusMsg").textContent = "";
   const currentField = STATUS_DATE_FIELD[p.status];
   updateStatusDateUI("modal", p.status, currentField ? p[currentField.key] : null);
@@ -2779,12 +2794,12 @@ function renderDetailModal(){
   };
 
   const timeline = buildTimeline(p).slice().reverse();
-  document.getElementById("modalTimeline").innerHTML = timeline.length ? timeline.map(e=>`
-    <li>
-      <span class="tl-date">${e.date}</span>
-      <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
-      <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
-    </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity logged yet.</li>`;
+  document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
+  // En Tracking (docked), la Activity vive en el panel de la izquierda en vez de aqui, para
+  // dejar mas espacio vertical a la lista de reqs (ver #trackingSelectedActivityPanel).
+  document.getElementById("modalActivityBlock").style.display =
+    document.getElementById("detailModal").classList.contains("docked") ? "none" : "";
+  renderTrackingSelectedActivity(p, timeline);
 
   document.getElementById("modalRemarkText").value = "";
   document.getElementById("modalRemarkMsg").textContent = "";
@@ -2858,6 +2873,121 @@ document.getElementById("editStatusModalClose").addEventListener("click", closeE
 document.getElementById("editStatusModal").addEventListener("click", (e)=>{
   if(e.target.id === "editStatusModal") closeEditStatusModal();
 });
+
+// Un campo "select con opcion de agregar uno nuevo" generico, reutilizado por Hiring Manager y
+// Country dentro de #editReqInfoModal (a diferencia del modal de un solo campo, aqui van los
+// dos juntos, cada uno con su propio select/input/link "volver a la lista").
+function setupAddNewSelect(selectId, inputId, backBtnId, options, currentValue){
+  const select = document.getElementById(selectId);
+  const input = document.getElementById(inputId);
+  const back = document.getElementById(backBtnId);
+  select.innerHTML = options.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("") + `<option value="__new__">+ Add New…</option>`;
+  const inList = currentValue && options.includes(currentValue);
+  if(inList){
+    select.value = currentValue;
+    select.style.display = "";
+    input.style.display = "none";
+    back.style.display = "none";
+    input.value = "";
+  } else {
+    select.value = "__new__";
+    select.style.display = "none";
+    input.style.display = "";
+    input.value = currentValue || "";
+    back.style.display = "";
+  }
+}
+function getAddNewValue(selectId, inputId){
+  const select = document.getElementById(selectId);
+  const input = document.getElementById(inputId);
+  return (select.style.display !== "none" ? select.value : input.value).trim() || null;
+}
+function wireAddNewSelect(selectId, inputId, backBtnId){
+  document.getElementById(selectId).addEventListener("change", (e)=>{
+    if(e.target.value !== "__new__") return;
+    const input = document.getElementById(inputId);
+    e.target.style.display = "none";
+    input.style.display = "";
+    input.value = "";
+    document.getElementById(backBtnId).style.display = "";
+    input.focus();
+  });
+  document.getElementById(backBtnId).addEventListener("click", ()=>{
+    const select = document.getElementById(selectId);
+    select.style.display = "";
+    document.getElementById(inputId).style.display = "none";
+    document.getElementById(backBtnId).style.display = "none";
+  });
+}
+wireAddNewSelect("reqInfoHmSelect", "reqInfoHmInput", "reqInfoHmBackToList");
+wireAddNewSelect("reqInfoCountrySelect", "reqInfoCountryInput", "reqInfoCountryBackToList");
+
+function openEditReqInfoModal(){
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const hmOptions = [...new Set(POSITIONS.map(x=>x.hiringManager).filter(Boolean))].sort();
+  const countryOptions = [...new Set(POSITIONS.map(x=>x.country).filter(Boolean))].sort();
+  setupAddNewSelect("reqInfoHmSelect", "reqInfoHmInput", "reqInfoHmBackToList", hmOptions, p.hiringManager);
+  setupAddNewSelect("reqInfoCountrySelect", "reqInfoCountryInput", "reqInfoCountryBackToList", countryOptions, p.country);
+  document.getElementById("reqInfoCity").value = p.city || "";
+  document.getElementById("reqInfoWorkArrangement").innerHTML = ["Remote","Hybrid","On-site"]
+    .map(a=>`<option value="${a}" ${a===(p.workArrangement||"Remote")?"selected":""}>${a}</option>`).join("");
+  document.getElementById("reqInfoMsg").textContent = "";
+  document.getElementById("editReqInfoModal").classList.add("open");
+}
+function closeEditReqInfoModal(){
+  document.getElementById("editReqInfoModal").classList.remove("open");
+}
+document.getElementById("editReqInfoClose").addEventListener("click", closeEditReqInfoModal);
+document.getElementById("editReqInfoModal").addEventListener("click", (e)=>{
+  if(e.target.id === "editReqInfoModal") closeEditReqInfoModal();
+});
+document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const msg = document.getElementById("reqInfoMsg");
+  const fields = [
+    {key:"hiringManager", header:"Hiring Manager", value: getAddNewValue("reqInfoHmSelect","reqInfoHmInput")},
+    {key:"country", header:"Country", value: getAddNewValue("reqInfoCountrySelect","reqInfoCountryInput")},
+    {key:"city", header:"City", value: document.getElementById("reqInfoCity").value.trim() || null},
+    {key:"workArrangement", header:"Work Arrangement", value: document.getElementById("reqInfoWorkArrangement").value},
+  ];
+  const changed = fields.filter(f => f.value !== (p[f.key] || null));
+  if(!changed.length){
+    msg.textContent = "No changes to save.";
+    msg.style.color = "var(--text-muted)";
+    return;
+  }
+  changed.forEach(f => { p[f.key] = f.value; });
+  // Country es la fuente del filtro de ubicacion (LOCATIONS); si cambio, se recalcula antes de
+  // re-renderizar para que el nuevo pais quede disponible ahi tambien.
+  if(changed.some(f=>f.key==="country")){
+    LOCATIONS = [...new Set(POSITIONS.map(x=>x.country).filter(Boolean))];
+  }
+  renderAll();
+  renderDetailModal();
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      for(const f of changed){
+        await graphUpdatePositionFieldByHeader(p.id, f.header, f.value || "");
+      }
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+      return;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+  setTimeout(closeEditReqInfoModal, 900);
+});
+
 async function saveModalStatus(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
