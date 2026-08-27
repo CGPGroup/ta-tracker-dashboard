@@ -130,6 +130,7 @@
     color: var(--text-secondary); font-weight: 600; margin-bottom: 12px; padding-bottom: 12px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
   }
+  .cgp-credit-logo { height: 11px; width: auto; vertical-align: -1px; margin-left: 3px; }
 
   .dashboard-body { display: flex; align-items: flex-start; gap: 20px; }
   .team-rail { width: 260px; flex: none; }
@@ -554,7 +555,7 @@
       <button class="nav-item" data-view="guide"><span class="nav-ic">§</span> Process & SLA Guide</button>
     </nav>
     <div class="sidebar-foot">
-      <div class="sidebar-tagline">The Team's Single Source Of Truth<br>Managed by CGP Group</div>
+      <div class="sidebar-tagline">The Team's Single Source Of Truth<br>Managed by <img src="logos/cgp-group.svg" alt="CGP Group" class="cgp-credit-logo"></div>
       You're seeing live data already.<br>
       Connect Microsoft 365 above only if you need to make changes.
     </div>
@@ -3121,7 +3122,7 @@ async function graphSendTrackerLinkEmail(email, siteUrl, name){
       <li>Each recruiter's active workload</li>
       <li>The full activity history and remarks behind every position</li>
     </ul>
-    <p>Dashboard: <a href="${siteUrl}">${siteUrl}</a></p>
+    <p><a href="${siteUrl}">Open The Tracker &rarr;</a></p>
     <p>You'll also get a separate email inviting you to the shared file itself, that's what
     actually powers the tracker.</p>
     <p>If you only need to view it, no login is required. If you need to make changes, connect
