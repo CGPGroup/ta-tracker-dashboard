@@ -652,8 +652,8 @@
               <div class="form-field full"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
-              <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"><option>Nicolás Patarroyo</option></select></div>
-              <div class="form-field"><label>Country/Market</label><input type="text" id="newPosCountry" placeholder="e.g. Canada"></div>
+              <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"></select></div>
+              <div class="form-field"><label>Country/Market</label><select id="newPosCountry"><option>United States</option><option>Canada</option><option>Australia</option></select></div>
               <div class="form-field"><label>Work Arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
               <div class="form-field"><label>City (Only If Hybrid Or On-Site)</label><input type="text" id="newPosCity" placeholder="e.g. Calgary, AB"></div>
               <div class="form-field"><label>Initial Status</label><select id="newPosStatus"></select></div>
@@ -2660,7 +2660,18 @@ function colorForName(name){
   for(let i=0;i<name.length;i++) hash = (hash*31 + name.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
+// A diferencia de fillSelectOnce() (piensa que los filtros son estaticos una vez cargados),
+// este select SI debe reflejar RECRUITERS en cada render: cambia justo cuando se agrega un
+// reclutador nuevo o se hace un Reset All Data, y es exactamente en esos momentos cuando se
+// esta usando este formulario.
+function renderNewPosRecruiterSelect(){
+  const sel = document.getElementById("newPosRecruiter");
+  const prev = sel.value;
+  sel.innerHTML = RECRUITERS.map(r=>`<option value="${r}">${r}</option>`).join("");
+  if(RECRUITERS.includes(prev)) sel.value = prev;
+}
 function renderAll(){
+  renderNewPosRecruiterSelect();
   renderDashboardPanels();
   renderTeamPanel();
   renderPositions();
@@ -3075,9 +3086,15 @@ async function graphAppendHistorial(positionId, positionTitle, remark, author){
 }
 
 async function graphAppendPosition(row){
+  // Mismo motivo que graphAppendRecruiter(): si una columna reciente (ej. Irth Careers Page,
+  // columna AQ) todavia no se agrego a mano en el Excel real, la Tabla ahi tiene menos
+  // columnas de las que `row` trae, y Graph tira "InvalidArgument" si no coinciden exacto.
+  const headerResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/headerRowRange`);
+  const colCount = (headerResp.values[0] || []).length || row.length;
+  const trimmedRow = row.slice(0, colCount);
   const result = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/rows/add`, {
     method: "POST",
-    body: JSON.stringify({ values: [row] }),
+    body: JSON.stringify({ values: [trimmedRow] }),
   });
   // La fila nueva llega sin las formulas de SLA (la API solo escribe valores literales).
   // Las copiamos aqui mismo, en las columnas L a W, usando el mismo patron de build_tracker.py.
@@ -3108,9 +3125,17 @@ async function graphAppendPosition(row){
 }
 
 async function graphAppendRecruiter(name, email, photoUrl, jobTitle){
+  // Graph exige que el array de valores tenga EXACTAMENTE el mismo numero de columnas que la
+  // Tabla real en Excel, o tira "InvalidArgument" (dimensions do not match). Si alguna columna
+  // reciente (ej. Job Title) todavia no se agrego a mano en el Excel real, la tabla ahi tiene
+  // menos columnas de las que este objeto conoce, asi que se recorta el row al tamano real en
+  // vez de asumir que las 5 columnas siempre existen.
+  const headerResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/headerRowRange`);
+  const colCount = (headerResp.values[0] || []).length || 5;
+  const row = [name, email || "", "Yes", photoUrl || "", jobTitle || ""].slice(0, colCount);
   await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows/add`, {
     method: "POST",
-    body: JSON.stringify({ values: [[name, email || "", "Yes", photoUrl || "", jobTitle || ""]] }),
+    body: JSON.stringify({ values: [row] }),
   });
 }
 
@@ -3224,7 +3249,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCountry","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newPosStatus").value = "Kickoff";
   updateStatusDateUI("newPos", "Kickoff", null);
   document.getElementById("createPositionMsg").textContent = "";
