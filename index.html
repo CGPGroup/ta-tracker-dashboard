@@ -3315,7 +3315,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
           shareNote += " Tracker link emailed too.";
         } catch(mailErr){
           console.error(mailErr);
-          shareNote += " Couldn't email the tracker link separately, share the link with them yourself: " + TRACKER_URL;
+          shareNote += ` Couldn't email the tracker link separately (${mailErr.message}), share the link with them yourself: ${TRACKER_URL}`;
         }
       } catch(shareErr){
         console.error(shareErr);
@@ -3367,7 +3367,7 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
       msg.textContent += " They'll get the file access invite plus a separate email with the tracker link.";
     } catch(mailErr){
       console.error(mailErr);
-      msg.textContent += " Couldn't email them the tracker link, share it yourself: " + TRACKER_URL;
+      msg.textContent += ` Couldn't email them the tracker link (${mailErr.message}), share it yourself: ${TRACKER_URL}`;
       msg.style.color = "var(--warning)";
     }
     document.getElementById("shareAccessEmail").value = "";
