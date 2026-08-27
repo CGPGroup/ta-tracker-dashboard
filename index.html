@@ -689,21 +689,9 @@
             <div class="form-actions">
               <button class="btn primary" type="button" id="createRecruiterBtn">Add Recruiter</button>
               <button class="btn ghost" type="button" id="clearRecruiterBtn">Clear</button>
+              <button class="btn ghost" type="button" id="openEditRecruiterBtn">Edit Existing Recruiter</button>
             </div>
             <div class="panel-sub" id="createRecruiterMsg" style="margin-top:8px;"></div>
-
-            <h3 style="margin-top:26px;">Edit Recruiter</h3>
-            <div class="panel-sub">Updates email, job title, or photo for someone already on the team. Renaming isn't supported here yet, ask if you need to fix a typo in a name.</div>
-            <div class="form-grid">
-              <div class="form-field full"><label>Recruiter</label><select id="editRecSelect"></select></div>
-              <div class="form-field full"><label>Email</label><input type="email" id="editRecEmail" placeholder="juan.torres@company.com"></div>
-              <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="editRecTitle" placeholder="e.g. Talent Partner"></div>
-              <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="editRecPhoto" placeholder="Leave blank to use initials instead"></div>
-            </div>
-            <div class="form-actions">
-              <button class="btn primary" type="button" id="saveRecruiterBtn">Save Changes</button>
-            </div>
-            <div class="panel-sub" id="editRecruiterMsg" style="margin-top:8px;"></div>
 
             <h3 style="margin-top:26px;">New Status Or Holiday</h3>
             <div class="panel-sub">Edits the shared configuration (Config sheet)</div>
@@ -932,6 +920,29 @@
     <div class="form-actions" style="margin-top:18px;">
       <button class="btn primary" type="button" id="gateContinueBtn">Continue To Dashboard →</button>
     </div>
+  </div>
+</div>
+
+<!-- ======================= EDIT RECRUITER MODAL ======================= -->
+<div class="modal-overlay" id="editRecruiterModal">
+  <div class="modal-card" style="max-width:520px;">
+    <div class="modal-head">
+      <div>
+        <h2 style="margin:0; font-size:16px;">Edit Recruiter</h2>
+        <div class="modal-sub">Updates email, job title, or photo for someone already on the team. Renaming isn't supported here yet, ask if you need to fix a typo in a name.</div>
+      </div>
+      <button class="modal-close" id="editRecruiterClose" type="button">&times;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field full"><label>Recruiter</label><select id="editRecSelect"></select></div>
+      <div class="form-field full"><label>Email</label><input type="email" id="editRecEmail" placeholder="juan.torres@company.com"></div>
+      <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="editRecTitle" placeholder="e.g. Talent Partner"></div>
+      <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="editRecPhoto" placeholder="Leave blank to use initials instead"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="saveRecruiterBtn">Save Changes</button>
+    </div>
+    <div class="panel-sub" id="editRecruiterMsg" style="margin-top:8px;"></div>
   </div>
 </div>
 
@@ -3409,6 +3420,20 @@ document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
   ["newRecName","newRecEmail","newRecTitle","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newRecShare").checked = true;
   document.getElementById("createRecruiterMsg").textContent = "";
+});
+
+function openEditRecruiterModal(){
+  renderEditRecruiterSelect();
+  document.getElementById("editRecruiterMsg").textContent = "";
+  document.getElementById("editRecruiterModal").classList.add("open");
+}
+function closeEditRecruiterModal(){
+  document.getElementById("editRecruiterModal").classList.remove("open");
+}
+document.getElementById("openEditRecruiterBtn").addEventListener("click", openEditRecruiterModal);
+document.getElementById("editRecruiterClose").addEventListener("click", closeEditRecruiterModal);
+document.getElementById("editRecruiterModal").addEventListener("click", (e)=>{
+  if(e.target.id === "editRecruiterModal") closeEditRecruiterModal();
 });
 
 document.getElementById("editRecSelect").addEventListener("change", (e)=>{
