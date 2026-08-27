@@ -3536,7 +3536,7 @@ setConnectionUi(false);
 // Cuando la data real (Graph o el proxy publico) esta cacheada/es rapida, trysilentConnect()
 // puede resolver en unos pocos cientos de ms, muy rapido para realmente ver la pantalla de
 // carga. Se fuerza un minimo de tiempo visible para que siempre se alcance a leer/ver bien.
-const APP_LOADING_MIN_MS = 3500;
+const APP_LOADING_MIN_MS = 6000;
 const appLoadingStartedAt = Date.now();
 function hideAppLoadingOverlay(){
   const el = document.getElementById("appLoadingOverlay");
@@ -3547,8 +3547,8 @@ function hideAppLoadingOverlay(){
 trysilentConnect().finally(hideAppLoadingOverlay);
 // Red de seguridad: si algo se cuelga de forma inesperada (conexion lenta, error no
 // capturado en algun punto de la cadena), la pantalla de carga no debe quedar pegada para
-// siempre, a los 8s se revela la app igual, con lo que haya cargado hasta ese momento.
-setTimeout(hideAppLoadingOverlay, 8000);
+// siempre, a los 12s se revela la app igual, con lo que haya cargado hasta ese momento.
+setTimeout(hideAppLoadingOverlay, 12000);
 
 /* ---- SSOT Management: crear posicion / reclutador ---- */
 // "Kickoff" es el punto de partida real de una posicion nueva (asignada, pero el
