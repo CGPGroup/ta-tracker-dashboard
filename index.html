@@ -2701,7 +2701,7 @@ const MSAL_CONFIG = {
 // sitio de SharePoint compartido, esta es la unica seccion que hay que cambiar.
 const EXCEL_FILE_PATH = "/TA Tracker/TA_Tracker.xlsx";
 const TRACKER_URL = "https://iot-db.github.io/ta-tracker-dashboard/";
-const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite"];
+const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite", "Mail.Send"];
 
 const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
 let msalReady = msalInstance.initialize();
@@ -2811,6 +2811,26 @@ async function graphShareFile(email, role, siteUrl){
       roles: [role],
       recipients: [{ email }],
       message: `You've been added to the Irth TA Tracker. Once you accept this, connect Microsoft 365 from the dashboard here to see live data: ${siteUrl}`,
+    }),
+  });
+}
+// La invitacion de OneDrive de arriba trae un campo "message" con el link, pero Microsoft
+// reemplaza el cuerpo del correo por su propia plantilla en invitaciones a cuentas externas
+// (cross-tenant, ej. gente de Irth vista desde una cuenta de CGP) — ahi el link nunca llega.
+// Este correo aparte, enviado desde el buzon real de quien comparte, siempre lleva el link.
+async function graphSendTrackerLinkEmail(email, siteUrl){
+  await graphFetch("/me/sendMail", {
+    method: "POST",
+    body: JSON.stringify({
+      message: {
+        subject: "Your access to the Irth TA Tracker",
+        body: {
+          contentType: "HTML",
+          content: `<p>You've been given access to the Irth TA Tracker (the shared file you'll see an invite for separately).</p><p>Here's the link to the dashboard itself: <a href="${siteUrl}">${siteUrl}</a></p><p>Connect Microsoft 365 from the button at the top to see live data and, if you have edit access, make changes.</p>`,
+        },
+        toRecipients: [{ emailAddress: { address: email } }],
+      },
+      saveToSentItems: true,
     }),
   });
 }
@@ -3287,6 +3307,13 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
       try {
         await graphShareFile(email, shareRole, TRACKER_URL);
         shareNote = " File shared and invite emailed.";
+        try {
+          await graphSendTrackerLinkEmail(email, TRACKER_URL);
+          shareNote += " Tracker link emailed too.";
+        } catch(mailErr){
+          console.error(mailErr);
+          shareNote += " Couldn't email the tracker link separately, share the link with them yourself: " + TRACKER_URL;
+        }
       } catch(shareErr){
         console.error(shareErr);
         shareNote = " Recruiter saved, but sharing the file failed: " + shareErr.message;
@@ -3330,8 +3357,16 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
   msg.style.color = "var(--text-muted)";
   try {
     await graphShareFile(email, role, TRACKER_URL);
-    msg.textContent = "Shared. They'll get an email with access and the tracker link.";
+    msg.textContent = "Shared.";
     msg.style.color = "var(--good)";
+    try {
+      await graphSendTrackerLinkEmail(email, TRACKER_URL);
+      msg.textContent += " They'll get the file access invite plus a separate email with the tracker link.";
+    } catch(mailErr){
+      console.error(mailErr);
+      msg.textContent += " Couldn't email them the tracker link, share it yourself: " + TRACKER_URL;
+      msg.style.color = "var(--warning)";
+    }
     document.getElementById("shareAccessEmail").value = "";
   } catch(err){
     console.error(err);
