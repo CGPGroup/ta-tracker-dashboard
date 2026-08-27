@@ -4,25 +4,37 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Irth TA Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     color-scheme: dark;
-    --sidebar-bg: #121110;
-    --surface-1: #201e1c;
-    --surface-2: #2a2725;
-    --page: #18110d;
-    --text-primary: #ece7e2;
-    --text-secondary: #aba29b;
-    --text-muted: #7c756d;
-    --grid: #322e2a;
-    --baseline: #443f3a;
+    /* CGP usa Inter en su propio sitio, KeyStone (marca de CGP) usa Poppins. Poppins para
+       titulos/numeros grandes (personalidad), Inter para todo lo demas (es literalmente para
+       lo que se diseño: texto denso de interfaz, tablas, cifras). */
+    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-display: "Poppins", "Inter", system-ui, -apple-system, sans-serif;
+
+    --sidebar-bg: #131211;
+    --surface-1: #1a1817;
+    --surface-2: #221f1d;
+    --page: #0c0b0a;
+    --text-primary: #f2ede6;
+    --text-secondary: #b3a89c;
+    --text-muted: #85796d;
+    --grid: #2d2925;
+    --baseline: #3d3833;
     --border: rgba(255,255,255,0.08);
 
-    --brand: #d97757;
-    --brand-dark: #e08b6e;
-    --brand-wash: rgba(217,119,87,0.14);
+    /* Naranja de CGP/KeyStone (#f26a21) atenuado un paso, ni tan vivo como el original ni tan
+       apagado como el terracota que habia antes (#d97757); el rust (#da4826) es el de CGP tal
+       cual, para hover/enfasis secundario. */
+    --brand: #e0703f;
+    --brand-dark: #da4826;
+    --brand-wash: rgba(224,112,63,0.14);
 
-    --seq-100: #f0c4ae; --seq-200: #e49d86; --seq-300: #da7c5d; --seq-400: #d97757; --seq-500: #bf502b; --seq-600: #89391f;
+    --seq-100: #f2c7a8; --seq-200: #e8a274; --seq-300: #e0813f; --seq-400: #e0703f; --seq-500: #c65a2a; --seq-600: #8f3f1d;
 
     --good: #7bb87e;
     --warning: #d3a355;
@@ -41,19 +53,24 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-family: var(--font-body);
     background: var(--page);
     color: var(--text-primary);
   }
   /* Los controles nativos (input/select/textarea/button) no heredan la fuente por defecto en
      la mayoria de navegadores; esto obliga a que usen la misma tipografia que el resto. */
   input, select, textarea, button { font-family: inherit; }
+  /* Poppins (la marca de KeyStone) solo en momentos de titulo/cifra grande; el resto de la
+     interfaz, tablas y texto denso se queda en Inter, que es para lo que fue diseñado. */
+  h1, h2, h3, .kpi-value, .donut-center-value, .app-loading-title, .brand-text .l1 {
+    font-family: var(--font-display);
+  }
 
   /* ---------- Shell ---------- */
   .shell { display: flex; min-height: 100vh; }
 
   .sidebar {
-    width: 220px; flex: none;
+    width: 232px; flex: none;
     background: var(--sidebar-bg);
     color: #fff;
     display: flex; flex-direction: column;
@@ -105,7 +122,7 @@
     border-left: 3px solid transparent;
   }
   .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
-  .nav-item.active { background: rgba(217,119,87,0.22); color: #fff; border-left: 3px solid var(--brand); }
+  .nav-item.active { background: rgba(224,112,63,0.22); color: #fff; border-left: 3px solid var(--brand); }
   .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
 
   .sidebar-foot {
@@ -127,7 +144,7 @@
     background: var(--surface-2); border: 1px solid var(--border); text-align: center;
   }
   .team-card:hover { border-color: var(--brand); }
-  .team-card.active { border-color: var(--brand); background: rgba(217,119,87,0.14); }
+  .team-card.active { border-color: var(--brand); background: rgba(224,112,63,0.14); }
   .team-avatar {
     width: 52px; height: 52px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -144,7 +161,7 @@
 
   .scope-banner {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    background: rgba(217,119,87,0.10); border: 1px solid rgba(217,119,87,0.32);
+    background: rgba(224,112,63,0.10); border: 1px solid rgba(224,112,63,0.32);
     border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px;
   }
   .scope-banner b { color: var(--text-primary); }
@@ -178,7 +195,7 @@
   }
   .alert-banner::before { content: "⚠"; font-size: 12px; flex: none; }
   .alert-banner.tier-yellow { background: rgba(211,163,85,0.08); border-color: rgba(211,163,85,0.28); color: var(--warning); }
-  .alert-banner.tier-orange { background: rgba(217,119,87,0.10); border-color: rgba(217,119,87,0.32); color: var(--brand-dark); }
+  .alert-banner.tier-orange { background: rgba(224,112,63,0.10); border-color: rgba(224,112,63,0.32); color: var(--brand-dark); }
   .alert-banner.tier-red { background: rgba(193,116,102,0.10); border-color: rgba(193,116,102,0.36); color: var(--critical); }
   .alert-banner.tier-red::before { content: "⛔"; }
   .alert-banner.tier-good { background: rgba(123,184,126,0.08); border-color: rgba(123,184,126,0.28); color: var(--good); }
@@ -398,7 +415,7 @@
   .btn.small { padding: 7px 13px; font-size: 12.5px; }
 
   .callout {
-    background: var(--brand-wash); border: 1px solid rgba(217,119,87,0.30); border-radius: var(--radius);
+    background: var(--brand-wash); border: 1px solid rgba(224,112,63,0.30); border-radius: var(--radius);
     padding: 12px 16px; font-size: 11px; font-weight: 700 !important; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;
   }
   .callout b { color: var(--text-primary); font-weight: 700 !important; }
@@ -514,7 +531,7 @@
   <div class="app-loading-spinner"></div>
   <div class="app-loading-sub">Loading the latest data…</div>
 </div>
-<div class="viz-root" data-palette="#d97757">
+<div class="viz-root" data-palette="#e0703f">
 <div class="shell">
 
   <aside class="sidebar">
