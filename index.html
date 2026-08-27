@@ -77,12 +77,7 @@
     padding: 20px 14px;
   }
   .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
-  .brand-mark {
-    width: 34px; height: 34px; border-radius: 9px;
-    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 15px; color: #fff;
-  }
+  .brand-mark { width: 34px; height: 34px; object-fit: contain; display: block; }
   .brand-text { line-height: 1.2; }
   .brand-text .l1 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
   .brand-text .l2 { font-size: 10.5px; color: #a8a8a8; }
@@ -503,12 +498,16 @@
     .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
   }
 
-  /* ---------- Unificar tipografia: todo en negrilla, misma familia en SVG ---------- */
+  /* ---------- Unificar tipografia: misma familia en SVG, peso base mas liviano ---------- */
   svg text { font-family: inherit; }
-  * { font-weight: 700; }
+  /* Con la fuente del sistema, negrilla en todo se veia bien; con Inter/Poppins (mas densas
+     de por si) el mismo truco se sentia "apachurrado". Se baja el peso base y los elementos
+     que de verdad necesitan mas presencia (botones, nav, titulos, valores de KPI) ya tienen
+     su propio font-weight explicito en su propia regla, asi que no dependen de esta linea. */
+  * { font-weight: 500; }
   .toolbar input[type="text"], .toolbar select, .form-field input, .form-field select, .form-field textarea,
   .add-remark textarea, .status-update-row select {
-    font-weight: 600;
+    font-weight: 400;
   }
 </style>
 <script>
@@ -527,7 +526,7 @@
     <span class="app-loading-plus">+</span>
     <img src="logos/irth-solutions.png" alt="Irth Solutions" class="app-loading-logo irth">
   </div>
-  <div class="app-loading-title">Irth TA Tracker</div>
+  <div class="app-loading-title">Talent Acquisition Tracker</div>
   <div class="app-loading-spinner"></div>
   <div class="app-loading-sub">Loading the latest data…</div>
 </div>
@@ -536,10 +535,10 @@
 
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">IR</div>
+      <img src="logos/irth-icon.png" alt="Irth Solutions" class="brand-mark">
       <div class="brand-text">
-        <div class="l1">IRTH · TA TRACKER</div>
-        <div class="l2">The Team's Single Source Of Truth</div>
+        <div class="l1">Irth Solutions</div>
+        <div class="l2">Talent Acquisition Tracker</div>
       </div>
     </div>
     <nav class="nav">
@@ -3504,7 +3503,7 @@ setConnectionUi(false);
 // Cuando la data real (Graph o el proxy publico) esta cacheada/es rapida, trysilentConnect()
 // puede resolver en unos pocos cientos de ms, muy rapido para realmente ver la pantalla de
 // carga. Se fuerza un minimo de tiempo visible para que siempre se alcance a leer/ver bien.
-const APP_LOADING_MIN_MS = 1900;
+const APP_LOADING_MIN_MS = 3500;
 const appLoadingStartedAt = Date.now();
 function hideAppLoadingOverlay(){
   const el = document.getElementById("appLoadingOverlay");
