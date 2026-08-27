@@ -70,6 +70,31 @@
   .brand-text .l1 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
   .brand-text .l2 { font-size: 10.5px; color: #a8a8a8; }
 
+  /* ---------- Pantalla de carga inicial: evita el "flash" de datos viejos/de ejemplo antes
+     de que trysilentConnect() termine de resolver datos reales (Graph o el proxy publico). ---------- */
+  .app-loading-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--page);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
+  }
+  .app-loading-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .app-loading-mark {
+    width: 60px; height: 60px; border-radius: 16px;
+    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 24px; color: #fff;
+    box-shadow: 0 10px 30px rgba(217,119,87,0.35);
+  }
+  .app-loading-title { font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: 0.02em; }
+  .app-loading-spinner {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 3px solid var(--border); border-top-color: var(--brand);
+    animation: app-loading-spin 0.8s linear infinite;
+  }
+  @keyframes app-loading-spin { to { transform: rotate(360deg); } }
+  .app-loading-sub { font-size: 12px; color: var(--text-muted); }
+
   .nav { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
   .nav-item {
     display: flex; align-items: center; gap: 10px;
@@ -476,6 +501,12 @@
 </script>
 </head>
 <body>
+<div class="app-loading-overlay" id="appLoadingOverlay">
+  <div class="app-loading-mark">IR</div>
+  <div class="app-loading-title">Irth TA Tracker</div>
+  <div class="app-loading-spinner"></div>
+  <div class="app-loading-sub">Loading the latest data…</div>
+</div>
 <div class="viz-root" data-palette="#d97757">
 <div class="shell">
 
@@ -3391,7 +3422,15 @@ async function graphClearTable(tableName){
 
 document.getElementById("connectBtn").addEventListener("click", connectM365);
 setConnectionUi(false);
-trysilentConnect();
+function hideAppLoadingOverlay(){
+  const el = document.getElementById("appLoadingOverlay");
+  if(el) el.classList.add("hidden");
+}
+trysilentConnect().finally(hideAppLoadingOverlay);
+// Red de seguridad: si algo se cuelga de forma inesperada (conexion lenta, error no
+// capturado en algun punto de la cadena), la pantalla de carga no debe quedar pegada para
+// siempre — a los 8s se revela la app igual, con lo que haya cargado hasta ese momento.
+setTimeout(hideAppLoadingOverlay, 8000);
 
 /* ---- SSOT Management: crear posicion / reclutador ---- */
 // "Kickoff" es el punto de partida real de una posicion nueva (asignada, pero el
