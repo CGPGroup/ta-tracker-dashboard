@@ -1650,7 +1650,7 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
   // division de abajo no truene cuando se dibuja el placeholder gris de "sin datos".
   const realTotal = rows.reduce((s,r)=>s+(r.realValue !== undefined ? r.realValue : r.value),0);
   const arcTotal = rows.reduce((s,r)=>s+r.value,0) || 1;
-  const r = 45, cx = 60, cy = 60, sw = 14;
+  const r = 45, cx = 60, cy = 60, sw = 12;
   const circ = 2*Math.PI*r;
   let offset = 0;
   const arcs = rows.map((row,i)=>{
