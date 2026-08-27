@@ -3103,18 +3103,35 @@ async function graphShareFile(email, role, siteUrl){
 }
 // La invitacion de OneDrive de arriba trae un campo "message" con el link, pero Microsoft
 // reemplaza el cuerpo del correo por su propia plantilla en invitaciones a cuentas externas
-// (cross-tenant, ej. gente de Irth vista desde una cuenta de CGP) — ahi el link nunca llega.
+// (cross-tenant, ej. gente de Irth vista desde una cuenta de CGP), ahi el link nunca llega.
 // Este correo aparte, enviado desde el buzon real de quien comparte, siempre lleva el link.
-async function graphSendTrackerLinkEmail(email, siteUrl){
+async function graphSendTrackerLinkEmail(email, siteUrl, name){
+  const greeting = name ? name.split(" ")[0] : "there";
+  const content = `
+    <p>Hi ${greeting},</p>
+    <p>You've been given access to the Irth Talent Acquisition Tracker, the team's single
+    source of truth for every Irth Solutions requisition Cornerstone is working, from the
+    moment a req is assigned through to hire.</p>
+    <p>Please treat it with care: everything you'll see is live, real recruiting data. Don't
+    share this link outside the team, and if you're ever not sure whether something should be
+    changed, check with Nicolás first.</p>
+    <p>Inside, you'll find:</p>
+    <ul>
+      <li>Every open and closed requisition, with live status and SLA health</li>
+      <li>Each recruiter's active workload</li>
+      <li>The full activity history and remarks behind every position</li>
+    </ul>
+    <p>Dashboard: <a href="${siteUrl}">${siteUrl}</a></p>
+    <p>You'll also get a separate email inviting you to the shared file itself, that's what
+    actually powers the tracker.</p>
+    <p>If you only need to view it, no login is required. If you need to make changes, connect
+    with Microsoft 365 using the button at the top.</p>`;
   await graphFetch("/me/sendMail", {
     method: "POST",
     body: JSON.stringify({
       message: {
-        subject: "Your access to the Irth TA Tracker",
-        body: {
-          contentType: "HTML",
-          content: `<p>You've been given access to the Irth TA Tracker (the shared file you'll see an invite for separately).</p><p>Here's the link to the dashboard itself: <a href="${siteUrl}">${siteUrl}</a></p><p>Connect Microsoft 365 from the button at the top to see live data and, if you have edit access, make changes.</p>`,
-        },
+        subject: "Access To The Irth Talent Acquisition Tracker",
+        body: { contentType: "HTML", content },
         toRecipients: [{ emailAddress: { address: email } }],
       },
       saveToSentItems: true,
@@ -3648,7 +3665,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
         await graphShareFile(email, shareRole, TRACKER_URL);
         shareNote = " File shared and invite emailed.";
         try {
-          await graphSendTrackerLinkEmail(email, TRACKER_URL);
+          await graphSendTrackerLinkEmail(email, TRACKER_URL, name);
           shareNote += " Tracker link emailed too.";
         } catch(mailErr){
           console.error(mailErr);
