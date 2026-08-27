@@ -79,13 +79,10 @@
     transition: opacity 0.4s ease, visibility 0.4s ease;
   }
   .app-loading-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-  .app-loading-mark {
-    width: 60px; height: 60px; border-radius: 16px;
-    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 24px; color: #fff;
-    box-shadow: 0 10px 30px rgba(217,119,87,0.35);
-  }
+  .app-loading-logos { display: flex; align-items: center; gap: 20px; margin-bottom: 4px; }
+  .app-loading-logo { height: 30px; width: auto; display: block; }
+  .app-loading-logo.cgp { height: 26px; }
+  .app-loading-plus { font-size: 20px; font-weight: 700; color: var(--text-muted); }
   .app-loading-title { font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: 0.02em; }
   .app-loading-spinner {
     width: 26px; height: 26px; border-radius: 50%;
@@ -502,7 +499,11 @@
 </head>
 <body>
 <div class="app-loading-overlay" id="appLoadingOverlay">
-  <div class="app-loading-mark">IR</div>
+  <div class="app-loading-logos">
+    <img src="logos/cgp-group.svg" alt="CGP Group" class="app-loading-logo cgp">
+    <span class="app-loading-plus">+</span>
+    <img src="logos/irth-solutions.png" alt="Irth Solutions" class="app-loading-logo irth">
+  </div>
   <div class="app-loading-title">Irth TA Tracker</div>
   <div class="app-loading-spinner"></div>
   <div class="app-loading-sub">Loading the latest data…</div>
