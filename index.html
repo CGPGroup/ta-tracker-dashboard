@@ -2055,7 +2055,7 @@ function renderPositions(){
     </tr>`;
   }).join("");
   document.querySelectorAll("#positionsTable tbody tr.clickable").forEach(tr=>{
-    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, "view", isAdmin()));
+    tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, "view", isAdmin(), true));
   });
 }
 
