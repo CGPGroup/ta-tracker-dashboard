@@ -979,6 +979,7 @@
     <div class="add-remark" id="modalRemarkSection">
       <textarea id="modalRemarkText" rows="2" placeholder="What changed, what's next…"></textarea>
       <button class="btn primary small" id="modalRemarkSave" type="button">Add Remark</button>
+      <div style="font-size:11px; margin-top:4px;" id="modalRemarkMsg"></div>
     </div>
 
     <div class="modal-danger-zone" id="modalDeleteZone">
@@ -1156,8 +1157,8 @@ function renderPendingAssignments(){
         <div><b>You have ${pending.length} new assignment${pending.length===1?"":"s"}</b> waiting on your acceptance.</div>
         ${pending.map(p=>`
           <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <span>${posLabel(p)} <span style="color:var(--text-muted);">— assigned ${p.kickoff}</span></span>
-            <button class="btn primary small" type="button" data-accept-id="${p.id}">Accept</button>
+            <span>${posLabel(p)} <span style="color:var(--text-muted);">— assigned ${escapeHtml(p.kickoff)}</span></span>
+            <button class="btn primary small" type="button" data-accept-id="${escapeHtml(p.id)}">Accept</button>
           </div>`).join("")}
       </div>`;
     }
@@ -1165,7 +1166,7 @@ function renderPendingAssignments(){
   acceptedConfirmations.forEach(c=>{
     html += `<div class="alert-banner tier-good" style="flex-direction:column; align-items:stretch;">
       <div>${c.title} — accepted. The kickoff email reply has already been sent to the hiring manager confirming you as the assigned recruiter and explaining the SLAs. Please introduce yourself in that same email thread, then request the intake meeting.</div>
-      <div style="text-align:right;"><button class="btn ghost small" type="button" data-dismiss-id="${c.id}">Got It</button></div>
+      <div style="text-align:right;"><button class="btn ghost small" type="button" data-dismiss-id="${escapeHtml(c.id)}">Got It</button></div>
     </div>`;
   });
   zone.innerHTML = html;
@@ -1227,7 +1228,7 @@ function setDashboardScope(name){
   const count = POSITIONS.filter(p=>p.recruiter===name).length;
   banner.style.display = "";
   banner.innerHTML = `
-    <span>Viewing <b>${name}'s</b> dashboard &middot; ${count} position${count===1?"":"s"}</span>
+    <span>Viewing <b>${escapeHtml(name)}'s</b> dashboard &middot; ${count} position${count===1?"":"s"}</span>
     <span style="display:flex; gap:8px;">
       <button class="btn primary small" id="scopeEditBtn" type="button">Open Tracking →</button>
       <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Dashboard</button>
@@ -1251,8 +1252,8 @@ function openProfileGate(name){
   if(pending.length){
     html += `<div class="modal-section-title">New Assignments</div>` + pending.map(p=>`
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0;">
-        <span>${posLabel(p)} <span style="color:var(--text-muted);">— assigned ${p.kickoff}</span></span>
-        <button class="btn primary small" type="button" data-gate-accept-id="${p.id}">Accept</button>
+        <span>${posLabel(p)} <span style="color:var(--text-muted);">— assigned ${escapeHtml(p.kickoff)}</span></span>
+        <button class="btn primary small" type="button" data-gate-accept-id="${escapeHtml(p.id)}">Accept</button>
       </div>`).join("");
   }
   if(slaRows.length || completionRows.length){
@@ -1299,9 +1300,9 @@ function renderRecentReqs(){
   zone.innerHTML = `
     <div class="recent-reqs-title">Recently Assigned</div>
     ${recent.map(p=>`
-      <div class="recent-req-row" data-id="${p.id}">
-        <div>${p.title}</div>
-        <div class="rr-code">${p.id} &middot; ${p.status}</div>
+      <div class="recent-req-row" data-id="${escapeHtml(p.id)}">
+        <div>${escapeHtml(p.title)}</div>
+        <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(p.status)}</div>
       </div>`).join("")}`;
   zone.querySelectorAll(".recent-req-row").forEach(row=>{
     row.addEventListener("click", ()=>{
@@ -1314,13 +1315,13 @@ function renderTeamPanel(){
   const el = document.getElementById("teamGrid");
   el.innerHTML = RECRUITERS.map(name=>{
     const photo = RECRUITER_PHOTOS[name];
-    const avatarStyle = photo ? `background-image:url('${photo}');` : `background:${colorForName(name)};`;
+    const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
     const title = RECRUITER_TITLES[name] || "Recruiter";
     return `
-    <div class="team-card${activeDashboardScope===name?' active':''}" data-name="${name}">
-      <div class="team-avatar" style="${avatarStyle}">${photo ? "" : initialsFor(name)}</div>
-      <div class="team-name">${name}</div>
-      <div class="team-title">${title}</div>
+    <div class="team-card${activeDashboardScope===name?' active':''}" data-name="${escapeHtml(name)}">
+      <div class="team-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(name))}</div>
+      <div class="team-name">${escapeHtml(name)}</div>
+      <div class="team-title">${escapeHtml(title)}</div>
     </div>`;
   }).join("");
   el.querySelectorAll(".team-card").forEach(card=>{
@@ -1505,16 +1506,30 @@ function slaFlags(p){
     .map(k=>`🚩 ${k}: ${STATUS_WORD[s[k].status]}`).join(" · ") || "No SLA issues";
 }
 
+// Cualquier campo de texto libre (title, remarks, nombres, etc.) que un reclutador escriba
+// pasa por aqui antes de insertarse como HTML — sin esto, alguien podria escribir un titulo
+// o remark con un <script> que se ejecute para cualquiera que despues vea esa posicion,
+// incluida la vista publica sin login. Nunca interpolar texto libre en un template de HTML
+// sin pasarlo por escapeHtml() primero.
+function escapeHtml(str){
+  if(str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 function posLabel(p){
-  return `<span class="pos-title">${p.title}</span><span class="pos-code">${p.id}</span>`;
+  return `<span class="pos-title">${escapeHtml(p.title)}</span><span class="pos-code">${escapeHtml(p.id)}</span>`;
 }
 function formatLocation(p){
   const arr = p.workArrangement || "Remote";
-  if(p.city) return `${p.city}, ${p.country} (${arr})`;
-  return `${p.country} (${arr})`;
+  if(p.city) return `${escapeHtml(p.city)}, ${escapeHtml(p.country)} (${arr})`;
+  return `${escapeHtml(p.country)} (${arr})`;
 }
 function locationOnly(p){
-  return p.city ? `${p.city}, ${p.country}` : (p.country || "-");
+  return p.city ? `${escapeHtml(p.city)}, ${escapeHtml(p.country)}` : (escapeHtml(p.country) || "-");
 }
 const ARRANGEMENT_COLORS = { "Remote": "var(--stage-blue)", "Hybrid": "var(--stage-purple)", "On-site": "var(--good)" };
 function arrangementBadge(p){
@@ -1579,7 +1594,7 @@ function renderBarlist(elId, rows, colorVar, onClickRow){
   const max = Math.max(1, ...rows.map(r=>r.value));
   document.getElementById(elId).innerHTML = rows.map((r,i)=>`
     <div class="barlist-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
-      <div class="barlist-label" title="${r.label}">${r.label}</div>
+      <div class="barlist-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
       <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${colorVar};"></div></div>
       <div class="barlist-value">${r.value}</div>
     </div>`).join("");
@@ -1610,7 +1625,7 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
   const legend = rows.map((row,i)=>`
     <div class="donut-legend-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
       <span class="dot" style="background:${colors[i % colors.length]}"></span>
-      <span class="donut-legend-label" title="${row.label}">${row.label}</span>
+      <span class="donut-legend-label" title="${escapeHtml(row.label)}">${escapeHtml(row.label)}</span>
       <span class="donut-legend-value">${row.realValue !== undefined ? row.realValue : row.value}</span>
     </div>`).join("");
   const centerValue = centerOverride ? centerOverride.value : realTotal;
@@ -1664,12 +1679,12 @@ function renderReclutadorChart(){
     .sort((a,b)=>b.value-a.value);
   document.getElementById("chartReclutador").innerHTML = rows.map(r=>{
     const photo = RECRUITER_PHOTOS[r.label];
-    const avatarStyle = photo ? `background-image:url('${photo}');` : `background:${colorForName(r.label)};`;
+    const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
     const pct = Math.min(100, (r.value / WORKLOAD_CAP) * 100);
     return `
-    <div class="workload-card clickable-stat" data-label="${r.label}">
-      <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : initialsFor(r.label)}</div>
-      <div class="workload-name" title="${r.label}">${r.label}</div>
+    <div class="workload-card clickable-stat" data-label="${escapeHtml(r.label)}">
+      <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
+      <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${workloadColor(r.value)};"></div></div>
       <div class="workload-count">${r.value} Req${r.value===1?"":"s"}</div>
     </div>`;
@@ -1714,7 +1729,7 @@ function renderHiredLocChart(){
     const color = ARRANGEMENT_COLORS[r.label] || "var(--neutral)";
     return `
     <div class="barlist-row clickable-stat" data-idx="${i}">
-      <div class="barlist-label">${r.label}</div>
+      <div class="barlist-label">${escapeHtml(r.label)}</div>
       <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${color};"></div></div>
       <div class="barlist-value">${r.value}</div>
     </div>`;
@@ -1950,8 +1965,8 @@ function renderPendingOffers(){
   }
   list.innerHTML = offers.map(p=>{
     const s = computeSla(p);
-    return `<div class="pending-offer-row clickable-stat" data-id="${p.id}">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${p.recruiter} · ${p.hiringManager}</div></div>
+    return `<div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${escapeHtml(p.recruiter)} · ${escapeHtml(p.hiringManager)}</div></div>
       ${slaChip(s.TTF)}
     </div>`;
   }).join("");
@@ -2046,11 +2061,11 @@ function renderPositions(){
   document.querySelector("#positionsTable tbody").innerHTML = rows.map(p=>{
     const s = computeSla(p);
     return `
-    <tr class="clickable" data-id="${p.id}">
-      <td class="cell-position">${posLabel(p)}</td><td>${p.client}</td><td>${p.hiringManager}</td><td>${p.recruiter}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
+    <tr class="clickable" data-id="${escapeHtml(p.id)}">
+      <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.client)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
-      <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${p.lastRemark||''}">${p.lastRemark||'-'}</td>
+      <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(p.lastRemark)}">${escapeHtml(p.lastRemark)||'-'}</td>
       <td>${p.status==="Hired" ? "Yes" : "No"}</td>
     </tr>`;
   }).join("");
@@ -2088,7 +2103,7 @@ function renderTrackingActivity(){
     <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; padding:8px 10px; margin:2px 0;" : ""}">
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
-      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${e.text}${e.author?` <span style="color:var(--text-muted);">(${e.author})</span>`:""}</span>
+      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity in the last 7 days.</li>`;
 }
 
@@ -2120,7 +2135,7 @@ function buildAttentionRows(positions){
 }
 function attentionRowsHtml(slaRows, completionRows){
   const slaHtml = slaRows.map(({p, s, worstKey})=>`
-    <div class="pending-offer-row clickable-stat" data-id="${p.id}">
+    <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${slaFlags(p)}</div></div>
       ${slaChip(s[worstKey])}
     </div>`).join("");
@@ -2129,7 +2144,7 @@ function attentionRowsHtml(slaRows, completionRows){
     const cls = (c.step1.status==="out" || c.step3.overdue) ? "out" : "risk";
     const label = c.step1.status==="out" ? "Not Accepted/Requested" : (c.step2.escalate || c.step3.overdue ? "Escalate" : "Overdue");
     return `
-    <div class="pending-offer-row clickable-stat" data-id="${p.id}">
+    <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
       <span class="sla-chip ${cls}"><span class="dot" style="background:${STATUS_META[cls].color}"></span>${label}</span>
     </div>`;
@@ -2211,11 +2226,11 @@ function renderTracking(){
     const s = computeSla(p);
     const t = buildTimeline(p);
     const last = t[t.length-1];
-    return `<tr class="clickable" data-id="${p.id}">
-      <td class="cell-position">${posLabel(p)}</td><td>${p.hiringManager}</td><td>${p.recruiter}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
+    return `<tr class="clickable" data-id="${escapeHtml(p.id)}">
+      <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
-      <td style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${last ? last.text : ''}">${last ? last.text : '-'}</td>
+      <td style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${last ? escapeHtml(last.text) : ''}">${last ? escapeHtml(last.text) : '-'}</td>
     </tr>`;
   }).join("");
   document.querySelectorAll("#trackingTable tbody tr.clickable").forEach(tr=>{
@@ -2288,9 +2303,9 @@ function openQuickList(title, sub, positions, subLineFn){
   document.getElementById("quickListTitle").textContent = title;
   document.getElementById("quickListSub").textContent = sub || `${positions.length} position${positions.length===1?"":"s"}`;
   const body = document.getElementById("quickListBody");
-  const subLine = subLineFn || (p => `${p.recruiter} · ${locationOnly(p)}`);
+  const subLine = subLineFn || (p => `${escapeHtml(p.recruiter)} · ${locationOnly(p)}`);
   body.innerHTML = positions.length ? positions.map(p => `
-    <div class="quick-list-row" data-id="${p.id}">
+    <div class="quick-list-row" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${subLine(p)}</div></div>
       ${statusChip(p.status)}
     </div>`).join("") : `<div class="panel-sub" style="margin:0;">Nothing matches this right now.</div>`;
@@ -2323,48 +2338,48 @@ function renderDetailModal(){
   document.getElementById("modalSub").textContent = `${p.client} · ${formatLocation(p)}`;
 
   const positionFacts = [
-    {label:"Hiring Manager", value:p.hiringManager},
-    {label:"Recruiter", value:p.recruiter},
+    {label:"Hiring Manager", value:escapeHtml(p.hiringManager)},
+    {label:"Recruiter", value:escapeHtml(p.recruiter)},
     {label:"Status", value:statusChip(p.status)},
     {label:"Location", value:locationOnly(p)},
     {label:"Work Arrangement", value:arrangementBadge(p)},
   ];
-  if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value:p.spottJobId});
-  if(p.careersUrl) positionFacts.push({label:"Irth Careers Page", value:`<a href="${p.careersUrl}" target="_blank" rel="noopener">View Posting ↗</a>`});
-  if(p.productLine) positionFacts.push({label:"Product Line", value:p.productLine});
-  if(p.salaryRange) positionFacts.push({label:"Salary Range", value:p.salaryRange});
+  if(p.spottJobId) positionFacts.push({label:"Spott Job ID", value:escapeHtml(p.spottJobId)});
+  if(p.careersUrl) positionFacts.push({label:"Irth Careers Page", value:`<a href="${escapeHtml(p.careersUrl)}" target="_blank" rel="noopener">View Posting ↗</a>`});
+  if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
+  if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
 
   const pipelineFacts = [];
-  if(p.sourced != null) pipelineFacts.push({label:"Sourced", value:p.sourced});
-  if(p.directApps != null) pipelineFacts.push({label:"Direct Apps", value:p.directApps});
-  if(p.submittedCount != null) pipelineFacts.push({label:"Submitted", value:p.submittedCount});
-  if(p.activeCount != null) pipelineFacts.push({label:"Active", value:p.activeCount});
-  if(p.rejectedCount != null) pipelineFacts.push({label:"Rejected", value:p.rejectedCount});
+  if(p.sourced != null) pipelineFacts.push({label:"Sourced", value:escapeHtml(p.sourced)});
+  if(p.directApps != null) pipelineFacts.push({label:"Direct Apps", value:escapeHtml(p.directApps)});
+  if(p.submittedCount != null) pipelineFacts.push({label:"Submitted", value:escapeHtml(p.submittedCount)});
+  if(p.activeCount != null) pipelineFacts.push({label:"Active", value:escapeHtml(p.activeCount)});
+  if(p.rejectedCount != null) pipelineFacts.push({label:"Rejected", value:escapeHtml(p.rejectedCount)});
 
   const outcomeFacts = [];
-  if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:p.placedCandidate});
-  if(p.finalComp) outcomeFacts.push({label:"Final Compensation", value:p.finalComp});
+  if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
+  if(p.finalComp) outcomeFacts.push({label:"Final Compensation", value:escapeHtml(p.finalComp)});
 
   const isView = activeDetailMode === "view";
   const timelineHtml = isView
     ? factsSection("Timeline", [
-        {label:"Kickoff Date", value:p.kickoff || "-"},
-        {label:"Intake Requested Date", value:p.intakeRequestedDate || "-"},
-        {label:"Intake Scheduled For", value:p.intakeScheduledDate || "-"},
-        {label:"Intake Meeting", value:p.intake || "-"},
-        {label:"Submit Date", value:p.submit || "-"},
-        {label:"Fill Date", value:p.fill || "-"},
-        {label:"Hire Date", value:p.hire || "-"},
+        {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
+        {label:"Intake Requested Date", value:escapeHtml(p.intakeRequestedDate) || "-"},
+        {label:"Intake Scheduled For", value:escapeHtml(p.intakeScheduledDate) || "-"},
+        {label:"Intake Meeting", value:escapeHtml(p.intake) || "-"},
+        {label:"Submit Date", value:escapeHtml(p.submit) || "-"},
+        {label:"Fill Date", value:escapeHtml(p.fill) || "-"},
+        {label:"Hire Date", value:escapeHtml(p.hire) || "-"},
       ])
     : `<div class="modal-section-title">Timeline</div>
     <div class="facts-grid">
-      <div><div class="fact-label">Kickoff Date</div><input type="date" class="fact-date-input" id="editKickoff" value="${p.kickoff||''}"></div>
-      <div><div class="fact-label">Intake Requested Date</div><input type="date" class="fact-date-input" id="editIntakeRequested" value="${p.intakeRequestedDate||''}"></div>
-      <div><div class="fact-label">Intake Scheduled For</div><input type="date" class="fact-date-input" id="editIntakeScheduled" value="${p.intakeScheduledDate||''}"></div>
-      <div><div class="fact-label">Intake Meeting</div><input type="date" class="fact-date-input" id="editIntake" value="${p.intake||''}"></div>
-      <div><div class="fact-label">Submit Date</div><input type="date" class="fact-date-input" id="editSubmit" value="${p.submit||''}"></div>
-      <div><div class="fact-label">Fill Date</div><input type="date" class="fact-date-input" id="editFill" value="${p.fill||''}"></div>
-      <div><div class="fact-label">Hire Date</div><input type="date" class="fact-date-input" id="editHire" value="${p.hire||''}"></div>
+      <div><div class="fact-label">Kickoff Date</div><input type="date" class="fact-date-input" id="editKickoff" value="${escapeHtml(p.kickoff)}"></div>
+      <div><div class="fact-label">Intake Requested Date</div><input type="date" class="fact-date-input" id="editIntakeRequested" value="${escapeHtml(p.intakeRequestedDate)}"></div>
+      <div><div class="fact-label">Intake Scheduled For</div><input type="date" class="fact-date-input" id="editIntakeScheduled" value="${escapeHtml(p.intakeScheduledDate)}"></div>
+      <div><div class="fact-label">Intake Meeting</div><input type="date" class="fact-date-input" id="editIntake" value="${escapeHtml(p.intake)}"></div>
+      <div><div class="fact-label">Submit Date</div><input type="date" class="fact-date-input" id="editSubmit" value="${escapeHtml(p.submit)}"></div>
+      <div><div class="fact-label">Fill Date</div><input type="date" class="fact-date-input" id="editFill" value="${escapeHtml(p.fill)}"></div>
+      <div><div class="fact-label">Hire Date</div><input type="date" class="fact-date-input" id="editHire" value="${escapeHtml(p.hire)}"></div>
     </div>
     <div style="margin-bottom:18px;">
       <button class="btn primary small" id="modalDatesSave" type="button">Save Dates</button>
@@ -2376,7 +2391,7 @@ function renderDetailModal(){
   // Excel a mano. En modo vista ya se ve como parte de "Position" arriba si esta seteado.
   const spottIdEditHtml = isView ? "" : `
     <div class="facts-grid" style="margin-bottom:10px;">
-      <div class="form-field full"><label>Spott Job ID</label><input type="text" id="editSpottJobId" placeholder="e.g. 3a3dd134-484a-4afa-b9d7-c089060e2316" value="${p.spottJobId||''}"></div>
+      <div class="form-field full"><label>Spott Job ID</label><input type="text" id="editSpottJobId" placeholder="e.g. 3a3dd134-484a-4afa-b9d7-c089060e2316" value="${escapeHtml(p.spottJobId)}"></div>
     </div>
     <div style="margin-bottom:18px;">
       <button class="btn primary small" id="modalSpottIdSave" type="button">Save Spott ID</button>
@@ -2385,7 +2400,7 @@ function renderDetailModal(){
 
   const careersUrlEditHtml = isView ? "" : `
     <div class="facts-grid" style="margin-bottom:10px;">
-      <div class="form-field full"><label>Irth Careers Page URL</label><input type="text" id="editCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF" value="${p.careersUrl||''}"></div>
+      <div class="form-field full"><label>Irth Careers Page URL</label><input type="text" id="editCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF" value="${escapeHtml(p.careersUrl)}"></div>
     </div>
     <div style="margin-bottom:18px;">
       <button class="btn primary small" id="modalCareersUrlSave" type="button">Save Careers Page URL</button>
@@ -2466,10 +2481,11 @@ function renderDetailModal(){
     <li>
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
-      <span class="tl-text">${e.text}${e.author?` <span style="color:var(--text-muted);">(${e.author})</span>`:""}</span>
+      <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity logged yet.</li>`;
 
   document.getElementById("modalRemarkText").value = "";
+  document.getElementById("modalRemarkMsg").textContent = "";
 
   document.getElementById("modalStatusTitle").style.display = isView ? "none" : "";
   document.getElementById("modalStatusSection").style.display = isView ? "none" : "";
@@ -2503,7 +2519,9 @@ async function saveModalDates(){
     }
   });
   if(!changed.length){
-    document.getElementById("modalDatesMsg").textContent = "No changes to save.";
+    const m = document.getElementById("modalDatesMsg");
+    m.textContent = "No changes to save.";
+    m.style.color = "var(--text-muted)";
     return;
   }
   renderAll();
@@ -2513,17 +2531,21 @@ async function saveModalDates(){
   const msg = document.getElementById("modalDatesMsg");
   if(isConnected()){
     msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
     try {
       for(const f of changed){
         await graphUpdatePositionField(p.id, f.col, f.value || "");
       }
       msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
     } catch(err){
       console.error(err);
       msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
     }
   } else {
     msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
   }
 }
 async function saveModalSpottId(){
@@ -2532,7 +2554,9 @@ async function saveModalSpottId(){
   const raw = document.getElementById("editSpottJobId").value.trim();
   const newVal = raw || null;
   if(newVal === (p.spottJobId || null)){
-    document.getElementById("modalSpottIdMsg").textContent = "No changes to save.";
+    const m = document.getElementById("modalSpottIdMsg");
+    m.textContent = "No changes to save.";
+    m.style.color = "var(--text-muted)";
     return;
   }
   p.spottJobId = newVal;
@@ -2542,15 +2566,19 @@ async function saveModalSpottId(){
   const msg = document.getElementById("modalSpottIdMsg");
   if(isConnected()){
     msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
     try {
       await graphUpdatePositionField(p.id, "AM", newVal || "");
       msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
     } catch(err){
       console.error(err);
       msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
     }
   } else {
     msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
   }
 }
 async function saveModalCareersUrl(){
@@ -2559,7 +2587,9 @@ async function saveModalCareersUrl(){
   const raw = document.getElementById("editCareersUrl").value.trim();
   const newVal = raw || null;
   if(newVal === (p.careersUrl || null)){
-    document.getElementById("modalCareersUrlMsg").textContent = "No changes to save.";
+    const m = document.getElementById("modalCareersUrlMsg");
+    m.textContent = "No changes to save.";
+    m.style.color = "var(--text-muted)";
     return;
   }
   p.careersUrl = newVal;
@@ -2569,15 +2599,19 @@ async function saveModalCareersUrl(){
   const msg = document.getElementById("modalCareersUrlMsg");
   if(isConnected()){
     msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
     try {
       await graphUpdatePositionField(p.id, "AQ", newVal || "");
       msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
     } catch(err){
       console.error(err);
       msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
     }
   } else {
     msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
   }
 }
 async function saveModalStatus(){
@@ -2590,7 +2624,9 @@ async function saveModalStatus(){
     const dateField = STATUS_DATE_FIELD[newStatus];
     const dateVal = dateField ? document.getElementById("modalStatusDateInput").value : null;
     if(dateField && !dateVal){
-      document.getElementById("modalStatusMsg").textContent = `Please fill in "${dateField.label}" before saving this status.`;
+      const m = document.getElementById("modalStatusMsg");
+      m.textContent = `Please fill in "${dateField.label}" before saving this status.`;
+      m.style.color = "var(--critical)";
       return;
     }
     const oldStatus = p.status;
@@ -2610,15 +2646,26 @@ async function saveModalStatus(){
     renderHiredLocChart();
     renderSlaChart();
     renderSlaMeter();
+    // renderDetailModal() reconstruye el HTML de este span, hay que volver a buscarlo despues
+    // de re-renderizar o el mensaje se pierde en un nodo viejo (mismo patron que las otras
+    // funciones de guardado del modal).
+    const msg = document.getElementById("modalStatusMsg");
     if(isConnected()){
       try {
         await graphUpdatePositionField(p.id, "G", newStatus);
         if(dateField) await graphUpdatePositionField(p.id, dateField.col, dateVal);
         await graphAppendHistorial(p.id, p.title, remarkText, "You");
+        msg.textContent = "Saved.";
+        msg.style.color = "var(--good)";
       } catch(err){
         console.error(err);
+        msg.textContent = "Could not save: " + err.message;
+        msg.style.color = "var(--critical)";
         alert("Could not save the status change. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
       }
+    } else {
+      msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+      msg.style.color = "var(--warning)";
     }
   }
 }
@@ -2633,14 +2680,22 @@ async function saveModalRemark(){
   renderDetailModal();
   renderTracking();
   renderPositions();
+  const msg = document.getElementById("modalRemarkMsg");
   if(isConnected()){
     try {
       await graphUpdatePositionField(p.id, "X", text);
       await graphAppendHistorial(p.id, p.title, text, "You");
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
     } catch(err){
       console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
       alert("Could not save the remark. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
     }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
   }
 }
 
@@ -2843,7 +2898,7 @@ function colorForName(name){
 function renderNewPosRecruiterSelect(){
   const sel = document.getElementById("newPosRecruiter");
   const prev = sel.value;
-  sel.innerHTML = RECRUITERS.map(r=>`<option value="${r}">${r}</option>`).join("");
+  sel.innerHTML = RECRUITERS.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
   if(RECRUITERS.includes(prev)) sel.value = prev;
 }
 // Precarga los campos de Edit Recruiter con lo que ya se sabe de ese nombre, para poder
@@ -2857,7 +2912,7 @@ function prefillEditRecruiterFields(name){
 function renderEditRecruiterSelect(){
   const sel = document.getElementById("editRecSelect");
   const prev = sel.value;
-  sel.innerHTML = RECRUITERS.map(r=>`<option value="${r}">${r}</option>`).join("");
+  sel.innerHTML = RECRUITERS.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
   const next = RECRUITERS.includes(prev) ? prev : (RECRUITERS[0] || "");
   sel.value = next;
   prefillEditRecruiterFields(next);
