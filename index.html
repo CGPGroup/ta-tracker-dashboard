@@ -1252,6 +1252,10 @@ function setDashboardScope(name){
   const wasOnTracking = document.getElementById("view-tracking").classList.contains("active");
   activeDashboardScope = name;
   document.querySelector('.nav-item[data-view="tracking"]').style.display = name ? "" : "none";
+  // SSOT Management es administracion de todo el equipo (crear posiciones/reclutadores,
+  // compartir acceso, borrar data) — no tiene sentido dentro del perfil de un solo reclutador,
+  // asi que se esconde ahi, igual que Tracking se esconde fuera de un perfil.
+  document.querySelector('.nav-item[data-view="manage"]').style.display = name ? "none" : "";
   document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
   document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
