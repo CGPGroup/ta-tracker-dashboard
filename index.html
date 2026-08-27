@@ -3137,7 +3137,7 @@ async function graphUpdatePositionField(positionId, columnLetter, value){
 // con el mismo nombre exacto esto edita el primero que encuentre, misma limitacion que ya
 // tienen RECRUITER_PHOTOS/RECRUITER_TITLES (tambien indexados por nombre).
 async function resolveRecruiterRowIndex(name){
-  const resp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/columns('Name')/range?$select=values`);
+  const resp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/columns('Recruiter Name')/range?$select=values`);
   const values = resp.values || [];
   for(let i = 1; i < values.length; i++){
     if(values[i][0] === name) return i - 1;
