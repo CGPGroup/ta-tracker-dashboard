@@ -2759,8 +2759,11 @@ async function graphFetch(path, options = {}){
     const body = await res.text();
     throw new Error(`Graph API error (${res.status}): ${body.slice(0,300)}`);
   }
-  if(res.status === 204) return null;
-  return res.json();
+  // /me/sendMail (y otros) responden 202 Accepted con el body vacio, no 204 — res.json() sobre
+  // un body vacio tira un SyntaxError, lo que hacia ver como "fallido" un correo que Graph ya
+  // habia aceptado y enviado de verdad. Leer como texto primero evita ese falso negativo.
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 function filePathSegment(){
