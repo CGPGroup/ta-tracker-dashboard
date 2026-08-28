@@ -194,6 +194,8 @@
     padding: 0 24px;
   }
   .topbar h1 { font-size: 16px; margin: 0; font-weight: 700; }
+  .topbar h1 .topbar-eyebrow { color: var(--text-muted); font-weight: 600; }
+  .topbar h1 .topbar-eyebrow::after { content: "·"; margin: 0 7px; color: var(--border); font-weight: 400; }
   .topbar .sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
   .topbar-right { display: flex; align-items: center; gap: 14px; }
   .pill {
@@ -685,7 +687,7 @@
         <div class="dashboard-body">
           <aside class="team-rail">
             <div class="team-rail-title" id="teamRailTitle">Team</div>
-            <div class="team-rail-sub" id="teamRailSub">Click a recruiter to see their own dashboard</div>
+            <div class="team-rail-sub" id="teamRailSub">Click a recruiter to open their workspace</div>
             <div class="team-grid" id="teamGrid"></div>
             <div id="recentReqsZone"></div>
           </aside>
@@ -1267,7 +1269,7 @@
     </div>
     <div id="gateBody"></div>
     <div class="form-actions" style="margin-top:18px;">
-      <button class="btn primary" type="button" id="gateContinueBtn">Continue To Dashboard →</button>
+      <button class="btn primary" type="button" id="gateContinueBtn">Continue To Workspace →</button>
     </div>
   </div>
 </div>
@@ -1548,12 +1550,14 @@ function setDashboardScope(name){
   document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   document.getElementById("recentActivityZone").style.display = name ? "" : "none";
-  // Antes decia siempre "Click a recruiter to see their own dashboard", incluso ya parado
-  // adentro del dashboard de ese reclutador — confuso, sonaba a que faltaba dar ese paso.
-  document.getElementById("teamRailTitle").textContent = name ? "Switch Recruiter" : "Team";
+  // El titulo se queda siempre en "Team": una vez adentro de un workspace, quien esta viendo
+  // ya se ve arriba en el banner de perfil (foto + nombre + cargo) y en la tarjeta resaltada
+  // de esta misma lista — repetirlo aqui como "Switch Recruiter" / "Viewing X's dashboard" era
+  // la misma identidad dicha tres veces. Este panel solo necesita explicar la mecanica de clic.
+  document.getElementById("teamRailTitle").textContent = "Team";
   document.getElementById("teamRailSub").textContent = name
-    ? `Viewing ${name}'s dashboard — click another card to switch.`
-    : "Click a recruiter to see their own dashboard";
+    ? "Click another card to switch workspaces"
+    : "Click a recruiter to open their workspace";
   activateView((name && wasOnTracking) ? "tracking" : "dashboard");
   // Fundido corto al cambiar de Team Dashboard a Recruiter Dashboard (o entre reclutadores) en
   // vez de que el contenido salte de golpe. requestAnimationFrame no sirve aqui (no corre si la
@@ -3672,11 +3676,13 @@ function activateView(view){
   if(activeDashboardScope){
     // Dentro del perfil de un reclutador, el titulo grande es su Workspace personal — constante
     // sin importar en que vista este parado — y Dashboard/Positions/Tracking pasan a ser
-    // secciones DENTRO de ese workspace, no el nombre del workspace en si (antes decia
-    // "Recruiter Dashboard" incluso estando en Tracking o Positions, lo cual no tenia sentido).
-    document.getElementById("topbarTitle").textContent = `${activeDashboardScope} Workspace`;
-    const viewLabel = view === "dashboard" ? "Recruiter Dashboard" : TITLES[view][0];
-    document.getElementById("topbarSub").textContent = `${viewLabel} — ${TITLES[view][1]}`;
+    // secciones DENTRO de ese workspace, no el nombre del workspace en si. "Workspace" va
+    // primero como un eyebrow tenue (el marco/contenedor) y el nombre despues en el peso
+    // fuerte (lo que de verdad importa leer) — mismo patron que "Workspace · Nombre".
+    document.getElementById("topbarTitle").innerHTML = `<span class="topbar-eyebrow">Workspace</span>${escapeHtml(activeDashboardScope)}`;
+    // El nombre de la vista ya no repite "Recruiter Dashboard" — el titulo grande ya dejo claro
+    // de quien es el workspace, asi que aqui solo hace falta decir en que seccion estas.
+    document.getElementById("topbarSub").textContent = `${TITLES[view][0]} — ${TITLES[view][1]}`;
   } else {
     document.getElementById("topbarTitle").textContent = view === "dashboard" ? "Team Dashboard" : TITLES[view][0];
     document.getElementById("topbarSub").textContent = TITLES[view][1];
