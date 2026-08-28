@@ -528,17 +528,23 @@
   .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
   .sla-card .sla-name { font-size: 10.5px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .modal-section-title { font-size: 12.5px; font-weight: 700; margin: 0 0 8px; }
-  /* Select inline de Status: misma forma de pill/ovalo que .status-chip (fondo neutro,
-     redondeado), sin flecha nativa de dropdown, y cada opcion con su punto de color via
-     STAGE_COLORS (ver renderDetailModal()). */
-  .status-pill-select {
-    appearance: none; -webkit-appearance: none; -moz-appearance: none;
-    font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
-    padding: 3px 10px; border: none; border-radius: 999px;
-    background: var(--surface-2); background-image: none; color: var(--text-primary);
+  /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
+     texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
+     menu es una lista simple debajo, cada item con su propio punto de color via STAGE_COLORS. */
+  .status-dropdown { position: relative; display: inline-block; }
+  .status-dropdown-trigger { border: none; cursor: pointer; font: inherit; }
+  .status-dropdown-menu {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 4px; min-width: 210px; max-height: 260px; overflow-y: auto;
   }
-  .status-pill-select:hover { background: var(--surface-3, var(--surface-2)); }
-  .status-pill-select:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+  .status-dropdown-menu.open { display: block; }
+  .status-dropdown-item {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .status-dropdown-item:hover { background: var(--surface-2); }
+  .status-dropdown-item .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
   .timeline { list-style: none; margin: 0 0 14px; padding: 0; max-height: 220px; overflow-y: auto; }
   .timeline li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
   .timeline li:last-child { border-bottom: none; }
@@ -1091,11 +1097,10 @@
 </div>
 
 <!-- ======================= CONFIRM STATUS DATE MODAL ======================= -->
-<!-- El status en si se elige directamente con el dropdown inline (con puntitos de color, con
-     forma de pill) que vive arriba junto al resto de Basic Info — ver modalStatusSelect en
-     renderDetailModal() y onStatusSelectChange(). Este modal chiquito SOLO aparece cuando el
-     nuevo status elegido exige una fecha (STATUS_DATE_FIELD); si el usuario cancela, el select
-     vuelve a mostrar el status anterior (ver closeEditStatusModal()). -->
+<!-- El status en si se elige directamente con el dropdown inline (#statusDropdown, con puntitos
+     de color, con forma de pill) que vive arriba junto al resto de Basic Info — ver
+     onStatusOptionClick() en renderDetailModal(). Este modal chiquito SOLO aparece cuando el
+     nuevo status elegido exige una fecha (STATUS_DATE_FIELD). -->
 <div class="modal-overlay" id="editStatusModal">
   <div class="modal-card" style="max-width:480px;">
     <div class="modal-head">
@@ -2679,14 +2684,28 @@ function renderDetailModal(){
 
   // Hiring Manager/Country/City/Work Arrangement se editan juntos con un solo boton al pie
   // (abre #editReqInfoModal) — Nicolas pidio que no cada uno tuviera su propio Edit. Status en
-  // cambio es un <select> inline aqui mismo (con forma de pill y puntitos de color, ver CSS
-  // .status-pill-select), sin boton Edit ni modal para elegirlo — el modal chiquito
-  // (#editStatusModal) solo aparece si el status elegido exige una fecha, ver
-  // onStatusSelectChange()/poblacion de modalStatusSelect mas abajo en esta funcion.
+  // cambio es un dropdown propio (no un <select> nativo — un <option> no puede pintar el punto
+  // de un color y la palabra de otro) que imita exactamente el mismo .status-chip que se ve en
+  // todos lados (punto de color + texto blanco), pero clickeable — ver
+  // statusDropdownItemHtml()/wireStatusDropdown() mas abajo en esta funcion. Sin boton Edit ni
+  // modal para elegirlo; el modal chiquito (#editStatusModal) solo aparece si el status elegido
+  // exige una fecha.
+  const statusDropdownHtml = `
+    <div class="status-dropdown" id="statusDropdown">
+      <button type="button" class="status-chip status-dropdown-trigger" id="statusDropdownTrigger">
+        <span class="dot" style="background:${STAGE_COLORS[p.status] || "var(--neutral)"}"></span>${escapeHtml(p.status)}
+      </button>
+      <div class="status-dropdown-menu" id="statusDropdownMenu">
+        ${STATUS_ORDER.map(st=>`
+          <div class="status-dropdown-item" data-status="${escapeHtml(st)}">
+            <span class="dot" style="background:${STAGE_COLORS[st] || "var(--neutral)"}"></span>${escapeHtml(st)}
+          </div>`).join("")}
+      </div>
+    </div>`;
   const basicInfoEditHtml = isView ? "" : `
     <div class="facts-grid" style="margin-bottom:8px;">
       <div><div class="fact-label">Hiring Manager</div><div class="fact-value">${p.hiringManager ? escapeHtml(p.hiringManager) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
-      <div><div class="fact-label">Status</div><div class="fact-value"><select id="modalStatusSelect" class="status-pill-select"></select></div></div>
+      <div><div class="fact-label">Status</div><div class="fact-value">${statusDropdownHtml}</div></div>
       <div><div class="fact-label">Country</div><div class="fact-value">${p.country ? escapeHtml(p.country) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">City</div><div class="fact-value">${p.city ? escapeHtml(p.city) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">Work Arrangement</div><div class="fact-value">${arrangementBadge(p)}</div></div>
@@ -2809,12 +2828,13 @@ function renderDetailModal(){
   }
 
   if(!isView){
-    const statusSelect = document.getElementById("modalStatusSelect");
-    // Bullet "●" plano, sin color por status — un <option> no permite pintar el punto distinto
-    // del texto, asi que en vez de teñir toda la linea (dot + palabra, que se veia mal) se deja
-    // todo en el color de texto normal del select (blanco/neutro, ver .status-pill-select).
-    statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${escapeHtml(st)}" ${st===p.status?"selected":""}>● ${escapeHtml(st)}</option>`).join("");
-    statusSelect.onchange = () => onStatusSelectChange(p, statusSelect);
+    document.getElementById("statusDropdownTrigger").addEventListener("click", (e)=>{
+      e.stopPropagation();
+      document.getElementById("statusDropdownMenu").classList.toggle("open");
+    });
+    document.querySelectorAll(".status-dropdown-item").forEach(item=>{
+      item.addEventListener("click", ()=> onStatusOptionClick(p, item.dataset.status));
+    });
   }
 
   const timeline = buildTimeline(p).slice().reverse();
@@ -2896,23 +2916,28 @@ let pendingStatusChange = null;
 function closeEditStatusModal(){
   document.getElementById("editStatusModal").classList.remove("open");
   pendingStatusChange = null;
-  // Si se cancela (X, click afuera, o ya se guardo), el select inline vuelve a reflejar el
-  // status real de la posicion — al cancelar deshace la seleccion visual; al guardar, p.status
-  // ya es el nuevo status asi que esto no cambia nada.
-  const select = document.getElementById("modalStatusSelect");
-  const p = POSITIONS.find(x=>x.id===activeDetailId);
-  if(select && p) select.value = p.status;
+  // El dropdown de status solo cambia lo que se ve una vez que el cambio ya se aplico a
+  // p.status (via commitStatusChange, que vuelve a renderizar) — cancelar aqui no necesita
+  // deshacer nada visualmente, nunca se adelanto a mostrar el status nuevo.
 }
 document.getElementById("editStatusModalClose").addEventListener("click", closeEditStatusModal);
 document.getElementById("editStatusModal").addEventListener("click", (e)=>{
   if(e.target.id === "editStatusModal") closeEditStatusModal();
 });
-// El status se elige directo en el <select> inline (con puntitos, forma de pill) que vive junto
-// al resto de Basic Info. Si el status elegido no exige fecha, se guarda de una; si la exige
-// (Kickoff, Intake Meeting Requested, Intake Pending), aparece #editStatusModal solo por esa
-// fecha, y si se cancela el select vuelve a mostrar el status anterior.
-function onStatusSelectChange(p, statusSelect){
-  const newStatus = statusSelect.value;
+// Cierra el dropdown de status si se hace click fuera de el — se registra una sola vez (el
+// dropdown se recrea en cada render, pero siempre con el mismo id, asi que buscarlo en vivo
+// aqui adentro es suficiente en vez de tener que re-enganchar este listener cada vez).
+document.addEventListener("click", (e)=>{
+  const dropdown = document.getElementById("statusDropdown");
+  if(dropdown && !dropdown.contains(e.target)){
+    document.getElementById("statusDropdownMenu")?.classList.remove("open");
+  }
+});
+// Click en una opcion del dropdown de status. Si el status elegido no exige fecha, se guarda de
+// una; si la exige (Kickoff, Intake Meeting Requested, Intake Pending), aparece #editStatusModal
+// solo por esa fecha.
+function onStatusOptionClick(p, newStatus){
+  document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
   const dateField = STATUS_DATE_FIELD[newStatus];
   if(dateField){
