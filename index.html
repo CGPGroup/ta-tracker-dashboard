@@ -1084,17 +1084,19 @@
 
       <section class="view" id="view-guide">
         <div class="guide-wrap">
-          <div class="callout prose"><b>What this is:</b> not instructions for using the tracker, this is the actual Irth requisition process end to end, who does what, when sourcing is allowed to start, and exactly how every SLA and allowance is defined. Source: the Irth Solutions Recruiting Workflows master prompt and the Recruitment Workflow Guide agreed with Cornerstone's VP of Recruitment and Irth's Talent Acquisition team.</div>
+          <div class="callout prose"><b>What this is:</b> not instructions for using the tracker, this is the actual Irth requisition process end to end, who does what, when sourcing is allowed to start, and exactly how every SLA and allowance is defined. Source: the Irth Solutions Recruiting Workflows Master Prompt and the Recruiting Operations Playbook, both agreed with Cornerstone's VP of Recruitment (Sara Howren) and Irth's Talent Acquisition team.</div>
 
           <div class="panel" style="margin-bottom:14px;">
             <h3>Who's Involved</h3>
             <div class="panel-sub">The people and tools behind every requisition</div>
             <ul>
+              <li><b>Nicolás Patarroyo, Lead Talent Partner:</b> owns the Irth account. Always writes and sends the Kickoff email personally, in first person, no matter who ends up running a requisition day-to-day; is the backup point of contact named in that email; and makes the first call on every Pivot SLA request.</li>
               <li><b>Cornerstone (us):</b> the RPO running this account end to end: JD review, market research and comp benchmarking, sourcing, screening, submissions, weekly reporting, and keeping the pipeline current in Spott.</li>
               <li><b>Irth Solutions:</b> the client. A SaaS platform for critical infrastructure (pipeline integrity, damage prevention, land management).</li>
-              <li><b>Irth's Talent Acquisition team, Kesha Brown and Immy Nader:</b> they publish and manage the requisition on Irth's careers page (via Workable), send the formal assignment email, and are the bridge for any request to edit a JD that's already published. They are not the hiring manager.</li>
+              <li><b>Irth's Talent Acquisition team, Kesha Brown and Immy Nader:</b> they publish and manage the requisition on Irth's careers page (via Workable), send the formal assignment email, are the bridge for any request to edit a JD that's already published, and are who a recruiter escalates to when a hiring manager misses the feedback SLA. They are not the hiring manager. Immy is also the required final sign-off on every Pivot SLA request. Kesha is handing this off to Immy over time, both currently cover it.</li>
               <li><b>The Hiring Manager:</b> owns alignment and decisions: intake, reviewing every submitted candidate, approving or rejecting them, giving feedback within SLA, and flagging any change in scope or requirements.</li>
               <li><b>The Candidate:</b> completes the Workable application, confirms location and work authorization, attends scheduled interviews, and responds to Cornerstone's outreach.</li>
+              <li><b>Sara Howren, VP of Recruitment (Cornerstone):</b> approved the original SLA targets together with Irth's stakeholders. Not involved in approving the Pivot SLA, that authority sits with Nicolás and Immy jointly.</li>
               <li><b>KeyStone:</b> the AI sourcing tool, also used to publish the role to LinkedIn.</li>
               <li><b>Spott:</b> the ATS where the entire pipeline is actually managed, regardless of where a candidate came from.</li>
               <li><b>Workable:</b> Irth's careers page, and the system the hiring manager actually uses to review and approve submitted candidates.</li>
@@ -1106,22 +1108,25 @@
             <div class="panel-sub">Every requisition follows the same sequence, no step is ever assumed just because another one already happened</div>
             <ol>
               <li><b>Assignment.</b> A requisition technically exists the moment it's created in Workable, but it isn't formally assigned until Irth's Talent Coordinator (Kesha or Immy) sends the assignment email, copying both the recruiter and the hiring manager. In practice, this is often preceded by a heads-up call where Immy confirms the requisitions are ready and already live on Irth's careers page, that live posting is exactly what a requisition's "Irth Careers Page" link points to. This assignment email is what the tracker calls <b>Kickoff</b>, and its date is the Kickoff Date.</li>
-              <li><b>Kickoff reply.</b> Once assigned, the Lead Talent Partner replies on that same email thread, introducing Cornerstone as the RPO to the hiring manager, naming the assigned recruiter, and explaining exactly how sourcing, submissions, feedback, and SLAs will work. This reply always follows the same fixed template, nothing here is improvised per role.</li>
+              <li><b>Kickoff reply.</b> Nicolás, as Lead Talent Partner, always replies on that same email thread himself, introducing Cornerstone as the RPO to the hiring manager, naming the assigned recruiter if it isn't him, and explaining exactly how sourcing, submissions, feedback, and SLAs will work. This reply always follows the same fixed template, nothing here is improvised per role.</li>
               <li><b>Intake meeting requested, then held.</b> The recruiter asks for a 30-45 minute intake meeting (or, if the hiring manager can't make time, a short written substitute). <b>Non-negotiable rule: sourcing never starts before this happens</b>, not even if the role looks obvious or familiar. The JD alone is a starting point, almost always optimistic; the intake is what gives the real context to source against.</li>
-              <li><b>Sourcing.</b> Starts only after the intake. Passive candidates are sourced manually in KeyStone; active candidates are the ones who apply directly through the LinkedIn posting.</li>
-              <li><b>Screening, batching, submission.</b> Screened candidates get invited to complete their official Workable application, that's what creates the "Submitted" profile the hiring manager actually reviews.</li>
-              <li><b>Feedback loop.</b> The hiring manager approves or rejects each submitted candidate, logged in Workable's Review tab.</li>
-              <li><b>Offer to Hire.</b> Ends when the candidate is confirmed hired, with the placement counted on their actual start date, not when they sign the offer.</li>
+              <li><b>JD & sourcing prep.</b> With real context from the intake in hand, the recruiter builds three separate things: an internal JD (Cornerstone's own working document, never published anywhere), a public JD for KeyStone/LinkedIn with the client's identity anonymized, and the sourcing criteria fed into KeyStone's AI Sourcing engine. The AI's own auto-generated filters are a starting point, not the final word, the recruiter's own criteria from what was actually agreed in the intake take priority.</li>
+              <li><b>Sourcing.</b> Starts only after the intake, never before, see <b>Sourcing Channels</b> below for the three ways a candidate can enter the pipeline.</li>
+              <li><b>Screening, batching, submission.</b> Screened candidates get invited to complete their official Workable application, that's what creates the "Submitted" profile the hiring manager actually reviews, in curated batches of 3-5 (see <b>Batch Cadence</b> below).</li>
+              <li><b>Interviews.</b> Candidates who advance go through a Technical Interview first, then a Hiring Manager Interview, the final call usually sits with this second round. Each round runs its own feedback and decision cycle, see <b>Feedback SLA vs. Decision SLA</b> below.</li>
+              <li><b>Offer Stage.</b> Once the hiring manager confirms in firm, it moves to Irth's internal team to process, see <b>Offer Stage Mechanics</b> below for the exact cadence.</li>
+              <li><b>Placement.</b> Closes only when the candidate's actual start date arrives, not when they sign the offer, a signed offer can still fall through before day one.</li>
             </ol>
           </div>
 
           <div class="panel" style="margin-bottom:14px;">
-            <h3>Passive Vs. Active Candidates</h3>
-            <div class="panel-sub">Why the pipeline tracks two different sourcing paths</div>
+            <h3>Sourcing Channels</h3>
+            <div class="panel-sub">Three ways a candidate enters the pipeline, and why only one of them needs manual work</div>
             <ul>
               <li><b>Passive:</b> sourced manually in KeyStone and added to a shortlist. They're automatically invited to either an AI interview or a Screening Interview with the recruiter.</li>
               <li><b>Active:</b> candidates who apply directly through the role's LinkedIn posting. They only count as an applicant once they click "Finish your application" on the careers page, anyone who starts a profile but doesn't finish it is never added to the pipeline.</li>
-              <li>Either way, the actual call that gets booked with a recruiter is always a <b>Screening Interview</b>, there's no separate "intro call" format, regardless of whether the candidate completed the AI interview first.</li>
+              <li><b>Direct & referred:</b> candidates who apply straight through Irth's own Workable careers page, or come in as an employee referral. Unlike the other two, these don't flow into Spott automatically, the recruiter has to add them manually. Once added, they go through the exact same evaluation as anyone else, this only changes how they enter, not how they're processed.</li>
+              <li>Regardless of channel, the actual call that gets booked with a recruiter is always a <b>Screening Interview</b>, there's no separate "intro call" format, whether or not the candidate completed the AI interview first.</li>
             </ul>
           </div>
 
@@ -1151,7 +1156,7 @@
               <li><b>Allowance:</b> +11 to 13 calendar days on TTF/TTH, equivalent to a full new sourcing cycle. Applies once per requisition.</li>
               <li><b>Attribution is decided against the Intake Summary</b>, the one document that acts as the objective record of what was actually agreed: if the rejected batch matched what was agreed there and the hiring manager rejected it anyway (new criteria, change of mind), the allowance applies. If the batch didn't match what was agreed, the recruiter is attributed and the clock keeps running with no allowance.</li>
               <li>If the real issue is a genuinely limited talent pool or uncompetitive approved compensation, Talent Mapping and/or Compensation Market Analysis are used as evidence, both to justify the allowance and to reset expectations with the hiring manager.</li>
-              <li><b>Approval:</b> the Lead Talent Partner on the account has full authority to approve this, no escalation needed. If another recruiter is working the requisition, they present the case to the Lead, who decides.</li>
+              <li><b>Approval, two layers, deliberately:</b> Nicolás, as Lead Talent Partner, makes the first call, evaluated against the Intake Summary. If another recruiter is working the requisition, they present the case to Nicolás first. But it isn't confirmed until <b>Immy Nader signs off too</b>, on Irth's side, neither side can grant or deny this allowance on their own.</li>
               <li>This only ever applies once per requisition. If the same batch-rejection pattern repeats after the allowance was already used, that's no longer an alignment problem, it's a deeper issue that needs to be escalated, not another allowance.</li>
             </ul>
           </div>
@@ -1168,10 +1173,43 @@
           </div>
 
           <div class="panel" style="margin-bottom:14px;">
-            <h3>Feedback SLA</h3>
-            <div class="panel-sub">How long a hiring manager has to respond, and what happens if they don't</div>
-            <p>After any interview stage (especially technical rounds), feedback, positive or negative, is expected within <b>1-3 business days</b>, logged directly in Workable's Review tab as a formal evaluation (this is a SOC 2 compliance requirement, not just a courtesy).</p>
-            <p style="margin-top:10px;">If it doesn't arrive on time, the first move is a courteous follow-up. Escalation only happens after a full week with no response and two reminders already sent, first to <b>Kesha Brown</b>, and if there's still no response, to <b>Nicole Bell</b> as the final point of contact.</p>
+            <h3>Feedback SLA vs. Decision SLA</h3>
+            <div class="panel-sub">The single most common point of friction in the whole process, and the most costly one to get wrong</div>
+            <div class="callout prose"><b>These are two different things, and confusing them is what breaks candidate experience.</b> It's completely fine for a hiring manager to take real time deciding who to advance, comparing candidates, thinking it over. What's never fine is silence: even a first impression, not the final call, has a fixed clock.</div>
+            <ul>
+              <li><b>Feedback SLA — 1-3 business days:</b> after any submission or interview stage, positive or negative, logged directly in Workable's Review tab as a formal evaluation (a SOC 2 compliance requirement, not just a courtesy). This clock runs regardless of whether the real decision to advance is still pending.</li>
+              <li><b>If it's missed:</b> the recruiter pauses that specific candidate (nothing moves without documented feedback), escalates immediately to Irth's Talent Acquisition team (Immy Nader, Kesha Brown during the transition), and <b>the whole requisition automatically goes On Hold</b>. This isn't a judgment call made case by case, it's automatic, precisely so process discipline never depends on someone deciding in the moment whether an exception is worth making.</li>
+              <li><b>Decision SLA — 5 business days after feedback lands:</b> once feedback is in and the hiring manager wants to move someone forward, the next step needs to be decided within 5 business days. Evaluated per candidate, never waiting for the rest of the batch to finish interviewing, a strong candidate's process shouldn't be hostage to someone else's slower calendar.</li>
+              <li><b>Exception — internal candidates:</b> sometimes the hiring manager reveals, partway through, that the role is also open to an internal Irth candidate, and wants that process to resolve first before deciding on external candidates already interviewed. This is a legitimate business reason, never treated as an SLA violation, but it has to be explicitly stated by the hiring manager, not just inferred from silence, that's what the tracker's <b>On Hold — Internal Candidates</b> status is for. No fixed deadline applies, but a weekly check-in still happens, and only the decision on already-interviewed external candidates pauses, sourcing and screening elsewhere on the requisition keeps moving.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>Offer Stage Mechanics</h3>
+            <div class="panel-sub">What happens once a requisition moves past Cornerstone's scope, and why it matters for TTF/TTH accuracy</div>
+            <ul>
+              <li><b>Feedback first, always:</b> Irth won't process any Offer Request until the hiring manager's feedback is already logged in Workable, the same feedback discipline from earlier in the process, applied one more time before an offer goes out.</li>
+              <li><b>Weekly cadence:</b> Irth processes Offer Requests on <b>Wednesdays</b>. Send it before Wednesday, and the candidate hears from Irth that same Wednesday or the next day.</li>
+              <li><b>Verbal first, formal letter after:</b> Irth calls the candidate with a verbal offer before anything goes out in writing, the formal letter (to HR, IT, and Payroll, to coordinate onboarding) follows once the candidate has verbally accepted.</li>
+              <li><b>Payroll timing:</b> Irth pays biweekly and prefers start dates between the 1st and the 15th of the month, so a new hire's first paycheck doesn't land prorated to almost nothing.</li>
+              <li>This whole stage sits outside Cornerstone's control, which is why the hand-off email to Immy always asks for two dates, not to relay to the candidate, just to keep TTF/TTH honest: the exact date the Offer Request went out, and the confirmed start date once it's set.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
+            <h3>Capacity & Workload Weighting</h3>
+            <div class="panel-sub">Why 10 requisitions isn't the same workload for every recruiter</div>
+            <p>A recruiter with 10 requisitions all in active sourcing is carrying a very different load than one with 10 requisitions mostly sitting in Offer Stage waiting on Irth. Raw headcount hides that difference, so the tracker weights each requisition by how much real effort its current stage actually takes, and adds those weights up instead of just counting reqs.</p>
+            <ul style="margin-top:10px;">
+              <li>Kickoff sent, before intake: <b>0.25</b> — prep work (market research, comp analysis), real but light.</li>
+              <li>Intake done, no batch out yet: <b>0.5</b> — building the first batch, effort ramping up.</li>
+              <li>Sourcing / batch in progress: <b>1.0</b> — peak active effort, the reference point every other weight is calibrated against.</li>
+              <li>Candidates in interviews: <b>0.5</b> — less sourcing, but real follow-up and coordination.</li>
+              <li>Offer Stage: <b>0.25</b> — outside Cornerstone's operational scope, mostly waiting on Irth.</li>
+              <li>Placement confirmed, start date pending: <b>0.1</b> — effectively closed.</li>
+              <li>On Hold: <b>0.1</b> — paused, no active effort, but still an open requisition that will eventually need attention.</li>
+            </ul>
+            <p style="margin-top:10px;"><b>10</b> requisitions (raw count) is the healthy sweet spot, <b>12</b> is the accepted ceiling, an exception to lean on temporarily, never the norm. A new requisition can still be assigned as long as the recruiter's <i>weighted</i> load, not the raw count, has room left.</p>
           </div>
 
           <div class="panel" style="margin-bottom:0;">
