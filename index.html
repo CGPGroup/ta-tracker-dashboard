@@ -46,6 +46,12 @@
     --stage-teal: #5cae9e;
     --stage-purple: #9b84c9;
     --stage-mauve: #9c8aa0;
+    /* Paleta propia de Work Arrangement — deliberadamente distinta de las --stage-* de arriba
+       (que son de Status) para que dos columnas adyacentes en la misma fila (Status,
+       Arrangement) nunca muestren el mismo color por dos razones distintas. */
+    --arr-remote: #4fb8c9;
+    --arr-hybrid: #cc9a3d;
+    --arr-onsite: #8a95a6;
 
     --radius: 12px;
     --shadow: 0 1px 2px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.28);
@@ -81,7 +87,7 @@
   .brand-mark { width: 34px; height: 34px; object-fit: contain; display: block; }
   .brand-text { line-height: 1.2; }
   .brand-text .l1 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
-  .brand-text .l2 { font-size: 10.5px; color: #a8a8a8; }
+  .brand-text .l2 { font-size: 10.5px; color: var(--text-secondary); }
 
   /* ---------- Pantalla de carga inicial: evita el "flash" de datos viejos/de ejemplo antes
      de que trysilentConnect() termine de resolver datos reales (Graph o el proxy publico). ---------- */
@@ -112,7 +118,7 @@
   .nav-item {
     display: flex; align-items: center; gap: 10px;
     padding: 10px 12px; border-radius: 8px;
-    color: #c9c9c9; font-size: 13.5px; font-weight: 700;
+    color: var(--text-secondary); font-size: 13.5px; font-weight: 700;
     cursor: pointer; user-select: none;
     border: none; background: none; text-align: left; width: 100%;
     border-left: 3px solid transparent;
@@ -124,7 +130,7 @@
 
   .sidebar-foot {
     margin-top: auto; padding: 12px 8px 4px;
-    font-size: 11px; color: #8c8c8c; line-height: 1.5;
+    font-size: 11px; color: var(--text-muted); line-height: 1.5;
     border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
   }
   .sidebar-tagline {
@@ -337,7 +343,7 @@
 
   .stackbar-wrap { margin-bottom: 6px; }
   .stackbar-title { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
-  .stackbar-title .tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; }
+  .tag { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; }
   .tag.official { background: var(--brand-wash); color: var(--brand-dark); }
   .tag.internal { background: var(--surface-2); color: var(--text-secondary); }
   .stackbar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--grid); }
@@ -431,7 +437,7 @@
     display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 3px 9px 3px 8px; border-radius: 999px;
     background: var(--surface-2); color: var(--text-secondary); white-space: nowrap;
   }
-  .status-chip .dot { width: 7px; height: 7px; flex: none; }
+  .status-chip .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
   .sla-chip {
     display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
     padding: 3px 8px; border-radius: 999px; white-space: nowrap;
@@ -455,7 +461,7 @@
   .form-actions { display: flex; gap: 10px; margin-top: 18px; }
   .btn {
     font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 18px;
-    border-radius: 9px; border: none; cursor: pointer;
+    border-radius: 8px; border: none; cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
   }
   .btn:active { transform: scale(0.97); }
@@ -476,7 +482,7 @@
   /* ---------- Process & SLA Guide ---------- */
   .guide-wrap { max-width: 860px; }
   .guide-wrap p, .guide-wrap li { font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); }
-  .guide-wrap li b, .guide-wrap p b { color: var(--text-primary); }
+  .guide-wrap li b, .guide-wrap p b { color: var(--text-primary); font-weight: 700 !important; }
   .guide-wrap ul, .guide-wrap ol { margin: 6px 0 0; padding-left: 20px; }
   .guide-wrap ul li, .guide-wrap ol li { margin-bottom: 7px; }
   .guide-wrap ul li:last-child, .guide-wrap ol li:last-child { margin-bottom: 0; }
@@ -520,7 +526,7 @@
   .fact-edit-link:hover { color: var(--brand-dark); }
   .fact-date-input {
     font-family: inherit; font-size: 13px; padding: 6px 8px; width: 100%;
-    border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text-primary);
   }
   /* Campo de Timeline que todavia no le toca al recruiter (el anterior en la secuencia sigue
      vacio) — se ve gris/deshabilitado en vez de ocultarse, para que quede claro que existe y
@@ -732,15 +738,15 @@
                   <div id="listPendingOffers"></div>
                 </div>
                 <div class="panel">
-                  <h3>Hires Per Month (2026)</h3>
-                  <div class="panel-sub">Confirmed placements per month, year to date</div>
+                  <h3 id="hiresTrendTitle">Hires Per Month</h3>
+                  <div class="panel-sub">Confirmed placements per month, year to date. Click a point to see who.</div>
                   <div id="chartHiresTrend"></div>
                 </div>
               </div>
               <div class="dash-col">
                 <div class="panel">
                   <h3>SLA Health</h3>
-                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target (TTS in business days; TTF/TTH in calendar days)</div>
+                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
                   <div id="chartSla"></div>
                 </div>
                 <div class="panel" id="panelWorkloadByRecruiter">
@@ -778,7 +784,7 @@
       <section class="view" id="view-positions">
         <div class="panel">
           <h3>Positions</h3>
-          <div class="panel-sub">Every position that exists in the system, in any status (includes closed, cancelled, and fell-through). This is the full directory, not the working tracker.</div>
+          <div class="panel-sub" id="positionsPanelSub">Every position that exists in the system, in any status (includes closed, cancelled, and fell-through). This is the full directory, not the working tracker.</div>
           <div class="toolbar">
             <input type="text" id="positionsSearch" placeholder="Search by position, hiring manager, or recruiter…">
             <select id="positionsStatus"><option value="">All Statuses</option></select>
@@ -892,7 +898,7 @@
               <div class="form-field full"><label>Initial Remark (Optional)</label><textarea rows="2" id="newPosRemark" placeholder="Kickoff context…"></textarea></div>
             </div>
             <div class="form-actions">
-              <button class="btn primary" type="button" id="createPositionBtn">Create Position</button>
+              <button class="btn primary" type="button" id="createPositionBtn">Add Position</button>
               <button class="btn ghost" type="button" id="clearPositionBtn">Clear</button>
             </div>
             <div class="panel-sub" id="createPositionMsg" style="margin-top:8px;"></div>
@@ -1332,7 +1338,7 @@
 // negociable del master prompt: nada de sourcing antes del intake meeting). El motor de SLA
 // no necesita cambios para esto: computeSla() ya devuelve "Not started" en TTS/TTF/TTH
 // mientras el campo Intake Date siga vacio, que es justo el caso en estos 3 statuses.
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Hiring Manager Interview","Technical Interview","Offer Request","Filled","Hired","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Aclaracion corta que se muestra debajo del selector de status (no se guarda como parte del
 // valor, para que las tablas/filtros/chips sigan mostrando el nombre corto del status).
 const STATUS_SUBTITLE = {
@@ -1450,22 +1456,25 @@ function renderDashboardPanels(){
 // no cuesta nada calcularlo siempre.
 function renderAvgTtsChart(){
   const positions = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  const withTts = positions.map(p=>slaFor(p,"TTS",p.submit)).filter(s=>s.status!=="none");
+  const withTtsPairs = positions.map(p=>({p, s: slaFor(p,"TTS",p.submit)})).filter(x=>x.s.status!=="none");
   const target = SLA_TARGETS.TTS;
   const el = document.getElementById("chartAvgTts");
-  if(!withTts.length){
+  if(!withTtsPairs.length){
     el.innerHTML = `<div class="panel-sub" style="margin:0;">No positions with an active TTS clock yet.</div>`;
     return;
   }
-  const avg = Math.round(withTts.reduce((sum,s)=>sum+(s.elapsed||0),0) / withTts.length);
+  const avg = Math.round(withTtsPairs.reduce((sum,x)=>sum+(x.s.elapsed||0),0) / withTtsPairs.length);
   let color = "var(--good)";
   if(avg > target) color = "var(--critical)";
   else if(avg >= target * RISK_THRESHOLD) color = "var(--warning)";
   el.innerHTML = `
-    <div style="display:flex; align-items:baseline; gap:10px;">
+    <div class="clickable-stat" style="display:flex; align-items:baseline; gap:10px; cursor:pointer;">
       <div style="font-size:32px; color:${color}; line-height:1;">${avg}d</div>
-      <div style="font-size:11.5px; color:var(--text-muted);">avg vs ${target}d target &middot; ${withTts.length} position${withTts.length===1?"":"s"}</div>
+      <div style="font-size:11.5px; color:var(--text-muted);">avg vs ${target}d target &middot; ${withTtsPairs.length} position${withTtsPairs.length===1?"":"s"} &middot; business days from Kickoff to Submitted, so far</div>
     </div>`;
+  el.querySelector(".clickable-stat").addEventListener("click", ()=>{
+    openQuickList("Active TTS Clocks", `${withTtsPairs.length} position${withTtsPairs.length===1?"":"s"} averaging ${avg}d vs the ${target}d target`, withTtsPairs.map(x=>x.p));
+  });
 }
 // Mensajes de confirmacion tras aceptar una asignacion, se muestran hasta que el reclutador
 // los descarta (no se guardan en ningun lado, solo viven en esta pestana/sesion).
@@ -1550,6 +1559,16 @@ function setDashboardScope(name){
   document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   document.getElementById("recentActivityZone").style.display = name ? "" : "none";
+  // Positions es el unico tab que sigue siendo la lista COMPLETA de la compañia incluso dentro
+  // de un Workspace personal (a diferencia de Dashboard/Tracking, que ya filtran solo). En vez
+  // de duplicar esa logica de filtrado, se reusa el filtro de Recruiter que Positions ya tiene:
+  // al entrar a un Workspace se pre-selecciona ese reclutador (el chip se puede quitar con un
+  // clic si de verdad quieres ver el directorio completo desde ahi), y al salir se limpia.
+  const posRecSel = document.getElementById("positionsRecruiter");
+  if(posRecSel){ posRecSel.value = name || ""; renderPositions(); }
+  document.getElementById("positionsPanelSub").textContent = name
+    ? `Every position for ${name}, in any status (includes closed, cancelled, and fell-through) — pre-filtered to this workspace, clear the Recruiter filter to see everyone.`
+    : "Every position that exists in the system, in any status (includes closed, cancelled, and fell-through). This is the full directory, not the working tracker.";
   // El titulo se queda siempre en "Team": una vez adentro de un workspace, quien esta viendo
   // ya se ve arriba en el banner de perfil (foto + nombre + cargo) y en la tarjeta resaltada
   // de esta misma lista — repetirlo aqui como "Switch Recruiter" / "Viewing X's dashboard" era
@@ -1719,6 +1738,9 @@ let POSITIONS = [
   {id:"SM-111", title:"Product Marketing Manager, Damage Prevention", client:"Irth Solutions", hiringManager:"Josh Fuller / Jeff Law", recruiter:"Nicolás Patarroyo", status:"Hiring Manager Interview", country:"United States", workArrangement:"Remote", city:null, spottJobId:null, productLine:"Damage Prevention", salaryRange:"USD $110,000 – $130,000", sourced:50, directApps:3, submittedCount:3, activeCount:2, rejectedCount:1, placedCandidate:null, finalComp:null, kickoff:"2026-08-03", intake:"2026-08-06", submit:null, fill:null, hire:null, lastRemark:"Two finalists remain after one rejection; hiring manager indicated a preferred candidate with the other as a strong backup. Decision expected imminently. (Spott kickoff-date field said: \"Aug 4, 2026 (intake Aug 6)\")", slaException:"No", extra:[]},
 ];
 
+// TODO cada diciembre: son los feriados de 2026 unicamente (afectan bizDaysBetween, o sea TTS
+// y el escalamiento de intake) — hay que agregar los de 2027 antes de que arranque el año, esta
+// lista no se genera sola.
 let HOLIDAYS_SET = new Set(["2026-01-01","2026-01-12","2026-03-23","2026-04-02","2026-04-03","2026-05-01","2026-05-18","2026-06-08","2026-06-15","2026-06-29","2026-07-20","2026-08-07","2026-08-17","2026-10-12","2026-11-02","2026-11-16","2026-12-08","2026-12-25"]);
 let RISK_THRESHOLD = 0.85;
 // TTS se mide en dias habiles (target = techo del rango de 7-9 dias habiles del master prompt).
@@ -1917,7 +1939,7 @@ function formatLocation(p){
 function locationOnly(p){
   return p.city ? `${escapeHtml(p.city)}, ${escapeHtml(p.country)}` : (escapeHtml(p.country) || "-");
 }
-const ARRANGEMENT_COLORS = { "Remote": "var(--stage-blue)", "Hybrid": "var(--stage-purple)", "On-site": "var(--good)" };
+const ARRANGEMENT_COLORS = { "Remote": "var(--arr-remote)", "Hybrid": "var(--arr-hybrid)", "On-site": "var(--arr-onsite)" };
 function arrangementBadge(p){
   const arr = p.workArrangement || "Remote";
   const color = ARRANGEMENT_COLORS[arr] || "var(--neutral)";
@@ -1939,7 +1961,8 @@ function renderKpis(){
     if(["TTS","TTF","TTH"].some(k=>s[k].status==="risk")) atRisk++;
     if(["TTS","TTF","TTH"].some(k=>s[k].status==="out")) outOfSla++;
   });
-  const fellThrough = dashboardPositions().filter(p=>p.fill && p.status==="Fell Through").length;
+  const fellThroughPositions = dashboardPositions().filter(p=>p.fill && p.status==="Fell Through");
+  const fellThrough = fellThroughPositions.length;
 
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
@@ -1951,10 +1974,17 @@ function renderKpis(){
   const minExpected = Math.round(active.length * 3.5);
   const submittedCls = active.length===0 ? "" : (submittedTotal < minExpected ? "warning" : "good");
 
+  const offersPending = dashboardPositions().filter(p=>p.status==="Offer Request");
   const tiles = [
-    {label:"Active Positions", value: active.length, cls:""},
-    {label:"Submitted Vs Expected", value: submittedTotal, cls: submittedCls, sub: active.length ? `Expected ≥${minExpected} for ${active.length} active` : ""},
-    {label:"Offers Pending Decision", value: dashboardPositions().filter(p=>p.status==="Offer Request").length, cls:""},
+    {label:"Active Positions", value: active.length, cls:"", onClick: active.length>0 ? ()=>{
+      openQuickList("Active Positions", `${active.length} position${active.length===1?"":"s"} not yet in a terminal status`, active);
+    } : null},
+    {label:"Submitted Vs Expected", value: submittedTotal, cls: submittedCls, sub: active.length ? `Expected ≥${minExpected} for ${active.length} active (3.5 candidates/position, the SLA minimum batch size)` : "", onClick: active.length>0 ? ()=>{
+      openQuickList("Submitted Vs Expected", `${submittedTotal} submitted across ${active.length} active position${active.length===1?"":"s"} &middot; expected at least ${minExpected}`, active);
+    } : null},
+    {label:"Offers Pending Decision", value: offersPending.length, cls:"", onClick: offersPending.length>0 ? ()=>{
+      openQuickList("Offers Pending Decision", `${offersPending.length} position${offersPending.length===1?"":"s"} waiting on an offer decision`, offersPending);
+    } : null},
     {label:"At SLA Risk", value: atRisk, cls: atRisk>0 ? "warning":"", onClick: atRisk>0 ? ()=>{
       const matches = active.filter(p=>["TTS","TTF","TTH"].some(k=>computeSla(p)[k].status==="risk"));
       openQuickList("At SLA Risk", `${matches.length} position${matches.length===1?"":"s"}`, matches, slaFlags);
@@ -1963,7 +1993,9 @@ function renderKpis(){
       const matches = active.filter(p=>["TTS","TTF","TTH"].some(k=>computeSla(p)[k].status==="out"));
       openQuickList("Out Of SLA", `${matches.length} position${matches.length===1?"":"s"}`, matches, slaFlags);
     } : null},
-    {label:"Offers Fell Through", value: fellThrough, cls: fellThrough>0 ? "critical":""},
+    {label:"Offers Fell Through", value: fellThrough, cls: fellThrough>0 ? "critical":"", sub: "Filled positions where the placement later fell through", onClick: fellThrough>0 ? ()=>{
+      openQuickList("Offers Fell Through", `${fellThrough} position${fellThrough===1?"":"s"}`, fellThroughPositions);
+    } : null},
   ];
   document.getElementById("kpiRow").innerHTML = tiles.map((t,i)=>`
     <div class="kpi-tile${t.onClick?' clickable-stat':''}" data-idx="${i}">
@@ -2272,11 +2304,16 @@ function renderCompletionChart(){
 }
 
 function renderHiresTrend(){
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug"];
+  const now = new Date();
+  const year = now.getFullYear();
+  document.getElementById("hiresTrendTitle").textContent = `Hires Per Month (${year})`;
+  const ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const months = ALL_MONTHS.slice(0, now.getMonth() + 1);
   const counts = new Array(months.length).fill(0);
+  const positionsByMonth = months.map(()=>[]);
   dashboardPositions().filter(p=>p.status==="Hired" && p.hire).forEach(p=>{
     const d = parseD(p.hire);
-    if(d.getFullYear()===2026 && d.getMonth() < months.length) counts[d.getMonth()]++;
+    if(d.getFullYear()===year && d.getMonth() < months.length){ counts[d.getMonth()]++; positionsByMonth[d.getMonth()].push(p); }
   });
 
   const w=560, h=85, padL=30, padR=16, padT=12, padB=18;
@@ -2302,8 +2339,9 @@ function renderHiresTrend(){
   const xLabels = points.map((p,i)=>
     `<text x="${p.x.toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="7" fill="var(--text-muted)">${months[i]}</text>`
   ).join("");
-  const dots = points.map(p=>
-    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="1.5"/>`
+  const dots = points.map((p,i)=>
+    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="1.5" data-month-i="${i}" style="pointer-events:none;"/>`
+    + `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="7" fill="transparent" data-month-i="${i}" style="cursor:pointer;"/>`
   ).join("");
   const last = points[points.length-1];
   const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-8).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="var(--text-primary)">${last.v}</text>`;
@@ -2318,6 +2356,12 @@ function renderHiresTrend(){
       ${endLabel}
       ${xLabels}
     </svg>`;
+  document.querySelectorAll('#chartHiresTrend [data-month-i]').forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const i = Number(el.dataset.monthI);
+      openQuickList(`Hired in ${months[i]} ${year}`, `${counts[i]} position${counts[i]===1?"":"s"}`, positionsByMonth[i]);
+    });
+  });
 }
 
 function renderPlacementsMonth(){
@@ -3681,8 +3725,11 @@ function activateView(view){
     // fuerte (lo que de verdad importa leer) — mismo patron que "Workspace · Nombre".
     document.getElementById("topbarTitle").innerHTML = `<span class="topbar-eyebrow">Workspace</span>${escapeHtml(activeDashboardScope)}`;
     // El nombre de la vista ya no repite "Recruiter Dashboard" — el titulo grande ya dejo claro
-    // de quien es el workspace, asi que aqui solo hace falta decir en que seccion estas.
-    document.getElementById("topbarSub").textContent = `${TITLES[view][0]} — ${TITLES[view][1]}`;
+    // de quien es el workspace, asi que aqui solo hace falta decir en que seccion estas. Positions
+    // es la unica vista cuya descripcion cambia de verdad estando en un Workspace (ver
+    // setDashboardScope(), que pre-filtra su Recruiter select) — las demas ya eran ciertas tal cual.
+    const scopedDesc = view === "positions" ? `Pre-filtered to ${activeDashboardScope}'s requisitions` : TITLES[view][1];
+    document.getElementById("topbarSub").textContent = `${TITLES[view][0]} — ${scopedDesc}`;
   } else {
     document.getElementById("topbarTitle").textContent = view === "dashboard" ? "Team Dashboard" : TITLES[view][0];
     document.getElementById("topbarSub").textContent = TITLES[view][1];
