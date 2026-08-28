@@ -3691,14 +3691,14 @@ const MSAL_CONFIG = {
     // Registration en Azure tambien este puesto en "Accounts in any organizational directory"
     // (ver instrucciones a Nicolas), si no, MSAL tira error de configuracion al cargar.
     authority: "https://login.microsoftonline.com/organizations",
-    redirectUri: "https://iot-db.github.io/ta-tracker-dashboard/",
+    redirectUri: "https://cgpgroup.github.io/ta-tracker-dashboard/",
   },
   cache: { cacheLocation: "sessionStorage" },
 };
 // Ruta del archivo dentro de "mi OneDrive" (root). Si mas adelante se mueve a un
 // sitio de SharePoint compartido, esta es la unica seccion que hay que cambiar.
 const EXCEL_FILE_PATH = "/TA Tracker/TA_Tracker.xlsx";
-const TRACKER_URL = "https://iot-db.github.io/ta-tracker-dashboard/";
+const TRACKER_URL = "https://cgpgroup.github.io/ta-tracker-dashboard/";
 const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite", "Mail.Send"];
 
 const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
