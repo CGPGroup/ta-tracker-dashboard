@@ -1048,18 +1048,6 @@
             </div>
             <div class="panel-sub" id="shareAccessMsg" style="margin-top:8px;"></div>
 
-            <details class="danger-zone-details" id="deleteScheduledColDetails">
-              <summary>Danger Zone: Delete "Intake Meeting Scheduled Date" Column</summary>
-              <div class="panel-sub">Intake Scheduled For and Intake Meeting were merged into one field (the tracker no longer reads or writes this column). This permanently removes the column from the shared file's Positions sheet — do this only after confirming the tracker works fine without it. Everything to the right of it (Recruiter Accepted Date, Irth Careers Page, etc.) shifts one column left; the tracker already resolves those by header name, not by fixed column letter, so nothing else should break.</div>
-              <div class="form-grid">
-                <div class="form-field full"><label>Type DELETE COLUMN To Confirm</label><input type="text" id="deleteScheduledColConfirm" placeholder="DELETE COLUMN"></div>
-              </div>
-              <div class="form-actions">
-                <button class="link-danger" type="button" id="deleteScheduledColBtn" style="border:1px solid var(--critical); border-radius:8px; padding:8px 14px;">Delete Column</button>
-              </div>
-              <div class="panel-sub" id="deleteScheduledColMsg" style="margin-top:8px;"></div>
-            </details>
-
             <details class="danger-zone-details" id="dangerZoneDetails">
               <summary>Danger Zone: Reset All Data</summary>
               <div class="panel-sub">Permanently deletes every position, historial entry, and recruiter from the shared file, for starting fresh with test data. This can't be undone from here. Only the tracker admin can actually do this.</div>
@@ -4012,7 +4000,6 @@ function renderEditRecruiterSelect(){
 // resetAllBtn desde antes, esto es ademas no mostrarsela a quien no la puede usar).
 function updateDangerZoneVisibility(){
   document.getElementById("dangerZoneDetails").style.display = isAdmin() ? "" : "none";
-  document.getElementById("deleteScheduledColDetails").style.display = isAdmin() ? "" : "none";
 }
 function renderAll(){
   renderNewPosRecruiterSelect();
@@ -5068,57 +5055,6 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
     console.error(err);
     msg.textContent = "Could not share: " + err.message;
     msg.style.color = "var(--critical)";
-  }
-});
-
-// Borra la columna "Intake Meeting Scheduled Date" de PositionsTable de verdad — ya nada en el
-// codigo la lee ni la escribe (ver STATUS_DATE_FIELD/computeCompletion), y los 2 escrituras que
-// antes usaban letras fijas mas a la derecha (Recruiter Accepted Date, Irth Careers Page) ya se
-// resuelven por nombre de encabezado, asi que el corrimiento de columnas que esto causa no
-// deberia romper nada. Aun asi es una operacion sobre la estructura del archivo real, no solo
-// datos, asi que lleva el mismo candado de "escribir la frase exacta" que Reset All Data.
-async function graphDeleteScheduledColumn(){
-  const base = await workbookBase();
-  await graphFetch(`${base}/tables('PositionsTable')/columns('Intake Meeting Scheduled Date')`, {
-    method: "DELETE",
-  });
-}
-document.getElementById("deleteScheduledColBtn").addEventListener("click", async () => {
-  const msg = document.getElementById("deleteScheduledColMsg");
-  const confirmInput = document.getElementById("deleteScheduledColConfirm");
-  if(confirmInput.value.trim() !== "DELETE COLUMN"){
-    msg.textContent = 'Type "DELETE COLUMN" (exactly) in the box above first.';
-    msg.style.color = "var(--critical)";
-    return;
-  }
-  if(!isConnected()){
-    msg.textContent = "Connect to Microsoft 365 first (button at the top) to do this.";
-    msg.style.color = "var(--critical)";
-    return;
-  }
-  if(!isAdmin()){
-    msg.textContent = "Only the tracker admin can do this.";
-    msg.style.color = "var(--critical)";
-    return;
-  }
-  const sure = confirm('This permanently deletes the "Intake Meeting Scheduled Date" column from the shared file. This can\'t be undone from here. Are you sure?');
-  if(!sure) return;
-
-  const btn = document.getElementById("deleteScheduledColBtn");
-  btn.disabled = true;
-  msg.textContent = "Deleting the column…";
-  msg.style.color = "var(--text-muted)";
-  try {
-    await graphDeleteScheduledColumn();
-    confirmInput.value = "";
-    msg.textContent = "Done. The column is gone.";
-    msg.style.color = "var(--good)";
-  } catch(err){
-    console.error(err);
-    msg.textContent = "Could not delete the column: " + err.message;
-    msg.style.color = "var(--critical)";
-  } finally {
-    btn.disabled = false;
   }
 });
 
