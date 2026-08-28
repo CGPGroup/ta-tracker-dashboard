@@ -674,8 +674,8 @@
   <div class="main">
     <div class="topbar">
       <div>
-        <h1 id="topbarTitle">Team Workspace</h1>
-        <div class="sub" id="topbarSub">Overview of all active positions</div>
+        <h1 id="topbarTitle"><span class="topbar-eyebrow">Workspace</span>Talent Acquisition Team</h1>
+        <div class="sub" id="topbarSub">Dashboard — Overview of all active positions</div>
       </div>
       <div class="topbar-right">
         <span class="pill" id="connectionPill">Not connected</span>
@@ -1617,7 +1617,7 @@ function setDashboardScope(name){
     </div>
     <div class="scope-banner-actions">
       <button class="btn primary small" id="scopeEditBtn" type="button">Open Tracking →</button>
-      <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Workspace</button>
+      <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team</button>
     </div>`;
   document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
   document.getElementById("scopeEditBtn").addEventListener("click", ()=> jumpToRecruiterTracking(name));
@@ -3749,27 +3749,24 @@ function activateView(view){
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById("view-"+view).classList.add("active");
-  if(activeDashboardScope){
-    // Dentro del perfil de un reclutador, el titulo grande es su Workspace personal — constante
-    // sin importar en que vista este parado — y Dashboard/Positions/Tracking pasan a ser
-    // secciones DENTRO de ese workspace, no el nombre del workspace en si. "Workspace" va
-    // primero como un eyebrow tenue (el marco/contenedor) y el nombre despues en el peso
-    // fuerte (lo que de verdad importa leer) — mismo patron que "Workspace · Nombre".
-    document.getElementById("topbarTitle").innerHTML = `<span class="topbar-eyebrow">Workspace</span>${escapeHtml(activeDashboardScope)}`;
-    // El nombre de la vista ya no repite "Recruiter Dashboard" — el titulo grande ya dejo claro
-    // de quien es el workspace, asi que aqui solo hace falta decir en que seccion estas. Positions
-    // es la unica vista cuya descripcion cambia de verdad estando en un Workspace, y se lee del
-    // valor real del select de Recruiter (no de activeDashboardScope) porque el filtro de
-    // Positions puede apuntar a alguien distinto al workspace en el que estas parado (ver
-    // openTeamCard(), que te deja ver las requisitions de otro sin sacarte de tu propio
-    // workspace) — las demas vistas ya eran ciertas tal cual.
-    const posRecVal = view === "positions" ? document.getElementById("positionsRecruiter").value : "";
-    const scopedDesc = view === "positions" ? (posRecVal ? `Pre-filtered to ${posRecVal}'s requisitions` : TITLES[view][1]) : TITLES[view][1];
-    document.getElementById("topbarSub").textContent = `${TITLES[view][0]} — ${scopedDesc}`;
-  } else {
-    document.getElementById("topbarTitle").textContent = view === "dashboard" ? "Team Workspace" : TITLES[view][0];
-    document.getElementById("topbarSub").textContent = TITLES[view][1];
-  }
+  // El titulo grande siempre sigue el mismo patron sin importar en que vista o en que workspace
+  // estes parado: "Workspace" como eyebrow tenue (el marco/contenedor, constante) + quien es el
+  // dueño en el peso fuerte (lo que de verdad importa leer) — tu perfil personal, el de otro
+  // reclutador, o el colectivo "Talent Acquisition Team" cuando no hay nadie scopeado (antes
+  // "Team Workspace" vivia como un titulo aparte con su propio formato; ahora es el mismo
+  // componente, solo que el nombre es el del equipo en vez de una persona). Dashboard/
+  // Positions/Tracking/etc. nunca vuelven a aparecer en el titulo — son secciones DENTRO de
+  // ese workspace, asi que su nombre + descripcion viven en el subtitulo de abajo.
+  const who = activeDashboardScope || "Talent Acquisition Team";
+  document.getElementById("topbarTitle").innerHTML = `<span class="topbar-eyebrow">Workspace</span>${escapeHtml(who)}`;
+  // Positions es la unica vista cuya descripcion cambia de verdad segun donde estes parado, y
+  // se lee del valor real del select de Recruiter (no de activeDashboardScope) porque el
+  // filtro de Positions puede apuntar a alguien distinto al workspace en el que estas parado
+  // (ver openTeamCard(), que te deja ver las requisitions de otro sin sacarte de tu propio
+  // workspace) — las demas vistas ya eran ciertas tal cual.
+  const posRecVal = view === "positions" ? document.getElementById("positionsRecruiter").value : "";
+  const desc = (view === "positions" && posRecVal) ? `Pre-filtered to ${posRecVal}'s requisitions` : TITLES[view][1];
+  document.getElementById("topbarSub").textContent = `${TITLES[view][0]} — ${desc}`;
   dockDetailModal(view === "tracking");
   // renderTracking() no se dispara solo al cambiar de vista/perfil (solo con los filtros del
   // toolbar) — sin esto, el flag de "editable" (identidad conectada vs activeDashboardScope)
