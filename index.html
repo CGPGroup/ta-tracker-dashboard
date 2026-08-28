@@ -523,11 +523,17 @@
   .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
   .sla-card .sla-name { font-size: 10.5px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .modal-section-title { font-size: 12.5px; font-weight: 700; margin: 0 0 8px; }
-  .status-update-row { display: flex; gap: 8px; align-items: center; margin-bottom: 18px; }
-  .status-update-row select {
-    font-family: inherit; font-size: 13px; padding: 8px 11px;
-    border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text-primary);
+  /* Select inline de Status: misma forma de pill/ovalo que .status-chip (fondo neutro,
+     redondeado), sin flecha nativa de dropdown, y cada opcion con su punto de color via
+     STAGE_COLORS (ver renderDetailModal()). */
+  .status-pill-select {
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+    padding: 3px 10px; border: none; border-radius: 999px;
+    background: var(--surface-2); background-image: none; color: var(--text-primary);
   }
+  .status-pill-select:hover { background: var(--surface-3, var(--surface-2)); }
+  .status-pill-select:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
   .timeline { list-style: none; margin: 0 0 14px; padding: 0; max-height: 220px; overflow-y: auto; }
   .timeline li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
   .timeline li:last-child { border-bottom: none; }
@@ -538,6 +544,7 @@
   }
   .timeline .tl-badge.auto { background: var(--surface-2); color: var(--text-secondary); }
   .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
+  .timeline .tl-badge.status { background: rgba(111,147,201,0.16); color: var(--stage-blue); }
   .timeline .tl-text { flex: 1; }
   .add-remark textarea {
     width: 100%; font-family: inherit; font-size: 13px; padding: 9px 11px;
@@ -566,7 +573,7 @@
      su propio font-weight explicito en su propia regla, asi que no dependen de esta linea. */
   * { font-weight: 500; }
   .toolbar input[type="text"], .toolbar select, .form-field input, .form-field select, .form-field textarea,
-  .add-remark textarea, .status-update-row select {
+  .add-remark textarea {
     font-weight: 400;
   }
 </style>
@@ -1077,20 +1084,17 @@
   </div>
 </div>
 
-<!-- ======================= EDIT STATUS MODAL ======================= -->
-<!-- Antes vivia siempre visible dentro del modal de detalle ("Update Status", debajo de
-     Requisition Completion), duplicando el Status que ya se ve arriba en Basic Info. Ahora se
-     abre solo con el boton Edit de esa fila (ver editStatusBtn en renderDetailModal()); mismos
-     ids de siempre (modalStatusSelect, modalStatusSave...) asi que updateStatusDateUI()/
-     saveModalStatus() no necesitaron cambios. -->
+<!-- ======================= CONFIRM STATUS DATE MODAL ======================= -->
+<!-- El status en si se elige directamente con el dropdown inline (con puntitos de color, con
+     forma de pill) que vive arriba junto al resto de Basic Info — ver modalStatusSelect en
+     renderDetailModal() y onStatusSelectChange(). Este modal chiquito SOLO aparece cuando el
+     nuevo status elegido exige una fecha (STATUS_DATE_FIELD); si el usuario cancela, el select
+     vuelve a mostrar el status anterior (ver closeEditStatusModal()). -->
 <div class="modal-overlay" id="editStatusModal">
   <div class="modal-card" style="max-width:480px;">
     <div class="modal-head">
-      <div><h2 style="margin:0; font-size:16px;">Edit Status</h2></div>
+      <div><h2 style="margin:0; font-size:16px;" id="editStatusModalTitle">Confirm Status Change</h2></div>
       <button class="modal-close" id="editStatusModalClose" type="button">&times;</button>
-    </div>
-    <div class="status-update-row">
-      <select id="modalStatusSelect"></select>
     </div>
     <div class="panel-sub" id="modalStatusSubtitle" style="margin-top:4px;"></div>
     <div class="form-field" id="modalStatusDateWrap" style="display:none; margin-top:10px;">
@@ -2470,11 +2474,12 @@ function buildTimeline(p){
     return (a.type==="auto"?0:1) - (b.type==="auto"?0:1);
   });
 }
+const TL_BADGE_LABELS = { auto: "Auto", manual: "Remark", status: "Status Change" };
 function timelineListHtml(timeline){
   return timeline.length ? timeline.map(e=>`
     <li>
       <span class="tl-date">${e.date}</span>
-      <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
+      <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
       <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity logged yet.</li>`;
 }
@@ -2638,20 +2643,16 @@ function renderDetailModal(){
       <span id="modalDatesMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
     </div>`;
 
-  // Hiring Manager/Country/City/Work Arrangement editables solo en modo edicion (Tracking),
-  // mismo patron que Timeline: inputs siempre visibles con un boton "Save Basic Info" propio,
-  // en vez de un modal aparte, porque son varios campos relacionados que suelen corregirse juntos.
-  // Cada campo se edita por separado con su propio boton Edit (mismo patron que las URLs), no
-  // como un formulario de inputs siempre abierto con un boton de guardar aparte. Status entra
-  // aqui tambien (antes vivia duplicado como una seccion "Update Status" fija mas abajo); su
-  // Edit abre #editStatusModal en vez del modal generico, porque tiene una fecha condicional.
   // Hiring Manager/Country/City/Work Arrangement se editan juntos con un solo boton al pie
-  // (abre #editReqInfoModal) — Nicolas pidio que no cada uno tuviera su propio Edit, solo
-  // Status lo conserva porque su edicion es su propio flujo (con fecha condicional).
+  // (abre #editReqInfoModal) — Nicolas pidio que no cada uno tuviera su propio Edit. Status en
+  // cambio es un <select> inline aqui mismo (con forma de pill y puntitos de color, ver CSS
+  // .status-pill-select), sin boton Edit ni modal para elegirlo — el modal chiquito
+  // (#editStatusModal) solo aparece si el status elegido exige una fecha, ver
+  // onStatusSelectChange()/poblacion de modalStatusSelect mas abajo en esta funcion.
   const basicInfoEditHtml = isView ? "" : `
     <div class="facts-grid" style="margin-bottom:8px;">
       <div><div class="fact-label">Hiring Manager</div><div class="fact-value">${p.hiringManager ? escapeHtml(p.hiringManager) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
-      ${editableFactCell("Status", statusChip(p.status), "editStatusBtn")}
+      <div><div class="fact-label">Status</div><div class="fact-value"><select id="modalStatusSelect" class="status-pill-select"></select></div></div>
       <div><div class="fact-label">Country</div><div class="fact-value">${p.country ? escapeHtml(p.country) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">City</div><div class="fact-value">${p.city ? escapeHtml(p.city) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">Work Arrangement</div><div class="fact-value">${arrangementBadge(p)}</div></div>
@@ -2681,9 +2682,6 @@ function renderDetailModal(){
   if(!isView){
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
-    document.getElementById("editStatusBtn").addEventListener("click", ()=>{
-      document.getElementById("editStatusModal").classList.add("open");
-    });
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit Spott Job URL",
@@ -2776,22 +2774,14 @@ function renderDetailModal(){
     document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">${a.text}</div>`).join("");
   }
 
-  const statusSelect = document.getElementById("modalStatusSelect");
-  // Un <option> no puede tener un <span> de punto de color adentro como los chips normales, pero
-  // Chrome/Edge si respetan color inline en <option> — un bullet "●" con ese color se acerca
-  // bastante al mismo lenguaje visual que el resto de la app.
-  statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${escapeHtml(st)}" style="color:${STAGE_COLORS[st] || "inherit"};" ${st===p.status?"selected":""}>● ${escapeHtml(st)}</option>`).join("");
-  document.getElementById("modalStatusMsg").textContent = "";
-  const currentField = STATUS_DATE_FIELD[p.status];
-  updateStatusDateUI("modal", p.status, currentField ? p[currentField.key] : null);
-  statusSelect.onchange = () => {
-    document.getElementById("modalStatusMsg").textContent = "";
-    const sel = statusSelect.value;
-    const f = STATUS_DATE_FIELD[sel];
-    // Si el status elegido es el mismo que ya tiene la posicion, precarga la fecha ya guardada
-    // (por si solo la esta corrigiendo); si es un status distinto, arranca en blanco.
-    updateStatusDateUI("modal", sel, (f && sel===p.status) ? p[f.key] : null);
-  };
+  if(!isView){
+    const statusSelect = document.getElementById("modalStatusSelect");
+    // Un <option> no puede tener un <span> de punto de color adentro como los chips normales,
+    // pero Chrome/Edge si respetan color inline en <option> — un bullet "●" con ese color se
+    // acerca bastante al mismo lenguaje visual que el resto de la app.
+    statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${escapeHtml(st)}" style="color:${STAGE_COLORS[st] || "inherit"};" ${st===p.status?"selected":""}>● ${escapeHtml(st)}</option>`).join("");
+    statusSelect.onchange = () => onStatusSelectChange(p, statusSelect);
+  }
 
   const timeline = buildTimeline(p).slice().reverse();
   document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
@@ -2866,13 +2856,41 @@ async function saveModalDates(){
 // saveModalSpottId()/saveModalCareersUrl()/saveModalBasicInfo() (formularios inline de siempre
 // abiertos con un boton de "Save" aparte) se reemplazaron por urlFactCell()/editableFactCell()
 // + el modal generico de un solo campo (openEditFieldModal), ver renderDetailModal().
+// Mientras el modal de confirmar fecha esta abierto, este guarda a que status se quiere pasar
+// (el <select> inline ya cambio visualmente, pero el cambio real todavia no se aplico a p.status).
+let pendingStatusChange = null;
 function closeEditStatusModal(){
   document.getElementById("editStatusModal").classList.remove("open");
+  pendingStatusChange = null;
+  // Si se cancela (X, click afuera, o ya se guardo), el select inline vuelve a reflejar el
+  // status real de la posicion — al cancelar deshace la seleccion visual; al guardar, p.status
+  // ya es el nuevo status asi que esto no cambia nada.
+  const select = document.getElementById("modalStatusSelect");
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(select && p) select.value = p.status;
 }
 document.getElementById("editStatusModalClose").addEventListener("click", closeEditStatusModal);
 document.getElementById("editStatusModal").addEventListener("click", (e)=>{
   if(e.target.id === "editStatusModal") closeEditStatusModal();
 });
+// El status se elige directo en el <select> inline (con puntitos, forma de pill) que vive junto
+// al resto de Basic Info. Si el status elegido no exige fecha, se guarda de una; si la exige
+// (Kickoff, Intake Meeting Requested, Intake Pending), aparece #editStatusModal solo por esa
+// fecha, y si se cancela el select vuelve a mostrar el status anterior.
+function onStatusSelectChange(p, statusSelect){
+  const newStatus = statusSelect.value;
+  if(newStatus === p.status) return;
+  const dateField = STATUS_DATE_FIELD[newStatus];
+  if(dateField){
+    pendingStatusChange = newStatus;
+    document.getElementById("editStatusModalTitle").textContent = `Confirm Status: ${newStatus}`;
+    document.getElementById("modalStatusMsg").textContent = "";
+    updateStatusDateUI("modal", newStatus, null);
+    document.getElementById("editStatusModal").classList.add("open");
+  } else {
+    commitStatusChange(p, newStatus, null, null);
+  }
+}
 
 // Un campo "select con opcion de agregar uno nuevo" generico, reutilizado por Hiring Manager y
 // Country dentro de #editReqInfoModal (a diferencia del modal de un solo campo, aqui van los
@@ -2988,60 +3006,52 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
   setTimeout(closeEditReqInfoModal, 900);
 });
 
-async function saveModalStatus(){
-  const p = POSITIONS.find(x=>x.id===activeDetailId);
-  if(!p) return;
-  const newStatus = document.getElementById("modalStatusSelect").value;
-  if(newStatus !== p.status){
-    // Kickoff / Intake Meeting Requested / Intake Pending no se pueden guardar sin la fecha
-    // que las define (asignacion recibida, respuesta pidiendo intake, o fecha agendada).
-    const dateField = STATUS_DATE_FIELD[newStatus];
-    const dateVal = dateField ? document.getElementById("modalStatusDateInput").value : null;
-    if(dateField && !dateVal){
-      const m = document.getElementById("modalStatusMsg");
-      m.textContent = `Please fill in "${dateField.label}" before saving this status.`;
-      m.style.color = "var(--critical)";
-      return;
+// Aplica un cambio de status ya confirmado (con su fecha si la exigia). Se usa tanto para
+// cambios sin fecha (directo desde el <select> inline, sin pasar por ningun modal) como para los
+// que si la exigen (despues de confirmar en #editStatusModal). El tag "status" en Activity es
+// distinto de "auto" (calculado por el sistema) y "manual" (remarks escritos a mano) — este es
+// un cambio de status real, hecho por alguien, pero no un remark libre.
+async function commitStatusChange(p, newStatus, dateField, dateVal){
+  const oldStatus = p.status;
+  const remarkText = dateField
+    ? `Status changed from ${oldStatus} to ${newStatus} (${dateField.label}: ${dateVal}).`
+    : `Status changed from ${oldStatus} to ${newStatus}.`;
+  p.extra = p.extra || [];
+  p.extra.push({date: new Date().toISOString().slice(0,10), type:"status", author:"You", text:remarkText});
+  p.status = newStatus;
+  if(dateField) p[dateField.key] = dateVal;
+  pendingStatusChange = null;
+  renderDetailModal();
+  renderPositions();
+  renderTracking();
+  renderKpis();
+  renderEstadoChart();
+  renderReclutadorChart();
+  renderHiredLocChart();
+  renderSlaChart();
+  renderSlaMeter();
+  const msg = document.getElementById("modalStatusMsg");
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      await graphUpdatePositionField(p.id, "G", newStatus);
+      if(dateField) await graphUpdatePositionField(p.id, dateField.col, dateVal);
+      await graphAppendHistorial(p.id, p.title, remarkText, "You");
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+      alert("Could not save the status change. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
     }
-    const oldStatus = p.status;
-    const remarkText = dateField
-      ? `Status changed from ${oldStatus} to ${newStatus} (${dateField.label}: ${dateVal}).`
-      : `Status changed from ${oldStatus} to ${newStatus}.`;
-    p.extra = p.extra || [];
-    p.extra.push({date: new Date().toISOString().slice(0,10), type:"manual", author:"You", text:remarkText});
-    p.status = newStatus;
-    if(dateField) p[dateField.key] = dateVal;
-    renderDetailModal();
-    renderPositions();
-    renderTracking();
-    renderKpis();
-    renderEstadoChart();
-    renderReclutadorChart();
-    renderHiredLocChart();
-    renderSlaChart();
-    renderSlaMeter();
-    // renderDetailModal() reconstruye el HTML de este span, hay que volver a buscarlo despues
-    // de re-renderizar o el mensaje se pierde en un nodo viejo (mismo patron que las otras
-    // funciones de guardado del modal).
-    const msg = document.getElementById("modalStatusMsg");
-    if(isConnected()){
-      try {
-        await graphUpdatePositionField(p.id, "G", newStatus);
-        if(dateField) await graphUpdatePositionField(p.id, dateField.col, dateVal);
-        await graphAppendHistorial(p.id, p.title, remarkText, "You");
-        msg.textContent = "Saved.";
-        msg.style.color = "var(--good)";
-      } catch(err){
-        console.error(err);
-        msg.textContent = "Could not save: " + err.message;
-        msg.style.color = "var(--critical)";
-        alert("Could not save the status change. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
-      }
-    } else {
-      msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
-      msg.style.color = "var(--warning)";
-    }
-    setTimeout(closeEditStatusModal, 900);
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+  if(document.getElementById("editStatusModal").classList.contains("open")){
+    setTimeout(()=>{ document.getElementById("editStatusModal").classList.remove("open"); }, 900);
   }
 }
 async function saveModalRemark(){
@@ -3076,7 +3086,20 @@ async function saveModalRemark(){
 
 document.getElementById("modalClose").addEventListener("click", closeDetailModal);
 document.getElementById("detailModal").addEventListener("click", (e)=>{ if(e.target.id==="detailModal") closeDetailModal(); });
-document.getElementById("modalStatusSave").addEventListener("click", saveModalStatus);
+document.getElementById("modalStatusSave").addEventListener("click", async ()=>{
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p || !pendingStatusChange) return;
+  const newStatus = pendingStatusChange;
+  const dateField = STATUS_DATE_FIELD[newStatus];
+  const dateVal = dateField ? document.getElementById("modalStatusDateInput").value : null;
+  if(dateField && !dateVal){
+    const m = document.getElementById("modalStatusMsg");
+    m.textContent = `Please fill in "${dateField.label}" before saving this status.`;
+    m.style.color = "var(--critical)";
+    return;
+  }
+  await commitStatusChange(p, newStatus, dateField, dateVal);
+});
 document.getElementById("modalRemarkSave").addEventListener("click", saveModalRemark);
 document.getElementById("modalEditInTrackingBtn").addEventListener("click", ()=>{
   const p = POSITIONS.find(x=>x.id===activeDetailId);
