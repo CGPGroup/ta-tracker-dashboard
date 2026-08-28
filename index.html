@@ -96,9 +96,9 @@
      el tema claro se usa logos/cgp-group-dark.svg (mismo archivo, el "CGP" y el texto chico
      recoloreados a #241f1b; "GROUP" se queda en naranja de marca, igual en los dos) — un chip
      oscuro fijo detras del logo se veia como una caja pegada encima de una sidebar clara, un
-     logo con su propia variante de color es la solucion real. applyTheme() intercambia el src.
-     El loading splash inicial (.app-loading-overlay) si se queda fijo en oscuro porque ahi
-     aparecen TRES logos con texto blanco (CGP, KeyStone, Irth) a la vez.
+     logo con su propia variante de color es la solucion real. applyTheme() intercambia el src
+     (tambien en el loading splash inicial, que por la misma razon ya no se queda fijo en
+     oscuro — el logo de Irth no necesita variante, ya es azul, no blanco).
      ============================================================ */
   :root[data-theme="light"] {
     color-scheme: light;
@@ -152,10 +152,6 @@
   /* ---------- Pantalla de carga inicial: evita el "flash" de datos viejos/de ejemplo antes
      de que trysilentConnect() termine de resolver datos reales (Graph o el proxy publico). ---------- */
   .app-loading-overlay {
-    /* Fijo en oscuro pase lo que pase con el tema: aqui salen a la vez los wordmarks de CGP Y
-       KeyStone, ambos en blanco solido sin version para fondo claro (ver el comentario grande
-       junto a body[data-theme="light"] mas arriba). */
-    --page: #0c0b0a; --text-primary: #f2ede6; --text-muted: #85796d; --border: rgba(255,255,255,0.08);
     position: fixed; inset: 0; z-index: 9999;
     background: var(--page);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
@@ -725,8 +721,8 @@
 <div class="app-loading-overlay" id="appLoadingOverlay">
   <div class="app-loading-logos">
     <div class="app-loading-logo-stack">
-      <img src="logos/cgp-group.svg" alt="CGP Group" class="app-loading-logo cgp">
-      <img src="logos/keystone-ai.svg" alt="KeyStone AI" class="app-loading-logo keystone">
+      <img src="logos/cgp-group.svg" alt="CGP Group" class="app-loading-logo cgp" id="loadingCgpLogo">
+      <img src="logos/keystone-ai.svg" alt="KeyStone AI" class="app-loading-logo keystone" id="loadingKeystoneLogo">
     </div>
     <span class="app-loading-plus">+</span>
     <img src="logos/irth-solutions.png" alt="Irth Solutions" class="app-loading-logo irth">
@@ -4697,10 +4693,15 @@ function applyTheme(theme){
   try { localStorage.setItem("tk_theme", theme); } catch(e){}
   document.getElementById("themeToggleKnob").innerHTML = theme === "light" ? THEME_ICON_SUN : THEME_ICON_MOON;
   document.getElementById("themeToggle").title = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
-  // El wordmark "CGP GROUP" esta dibujado en blanco solido en logos/cgp-group.svg — sin esto se
-  // volveria invisible contra una sidebar clara. cgp-group-dark.svg es el mismo archivo con ese
-  // texto recoloreado a oscuro (ver el comentario junto a body[data-theme="light"]).
+  // Los wordmarks "CGP GROUP" y "KeyStone" estan dibujados en blanco solido en sus SVG
+  // originales — sin esto se volverian invisibles contra un fondo claro. *-dark.svg son los
+  // mismos archivos con ese texto recoloreado a oscuro (el naranja/rojo de marca se queda igual
+  // en los dos, solo el texto cambia).
   document.getElementById("cgpCreditLogo").src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
+  const loadingCgp = document.getElementById("loadingCgpLogo");
+  const loadingKeystone = document.getElementById("loadingKeystoneLogo");
+  if(loadingCgp) loadingCgp.src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
+  if(loadingKeystone) loadingKeystone.src = theme === "light" ? "logos/keystone-ai-dark.svg" : "logos/keystone-ai.svg";
 }
 document.getElementById("themeToggle").addEventListener("click", ()=>{
   applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
