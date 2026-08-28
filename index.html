@@ -545,8 +545,11 @@
   .form-field input:disabled { background: var(--surface-1); color: var(--text-muted); }
   .form-actions { display: flex; gap: 10px; margin-top: 18px; }
   .btn {
-    font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 18px;
-    border-radius: 8px; border: none; cursor: pointer;
+    /* Pill completo en vez de rounded-rect: asi son los botones tanto en cgpgroup.com como en
+       gokeystone.ai (incluyendo el mismo detalle de flecha circular en los CTAs principales,
+       ver #connectBtn/.scope-banner-actions mas abajo). */
+    font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 20px;
+    border-radius: 999px; border: none; cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
   }
   .btn:active { transform: scale(0.97); }
