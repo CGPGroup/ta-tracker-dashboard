@@ -142,7 +142,7 @@
   .team-rail { width: 260px; flex: none; }
   .team-rail-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
   .team-rail-sub { font-size: 11px; color: var(--text-muted); margin: 2px 0 12px; }
-  .dashboard-main { flex: 1; min-width: 0; }
+  .dashboard-main { flex: 1; min-width: 0; transition: opacity 0.18s ease; }
   @media (max-width: 900px) { .dashboard-body { flex-direction: column; } .team-rail { width: 100%; } }
   .team-grid { display: flex; flex-wrap: wrap; gap: 12px; }
   .team-card {
@@ -674,12 +674,12 @@
       <section class="view active" id="view-dashboard">
         <div class="dashboard-body">
           <aside class="team-rail">
-            <div class="team-rail-title">Team</div>
-            <div class="team-rail-sub">Click a recruiter to see their own dashboard</div>
+            <div class="team-rail-title" id="teamRailTitle">Team</div>
+            <div class="team-rail-sub" id="teamRailSub">Click a recruiter to see their own dashboard</div>
             <div class="team-grid" id="teamGrid"></div>
             <div id="recentReqsZone"></div>
           </aside>
-          <div class="dashboard-main">
+          <div class="dashboard-main" id="dashboardMain">
             <div class="scope-banner" id="dashboardScopeBanner" style="display:none;"></div>
             <div id="pendingAssignmentZone"></div>
             <div class="kpi-row" id="kpiRow"></div>
@@ -1538,10 +1538,27 @@ function setDashboardScope(name){
   document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   document.getElementById("recentActivityZone").style.display = name ? "" : "none";
+  // Antes decia siempre "Click a recruiter to see their own dashboard", incluso ya parado
+  // adentro del dashboard de ese reclutador — confuso, sonaba a que faltaba dar ese paso.
+  document.getElementById("teamRailTitle").textContent = name ? "Switch Recruiter" : "Team";
+  document.getElementById("teamRailSub").textContent = name
+    ? `Viewing ${name}'s dashboard — click another card to switch.`
+    : "Click a recruiter to see their own dashboard";
   activateView((name && wasOnTracking) ? "tracking" : "dashboard");
+  // Fundido corto al cambiar de Team Dashboard a Recruiter Dashboard (o entre reclutadores) en
+  // vez de que el contenido salte de golpe. requestAnimationFrame no sirve aqui (no corre si la
+  // pestaña esta en segundo plano) — en vez de eso, se fuerza un reflow sincrono entre el salto
+  // a opacity:0 y el regreso a 1, para que la transicion de CSS si se dispare sin depender de
+  // que el navegador pinte un frame de por medio.
+  const main = document.getElementById("dashboardMain");
+  main.style.transition = "none";
+  main.style.opacity = "0";
+  void main.offsetHeight;
   renderDashboardPanels();
   renderTeamPanel();
   renderRecentReqs();
+  main.style.transition = "";
+  main.style.opacity = "1";
   const banner = document.getElementById("dashboardScopeBanner");
   if(!name){
     banner.style.display = "none";
