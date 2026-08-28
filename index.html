@@ -527,7 +527,8 @@
   .sla-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
   .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
   .sla-card .sla-name { font-size: 10.5px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-  .modal-section-title { font-size: 12.5px; font-weight: 700; margin: 0 0 8px; }
+  .modal-section-title { font-size: 12.5px; font-weight: 700; margin: 22px 0 8px; }
+  .modal-section-title:first-child { margin-top: 0; }
   /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
      texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
      menu es una lista simple debajo, cada item con su propio punto de color via STAGE_COLORS. */
@@ -2554,8 +2555,9 @@ function buildTimeline(p){
   if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
   if(p.fill)   entries.push({date:p.fill,   type:"auto", text:"Offer accepted, position filled."});
   if(p.hire)   entries.push({date:p.hire,   type:"auto", text:"Placement confirmed, candidate hired."});
-  const manualDate = p.hire || p.fill || p.submit || p.intake;
-  if(manualDate && p.lastRemark) entries.push({date:manualDate, type:"manual", author:p.recruiter, text:p.lastRemark});
+  // Remarks de sesiones anteriores (traidos completos de HistorialTable, no solo el ultimo —
+  // ver mergeLatestRemarks()), con su fecha real de cuando se escribieron.
+  (p.remarksHistory || []).forEach(r => entries.push({date:r.date, type:r.type || "manual", author:r.author, text:r.text}));
   (p.extra || []).forEach(e=> entries.push(e));
   return entries.filter(e=>e.date).sort((a,b)=>{
     if(a.date !== b.date) return a.date < b.date ? -1 : 1;
@@ -2705,12 +2707,15 @@ function renderDetailModal(){
   if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
 
+  // != null no bastaba: Graph devuelve celda vacia como "" (string vacio), no null/undefined,
+  // asi que sin el chequeo de "" estos campos se mostraban como filas vacias y el banner de
+  // sincronizado se creia "ya sincronizado" con puros campos en blanco.
   const pipelineFacts = [];
-  if(p.sourced != null) pipelineFacts.push({label:"Sourced", value:escapeHtml(p.sourced)});
-  if(p.directApps != null) pipelineFacts.push({label:"Direct Apps", value:escapeHtml(p.directApps)});
-  if(p.submittedCount != null) pipelineFacts.push({label:"Submitted", value:escapeHtml(p.submittedCount)});
-  if(p.activeCount != null) pipelineFacts.push({label:"Active", value:escapeHtml(p.activeCount)});
-  if(p.rejectedCount != null) pipelineFacts.push({label:"Rejected", value:escapeHtml(p.rejectedCount)});
+  if(p.sourced != null && p.sourced !== "") pipelineFacts.push({label:"Sourced", value:escapeHtml(p.sourced)});
+  if(p.directApps != null && p.directApps !== "") pipelineFacts.push({label:"Direct Apps", value:escapeHtml(p.directApps)});
+  if(p.submittedCount != null && p.submittedCount !== "") pipelineFacts.push({label:"Submitted", value:escapeHtml(p.submittedCount)});
+  if(p.activeCount != null && p.activeCount !== "") pipelineFacts.push({label:"Active", value:escapeHtml(p.activeCount)});
+  if(p.rejectedCount != null && p.rejectedCount !== "") pipelineFacts.push({label:"Rejected", value:escapeHtml(p.rejectedCount)});
 
   const outcomeFacts = [];
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
@@ -2736,7 +2741,7 @@ function renderDetailModal(){
       ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submit Date first.")}
       ${timelineFieldHtml("Hire Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
     </div>
-    <div style="margin-bottom:18px;">
+    <div style="margin-bottom:24px;">
       <button class="btn primary small" id="modalDatesSave" type="button">Save Dates</button>
       <span id="modalDatesMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
     </div>`;
@@ -2762,14 +2767,14 @@ function renderDetailModal(){
       </div>
     </div>`;
   const basicInfoEditHtml = isView ? "" : `
-    <div class="facts-grid" style="margin-bottom:8px;">
+    <div class="facts-grid" style="margin-bottom:16px;">
       <div><div class="fact-label">Hiring Manager</div><div class="fact-value">${p.hiringManager ? escapeHtml(p.hiringManager) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">Status</div><div class="fact-value">${statusDropdownHtml}</div></div>
       <div><div class="fact-label">Country</div><div class="fact-value">${p.country ? escapeHtml(p.country) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">City</div><div class="fact-value">${p.city ? escapeHtml(p.city) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">Work Arrangement</div><div class="fact-value">${arrangementBadge(p)}</div></div>
     </div>
-    <div style="margin-bottom:14px;">
+    <div style="margin-bottom:24px;">
       <button type="button" class="btn ghost small" id="editReqInfoBtn">Edit Basic Info</button>
     </div>`;
 
@@ -2778,7 +2783,7 @@ function renderDetailModal(){
   // Edit/Add abren el modal generico de un solo campo. Las tres van juntas en una sola fila
   // de 3 columnas: Irth primero, luego Spott, luego LinkedIn.
   const urlFactsHtml = isView ? "" : `
-    <div class="facts-grid" style="margin-bottom:14px;">
+    <div class="facts-grid" style="margin-bottom:22px;">
       ${urlFactCell("Irth Careers Page URL", p.careersUrl, "View Posting", "editCareersUrlBtn")}
       ${urlFactCell("Spott Job URL", p.spottJobId, "View In Spott", "editSpottIdBtn")}
       ${urlFactCell("LinkedIn Recruiter URL", p.linkedinRecruiterUrl, "View Job Post", "editLinkedinUrlBtn")}
@@ -2789,6 +2794,10 @@ function renderDetailModal(){
   // SLA). Solo en modo edicion; en vista se omite para no saturar el resumen rapido.
   // Mismo lenguaje visual que SLA/Requisition Completion (sla-grid de sla-card con un tag a la
   // derecha), en vez de una lista de timeline suelta que no combinaba con el resto del panel.
+  // Sin batches todavia no es un problema si el req sigue en Kickoff/Intake (nadie deberia
+  // haber mandado candidatos aun); si ya paso a Sourcing o mas adelante, si vale la pena
+  // avisarlo con el mismo lenguaje de alert-banner que el resto del tracker.
+  const EARLY_STATUSES = ["Kickoff", "Intake Meeting Requested", "Intake Pending"];
   const batchesHtml = isView ? "" : `
     <div class="modal-section-title">Submission Batches</div>
     ${p.batches && p.batches.length ? `<div class="sla-grid">
@@ -2797,8 +2806,10 @@ function renderDetailModal(){
           <div class="sla-name"><span>${escapeHtml(b.date)}</span><span class="tag ${b.type==="Pivot Follow-up" ? "internal" : "official"}">${escapeHtml(b.type)}</span></div>
           <div style="font-size:13px; font-weight:600;">${b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : "Count not set"}</div>
         </div>`).join("")}
-    </div>` : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`}
-    <div style="margin-bottom:18px;">
+    </div>` : (EARLY_STATUSES.includes(p.status)
+        ? `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`
+        : `<div class="alert-banner tier-yellow compact">No submission batches logged yet, even though this req is already in "${escapeHtml(p.status)}".</div>`)}
+    <div style="margin-bottom:22px;">
       <button type="button" class="btn ghost small" id="logBatchBtn">+ Log Batch</button>
     </div>`;
 
@@ -2808,8 +2819,10 @@ function renderDetailModal(){
     urlFactsHtml +
     timelineHtml +
     factsSection("Pipeline (From Spott)", pipelineFacts) +
-    (pipelineFacts.length ? `<div class="panel-sub" style="margin:-10px 0 14px;">Synced automatically from Spott every Tuesday and Saturday.</div>` : "") +
-    (isView ? "" : `<div style="margin-bottom:18px;"><button type="button" class="btn ghost small" id="editPipelineBtn">Edit Pipeline</button></div>`) +
+    (pipelineFacts.length
+      ? `<div class="alert-banner tier-good compact">Synced automatically from Spott every day at 12 PM CT.</div>`
+      : `<div class="alert-banner tier-yellow compact">Not synced yet — this fills in automatically from Spott every day at 12 PM CT once a Spott Job URL is set.</div>`) +
+    (isView ? "" : `<div style="margin-bottom:22px;"><button type="button" class="btn ghost small" id="editPipelineBtn">Edit Pipeline</button></div>`) +
     batchesHtml +
     factsSection("Outcome", outcomeFacts);
   if(!isView){
@@ -3312,10 +3325,8 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     try {
       await graphUpdatePositionField(p.id, "G", newStatus);
       if(dateField) await graphUpdatePositionField(p.id, dateField.col, dateVal);
-      await graphAppendHistorial(p.id, p.title, remarkText, "You");
-      // Se agrega despues del remark de status para que quede como el mas reciente (lo que
-      // mergeLatestRemarks() trae de vuelta como p.lastRemark en la proxima carga).
-      if(guidanceText) await graphAppendHistorial(p.id, p.title, guidanceText, "System");
+      await graphAppendHistorial(p.id, p.title, remarkText, "You", "status");
+      if(guidanceText) await graphAppendHistorial(p.id, p.title, guidanceText, "System", "guidance");
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
     } catch(err){
@@ -3950,25 +3961,34 @@ function parsePositionsTable(posHeaders, posRows){
       slaException: r[idx("Pivot SLA Approved?")],
       extra: [],
       batches: [],
+      remarksHistory: [],
     };
   }).filter(p => p.id);
 }
 // Reemplaza el ultimo remark de cada posicion por el mas reciente segun HistorialTable.
+// Ademas de p.lastRemark (usado en la columna "Last Update" de Tracking), guarda el HISTORIAL
+// COMPLETO de remarks de cada posicion en p.remarksHistory, mas viejo primero — antes solo se
+// traia el mas reciente, asi que Activity (a la izquierda en Tracking) no mostraba remarks de
+// sesiones anteriores, solo los que se agregaban en la sesion actual. Ver buildTimeline().
 function mergeLatestRemarks(positions, histHeaders, histRows){
   const hIdx = (name) => histHeaders.indexOf(name);
   const validIds = new Set(positions.map(p => p.id));
-  const latestByPos = {};
+  const byPos = {};
   histRows.forEach(row => {
     const pid = row[hIdx("Position ID")];
     if(!validIds.has(pid)) return;
     const dateStr = excelValToDateStr(row[hIdx("Date")]);
     const remark = row[hIdx("Remark")];
-    if(!remark) return;
-    if(!latestByPos[pid] || (dateStr && dateStr >= latestByPos[pid].date)){
-      latestByPos[pid] = { date: dateStr, remark };
-    }
+    const author = row[hIdx("Author")];
+    const type = row[hIdx("Type")];
+    if(!remark || !dateStr) return;
+    (byPos[pid] = byPos[pid] || []).push({ date: dateStr, text: remark, author, type });
   });
-  positions.forEach(p => { if(latestByPos[p.id]) p.lastRemark = latestByPos[p.id].remark; });
+  positions.forEach(p => {
+    const history = (byPos[p.id] || []).sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+    p.remarksHistory = history;
+    if(history.length) p.lastRemark = history[history.length - 1].text;
+  });
 }
 // A diferencia de mergeLatestRemarks() (solo guarda el mas reciente), aqui se guarda la lista
 // COMPLETA de batches de cada posicion (Date, Batch Type, Candidate Count), mas vieja primero,
@@ -4177,12 +4197,17 @@ async function graphUpdateRecruiterField(name, columnLetter, value){
   });
 }
 
-async function graphAppendHistorial(positionId, positionTitle, remark, author){
+// type viaja a la columna "Type" de HistorialTable (manual/status/guidance) para que, al
+// recargar la app despues, Activity pueda distinguir remarks escritos a mano de cambios de
+// status y mensajes de guia — antes siempre se escribia "manual" ahi, asi que todo el historial
+// pasado se veia como un remark generico sin importar que fuera en realidad (ver
+// mergeLatestRemarks()/buildTimeline()).
+async function graphAppendHistorial(positionId, positionTitle, remark, author, type){
   const today = new Date().toISOString().slice(0,10);
   await graphFetch(`${await workbookBase()}/tables('HistorialTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
-      values: [[positionId, `${positionTitle} ${positionId}`, today, "manual", remark, author]],
+      values: [[positionId, `${positionTitle} ${positionId}`, today, type || "manual", remark, author]],
     }),
   });
 }
@@ -4413,7 +4438,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
     // ahora" segun el status inicial elegido — se escribe directo a HistorialTable (no hay un
     // objeto en memoria todavia) para que loadFromGraph() lo traiga de vuelta como lastRemark.
-    if(STATUS_GUIDANCE[status]) await graphAppendHistorial(code, title, STATUS_GUIDANCE[status], "System");
+    if(STATUS_GUIDANCE[status]) await graphAppendHistorial(code, title, STATUS_GUIDANCE[status], "System", "guidance");
     msg.textContent = "Position created. Reloading data…";
     msg.style.color = "var(--good)";
     await loadFromGraph();
