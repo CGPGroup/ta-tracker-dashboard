@@ -1271,6 +1271,23 @@ const STAGE_COLORS = {
   "On Hold": "var(--neutral)",
   "Cancelled": "var(--stage-mauve)",
 };
+// Aproximacion mas cercana de STAGE_COLORS usando emoji de circulo (su color es fijo, no lo
+// controla el CSS de alrededor) — solo para el <option> del status inline, ver modalStatusSelect.
+const STATUS_DOT_EMOJI = {
+  "Kickoff": "🟠",
+  "Intake Meeting Requested": "🟠",
+  "Intake Pending": "🟠",
+  "Sourcing": "🔵",
+  "Screening": "🟢",
+  "Hiring Manager Interview": "🟠",
+  "Technical Interview": "🟣",
+  "Offer Request": "🟡",
+  "Filled": "🟢",
+  "Hired": "🟢",
+  "Fell Through": "🔴",
+  "On Hold": "⚪",
+  "Cancelled": "🟣",
+};
 // Refresca la aclaracion (STATUS_SUBTITLE) y el campo de fecha obligatoria (STATUS_DATE_FIELD)
 // debajo de un selector de status. Se usa tanto en el modal de detalle como en New Position,
 // que comparten esta misma logica pero con ids con distinto prefijo ("modal" / "newPos").
@@ -2810,10 +2827,11 @@ function renderDetailModal(){
 
   if(!isView){
     const statusSelect = document.getElementById("modalStatusSelect");
-    // Un <option> no puede tener un <span> de punto de color adentro como los chips normales,
-    // pero Chrome/Edge si respetan color inline en <option> — un bullet "●" con ese color se
-    // acerca bastante al mismo lenguaje visual que el resto de la app.
-    statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${escapeHtml(st)}" style="color:${STAGE_COLORS[st] || "inherit"};" ${st===p.status?"selected":""}>● ${escapeHtml(st)}</option>`).join("");
+    // Un <option> no puede tener un <span> de punto de color adentro como los chips normales, y
+    // colorear todo el texto (bullet + palabra) se veia mal — un emoji circulo SI trae su propio
+    // color fijo sin importar el color del texto alrededor, asi que el punto queda de color y la
+    // palabra se queda blanca/neutra, igual que pidio Nicolas.
+    statusSelect.innerHTML = STATUS_ORDER.map(st=>`<option value="${escapeHtml(st)}" ${st===p.status?"selected":""}>${STATUS_DOT_EMOJI[st] || "⚪"} ${escapeHtml(st)}</option>`).join("");
     statusSelect.onchange = () => onStatusSelectChange(p, statusSelect);
   }
 
