@@ -1576,14 +1576,15 @@ function setDashboardScope(name){
   // renderPositions() ya deriva positionsPanelSub del valor real de este select (ver ahi), asi
   // que no hace falta duplicar ese texto aqui.
   if(posRecSel){ posRecSel.value = name || ""; posRecSel.disabled = false; renderPositions(); }
-  // El titulo se queda siempre en "Team": una vez adentro de un workspace, quien esta viendo
-  // ya se ve arriba en el banner de perfil (foto + nombre + cargo) y en la tarjeta resaltada
-  // de esta misma lista — repetirlo aqui como "Switch Recruiter" / "Viewing X's dashboard" era
-  // la misma identidad dicha tres veces. Este panel solo necesita explicar la mecanica de clic.
-  document.getElementById("teamRailTitle").textContent = "Team";
-  document.getElementById("teamRailSub").textContent = name
-    ? (isAdmin() ? "Click another card to switch workspaces" : "Click another card to see their positions")
-    : "Click a recruiter to open their workspace";
+  // El card-grid de "Team" (todo el equipo, para cambiar o ver a alguien mas) solo pertenece
+  // al Team Workspace colectivo. Dentro del workspace personal de un reclutador ya no cumple
+  // ninguna funcion — no es un switcher (no se puede entrar a nadie mas desde ahi) y ya no es
+  // informacion tuya, asi que se esconde entero (titulo, subtitulo, y las tarjetas). Lo unico
+  // que sigue viviendo en esa columna dentro de tu workspace es "Recently Assigned" (mas abajo,
+  // siempre fue scope-only) — tu propia informacion, no la del equipo.
+  document.getElementById("teamRailTitle").style.display = name ? "none" : "";
+  document.getElementById("teamRailSub").style.display = name ? "none" : "";
+  document.getElementById("teamGrid").style.display = name ? "none" : "";
   activateView((name && wasOnTracking) ? "tracking" : "dashboard");
   // Fundido corto al cambiar de Team Dashboard a Recruiter Dashboard (o entre reclutadores) en
   // vez de que el contenido salte de golpe. requestAnimationFrame no sirve aqui (no corre si la
