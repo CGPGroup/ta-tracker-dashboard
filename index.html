@@ -733,7 +733,7 @@
                 </div>
                 <div class="panel" id="panelWorkloadByRecruiter">
                   <h3>Active Workload By Recruiter</h3>
-                  <div class="panel-sub">Open positions currently assigned to each recruiter</div>
+                  <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max.</div>
                   <div class="workload-grid" id="chartReclutador"></div>
                 </div>
                 <div class="panel" id="panelAvgTts" style="display:none;">
@@ -870,6 +870,7 @@
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
               <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"></select></div>
+              <div class="panel-sub full" id="newPosCapacityHint" style="margin:-6px 0 0;"></div>
               <div class="form-field"><label>Country/Market</label><select id="newPosCountry"><option>United States</option><option>Canada</option><option>Australia</option></select></div>
               <div class="form-field"><label>Work Arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
               <div class="form-field"><label>City (Only If Hybrid Or On-Site)</label><input type="text" id="newPosCity" placeholder="e.g. Calgary, AB"></div>
@@ -1319,7 +1320,7 @@
 // negociable del master prompt: nada de sourcing antes del intake meeting). El motor de SLA
 // no necesita cambios para esto: computeSla() ya devuelve "Not started" en TTS/TTF/TTH
 // mientras el campo Intake Date siga vacio, que es justo el caso en estos 3 statuses.
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Hiring Manager Interview","Technical Interview","Offer Request","Filled","Hired","Fell Through","On Hold","Cancelled"];
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Hiring Manager Interview","Technical Interview","Offer Request","Filled","Hired","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Aclaracion corta que se muestra debajo del selector de status (no se guarda como parte del
 // valor, para que las tablas/filtros/chips sigan mostrando el nombre corto del status).
 const STATUS_SUBTITLE = {
@@ -1357,6 +1358,10 @@ const STATUS_GUIDANCE = {
   "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Hire Date if you haven't already; this requisition is complete.",
   "Fell Through": "This requisition fell through. Add a remark explaining what happened — if it reopens, it most likely restarts at Sourcing rather than from scratch.",
   "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
+  // Distinto de "On Hold" normal: no es un incumplimiento de SLA, es una razon de negocio
+  // legitima (el HM quiere ver el resultado de un proceso interno de Irth antes de decidir sobre
+  // los candidatos externos). Nunca enmarcarlo como violacion de SLA con el hiring manager.
+  "On Hold — Internal Candidates": "The hiring manager wants to see the outcome of Irth's internal candidate process before deciding on the external candidates already interviewed. This is not an SLA violation — there's no fixed deadline, since that internal process runs on Irth's own timeline, not Cornerstone's. Keep a periodic (e.g. weekly) check-in with the hiring manager for a status update regardless. Sourcing/other work on this requisition can continue in parallel where it applies — only the decision on already-interviewed candidates is paused.",
   "Cancelled": "This requisition was cancelled by the client. No further action is needed.",
 };
 const STAGE_COLORS = {
@@ -1372,6 +1377,7 @@ const STAGE_COLORS = {
   "Hired": "var(--good)",
   "Fell Through": "var(--critical)",
   "On Hold": "var(--neutral)",
+  "On Hold — Internal Candidates": "var(--seq-500)",
   "Cancelled": "var(--stage-mauve)",
 };
 // Refresca la aclaracion (STATUS_SUBTITLE) y el campo de fecha obligatoria (STATUS_DATE_FIELD)
@@ -2005,30 +2011,49 @@ function renderEstadoChart(){
   });
 }
 
-// El limite recomendado es 10 reqs activas por reclutador (regla de Nicolas), asi que la
-// barra se llena contra ese techo fijo (no contra "quien tiene mas hoy"), y el color marca
-// que tan cerca esta cada quien de ese limite: verde 1-4, amarillo 5-6, naranja 7-9, rojo 10+.
-const WORKLOAD_CAP = 10;
+// Carga real ponderada por etapa (Playbook seccion 2.5): un req en Sourcing (esfuerzo maximo)
+// no pesa lo mismo que uno en Offer Stage (esperando a Irth) o en On Hold (pausado) — contar
+// solo posiciones brutas sobreestima a quien tiene muchas ya avanzadas y subestima a quien tiene
+// varias en sourcing intensivo. Pesos y limites (10 sweet spot, 12 maximo aceptable) tal cual el
+// Playbook; "Sourcing"/"Screening" ambos pesan 1.0 (construyendo/entregando el batch).
+const STAGE_WEIGHT = {
+  "Kickoff": 0.25,
+  "Intake Meeting Requested": 0.25,
+  "Intake Pending": 0.5,
+  "Sourcing": 1.0,
+  "Screening": 1.0,
+  "Hiring Manager Interview": 0.5,
+  "Technical Interview": 0.5,
+  "Offer Request": 0.25,
+  "Filled": 0.1,
+  "On Hold": 0.1,
+  "On Hold — Internal Candidates": 0.1,
+};
+const WORKLOAD_SWEET_SPOT = 10;
+const WORKLOAD_MAX = 12;
 function workloadColor(v){
-  if(v >= 10) return "var(--critical)";
-  if(v >= 7) return "var(--brand)";
-  if(v >= 5) return "var(--warning)";
+  if(v >= WORKLOAD_MAX) return "var(--critical)";
+  if(v >= WORKLOAD_SWEET_SPOT) return "var(--brand)";
+  if(v >= 7) return "var(--warning)";
   return "var(--good)";
 }
 function renderReclutadorChart(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  const rows = RECRUITERS.map(r=>({label:r, value: active.filter(p=>p.recruiter===r).length}))
-    .sort((a,b)=>b.value-a.value);
+  const rows = RECRUITERS.map(r=>{
+    const assigned = active.filter(p=>p.recruiter===r);
+    const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
+    return {label:r, count: assigned.length, value: Math.round(weighted * 10) / 10};
+  }).sort((a,b)=>b.value-a.value);
   document.getElementById("chartReclutador").innerHTML = rows.map(r=>{
     const photo = RECRUITER_PHOTOS[r.label];
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
-    const pct = Math.min(100, (r.value / WORKLOAD_CAP) * 100);
+    const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
     return `
-    <div class="workload-card clickable-stat" data-label="${escapeHtml(r.label)}">
+    <div class="workload-card clickable-stat" data-label="${escapeHtml(r.label)}" title="${r.count} requisition${r.count===1?"":"s"} assigned, weighted by stage effort">
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
       <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${workloadColor(r.value)};"></div></div>
-      <div class="workload-count">${r.value} Req${r.value===1?"":"s"}</div>
+      <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
     </div>`;
   }).join("");
   document.querySelectorAll("#chartReclutador .workload-card").forEach(el=>{
@@ -3067,9 +3092,17 @@ document.addEventListener("click", (e)=>{
 // Click en una opcion del dropdown de status. Si el status elegido no exige fecha, se guarda de
 // una; si la exige (Kickoff, Intake Meeting Requested, Intake Pending), aparece #editStatusModal
 // solo por esa fecha.
+// Regla no negociable del Playbook/Master Prompt: el sourcing (y todo lo que viene despues) no
+// puede arrancar hasta que el intake meeting realmente paso — ni siquiera si el rol "parece
+// obvio". Estos son los statuses que representan trabajo activo con candidatos.
+const REQUIRES_INTAKE_HELD = ["Sourcing", "Screening", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
+  if(REQUIRES_INTAKE_HELD.includes(newStatus) && !p.intake){
+    alert(`Can't move to "${newStatus}" yet — there's no Intake Meeting date logged. Sourcing (and everything after it) only starts once the intake meeting has actually happened, per policy.`);
+    return;
+  }
   const dateField = STATUS_DATE_FIELD[newStatus];
   if(dateField){
     pendingStatusChange = newStatus;
@@ -3231,6 +3264,14 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--critical)";
     return;
   }
+  // Batches deben ser de 3-5 candidatos ("calidad sobre cantidad", nunca una lista larga sin
+  // filtrar) — no es un bloqueo duro como lo del intake antes de sourcing, pero si vale la pena
+  // hacer parar y confirmar si alguien intenta loguear un numero fuera de ese rango.
+  const countNum = count ? Number(count) : null;
+  if(countNum != null && (countNum < 3 || countNum > 5)){
+    const proceed = confirm(`Batches should be 3-5 candidates, prioritizing quality over quantity — you entered ${countNum}. Log it anyway?`);
+    if(!proceed) return;
+  }
   p.batches = p.batches || [];
   p.batches.push({ date, type, count: count || null });
   renderDetailModal();
@@ -3305,10 +3346,12 @@ document.getElementById("editPipelineSave").addEventListener("click", async ()=>
   // candidatos al hiring manager (la etapa "Submission" en Spott) — dispara un recordatorio
   // especifico de lo que sigue segun el Master Prompt (comentario en Workable, correo de
   // notificacion al HM, SLA de feedback), en vez de esperar a que cambie el status del req.
+  // El SLA exige un batch de minimo 3 candidatos (nunca se manda de a 1 o 2) — el umbral real
+  // es cruzar a 3+, no simplemente pasar de 0 a cualquier numero positivo.
   const submittedChange = changed.find(f => f.key === "submittedCount");
-  const wasSubmittedZero = !p.submittedCount || Number(p.submittedCount) <= 0;
+  const wasBelowMinBatch = !p.submittedCount || Number(p.submittedCount) < 3;
   let submittedGuidanceText = null;
-  if(submittedChange && wasSubmittedZero && Number(submittedChange.value) > 0){
+  if(submittedChange && wasBelowMinBatch && Number(submittedChange.value) >= 3){
     submittedGuidanceText = "Candidates are now showing as Submitted in Spott. Make sure you've left your evaluation comment on each profile in Workable's Review tab, sent the hiring manager the submission notification email, and that they know feedback is due within 1-3 business days per candidate.";
   }
   changed.forEach(f => { p[f.key] = f.value; });
@@ -3674,6 +3717,27 @@ function renderNewPosRecruiterSelect(){
   const prev = sel.value;
   sel.innerHTML = RECRUITERS.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
   if(RECRUITERS.includes(prev)) sel.value = prev;
+  updateNewPosCapacityHint();
+}
+// Regla de asignacion del Playbook (seccion 2.5): se puede asignar un req nuevo si carga real +
+// 1.0 (asumiendo que entra en Etapa 1) sigue <= 10 (o hasta 12 en casos aceptables) — aqui se usa
+// 0.25 (el peso real de "Kickoff enviado") en vez de 1.0, porque un req nuevo siempre arranca ahi,
+// nunca ya en Sourcing.
+function updateNewPosCapacityHint(){
+  const hint = document.getElementById("newPosCapacityHint");
+  if(!hint) return;
+  const name = document.getElementById("newPosRecruiter").value;
+  if(!name){ hint.textContent = ""; return; }
+  const assigned = POSITIONS.filter(p => !TERMINAL.includes(p.status) && p.recruiter === name);
+  const currentLoad = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
+  const projected = Math.round((currentLoad + 0.25) * 10) / 10;
+  if(projected > WORKLOAD_MAX){
+    hint.innerHTML = `⛔ This would put ${escapeHtml(name)} at ${projected} weighted load, over the ${WORKLOAD_MAX} max — consider another recruiter.`;
+  } else if(projected > WORKLOAD_SWEET_SPOT){
+    hint.innerHTML = `⚠ This would put ${escapeHtml(name)} at ${projected} weighted load, past the ${WORKLOAD_SWEET_SPOT} sweet spot (still under the ${WORKLOAD_MAX} max).`;
+  } else {
+    hint.textContent = `${name} is currently at ${Math.round(currentLoad*10)/10} weighted load (${assigned.length} active req${assigned.length===1?"":"s"}) — plenty of room.`;
+  }
 }
 // Precarga los campos de Edit Recruiter con lo que ya se sabe de ese nombre, para poder
 // comparar contra lo que quede escrito al momento de guardar (y no reescribir sin necesidad
@@ -4427,6 +4491,7 @@ updateStatusDateUI("newPos", "Kickoff", null);
 document.getElementById("newPosStatus").addEventListener("change", (e)=>{
   updateStatusDateUI("newPos", e.target.value, null);
 });
+document.getElementById("newPosRecruiter").addEventListener("change", updateNewPosCapacityHint);
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
   const msg = document.getElementById("createPositionMsg");
   const title = document.getElementById("newPosTitle").value.trim();
