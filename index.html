@@ -2808,6 +2808,7 @@ function renderDetailModal(){
     urlFactsHtml +
     timelineHtml +
     factsSection("Pipeline (From Spott)", pipelineFacts) +
+    (pipelineFacts.length ? `<div class="panel-sub" style="margin:-10px 0 14px;">Synced automatically from Spott every Tuesday and Saturday.</div>` : "") +
     (isView ? "" : `<div style="margin-bottom:18px;"><button type="button" class="btn ghost small" id="editPipelineBtn">Edit Pipeline</button></div>`) +
     batchesHtml +
     factsSection("Outcome", outcomeFacts);
