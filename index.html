@@ -18,7 +18,10 @@
     --font-display: "Poppins", "Inter", system-ui, -apple-system, sans-serif;
 
     --sidebar-bg: #131211;
-    --surface-1: #1a1817;
+    /* Un paso mas claro que antes (#1a1817) — con las tarjetas soltando el borde para volverse
+       "borderless" (ver .panel/.kpi-tile/.modal-card mas abajo), la separacion contra --page
+       tiene que notarse solo con el cambio de superficie + sombra, sin la muleta del borde. */
+    --surface-1: #1e1b19;
     --surface-2: #221f1d;
     --page: #0c0b0a;
     --text-primary: #f2ede6;
@@ -28,14 +31,21 @@
     --baseline: #3d3833;
     --border: rgba(255,255,255,0.08);
 
-    /* Naranja de CGP/KeyStone (#f26a21) atenuado un paso, ni tan vivo como el original ni tan
-       apagado como el terracota que habia antes (#d97757); el rust (#da4826) es el de CGP tal
-       cual, para hover/enfasis secundario. */
-    --brand: #e0703f;
+    /* El naranja real de CGP/KeyStone tal cual sale de sus propios logos (ver logos/cgp-group.svg
+       y logos/keystone-ai.svg): #f26a21 el trazo claro, #da4826 el trazo oscuro — el mismo par
+       de dos tonos que ya usa la marca, no una aproximacion. Antes este token vivia atenuado un
+       paso (#e0703f) para no saturar toda la interfaz; en vez de diluir el color de marca, la
+       moderacion ahora vive en DONDE se usa a full color (botones primarios, estados activos,
+       acentos puntuales) — el resto de la interfaz sigue en superficies neutras. --brand-rgb
+       existe para poder construir washes/rgba() de este mismo color sin repetir el numero suelto
+       en cada regla (antes habia 5+ rgba(224,112,63,...) hardcodeados, desincronizados del token
+       apenas alguien cambiara --brand). */
+    --brand: #f26a21;
     --brand-dark: #da4826;
-    --brand-wash: rgba(224,112,63,0.14);
+    --brand-rgb: 242,106,33;
+    --brand-wash: rgba(var(--brand-rgb),0.14);
 
-    --seq-100: #f2c7a8; --seq-200: #e8a274; --seq-300: #e0813f; --seq-400: #e0703f; --seq-500: #c65a2a; --seq-600: #8f3f1d;
+    --seq-100: #f2c7a8; --seq-200: #e8a274; --seq-300: #e0813f; --seq-400: var(--brand); --seq-500: #c65a2a; --seq-600: #8f3f1d;
 
     --good: #7bb87e;
     --warning: #d3a355;
@@ -54,7 +64,7 @@
     --arr-onsite: #8a95a6;
 
     --radius: 12px;
-    --shadow: 0 1px 2px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.28);
+    --shadow: 0 1px 2px rgba(0,0,0,0.24), 0 6px 20px rgba(0,0,0,0.34);
   }
 
   * { box-sizing: border-box; }
@@ -125,8 +135,9 @@
   }
   .nav-item { transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
   .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
-  .nav-item.active { background: rgba(224,112,63,0.22); color: #fff; border-left: 3px solid var(--brand); }
+  .nav-item.active { background: rgba(var(--brand-rgb),0.22); color: #fff; border-left: 3px solid var(--brand); }
   .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
+  .nav-ic svg { width: 100%; height: 100%; display: block; }
 
   .sidebar-foot {
     margin-top: auto; padding: 12px 8px 4px;
@@ -158,7 +169,7 @@
     transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   }
   .team-card:hover { border-color: var(--brand); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.28); }
-  .team-card.active { border-color: var(--brand); background: rgba(224,112,63,0.14); }
+  .team-card.active { border-color: var(--brand); background: rgba(var(--brand-rgb),0.14); }
   .team-avatar {
     width: 52px; height: 52px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -178,7 +189,7 @@
      "tu espacio de trabajo", no solo otra vista mas de metricas genericas. */
   .scope-banner {
     display: flex; align-items: center; gap: 14px;
-    background: rgba(224,112,63,0.10); border: 1px solid rgba(224,112,63,0.32);
+    background: rgba(var(--brand-rgb),0.10); border: 1px solid rgba(var(--brand-rgb),0.32);
     border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;
   }
   .scope-banner-avatar {
@@ -221,7 +232,7 @@
   }
   .alert-banner::before { content: "⚠"; font-size: 12px; flex: none; }
   .alert-banner.tier-yellow { background: rgba(211,163,85,0.08); border-color: rgba(211,163,85,0.28); color: var(--warning); }
-  .alert-banner.tier-orange { background: rgba(224,112,63,0.10); border-color: rgba(224,112,63,0.32); color: var(--brand-dark); }
+  .alert-banner.tier-orange { background: rgba(var(--brand-rgb),0.10); border-color: rgba(var(--brand-rgb),0.32); color: var(--brand-dark); }
   .alert-banner.tier-red { background: rgba(193,116,102,0.10); border-color: rgba(193,116,102,0.36); color: var(--critical); }
   .alert-banner.tier-red::before { content: "⛔"; }
   .alert-banner.tier-good { background: rgba(123,184,126,0.08); border-color: rgba(123,184,126,0.28); color: var(--good); }
@@ -235,7 +246,7 @@
   }
   .kpi-tile {
     background: var(--surface-1); border-radius: var(--radius);
-    box-shadow: var(--shadow); padding: 10px 14px; border: 1px solid var(--border);
+    box-shadow: var(--shadow); padding: 10px 14px;
   }
   .kpi-label { font-size: 13.5px; color: var(--text-primary); font-weight: 700; margin-bottom: 4px; }
   .kpi-value { font-size: 24px; font-weight: 700; line-height: 1; }
@@ -293,7 +304,7 @@
 
   .panel {
     background: var(--surface-1); border-radius: var(--radius);
-    box-shadow: var(--shadow); padding: 12px 16px; border: 1px solid var(--border);
+    box-shadow: var(--shadow); padding: 12px 16px;
   }
   .panel h3 { font-size: 13.5px; margin: 0 0 2px; font-weight: 700; }
   /* Sin ".panel" de ancestro (asi estaba antes) esto solo aplicaba dentro de un .panel real —
@@ -472,7 +483,7 @@
   .btn.small { padding: 7px 13px; font-size: 12.5px; }
 
   .callout {
-    background: var(--brand-wash); border: 1px solid rgba(224,112,63,0.30); border-radius: var(--radius);
+    background: var(--brand-wash); border: 1px solid rgba(var(--brand-rgb),0.30); border-radius: var(--radius);
     padding: 12px 16px; font-size: 11px; font-weight: 700 !important; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;
   }
   .callout b { color: var(--text-primary); font-weight: 700 !important; }
@@ -503,7 +514,7 @@
   .modal-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
   .modal-card {
     background: var(--surface-1); border-radius: var(--radius); box-shadow: var(--shadow);
-    width: 100%; max-width: 780px; padding: 22px 26px 26px; border: 1px solid var(--border);
+    width: 100%; max-width: 780px; padding: 22px 26px 26px;
     transform: translateY(8px) scale(0.98);
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -654,11 +665,11 @@
       </div>
     </div>
     <nav class="nav">
-      <button class="nav-item active" data-view="dashboard"><span class="nav-ic">▣</span> Dashboard</button>
-      <button class="nav-item" data-view="positions"><span class="nav-ic">▤</span> Positions</button>
-      <button class="nav-item" data-view="tracking" style="display:none;"><span class="nav-ic">▥</span> Tracking</button>
-      <button class="nav-item" data-view="manage"><span class="nav-ic">＋</span> SSOT Management</button>
-      <button class="nav-item" data-view="guide"><span class="nav-ic">§</span> Process & SLA Guide</button>
+      <button class="nav-item active" data-view="dashboard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span> Dashboard</button>
+      <button class="nav-item" data-view="positions"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span> Positions</button>
+      <button class="nav-item" data-view="tracking" style="display:none;"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Tracking</button>
+      <button class="nav-item" data-view="manage"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="5" x2="14" y2="5"/><line x1="10" y1="5" x2="3" y2="5"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="19" x2="16" y2="19"/><line x1="12" y1="19" x2="3" y2="19"/><line x1="14" y1="3" x2="14" y2="7"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="17" x2="16" y2="21"/></svg></span> SSOT Management</button>
+      <button class="nav-item" data-view="guide"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> Process & SLA Guide</button>
     </nav>
     <div class="sidebar-foot">
       <div class="sidebar-cgp-credit">
