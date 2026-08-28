@@ -674,7 +674,7 @@
   <div class="main">
     <div class="topbar">
       <div>
-        <h1 id="topbarTitle">Team Dashboard</h1>
+        <h1 id="topbarTitle">Team Workspace</h1>
         <div class="sub" id="topbarSub">Overview of all active positions</div>
       </div>
       <div class="topbar-right">
@@ -1548,13 +1548,15 @@ function jumpToRecruiterTracking(name){
 // que el tab entero se oculta sin scope, y si estabas ahi cuando alguien le da "Back To Team
 // Dashboard" hay que sacarte de una vista que ya no deberia ser alcanzable.
 function setDashboardScope(name){
-  // Un reclutador conectado que no es admin nunca puede salir de su propio workspace ni entrar
-  // al de otro — se corrige aqui mismo, una sola vez para TODOS los callers (team card, gate,
-  // "Back To Team Dashboard", "Edit In Tracking" desde Positions, etc.) en vez de tener que
-  // acordarse de blindar cada boton por separado. isAdmin() ya trata "sin conexion" como admin
-  // (pruebas locales / gente viendo el link publico sin loguearse), asi que esto solo aplica a
-  // un reclutador real conectado con MS365 que no es Nicolas.
-  if(!isAdmin() && MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
+  // Un reclutador conectado que no es admin puede ver a TODO el equipo (Team Dashboard, sus
+  // KPIs, la lista de tarjetas) sin restriccion — de eso se trata Team. Lo unico que no puede
+  // es ENTRAR al workspace personal de otro reclutador (su perfil individual, editable, con
+  // sus propios KPIs/Tracking) — eso se corrige aqui mismo, una sola vez para todos los
+  // callers, en vez de tener que acordarse de blindar cada boton por separado. Si necesita ver
+  // requisitions de otro reclutador por alguna razon, para eso existe Positions (sin bloquear,
+  // ver renderPositions()) — nunca entrando a su workspace. isAdmin() ya trata "sin conexion"
+  // como admin (pruebas locales / gente viendo el link publico sin loguearse).
+  if(!isAdmin() && MY_RECRUITER_NAME && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
   const wasOnTracking = document.getElementById("view-tracking").classList.contains("active");
   activeDashboardScope = name;
   document.querySelector('.nav-item[data-view="tracking"]').style.display = name ? "" : "none";
@@ -1566,31 +1568,22 @@ function setDashboardScope(name){
   document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   document.getElementById("recentActivityZone").style.display = name ? "" : "none";
-  // Positions reusa el filtro de Recruiter que ya tenia para scopear por Workspace. Para un
-  // admin (Nicolas, o nadie conectado) es solo un pre-filtro comodo: se puede quitar con un
-  // clic para ver el directorio completo. Para un reclutador real no-admin, en cambio, esto es
-  // la misma barrera que ya aplica a Dashboard/Tracking — no ve requisitions de nadie mas, asi
-  // que el select queda bloqueado en su propio nombre, sin opcion de quitarlo.
+  // Positions es intencionalmente el directorio COMPLETO para cualquiera, admin o no — es el
+  // camino sancionado para ver requisitions de otro reclutador sin entrar a su workspace. Solo
+  // se pre-filtra como comodidad al entrar a un workspace (el tuyo o, si eres admin, el de
+  // otro), y ese pre-filtro siempre se puede quitar con un clic.
   const posRecSel = document.getElementById("positionsRecruiter");
-  const posLocked = !isAdmin() && !!MY_RECRUITER_NAME;
-  if(posRecSel){
-    posRecSel.value = name || "";
-    posRecSel.disabled = posLocked && !!name;
-    renderPositions();
-  }
-  document.getElementById("positionsPanelSub").textContent = name
-    ? (posLocked
-        ? `Every position for ${name}, in any status (includes closed, cancelled, and fell-through). Scoped to your own requisitions.`
-        : `Every position for ${name}, in any status (includes closed, cancelled, and fell-through) — pre-filtered to this workspace, clear the Recruiter filter to see everyone.`)
-    : "Every position that exists in the system, in any status (includes closed, cancelled, and fell-through). This is the full directory, not the working tracker.";
+  // renderPositions() ya deriva positionsPanelSub del valor real de este select (ver ahi), asi
+  // que no hace falta duplicar ese texto aqui.
+  if(posRecSel){ posRecSel.value = name || ""; posRecSel.disabled = false; renderPositions(); }
   // El titulo se queda siempre en "Team": una vez adentro de un workspace, quien esta viendo
   // ya se ve arriba en el banner de perfil (foto + nombre + cargo) y en la tarjeta resaltada
   // de esta misma lista — repetirlo aqui como "Switch Recruiter" / "Viewing X's dashboard" era
   // la misma identidad dicha tres veces. Este panel solo necesita explicar la mecanica de clic.
-  document.getElementById("teamRailTitle").textContent = posLocked ? "You" : "Team";
-  document.getElementById("teamRailSub").textContent = posLocked
-    ? "This is your workspace"
-    : (name ? "Click another card to switch workspaces" : "Click a recruiter to open their workspace");
+  document.getElementById("teamRailTitle").textContent = "Team";
+  document.getElementById("teamRailSub").textContent = name
+    ? (isAdmin() ? "Click another card to switch workspaces" : "Click another card to see their positions")
+    : "Click a recruiter to open their workspace";
   activateView((name && wasOnTracking) ? "tracking" : "dashboard");
   // Fundido corto al cambiar de Team Dashboard a Recruiter Dashboard (o entre reclutadores) en
   // vez de que el contenido salte de golpe. requestAnimationFrame no sirve aqui (no corre si la
@@ -1616,10 +1609,6 @@ function setDashboardScope(name){
   const title = RECRUITER_TITLES[name] || "Recruiter";
   const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
   banner.style.display = "";
-  // Un reclutador no-admin no tiene un Team Dashboard al que "volver" — este es su unico
-  // espacio, asi que ese boton simplemente no existe para el (el guard de arriba en esta misma
-  // funcion tampoco dejaria que sirviera de nada si lo dejaramos).
-  const backBtn = posLocked ? "" : `<button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Dashboard</button>`;
   banner.innerHTML = `
     <div class="scope-banner-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(name))}</div>
     <div class="scope-banner-info">
@@ -1628,10 +1617,24 @@ function setDashboardScope(name){
     </div>
     <div class="scope-banner-actions">
       <button class="btn primary small" id="scopeEditBtn" type="button">Open Tracking →</button>
-      ${backBtn}
+      <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Workspace</button>
     </div>`;
-  if(!posLocked) document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
+  document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
   document.getElementById("scopeEditBtn").addEventListener("click", ()=> jumpToRecruiterTracking(name));
+}
+// Punto de entrada unico para un clic en una tarjeta de Team. Admin (o tu propia tarjeta):
+// entra al perfil normalmente via el Profile Gate. Un reclutador no-admin mirando la tarjeta
+// de alguien mas: no entra a su workspace (setDashboardScope() lo bloquearia igual), en vez de
+// eso lo mandamos derecho a Positions filtrado a esa persona — el camino real para ver
+// requisitions de otro sin poder editarlas ni entrar a su espacio personal.
+function openTeamCard(name){
+  if(isAdmin() || name === MY_RECRUITER_NAME){ openProfileGate(name); return; }
+  // El select se fija ANTES de activateView() para que el subtitulo del topbar (que lee el
+  // valor actual de este select para Positions, ver activateView()) ya lo vea correcto.
+  const recSel = document.getElementById("positionsRecruiter");
+  if(recSel) recSel.value = name;
+  activateView("positions");
+  if(recSel) renderPositions();
 }
 // Pantalla intermedia entre hacer clic en una tarjeta de Team y realmente entrar al perfil:
 // un resumen de lo pendiente (nuevas asignaciones por aceptar + Needs Attention de ESE
@@ -1710,22 +1713,23 @@ function renderRecentReqs(){
 }
 function renderTeamPanel(){
   const el = document.getElementById("teamGrid");
-  // Un reclutador real no-admin no tiene nada que "cambiar a" — solo ve su propia tarjeta, sin
-  // opcion de entrar al workspace de nadie mas. isAdmin() ya cubre admin real y sin-conexion.
-  const visible = (isAdmin() || !MY_RECRUITER_NAME) ? RECRUITERS : RECRUITERS.filter(n=>n===MY_RECRUITER_NAME);
-  el.innerHTML = visible.map(name=>{
+  // Team siempre muestra a todo el equipo, a cualquiera — de eso se trata. Lo que cambia por
+  // tarjeta es a donde te lleva el clic, ver openTeamCard().
+  el.innerHTML = RECRUITERS.map(name=>{
     const photo = RECRUITER_PHOTOS[name];
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
     const title = RECRUITER_TITLES[name] || "Recruiter";
+    const isOwn = isAdmin() || name === MY_RECRUITER_NAME;
+    const hint = isOwn ? `Open ${name === MY_RECRUITER_NAME ? "your" : name + "'s"} workspace` : `See ${name}'s positions`;
     return `
-    <div class="team-card${activeDashboardScope===name?' active':''}" data-name="${escapeHtml(name)}">
+    <div class="team-card${activeDashboardScope===name?' active':''}" data-name="${escapeHtml(name)}" title="${escapeHtml(hint)}">
       <div class="team-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(name))}</div>
       <div class="team-name">${escapeHtml(name)}</div>
       <div class="team-title">${escapeHtml(title)}</div>
     </div>`;
   }).join("");
   el.querySelectorAll(".team-card").forEach(card=>{
-    card.addEventListener("click", ()=> openProfileGate(card.dataset.name));
+    card.addEventListener("click", ()=> openTeamCard(card.dataset.name));
   });
 }
 const TERMINAL = ["Hired","Cancelled","Fell Through"];
@@ -2464,11 +2468,6 @@ function fillSlaSelectOnce(sel){
 function renderPositions(){
   const statusSel = document.getElementById("positionsStatus");
   const recSel = document.getElementById("positionsRecruiter");
-  // Reforzado aqui tambien (no solo en setDashboardScope) porque renderPositions() se llama
-  // desde muchos otros lugares (limpiar chips, cambiar cualquier otro filtro, cambiar de vista)
-  // — asi el candado nunca depende de que el caller se acuerde de mantenerlo.
-  const posLocked = !isAdmin() && !!MY_RECRUITER_NAME;
-  if(posLocked){ recSel.value = MY_RECRUITER_NAME; recSel.disabled = true; }
   const hmSel = document.getElementById("positionsHM");
   const locSel = document.getElementById("positionsLocation");
   const ttsSel = document.getElementById("positionsTTS");
@@ -2488,6 +2487,13 @@ function renderPositions(){
   const est = statusSel.value, rec = recSel.value, hm = hmSel.value, loc = locSel.value;
   const ttsF = ttsSel.value, ttfF = ttfSel.value, tthF = tthSel.value, placementF = placementSel.value;
 
+  // Fuente unica de verdad para este subtitulo: sigue el filtro de Recruiter que de verdad
+  // esta aplicado ahora mismo, sin importar como llego ahi (entrando a un workspace, un clic
+  // en la tarjeta de otro reclutador desde Team, o eligiendolo a mano en el dropdown).
+  document.getElementById("positionsPanelSub").textContent = rec
+    ? `Every position for ${rec}, in any status (includes closed, cancelled, and fell-through) — filtered by Recruiter, clear it to see everyone.`
+    : "Every position that exists in the system, in any status (includes closed, cancelled, and fell-through). This is the full directory, not the working tracker.";
+
   // Panel de filtros secundarios: nunca se auto-cierra (no interrumpir a alguien ajustandolo),
   // pero SI se auto-abre si trae un filtro activo (ej. al cargar un filtro guardado) para que
   // nunca quede un filtro aplicado "escondido" sin que se note por que la tabla se ve distinta.
@@ -2501,7 +2507,7 @@ function renderPositions(){
   const chips = [];
   if(searchEl.value.trim()) chips.push({label:`Search: "${searchEl.value.trim()}"`, clear:()=>{ searchEl.value=""; }});
   if(est) chips.push({label:`Status: ${est}`, clear:()=>{ statusSel.value=""; }});
-  if(rec && !posLocked) chips.push({label:`Recruiter: ${rec}`, clear:()=>{ recSel.value=""; }});
+  if(rec) chips.push({label:`Recruiter: ${rec}`, clear:()=>{ recSel.value=""; }});
   if(hm) chips.push({label:`Hiring Manager: ${hm}`, clear:()=>{ hmSel.value=""; }});
   if(loc) chips.push({label:`Country: ${loc}`, clear:()=>{ locSel.value=""; }});
   if(ttsF) chips.push({label:`Time To Submit: ${slaLabel(ttsF)}`, clear:()=>{ ttsSel.value=""; }});
@@ -2509,8 +2515,7 @@ function renderPositions(){
   if(tthF) chips.push({label:`Time To Hire: ${slaLabel(tthF)}`, clear:()=>{ tthSel.value=""; }});
   if(placementF) chips.push({label:`Placement: ${placementF==="yes"?"Yes":"No"}`, clear:()=>{ placementSel.value=""; }});
   const chipsEl = document.getElementById("positionsChips");
-  const lockedChip = posLocked ? `<span class="filter-chip" style="opacity:0.85;" title="You only see your own requisitions here">Recruiter: ${escapeHtml(rec)} 🔒</span>` : "";
-  chipsEl.innerHTML = lockedChip + chips.map((c,i)=>`<span class="filter-chip">${c.label}<button type="button" data-chip-idx="${i}">&times;</button></span>`).join("")
+  chipsEl.innerHTML = chips.map((c,i)=>`<span class="filter-chip">${c.label}<button type="button" data-chip-idx="${i}">&times;</button></span>`).join("")
     + (chips.length ? `<button type="button" class="filter-chips-clear" id="positionsClearAllChips">Clear all</button>` : "");
   chipsEl.querySelectorAll("[data-chip-idx]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ chips[+btn.dataset.chipIdx].clear(); renderPositions(); });
@@ -3753,12 +3758,16 @@ function activateView(view){
     document.getElementById("topbarTitle").innerHTML = `<span class="topbar-eyebrow">Workspace</span>${escapeHtml(activeDashboardScope)}`;
     // El nombre de la vista ya no repite "Recruiter Dashboard" — el titulo grande ya dejo claro
     // de quien es el workspace, asi que aqui solo hace falta decir en que seccion estas. Positions
-    // es la unica vista cuya descripcion cambia de verdad estando en un Workspace (ver
-    // setDashboardScope(), que pre-filtra su Recruiter select) — las demas ya eran ciertas tal cual.
-    const scopedDesc = view === "positions" ? `Pre-filtered to ${activeDashboardScope}'s requisitions` : TITLES[view][1];
+    // es la unica vista cuya descripcion cambia de verdad estando en un Workspace, y se lee del
+    // valor real del select de Recruiter (no de activeDashboardScope) porque el filtro de
+    // Positions puede apuntar a alguien distinto al workspace en el que estas parado (ver
+    // openTeamCard(), que te deja ver las requisitions de otro sin sacarte de tu propio
+    // workspace) — las demas vistas ya eran ciertas tal cual.
+    const posRecVal = view === "positions" ? document.getElementById("positionsRecruiter").value : "";
+    const scopedDesc = view === "positions" ? (posRecVal ? `Pre-filtered to ${posRecVal}'s requisitions` : TITLES[view][1]) : TITLES[view][1];
     document.getElementById("topbarSub").textContent = `${TITLES[view][0]} — ${scopedDesc}`;
   } else {
-    document.getElementById("topbarTitle").textContent = view === "dashboard" ? "Team Dashboard" : TITLES[view][0];
+    document.getElementById("topbarTitle").textContent = view === "dashboard" ? "Team Workspace" : TITLES[view][0];
     document.getElementById("topbarSub").textContent = TITLES[view][1];
   }
   dockDetailModal(view === "tracking");
@@ -4305,10 +4314,6 @@ async function loadFromGraph(){
   LOCATIONS = [...new Set(newPositions.map(p => p.country).filter(Boolean))];
   POSITIONS = newPositions;
   renderAll();
-  // Un reclutador real (no admin) no aterriza en Team Dashboard para despues tener que
-  // encontrar su propia tarjeta — entra directo a su Workspace, coherente con que ya no puede
-  // salir de el de todos modos (ver el guard al inicio de setDashboardScope()).
-  if(!isAdmin() && myRecruiterName) setDashboardScope(myRecruiterName);
 }
 // Proxy publico de solo lectura (Cloudflare Worker), para gente que solo necesita VER el
 // tracker sin loguearse (Nicole, Immy, Sara, Chris Watkins...): el Worker guarda su propia
