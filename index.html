@@ -15,15 +15,17 @@
 <link rel="icon" type="image/png" href="logos/irth-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     color-scheme: dark;
-    /* CGP usa Inter en su propio sitio, KeyStone (marca de CGP) usa Poppins. Poppins para
-       titulos/numeros grandes (personalidad), Inter para todo lo demas (es literalmente para
-       lo que se diseño: texto denso de interfaz, tablas, cifras). */
-    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-display: "Poppins", "Inter", system-ui, -apple-system, sans-serif;
+    /* Antes esto mezclaba Inter (cuerpo) + Poppins (titulos/cifras), una combinacion que ninguno
+       de los dos sitios reales usa — verificado en vivo con getComputedStyle en cgpgroup.com
+       (Inter en TODO, sin Poppins) y gokeystone.ai (Poppins en TODO, sin Inter): ningun sitio
+       mezcla dos familias, cada uno se compromete a una sola en toda la pagina. Mezclar las dos
+       aqui es justo lo que se sentia "raro" (letras de otra fuente) — Poppins en todo, como
+       Keystone AI, resuelve eso. */
+    --font-body: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
 
     --sidebar-bg: #131211;
     /* Un paso mas claro que antes (#1a1817) — con las tarjetas soltando el borde para volverse
@@ -131,12 +133,6 @@
   /* Los controles nativos (input/select/textarea/button) no heredan la fuente por defecto en
      la mayoria de navegadores; esto obliga a que usen la misma tipografia que el resto. */
   input, select, textarea, button { font-family: inherit; }
-  /* Poppins (la marca de KeyStone) solo en momentos de titulo/cifra grande; el resto de la
-     interfaz, tablas y texto denso se queda en Inter, que es para lo que fue diseñado. */
-  h1, h2, h3, .kpi-value, .donut-center-value, .app-loading-title, .brand-text .l1 {
-    font-family: var(--font-display);
-  }
-
   /* ---------- Shell ---------- */
   .shell { display: flex; min-height: 100vh; }
 
