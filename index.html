@@ -1032,13 +1032,6 @@
             </div>
             <div class="panel-sub" style="margin-top:8px;">Not wired up yet, statuses and holidays still need to be added directly in the Config sheet for now.</div>
 
-            <h3 style="margin-top:26px;">Submission Batches Table</h3>
-            <div class="panel-sub">One-time setup so Tracking can log and show submission batches (Initial vs Pivot Follow-up) per requisition. Creates a new "Batches" sheet + table in the shared file — safe to click even if it's already set up, it checks first and won't create a duplicate.</div>
-            <div class="form-actions">
-              <button class="btn primary" type="button" id="setupBatchesTableBtn">Set Up Batches Table</button>
-            </div>
-            <div class="panel-sub" id="setupBatchesTableMsg" style="margin-top:8px;"></div>
-
             <h3 style="margin-top:26px;">Share Tracker Access</h3>
             <div class="panel-sub">For anyone who needs to see or use the tracker without being a recruiter in it — a stakeholder, an exec, a coordinator. Shares the shared file with their email and sends them the tracker link, without adding them to the Team list.</div>
             <div class="form-grid">
@@ -4595,59 +4588,6 @@ async function graphAppendBatch(positionId, date, batchType, candidateCount){
     }),
   });
 }
-// Crea la hoja + tabla "BatchesTable" en el archivo real (Position ID, Date, Batch Type,
-// Candidate Count), para no depender de que alguien la arme a mano en Excel. Revisa primero si
-// ya existe (un GET que falla con 404 significa que no) para nunca crear una duplicada.
-async function graphSetupBatchesTable(){
-  const base = await workbookBase();
-  try {
-    await graphFetch(`${base}/tables('BatchesTable')`);
-    return "already-exists";
-  } catch(err){ /* no existe todavia, se crea abajo */ }
-
-  await graphFetch(`${base}/worksheets/add`, {
-    method: "POST",
-    body: JSON.stringify({ name: "Batches" }),
-  });
-  await graphFetch(`${base}/worksheets('Batches')/range(address='A1:D1')`, {
-    method: "PATCH",
-    body: JSON.stringify({ values: [["Position ID", "Date", "Batch Type", "Candidate Count"]] }),
-  });
-  const table = await graphFetch(`${base}/worksheets('Batches')/tables/add`, {
-    method: "POST",
-    body: JSON.stringify({ address: "A1:D1", hasHeaders: true }),
-  });
-  await graphFetch(`${base}/tables('${table.id}')`, {
-    method: "PATCH",
-    body: JSON.stringify({ name: "BatchesTable" }),
-  });
-  return "created";
-}
-document.getElementById("setupBatchesTableBtn").addEventListener("click", async ()=>{
-  const msg = document.getElementById("setupBatchesTableMsg");
-  if(!isConnected()){
-    msg.textContent = "Connect to Microsoft 365 first (button at the top).";
-    msg.style.color = "var(--critical)";
-    return;
-  }
-  msg.textContent = "Setting up…";
-  msg.style.color = "var(--text-muted)";
-  try {
-    const result = await graphSetupBatchesTable();
-    if(result === "already-exists"){
-      msg.textContent = "Already set up, nothing to do.";
-      msg.style.color = "var(--good)";
-    } else {
-      msg.textContent = "Done — the Batches sheet and table were created. Log Batch will now save for real.";
-      msg.style.color = "var(--good)";
-    }
-  } catch(err){
-    console.error(err);
-    msg.textContent = "Could not set this up: " + err.message;
-    msg.style.color = "var(--critical)";
-  }
-});
-
 async function graphAppendPosition(row){
   // Mismo motivo que graphAppendRecruiter(): si una columna reciente (ej. Irth Careers Page,
   // columna AQ) todavia no se agrego a mano en el Excel real, la Tabla ahi tiene menos
