@@ -560,10 +560,18 @@
     flex: none; font-size: 9.5px; font-weight: 700; text-transform: uppercase; padding: 2px 6px;
     border-radius: 5px; height: fit-content; margin-top: 1px;
   }
+  /* 5 tags de Activity, cada uno con un significado especifico (ver TL_BADGE_LABELS):
+     auto = hecho derivado de una fecha (nadie "hizo" nada, se desprende del Timeline)
+     action = el reclutador hizo un clic concreto (ej. aceptar la asignacion), no es texto libre
+     status = cambio de status via el dropdown
+     guidance = sugerencia automatica de "que sigue" segun el status
+     manual = remark de texto libre escrito por el reclutador
+     Colores deliberadamente todos distintos entre si para poder distinguirlos de un vistazo. */
   .timeline .tl-badge.auto { background: var(--surface-2); color: var(--text-secondary); }
-  .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
+  .timeline .tl-badge.action { background: rgba(92,174,158,0.16); color: var(--stage-teal); }
   .timeline .tl-badge.status { background: rgba(111,147,201,0.16); color: var(--stage-blue); }
-  .timeline .tl-badge.guidance { background: rgba(224,112,63,0.14); color: var(--brand); }
+  .timeline .tl-badge.guidance { background: rgba(211,163,85,0.16); color: var(--warning); }
+  .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
   .timeline .tl-text { flex: 1; }
   .add-remark textarea {
     width: 100%; font-family: inherit; font-size: 13px; padding: 9px 11px;
@@ -1482,18 +1490,18 @@ async function acceptAssignment(positionId){
   if(!p) return;
   const today = new Date().toISOString().slice(0,10);
   p.recruiterAcceptedDate = today;
-  // "auto", no "manual" — esto no es un remark que alguien escribio, es un hecho del sistema
-  // (se acepto la asignacion), igual que "Intake meeting held."/"Candidate submitted..." en
-  // buildTimeline(); por eso tampoco lleva author, para que se vea igual que esos otros.
+  // "action", no "auto" ni "manual" — esto no se desprende solo de una fecha (eso seria "auto",
+  // ej. "Intake meeting held.") ni es un remark de texto libre — es un clic concreto que el
+  // reclutador SI hizo (aceptar la asignacion), asi que lleva su propio tag.
   const remarkText = "Accepted the assignment.";
   p.extra = p.extra || [];
-  p.extra.push({date: today, type:"auto", text:remarkText});
+  p.extra.push({date: today, type:"action", author:"You", text:remarkText});
   acceptedConfirmations.push({id:p.id, title:posLabel(p)});
   renderPendingAssignments();
   if(isConnected()){
     try {
       await graphUpdatePositionFieldByHeader(p.id, "Recruiter Accepted Date", today);
-      await graphAppendHistorial(p.id, p.title, remarkText, "You", "auto");
+      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
     } catch(err){
       console.error(err);
       alert("Could not save your acceptance. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
@@ -2591,7 +2599,7 @@ function buildTimeline(p){
     return (a.type==="auto"?0:1) - (b.type==="auto"?0:1);
   });
 }
-const TL_BADGE_LABELS = { auto: "Auto", manual: "Remark", status: "Status Change", guidance: "Next Step" };
+const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step" };
 function timelineListHtml(timeline){
   return timeline.length ? timeline.map(e=>`
     <li>
