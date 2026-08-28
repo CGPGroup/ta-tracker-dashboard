@@ -2754,17 +2754,20 @@ function renderDetailModal(){
   // Historial de batches de candidatos enviados (3-5 por batch tipicamente): cuantos se han
   // mandado y si cada uno fue el batch Initial o un Pivot Follow-up (relevante para el Pivot
   // SLA). Solo en modo edicion; en vista se omite para no saturar el resumen rapido.
+  // Mismo lenguaje visual que SLA/Requisition Completion (sla-grid de sla-card con un tag a la
+  // derecha), en vez de una lista de timeline suelta que no combinaba con el resto del panel.
   const batchesHtml = isView ? "" : `
     <div class="modal-section-title">Submission Batches</div>
-    ${p.batches && p.batches.length ? `<ul class="timeline" style="margin-bottom:10px;">
+    ${p.batches && p.batches.length ? `<div class="sla-grid">
       ${p.batches.slice().reverse().map(b=>`
-        <li>
-          <span class="tl-date">${escapeHtml(b.date)}</span>
-          <span class="tl-badge ${b.type==="Pivot Follow-up" ? "status" : "auto"}">${escapeHtml(b.type)}</span>
-          <span class="tl-text">${b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : ""}</span>
-        </li>`).join("")}
-    </ul>` : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`}
-    <button type="button" class="btn ghost small" id="logBatchBtn">+ Log Batch</button>`;
+        <div class="sla-card">
+          <div class="sla-name"><span>${escapeHtml(b.date)}</span><span class="tag ${b.type==="Pivot Follow-up" ? "internal" : "official"}">${escapeHtml(b.type)}</span></div>
+          <div style="font-size:13px; font-weight:600;">${b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : "Count not set"}</div>
+        </div>`).join("")}
+    </div>` : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`}
+    <div style="margin-bottom:18px;">
+      <button type="button" class="btn ghost small" id="logBatchBtn">+ Log Batch</button>
+    </div>`;
 
   document.getElementById("modalFacts").innerHTML =
     factsSection("", positionFacts) +
