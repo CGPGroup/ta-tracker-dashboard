@@ -1152,6 +1152,32 @@
   </div>
 </div>
 
+<!-- ======================= LOG SUBMISSION BATCH MODAL ======================= -->
+<!-- Un batch = un grupo de candidatos (tipicamente 3-5) enviado al hiring manager de una vez.
+     Batch Type se auto-sugiere (Initial la primera vez; Pivot Follow-up si ya hay batches
+     previos Y el Pivot SLA esta aprobado para ese req) pero siempre se puede cambiar a mano
+     antes de guardar — ver suggestBatchType()/openLogBatchModal(). -->
+<div class="modal-overlay" id="logBatchModal">
+  <div class="modal-card" style="max-width:480px;">
+    <div class="modal-head">
+      <div><h2 style="margin:0; font-size:16px;">Log Submission Batch</h2></div>
+      <button class="modal-close" id="logBatchClose" type="button">&times;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field"><label>Date</label><input type="date" id="logBatchDate"></div>
+      <div class="form-field"><label>Candidates In This Batch</label><input type="number" id="logBatchCount" min="1" placeholder="e.g. 4"></div>
+      <div class="form-field full">
+        <label>Batch Type</label>
+        <select id="logBatchType"><option value="Initial">Initial</option><option value="Pivot Follow-up">Pivot Follow-up</option></select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="logBatchSave">Save Batch</button>
+    </div>
+    <div class="panel-sub" id="logBatchMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
 <!-- ======================= PROFILE ENTRY GATE (before entering a recruiter's dashboard) ======================= -->
 <div class="modal-overlay" id="profileGateModal">
   <div class="modal-card" style="max-width:640px;">
@@ -2725,14 +2751,31 @@ function renderDetailModal(){
       ${urlFactCell("LinkedIn Recruiter URL", p.linkedinRecruiterUrl, "View Job Post", "editLinkedinUrlBtn")}
     </div>`;
 
+  // Historial de batches de candidatos enviados (3-5 por batch tipicamente): cuantos se han
+  // mandado y si cada uno fue el batch Initial o un Pivot Follow-up (relevante para el Pivot
+  // SLA). Solo en modo edicion; en vista se omite para no saturar el resumen rapido.
+  const batchesHtml = isView ? "" : `
+    <div class="modal-section-title">Submission Batches</div>
+    ${p.batches && p.batches.length ? `<ul class="timeline" style="margin-bottom:10px;">
+      ${p.batches.slice().reverse().map(b=>`
+        <li>
+          <span class="tl-date">${escapeHtml(b.date)}</span>
+          <span class="tl-badge ${b.type==="Pivot Follow-up" ? "status" : "auto"}">${escapeHtml(b.type)}</span>
+          <span class="tl-text">${b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : ""}</span>
+        </li>`).join("")}
+    </ul>` : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`}
+    <button type="button" class="btn ghost small" id="logBatchBtn">+ Log Batch</button>`;
+
   document.getElementById("modalFacts").innerHTML =
     factsSection("", positionFacts) +
     basicInfoEditHtml +
     urlFactsHtml +
     timelineHtml +
     factsSection("Pipeline (From Spott)", pipelineFacts) +
+    batchesHtml +
     factsSection("Outcome", outcomeFacts);
   if(!isView){
+    document.getElementById("logBatchBtn").addEventListener("click", ()=> openLogBatchModal(p));
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
@@ -3063,6 +3106,64 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--warning)";
   }
   setTimeout(closeEditReqInfoModal, 900);
+});
+
+// El primer batch de un req siempre se sugiere "Initial". Despues de eso, se sugiere "Pivot
+// Follow-up" solo si el Pivot SLA ya esta aprobado (columna "Pivot SLA Approved?") — si hay mas
+// batches pero el Pivot SLA no esta aprobado, se sigue sugiriendo "Initial" (ej. candidatos
+// adicionales dentro de la misma ventana original). Siempre editable a mano antes de guardar.
+function suggestBatchType(p){
+  const hasBatches = p.batches && p.batches.length > 0;
+  if(!hasBatches) return "Initial";
+  return isSlaExceptionApproved(p) ? "Pivot Follow-up" : "Initial";
+}
+function openLogBatchModal(p){
+  document.getElementById("logBatchDate").value = new Date().toISOString().slice(0,10);
+  document.getElementById("logBatchCount").value = "";
+  document.getElementById("logBatchType").value = suggestBatchType(p);
+  document.getElementById("logBatchMsg").textContent = "";
+  document.getElementById("logBatchModal").classList.add("open");
+}
+function closeLogBatchModal(){
+  document.getElementById("logBatchModal").classList.remove("open");
+}
+document.getElementById("logBatchClose").addEventListener("click", closeLogBatchModal);
+document.getElementById("logBatchModal").addEventListener("click", (e)=>{
+  if(e.target.id === "logBatchModal") closeLogBatchModal();
+});
+document.getElementById("logBatchSave").addEventListener("click", async ()=>{
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const msg = document.getElementById("logBatchMsg");
+  const date = document.getElementById("logBatchDate").value;
+  const count = document.getElementById("logBatchCount").value.trim();
+  const type = document.getElementById("logBatchType").value;
+  if(!date){
+    msg.textContent = "Pick a date for this batch.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  p.batches = p.batches || [];
+  p.batches.push({ date, type, count: count || null });
+  renderDetailModal();
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      await graphAppendBatch(p.id, date, type, count || "");
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message + " (make sure BatchesTable exists in the shared file)";
+      msg.style.color = "var(--critical)";
+      return;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+  setTimeout(closeLogBatchModal, 900);
 });
 
 // Aplica un cambio de status ya confirmado (con su fecha si la exigia). Se usa tanto para
@@ -3736,6 +3837,7 @@ function parsePositionsTable(posHeaders, posRows){
       lastRemark: r[idx("Last Remark")],
       slaException: r[idx("Pivot SLA Approved?")],
       extra: [],
+      batches: [],
     };
   }).filter(p => p.id);
 }
@@ -3755,6 +3857,28 @@ function mergeLatestRemarks(positions, histHeaders, histRows){
     }
   });
   positions.forEach(p => { if(latestByPos[p.id]) p.lastRemark = latestByPos[p.id].remark; });
+}
+// A diferencia de mergeLatestRemarks() (solo guarda el mas reciente), aqui se guarda la lista
+// COMPLETA de batches de cada posicion (Date, Batch Type, Candidate Count), mas vieja primero,
+// para poder mostrar el historial completo de envios. batchHeaders/batchRows vienen vacios si
+// BatchesTable todavia no existe en el archivo real (Nicolas no la ha creado) o el proxy publico
+// todavia no la expone — en ese caso cada posicion simplemente se queda con batches: [].
+function mergeBatches(positions, batchHeaders, batchRows){
+  if(!batchHeaders || !batchRows) return;
+  const bIdx = (name) => batchHeaders.indexOf(name);
+  const byId = {};
+  positions.forEach(p => { byId[p.id] = p; });
+  batchRows.forEach(row => {
+    const pid = row[bIdx("Position ID")];
+    const p = byId[pid];
+    if(!p) return;
+    const date = excelValToDateStr(row[bIdx("Date")]);
+    const type = row[bIdx("Batch Type")];
+    const count = row[bIdx("Candidate Count")];
+    if(!date || !type) return;
+    p.batches.push({ date, type, count });
+  });
+  positions.forEach(p => p.batches.sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 // Filas de RecruitersTable (A Name, B Email, C Active?, D Photo URL, E Job Title) -> las 4
 // piezas que el resto de la app necesita.
@@ -3783,6 +3907,14 @@ async function loadFromGraph(){
     const histRows = histResp.value.map(r => r.values[0]);
     mergeLatestRemarks(newPositions, histHeaders, histRows);
   } catch(err){ console.warn("Could not load Historial (non-fatal):", err); }
+
+  // BatchesTable es opcional: si Nicolas todavia no la creo en el Excel real, esto simplemente
+  // falla en silencio y cada posicion se queda con batches: [] (ver mergeBatches()).
+  try {
+    const batchResp = await graphFetch(`${await workbookBase()}/tables('BatchesTable')/rows?$select=values`);
+    const batchHeaderResp = await graphFetch(`${await workbookBase()}/tables('BatchesTable')/headerRowRange`);
+    mergeBatches(newPositions, batchHeaderResp.values[0], batchResp.value.map(r => r.values[0]));
+  } catch(err){ console.warn("Could not load Batches (non-fatal, BatchesTable may not exist yet):", err); }
 
   let myRecruiterName = null;
   try {
@@ -3820,6 +3952,7 @@ async function tryLoadPublicSnapshot(){
     const data = await resp.json();
     const newPositions = parsePositionsTable(data.positions.headers, data.positions.rows);
     if(data.historial) mergeLatestRemarks(newPositions, data.historial.headers, data.historial.rows);
+    if(data.batches) mergeBatches(newPositions, data.batches.headers, data.batches.rows);
     if(data.recruiters){
       const { newRecruiters, newPhotos, newTitles, newEmails } = parseRecruitersTable(data.recruiters.rows);
       RECRUITERS = newRecruiters;
@@ -3938,6 +4071,16 @@ async function graphAppendHistorial(positionId, positionTitle, remark, author){
     method: "POST",
     body: JSON.stringify({
       values: [[positionId, `${positionTitle} ${positionId}`, today, "manual", remark, author]],
+    }),
+  });
+}
+// BatchesTable: Position ID | Date | Batch Type | Candidate Count. Tabla separada (no
+// HistorialTable) porque un batch es informacion estructurada, no un remark de texto libre.
+async function graphAppendBatch(positionId, date, batchType, candidateCount){
+  await graphFetch(`${await workbookBase()}/tables('BatchesTable')/rows/add`, {
+    method: "POST",
+    body: JSON.stringify({
+      values: [[positionId, date, batchType, candidateCount]],
     }),
   });
 }
