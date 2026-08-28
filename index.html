@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Irth Solutions &middot; Talent Acquisition Tracker</title>
+<script>
+  // Se aplica ANTES que nada mas se pinte (sync, bloqueante a proposito) para que quien ya eligio
+  // "light" no vea un flash del tema oscuro por default mientras carga el resto de la pagina.
+  try {
+    var t = localStorage.getItem("tk_theme");
+    if(t === "light") document.documentElement.setAttribute("data-theme", "light");
+  } catch(e) {}
+</script>
 <link rel="icon" type="image/png" href="logos/irth-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,9 +55,14 @@
 
     --seq-100: #f2c7a8; --seq-200: #e8a274; --seq-300: #e0813f; --seq-400: var(--brand); --seq-500: #c65a2a; --seq-600: #8f3f1d;
 
-    --good: #7bb87e;
-    --warning: #d3a355;
-    --critical: #c17466;
+    /* good/warning/critical llevan su *-rgb hermano por la misma razon que --brand-rgb: hay
+       washes rgba() de estos tres (chips de SLA, alert-banners, tag de "Next Step") que antes
+       tenian el rgb tecleado a mano — con el tema claro necesitando su PROPIO tono de cada uno
+       (mas oscuro, para que siga leyendose sobre blanco en vez del pastel pensado para fondo
+       oscuro), un valor hardcodeado se habria desincronizado del tema activo. */
+    --good: #7bb87e; --good-rgb: 123,184,126;
+    --warning: #d3a355; --warning-rgb: 211,163,85;
+    --critical: #c17466; --critical-rgb: 193,116,102;
     --neutral: #7c756d;
 
     --stage-blue: #6f93c9;
@@ -63,8 +76,47 @@
     --arr-hybrid: #cc9a3d;
     --arr-onsite: #8a95a6;
 
+    /* Wash generico para "algo aqui es hoverable/clickeable" en superficies que no tienen ya su
+       propio color (recent-req-row, etc.) — blanco translucido tiene sentido sobre superficies
+       oscuras, pero se vuelve invisible sobre las claras del tema light; --hover-wash resuelve
+       segun el tema activo en vez de estar hardcodeado a un solo caso. */
+    --hover-wash: rgba(255,255,255,0.06);
+
     --radius: 12px;
     --shadow: 0 1px 2px rgba(0,0,0,0.24), 0 6px 20px rgba(0,0,0,0.34);
+  }
+
+  /* ============================================================
+     TEMA CLARO — activado con [data-theme="light"] en <html> (documentElement), fijado ANTES
+     de pintar la pagina para no parpadear el tema viejo un instante (ver el script inline al
+     principio de <head>). La sidebar (logo, nav, credito
+     CGP/KeyStone) se queda SIEMPRE oscura sin importar el tema (ver la regla ".sidebar" mas
+     abajo que re-fija estas mismas variables a sus valores oscuros): el wordmark "CGP GROUP" en
+     logos/cgp-group.svg esta dibujado en blanco solido, no existe una version del logo pensada
+     para fondo claro, asi que la sidebar es el ancla de marca fija (patron comun: Vercel,
+     Linear, Notion tambien mantienen su rail de navegacion oscuro aunque el contenido cambie).
+     Solo topbar + content (donde de verdad se trabaja todo el dia) responden al toggle.
+     ============================================================ */
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --surface-1: #ffffff;
+    --surface-2: #f2ede7;
+    --page: #f7f4f0;
+    --text-primary: #241f1b;
+    --text-secondary: #675d54;
+    --text-muted: #8b8074;
+    --grid: #e6e0d8;
+    --baseline: #d9d2c8;
+    --border: rgba(20,16,12,0.11);
+    --hover-wash: rgba(20,16,12,0.045);
+    --shadow: 0 1px 2px rgba(20,16,12,0.05), 0 6px 18px rgba(20,16,12,0.08);
+    /* Los tres semanticos necesitan su propio tono mas oscuro/saturado en claro — los de arriba
+       son pasteles pensados para resaltar sobre fondo casi negro; sobre blanco, esos mismos
+       valores como TEXTO (no solo como wash de fondo) casi no tienen contraste. */
+    --good: #2f8f4e; --good-rgb: 47,143,78;
+    --warning: #a3711e; --warning-rgb: 163,113,30;
+    --critical: #b8493a; --critical-rgb: 184,73,58;
+    --neutral: #6b6259;
   }
 
   * { box-sizing: border-box; }
@@ -87,6 +139,13 @@
   .shell { display: flex; min-height: 100vh; }
 
   .sidebar {
+    /* Re-fija estos tokens a sus valores oscuros pase lo que pase con el tema activo en <body>
+       — la sidebar es el ancla de marca fija (ver el comentario junto a body[data-theme="light"]
+       mas arriba). Una vez declarados aqui, todo lo de adentro que use var(--text-secondary) etc.
+       (nav-item, sidebar-foot...) hereda ESTOS valores, no los que ponga el tema del body. */
+    --surface-1: #1e1b19; --surface-2: #221f1d; --page: #0c0b0a;
+    --text-primary: #f2ede6; --text-secondary: #b3a89c; --text-muted: #85796d;
+    --border: rgba(255,255,255,0.08); --hover-wash: rgba(255,255,255,0.06);
     width: 232px; flex: none;
     background: var(--sidebar-bg);
     color: #fff;
@@ -181,7 +240,7 @@
 
   .recent-reqs-title { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 20px 0 6px; padding: 0 4px; }
   .recent-req-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
-  .recent-req-row:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+  .recent-req-row:hover { background: var(--hover-wash); color: var(--text-primary); }
   .recent-req-row .rr-code { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
 
   /* Banner de perfil del Recruiter Dashboard: identidad (foto + nombre) mas visible arriba,
@@ -215,11 +274,26 @@
   .topbar h1 .topbar-eyebrow::after { content: "·"; margin: 0 7px; color: var(--border); font-weight: 400; }
   .topbar .sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
   .topbar-right { display: flex; align-items: center; gap: 14px; }
+  /* Switch de tema, mismo patron visual que el toggle real de gokeystone.ai (pill + knob
+     redondo que se desliza) en vez de un simple boton de icono — coherente con como la propia
+     marca ya resuelve esto. El knob lleva el icono (sol en claro, luna en oscuro) en brand. */
+  .theme-toggle {
+    position: relative; width: 42px; height: 23px; border-radius: 999px; flex: none;
+    border: 1px solid var(--border); background: var(--surface-2); padding: 0; cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .theme-toggle-knob {
+    position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%;
+    background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
+  }
+  .theme-toggle-knob svg { width: 11px; height: 11px; }
+  :root[data-theme="light"] .theme-toggle-knob { transform: translateX(19px); }
   .pill {
     font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
     background: var(--brand-wash); color: var(--brand-dark);
   }
-  .pill.demo { background: rgba(211,163,85,0.14); color: var(--warning); }
+  .pill.demo { background: rgba(var(--warning-rgb),0.14); color: var(--warning); }
 
   .content { padding: 16px 32px 30px; width: 100%; }
 
@@ -231,11 +305,11 @@
     margin-bottom: 10px; display: flex; align-items: center; gap: 8px; border: 1px solid; line-height: 1.4;
   }
   .alert-banner::before { content: "⚠"; font-size: 12px; flex: none; }
-  .alert-banner.tier-yellow { background: rgba(211,163,85,0.08); border-color: rgba(211,163,85,0.28); color: var(--warning); }
+  .alert-banner.tier-yellow { background: rgba(var(--warning-rgb),0.08); border-color: rgba(var(--warning-rgb),0.28); color: var(--warning); }
   .alert-banner.tier-orange { background: rgba(var(--brand-rgb),0.10); border-color: rgba(var(--brand-rgb),0.32); color: var(--brand-dark); }
-  .alert-banner.tier-red { background: rgba(193,116,102,0.10); border-color: rgba(193,116,102,0.36); color: var(--critical); }
+  .alert-banner.tier-red { background: rgba(var(--critical-rgb),0.10); border-color: rgba(var(--critical-rgb),0.36); color: var(--critical); }
   .alert-banner.tier-red::before { content: "⛔"; }
-  .alert-banner.tier-good { background: rgba(123,184,126,0.08); border-color: rgba(123,184,126,0.28); color: var(--good); }
+  .alert-banner.tier-good { background: rgba(var(--good-rgb),0.08); border-color: rgba(var(--good-rgb),0.28); color: var(--good); }
   .alert-banner.tier-good::before { content: "✓"; }
   .alert-banner.compact { font-size: 10.5px; margin-bottom: 18px; }
 
@@ -453,9 +527,9 @@
     display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
     padding: 3px 8px; border-radius: 999px; white-space: nowrap;
   }
-  .sla-chip.within { background: rgba(123,184,126,0.16); color: var(--good); }
-  .sla-chip.risk { background: rgba(211,163,85,0.16); color: var(--warning); }
-  .sla-chip.out { background: rgba(193,116,102,0.16); color: var(--critical); }
+  .sla-chip.within { background: rgba(var(--good-rgb),0.16); color: var(--good); }
+  .sla-chip.risk { background: rgba(var(--warning-rgb),0.16); color: var(--warning); }
+  .sla-chip.out { background: rgba(var(--critical-rgb),0.16); color: var(--critical); }
   .sla-chip.none { background: var(--surface-2); color: var(--text-muted); }
   .sla-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
 
@@ -599,7 +673,7 @@
   .timeline .tl-badge.auto { background: var(--surface-2); color: var(--text-secondary); }
   .timeline .tl-badge.action { background: rgba(92,174,158,0.16); color: var(--stage-teal); }
   .timeline .tl-badge.status { background: rgba(111,147,201,0.16); color: var(--stage-blue); }
-  .timeline .tl-badge.guidance { background: rgba(211,163,85,0.16); color: var(--warning); }
+  .timeline .tl-badge.guidance { background: rgba(var(--warning-rgb),0.16); color: var(--warning); }
   .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
   .timeline .tl-text { flex: 1; }
   .add-remark textarea {
@@ -689,6 +763,9 @@
         <div class="sub" id="topbarSub">Dashboard — Overview of all active positions</div>
       </div>
       <div class="topbar-right">
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light/dark theme" title="Switch to light theme">
+          <span class="theme-toggle-knob" id="themeToggleKnob"></span>
+        </button>
         <span class="pill" id="connectionPill">Not connected</span>
         <button class="btn primary small" id="connectBtn" type="button">Connect Microsoft 365</button>
       </div>
@@ -4603,6 +4680,22 @@ async function graphClearTable(tableName){
 
 document.getElementById("connectBtn").addEventListener("click", connectM365);
 setConnectionUi(false);
+
+const THEME_ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+const THEME_ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>';
+function applyTheme(theme){
+  if(theme === "light") document.documentElement.setAttribute("data-theme", "light");
+  else document.documentElement.removeAttribute("data-theme");
+  try { localStorage.setItem("tk_theme", theme); } catch(e){}
+  document.getElementById("themeToggleKnob").innerHTML = theme === "light" ? THEME_ICON_SUN : THEME_ICON_MOON;
+  document.getElementById("themeToggle").title = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
+}
+document.getElementById("themeToggle").addEventListener("click", ()=>{
+  applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
+});
+// El script bloqueante al principio de <head> ya dejo el atributo puesto si tocaba (evita el
+// flash), esto solo sincroniza el icono del knob con lo que haya quedado.
+applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
 // Cuando la data real (Graph o el proxy publico) esta cacheada/es rapida, trysilentConnect()
 // puede resolver en unos pocos cientos de ms, muy rapido para realmente ver la pantalla de
 // carga. Se fuerza un minimo de tiempo visible para que siempre se alcance a leer/ver bien.
