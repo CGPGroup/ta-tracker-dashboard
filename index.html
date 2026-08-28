@@ -933,6 +933,18 @@
             </div>
             <div class="panel-sub" id="shareAccessMsg" style="margin-top:8px;"></div>
 
+            <details class="danger-zone-details" id="deleteScheduledColDetails">
+              <summary>Danger Zone: Delete "Intake Meeting Scheduled Date" Column</summary>
+              <div class="panel-sub">Intake Scheduled For and Intake Meeting were merged into one field (the tracker no longer reads or writes this column). This permanently removes the column from the shared file's Positions sheet — do this only after confirming the tracker works fine without it. Everything to the right of it (Recruiter Accepted Date, Irth Careers Page, etc.) shifts one column left; the tracker already resolves those by header name, not by fixed column letter, so nothing else should break.</div>
+              <div class="form-grid">
+                <div class="form-field full"><label>Type DELETE COLUMN To Confirm</label><input type="text" id="deleteScheduledColConfirm" placeholder="DELETE COLUMN"></div>
+              </div>
+              <div class="form-actions">
+                <button class="link-danger" type="button" id="deleteScheduledColBtn" style="border:1px solid var(--critical); border-radius:8px; padding:8px 14px;">Delete Column</button>
+              </div>
+              <div class="panel-sub" id="deleteScheduledColMsg" style="margin-top:8px;"></div>
+            </details>
+
             <details class="danger-zone-details" id="dangerZoneDetails">
               <summary>Danger Zone: Reset All Data</summary>
               <div class="panel-sub">Permanently deletes every position, historial entry, and recruiter from the shared file, for starting fresh with test data. This can't be undone from here. Only the tracker admin can actually do this.</div>
@@ -1310,15 +1322,18 @@ const STATUS_SUBTITLE = {
 const STATUS_DATE_FIELD = {
   "Kickoff": {key:"kickoff", col:"AA", label:"Kickoff Date"},
   "Intake Meeting Requested": {key:"intakeRequestedDate", col:"AN", label:"Date You Replied Requesting The Intake"},
-  "Intake Pending": {key:"intakeScheduledDate", col:"AO", label:"Date The Intake Was Scheduled For"},
+  // Antes pedia "Intake Scheduled For" (una fecha aparte) — Nicolas confirmo que en la
+  // practica siempre termina siendo el mismo dia que el Intake Meeting real, asi que se
+  // fusionaron en un solo campo: la fecha real de la reunion, la misma que arranca TTS/TTF/TTH.
+  "Intake Pending": {key:"intake", col:"H", label:"Intake Meeting Date"},
 };
 // Mensaje de "que hacer ahora" por status, logueado en Activity cada vez que un req entra a ese
 // status (al crearlo, o al cambiarlo) — Nicolas pidio esto para todos los status, no solo Kickoff.
 // El texto vive centralizado aqui para poder ajustarlo facil si el proceso real cambia.
 const STATUS_GUIDANCE = {
   "Kickoff": "This requisition was just assigned. Accept it and request the intake meeting with the hiring manager, introducing yourself in the kickoff email.",
-  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability. Once they do, log it under Intake Scheduled For.",
-  "Intake Pending": "The intake meeting is scheduled. After it happens, log the actual date under Intake Meeting.",
+  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability. Once they do, move the status to Intake Pending and log the date.",
+  "Intake Pending": "Intake meeting date logged. Once the meeting actually happens, move the status to Sourcing to start building batches.",
   "Sourcing": "Start sourcing candidates for this role.",
   "Screening": "Screen the candidates you've sourced before submitting the strongest ones to the hiring manager.",
   "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Keep the pipeline moving and log outcomes as they come in.",
@@ -1471,7 +1486,7 @@ async function acceptAssignment(positionId){
   renderPendingAssignments();
   if(isConnected()){
     try {
-      await graphUpdatePositionField(p.id, "AP", today);
+      await graphUpdatePositionFieldByHeader(p.id, "Recruiter Accepted Date", today);
       await graphAppendHistorial(p.id, p.title, remarkText, "You");
     } catch(err){
       console.error(err);
@@ -1652,9 +1667,12 @@ let SLA_TARGETS = { TTS: 9, TTF: 40, TTH: 50 };
 // Metas del tramo previo al sourcing (Kickoff -> Intake), en dias habiles, confirmadas por
 // Nicolas (no vienen del master prompt, ese solo cubre TTS/TTF/TTH desde el intake en
 // adelante). Solo "acceptRequest" es 100% responsabilidad del reclutador (aceptar + pedir el
-// intake); hmResponse/intakeHeld dependen del hiring manager, asi que no cuentan como falla
-// del reclutador, solo generan un recordatorio para que le haga push o escale con Immy Nader.
-const COMPLETION_TARGETS = { acceptRequest: 1, hmResponse: 3, intakeHeld: 5 };
+// intake); intakeHeld depende del hiring manager, asi que no cuenta como falla del reclutador,
+// solo genera un recordatorio para que le haga push o escale con Immy Nader. Antes habia un
+// paso aparte ("hmResponse", 3 dias) y otro para la reunion en si (5 dias) — Nicolas confirmo
+// que en la practica son el mismo evento (si el HM responde con fecha, esa fecha ES la reunion),
+// asi que se fusionaron en un solo target de 3 dias.
+const COMPLETION_TARGETS = { acceptRequest: 1, intakeHeld: 3 };
 const ESCALATION_CONTACT = "Immy Nader";
 // "Pivot SLA": allowance de dias calendario que se suma al target de TTF/TTH cuando la posicion
 // tiene "SLA Exception Approved?" = Yes (batch completo rechazado, atribuible al cliente segun
@@ -1739,7 +1757,6 @@ function computeSla(p){
 function computeCompletion(p){
   const kickoff = parseD(p.kickoff);
   const requested = parseD(p.intakeRequestedDate);
-  const scheduled = parseD(p.intakeScheduledDate);
   const held = parseD(p.intake);
   const today = new Date();
 
@@ -1749,20 +1766,15 @@ function computeCompletion(p){
     step1 = {status: elapsed<=COMPLETION_TARGETS.acceptRequest ? "within" : "out", elapsed, target:COMPLETION_TARGETS.acceptRequest};
   }
 
-  let step2 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.hmResponse, escalate:false};
-  if(requested){
-    const done = !!(scheduled || held);
-    const elapsed = bizDaysBetween(requested, scheduled || held || today);
-    step2 = {status: done ? "done" : (elapsed>COMPLETION_TARGETS.hmResponse ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.hmResponse, escalate: !done && elapsed>COMPLETION_TARGETS.hmResponse};
-  }
-
-  let step3 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.intakeHeld, overdue:false};
+  // Antes esto eran dos pasos (HM responde con fecha / reunion realmente sucede) — fusionados
+  // en uno solo porque en la practica son el mismo evento (ver COMPLETION_TARGETS arriba).
+  let step2 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.intakeHeld, overdue:false};
   if(requested){
     const elapsed = bizDaysBetween(requested, held || today);
-    step3 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld};
+    step2 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld};
   }
 
-  return {step1, step2, step3};
+  return {step1, step2};
 }
 // Texto tipo slaFlags() pero para el checklist de arriba: solo aparece algo si hay una falla
 // real del reclutador (step1 out) o un recordatorio de seguimiento pendiente (step2/step3).
@@ -1770,8 +1782,7 @@ function completionFlags(p){
   const c = computeCompletion(p);
   const flags = [];
   if(c.step1.status==="out") flags.push(`🚩 Accept & Request Intake: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
-  if(c.step2.escalate) flags.push(`🔔 Escalate To ${ESCALATION_CONTACT}: HM hasn't responded in ${c.step2.elapsed} business days (target ${c.step2.target})`);
-  if(c.step3.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Intake overdue, ${c.step3.elapsed} business days since requested (target ${c.step3.target})`);
+  if(c.step2.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Intake meeting hasn't happened, ${c.step2.elapsed} business days since requested (target ${c.step2.target})`);
   return flags;
 }
 
@@ -2460,8 +2471,8 @@ function attentionRowsHtml(slaRows, completionRows){
     </div>`).join("");
   const completionHtml = completionRows.map(p=>{
     const c = computeCompletion(p);
-    const cls = (c.step1.status==="out" || c.step3.overdue) ? "out" : "risk";
-    const label = c.step1.status==="out" ? "Not Accepted/Requested" : (c.step2.escalate || c.step3.overdue ? "Escalate" : "Overdue");
+    const cls = (c.step1.status==="out" || c.step2.overdue) ? "out" : "risk";
+    const label = c.step1.status==="out" ? "Not Accepted/Requested" : (c.step2.overdue ? "Escalate" : "Overdue");
     return `
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
@@ -2735,7 +2746,6 @@ function renderDetailModal(){
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
         {label:"Intake Requested Date", value:escapeHtml(p.intakeRequestedDate) || "-"},
-        {label:"Intake Scheduled For", value:escapeHtml(p.intakeScheduledDate) || "-"},
         {label:"Intake Meeting", value:escapeHtml(p.intake) || "-"},
         {label:"Submit Date", value:escapeHtml(p.submit) || "-"},
         {label:"Fill Date", value:escapeHtml(p.fill) || "-"},
@@ -2745,8 +2755,7 @@ function renderDetailModal(){
     <div class="facts-grid">
       ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "")}
       ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.")}
-      ${timelineFieldHtml("Intake Scheduled For", "editIntakeScheduled", p.intakeScheduledDate, !p.intakeRequestedDate, "Fill in Intake Requested Date first.")}
-      ${timelineFieldHtml("Intake Meeting", "editIntake", p.intake, !p.intakeScheduledDate, "Fill in Intake Scheduled For first.")}
+      ${timelineFieldHtml("Intake Meeting", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.")}
       ${timelineFieldHtml("Submit Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting first.")}
       ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submit Date first.")}
       ${timelineFieldHtml("Hire Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
@@ -2868,7 +2877,7 @@ function renderDetailModal(){
         requireUrl: true,
         onSave: async (newVal)=>{
           p.careersUrl = newVal;
-          if(isConnected()) await graphUpdatePositionField(p.id, "AQ", newVal || "");
+          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Irth Careers Page", newVal || "");
           renderDetailModal();
           renderPositions();
           renderTracking();
@@ -2920,8 +2929,7 @@ function renderDetailModal(){
       : `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`;
     const completionCards = [
       {label:"Accept & Request Intake", tag:"Recruiter Owned", chip: step1Chip},
-      {label:"HM Responds With Availability", tag:"Follow-Up Only", chip: followUpChip(c.step2.status)},
-      {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step3.status)},
+      {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2.status)},
     ];
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
@@ -2930,8 +2938,7 @@ function renderDetailModal(){
       </div>`).join("");
     const alerts = [];
     if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
-    if(c.step2.escalate) alerts.push({tier:"tier-orange", text:`The hiring manager hasn't responded to the intake request in ${c.step2.elapsed} business days (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
-    if(c.step3.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step3.elapsed} business days since it was requested (target ${c.step3.target}, one work week). Please escalate to ${ESCALATION_CONTACT} so the hiring manager makes time sooner.`});
+    if(c.step2.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step2.elapsed} business days since it was requested (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
     document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">${a.text}</div>`).join("");
   }
 
@@ -2970,7 +2977,6 @@ async function saveModalDates(){
   const fields = [
     {key:"kickoff", inputId:"editKickoff", col:"AA"},
     {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN"},
-    {key:"intakeScheduledDate", inputId:"editIntakeScheduled", col:"AO"},
     {key:"intake", inputId:"editIntake", col:"H"},
     {key:"submit", inputId:"editSubmit", col:"I"},
     {key:"fill", inputId:"editFill", col:"J"},
@@ -3658,6 +3664,7 @@ function renderEditRecruiterSelect(){
 // resetAllBtn desde antes, esto es ademas no mostrarsela a quien no la puede usar).
 function updateDangerZoneVisibility(){
   document.getElementById("dangerZoneDetails").style.display = isAdmin() ? "" : "none";
+  document.getElementById("deleteScheduledColDetails").style.display = isAdmin() ? "" : "none";
 }
 function renderAll(){
   renderNewPosRecruiterSelect();
@@ -3964,7 +3971,6 @@ function parsePositionsTable(posHeaders, posRows){
       finalComp: r[idx("Final Compensation")],
       kickoff: excelValToDateStr(r[idx("Kickoff Date")]),
       intakeRequestedDate: excelValToDateStr(r[idx("Intake Requested Date")]),
-      intakeScheduledDate: excelValToDateStr(r[idx("Intake Meeting Scheduled Date")]),
       recruiterAcceptedDate: excelValToDateStr(r[idx("Recruiter Accepted Date")]),
       intake: excelValToDateStr(r[idx("Intake Date")]),
       submit: excelValToDateStr(r[idx("Submit Date")]),
@@ -4404,7 +4410,9 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   const statusDateVal = dateField ? document.getElementById("newPosStatusDateInput").value : null;
   const kickoff = status === "Kickoff" ? statusDateVal : null;
   const intakeRequestedDate = status === "Intake Meeting Requested" ? statusDateVal : null;
-  const intakeScheduledDate = status === "Intake Pending" ? statusDateVal : null;
+  // "Intake Pending" ya no pide una fecha de "scheduled for" aparte, pide directo la fecha real
+  // del Intake Meeting (ver STATUS_DATE_FIELD).
+  const intake = status === "Intake Pending" ? statusDateVal : null;
   const remark = document.getElementById("newPosRemark").value.trim();
 
   if(!title || !code){
@@ -4432,18 +4440,20 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // X-Z: Last Remark, Last Remark Date, Pivot SLA Approved
     // AA: Kickoff Date | AB-AJ: campos de Spott (se llenan despues a mano si aplica)
     // AK-AL: Work Arrangement, City | AM: Spott Job ID (id real de Spott, no el Job Code)
-    // AN: Intake Requested Date | AO: Intake Meeting Scheduled Date
+    // AN: Intake Requested Date | AO: Intake Meeting Scheduled Date (columna en extincion, ver
+    // graphSetupDeleteScheduledColumn() — se deja en null aqui hasta que Nicolas confirme que ya
+    // la borro del archivo real; ese dia hay que quitar tambien este slot del array)
     // AP: Recruiter Accepted Date (siempre vacio aqui, una posicion nueva nunca nace ya aceptada)
     // AQ: Irth Careers Page (Workable) URL, si la columna ya existe en el Excel real
     const row = [
-      code, title, "Irth Solutions", hm, recruiter, country, status, null, null, null, null,
+      code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
       null,null,null,null,null,null,null,null,null,null,null,null,
       remark || "", null, "No",
       kickoff,
       null, null, null, null, null, null, null, null, null,
       workArrangement, city,
       null,
-      intakeRequestedDate, intakeScheduledDate,
+      intakeRequestedDate, null,
       null,
       careersUrl,
     ];
@@ -4737,6 +4747,57 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
     console.error(err);
     msg.textContent = "Could not share: " + err.message;
     msg.style.color = "var(--critical)";
+  }
+});
+
+// Borra la columna "Intake Meeting Scheduled Date" de PositionsTable de verdad — ya nada en el
+// codigo la lee ni la escribe (ver STATUS_DATE_FIELD/computeCompletion), y los 2 escrituras que
+// antes usaban letras fijas mas a la derecha (Recruiter Accepted Date, Irth Careers Page) ya se
+// resuelven por nombre de encabezado, asi que el corrimiento de columnas que esto causa no
+// deberia romper nada. Aun asi es una operacion sobre la estructura del archivo real, no solo
+// datos, asi que lleva el mismo candado de "escribir la frase exacta" que Reset All Data.
+async function graphDeleteScheduledColumn(){
+  const base = await workbookBase();
+  await graphFetch(`${base}/tables('PositionsTable')/columns('Intake Meeting Scheduled Date')`, {
+    method: "DELETE",
+  });
+}
+document.getElementById("deleteScheduledColBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("deleteScheduledColMsg");
+  const confirmInput = document.getElementById("deleteScheduledColConfirm");
+  if(confirmInput.value.trim() !== "DELETE COLUMN"){
+    msg.textContent = 'Type "DELETE COLUMN" (exactly) in the box above first.';
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(!isConnected()){
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to do this.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(!isAdmin()){
+    msg.textContent = "Only the tracker admin can do this.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const sure = confirm('This permanently deletes the "Intake Meeting Scheduled Date" column from the shared file. This can\'t be undone from here. Are you sure?');
+  if(!sure) return;
+
+  const btn = document.getElementById("deleteScheduledColBtn");
+  btn.disabled = true;
+  msg.textContent = "Deleting the column…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    await graphDeleteScheduledColumn();
+    confirmInput.value = "";
+    msg.textContent = "Done. The column is gone.";
+    msg.style.color = "var(--good)";
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not delete the column: " + err.message;
+    msg.style.color = "var(--critical)";
+  } finally {
+    btn.disabled = false;
   }
 });
 
