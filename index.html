@@ -1548,6 +1548,13 @@ function jumpToRecruiterTracking(name){
 // que el tab entero se oculta sin scope, y si estabas ahi cuando alguien le da "Back To Team
 // Dashboard" hay que sacarte de una vista que ya no deberia ser alcanzable.
 function setDashboardScope(name){
+  // Un reclutador conectado que no es admin nunca puede salir de su propio workspace ni entrar
+  // al de otro — se corrige aqui mismo, una sola vez para TODOS los callers (team card, gate,
+  // "Back To Team Dashboard", "Edit In Tracking" desde Positions, etc.) en vez de tener que
+  // acordarse de blindar cada boton por separado. isAdmin() ya trata "sin conexion" como admin
+  // (pruebas locales / gente viendo el link publico sin loguearse), asi que esto solo aplica a
+  // un reclutador real conectado con MS365 que no es Nicolas.
+  if(!isAdmin() && MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
   const wasOnTracking = document.getElementById("view-tracking").classList.contains("active");
   activeDashboardScope = name;
   document.querySelector('.nav-item[data-view="tracking"]').style.display = name ? "" : "none";
@@ -1559,24 +1566,31 @@ function setDashboardScope(name){
   document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   document.getElementById("recentActivityZone").style.display = name ? "" : "none";
-  // Positions es el unico tab que sigue siendo la lista COMPLETA de la compañia incluso dentro
-  // de un Workspace personal (a diferencia de Dashboard/Tracking, que ya filtran solo). En vez
-  // de duplicar esa logica de filtrado, se reusa el filtro de Recruiter que Positions ya tiene:
-  // al entrar a un Workspace se pre-selecciona ese reclutador (el chip se puede quitar con un
-  // clic si de verdad quieres ver el directorio completo desde ahi), y al salir se limpia.
+  // Positions reusa el filtro de Recruiter que ya tenia para scopear por Workspace. Para un
+  // admin (Nicolas, o nadie conectado) es solo un pre-filtro comodo: se puede quitar con un
+  // clic para ver el directorio completo. Para un reclutador real no-admin, en cambio, esto es
+  // la misma barrera que ya aplica a Dashboard/Tracking — no ve requisitions de nadie mas, asi
+  // que el select queda bloqueado en su propio nombre, sin opcion de quitarlo.
   const posRecSel = document.getElementById("positionsRecruiter");
-  if(posRecSel){ posRecSel.value = name || ""; renderPositions(); }
+  const posLocked = !isAdmin() && !!MY_RECRUITER_NAME;
+  if(posRecSel){
+    posRecSel.value = name || "";
+    posRecSel.disabled = posLocked && !!name;
+    renderPositions();
+  }
   document.getElementById("positionsPanelSub").textContent = name
-    ? `Every position for ${name}, in any status (includes closed, cancelled, and fell-through) — pre-filtered to this workspace, clear the Recruiter filter to see everyone.`
+    ? (posLocked
+        ? `Every position for ${name}, in any status (includes closed, cancelled, and fell-through). Scoped to your own requisitions.`
+        : `Every position for ${name}, in any status (includes closed, cancelled, and fell-through) — pre-filtered to this workspace, clear the Recruiter filter to see everyone.`)
     : "Every position that exists in the system, in any status (includes closed, cancelled, and fell-through). This is the full directory, not the working tracker.";
   // El titulo se queda siempre en "Team": una vez adentro de un workspace, quien esta viendo
   // ya se ve arriba en el banner de perfil (foto + nombre + cargo) y en la tarjeta resaltada
   // de esta misma lista — repetirlo aqui como "Switch Recruiter" / "Viewing X's dashboard" era
   // la misma identidad dicha tres veces. Este panel solo necesita explicar la mecanica de clic.
-  document.getElementById("teamRailTitle").textContent = "Team";
-  document.getElementById("teamRailSub").textContent = name
-    ? "Click another card to switch workspaces"
-    : "Click a recruiter to open their workspace";
+  document.getElementById("teamRailTitle").textContent = posLocked ? "You" : "Team";
+  document.getElementById("teamRailSub").textContent = posLocked
+    ? "This is your workspace"
+    : (name ? "Click another card to switch workspaces" : "Click a recruiter to open their workspace");
   activateView((name && wasOnTracking) ? "tracking" : "dashboard");
   // Fundido corto al cambiar de Team Dashboard a Recruiter Dashboard (o entre reclutadores) en
   // vez de que el contenido salte de golpe. requestAnimationFrame no sirve aqui (no corre si la
@@ -1602,6 +1616,10 @@ function setDashboardScope(name){
   const title = RECRUITER_TITLES[name] || "Recruiter";
   const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
   banner.style.display = "";
+  // Un reclutador no-admin no tiene un Team Dashboard al que "volver" — este es su unico
+  // espacio, asi que ese boton simplemente no existe para el (el guard de arriba en esta misma
+  // funcion tampoco dejaria que sirviera de nada si lo dejaramos).
+  const backBtn = posLocked ? "" : `<button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Dashboard</button>`;
   banner.innerHTML = `
     <div class="scope-banner-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(name))}</div>
     <div class="scope-banner-info">
@@ -1610,9 +1628,9 @@ function setDashboardScope(name){
     </div>
     <div class="scope-banner-actions">
       <button class="btn primary small" id="scopeEditBtn" type="button">Open Tracking →</button>
-      <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Dashboard</button>
+      ${backBtn}
     </div>`;
-  document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
+  if(!posLocked) document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
   document.getElementById("scopeEditBtn").addEventListener("click", ()=> jumpToRecruiterTracking(name));
 }
 // Pantalla intermedia entre hacer clic en una tarjeta de Team y realmente entrar al perfil:
@@ -1692,7 +1710,10 @@ function renderRecentReqs(){
 }
 function renderTeamPanel(){
   const el = document.getElementById("teamGrid");
-  el.innerHTML = RECRUITERS.map(name=>{
+  // Un reclutador real no-admin no tiene nada que "cambiar a" — solo ve su propia tarjeta, sin
+  // opcion de entrar al workspace de nadie mas. isAdmin() ya cubre admin real y sin-conexion.
+  const visible = (isAdmin() || !MY_RECRUITER_NAME) ? RECRUITERS : RECRUITERS.filter(n=>n===MY_RECRUITER_NAME);
+  el.innerHTML = visible.map(name=>{
     const photo = RECRUITER_PHOTOS[name];
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
     const title = RECRUITER_TITLES[name] || "Recruiter";
@@ -2443,6 +2464,11 @@ function fillSlaSelectOnce(sel){
 function renderPositions(){
   const statusSel = document.getElementById("positionsStatus");
   const recSel = document.getElementById("positionsRecruiter");
+  // Reforzado aqui tambien (no solo en setDashboardScope) porque renderPositions() se llama
+  // desde muchos otros lugares (limpiar chips, cambiar cualquier otro filtro, cambiar de vista)
+  // — asi el candado nunca depende de que el caller se acuerde de mantenerlo.
+  const posLocked = !isAdmin() && !!MY_RECRUITER_NAME;
+  if(posLocked){ recSel.value = MY_RECRUITER_NAME; recSel.disabled = true; }
   const hmSel = document.getElementById("positionsHM");
   const locSel = document.getElementById("positionsLocation");
   const ttsSel = document.getElementById("positionsTTS");
@@ -2475,7 +2501,7 @@ function renderPositions(){
   const chips = [];
   if(searchEl.value.trim()) chips.push({label:`Search: "${searchEl.value.trim()}"`, clear:()=>{ searchEl.value=""; }});
   if(est) chips.push({label:`Status: ${est}`, clear:()=>{ statusSel.value=""; }});
-  if(rec) chips.push({label:`Recruiter: ${rec}`, clear:()=>{ recSel.value=""; }});
+  if(rec && !posLocked) chips.push({label:`Recruiter: ${rec}`, clear:()=>{ recSel.value=""; }});
   if(hm) chips.push({label:`Hiring Manager: ${hm}`, clear:()=>{ hmSel.value=""; }});
   if(loc) chips.push({label:`Country: ${loc}`, clear:()=>{ locSel.value=""; }});
   if(ttsF) chips.push({label:`Time To Submit: ${slaLabel(ttsF)}`, clear:()=>{ ttsSel.value=""; }});
@@ -2483,7 +2509,8 @@ function renderPositions(){
   if(tthF) chips.push({label:`Time To Hire: ${slaLabel(tthF)}`, clear:()=>{ tthSel.value=""; }});
   if(placementF) chips.push({label:`Placement: ${placementF==="yes"?"Yes":"No"}`, clear:()=>{ placementSel.value=""; }});
   const chipsEl = document.getElementById("positionsChips");
-  chipsEl.innerHTML = chips.map((c,i)=>`<span class="filter-chip">${c.label}<button type="button" data-chip-idx="${i}">&times;</button></span>`).join("")
+  const lockedChip = posLocked ? `<span class="filter-chip" style="opacity:0.85;" title="You only see your own requisitions here">Recruiter: ${escapeHtml(rec)} 🔒</span>` : "";
+  chipsEl.innerHTML = lockedChip + chips.map((c,i)=>`<span class="filter-chip">${c.label}<button type="button" data-chip-idx="${i}">&times;</button></span>`).join("")
     + (chips.length ? `<button type="button" class="filter-chips-clear" id="positionsClearAllChips">Clear all</button>` : "");
   chipsEl.querySelectorAll("[data-chip-idx]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ chips[+btn.dataset.chipIdx].clear(); renderPositions(); });
@@ -4278,6 +4305,10 @@ async function loadFromGraph(){
   LOCATIONS = [...new Set(newPositions.map(p => p.country).filter(Boolean))];
   POSITIONS = newPositions;
   renderAll();
+  // Un reclutador real (no admin) no aterriza en Team Dashboard para despues tener que
+  // encontrar su propia tarjeta — entra directo a su Workspace, coherente con que ya no puede
+  // salir de el de todos modos (ver el guard al inicio de setDashboardScope()).
+  if(!isAdmin() && myRecruiterName) setDashboardScope(myRecruiterName);
 }
 // Proxy publico de solo lectura (Cloudflare Worker), para gente que solo necesita VER el
 // tracker sin loguearse (Nicole, Immy, Sara, Chris Watkins...): el Worker guarda su propia
