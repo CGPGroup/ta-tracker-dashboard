@@ -2842,8 +2842,8 @@ function renderDetailModal(){
     timelineHtml +
     factsSection("Pipeline (From Spott)", pipelineFacts) +
     (pipelineFacts.length
-      ? `<div class="alert-banner tier-good compact">Synced automatically from Spott every day at 12 PM CT.</div>`
-      : `<div class="alert-banner tier-yellow compact">Not synced yet — this fills in automatically from Spott every day at 12 PM CT once a Spott Job URL is set.</div>`) +
+      ? `<div class="alert-banner tier-good compact">Synced automatically from Spott every day at 12:00 PM CT.</div>`
+      : `<div class="alert-banner tier-yellow compact">Not synced yet — this fills in automatically from Spott every day at 12:00 PM CT once a Spott Job URL is set.</div>`) +
     (isView ? "" : `<div style="margin-bottom:22px;"><button type="button" class="btn ghost small" id="editPipelineBtn">Edit Pipeline</button></div>`) +
     batchesHtml +
     factsSection("Outcome", outcomeFacts);
