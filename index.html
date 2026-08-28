@@ -1185,6 +1185,32 @@
   </div>
 </div>
 
+<!-- ======================= EDIT PIPELINE MODAL ======================= -->
+<!-- Sourced/Direct Apps/Submitted/Active/Rejected: hoy se pegan a mano desde Spott (no hay
+     credencial de Spott que el Worker pueda usar para traerlos solo) — ver openEditPipelineModal(). -->
+<div class="modal-overlay" id="editPipelineModal">
+  <div class="modal-card" style="max-width:480px;">
+    <div class="modal-head">
+      <div>
+        <h2 style="margin:0; font-size:16px;">Edit Pipeline</h2>
+        <div class="modal-sub">From Spott — enter the current counts for this requisition.</div>
+      </div>
+      <button class="modal-close" id="editPipelineClose" type="button">&times;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field"><label>Sourced</label><input type="number" id="pipelineSourced" min="0"></div>
+      <div class="form-field"><label>Direct Apps</label><input type="number" id="pipelineDirectApps" min="0"></div>
+      <div class="form-field"><label>Submitted</label><input type="number" id="pipelineSubmitted" min="0"></div>
+      <div class="form-field"><label>Active</label><input type="number" id="pipelineActive" min="0"></div>
+      <div class="form-field"><label>Rejected</label><input type="number" id="pipelineRejected" min="0"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="editPipelineSave">Save Pipeline</button>
+    </div>
+    <div class="panel-sub" id="editPipelineMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
 <!-- ======================= PROFILE ENTRY GATE (before entering a recruiter's dashboard) ======================= -->
 <div class="modal-overlay" id="profileGateModal">
   <div class="modal-card" style="max-width:640px;">
@@ -2782,9 +2808,11 @@ function renderDetailModal(){
     urlFactsHtml +
     timelineHtml +
     factsSection("Pipeline (From Spott)", pipelineFacts) +
+    (isView ? "" : `<div style="margin-bottom:18px;"><button type="button" class="btn ghost small" id="editPipelineBtn">Edit Pipeline</button></div>`) +
     batchesHtml +
     factsSection("Outcome", outcomeFacts);
   if(!isView){
+    document.getElementById("editPipelineBtn").addEventListener("click", ()=> openEditPipelineModal(p));
     document.getElementById("logBatchBtn").addEventListener("click", ()=> openLogBatchModal(p));
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
@@ -3174,6 +3202,70 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--warning)";
   }
   setTimeout(closeLogBatchModal, 900);
+});
+
+// Sourced/Direct Apps/Submitted/Active/Rejected vienen de Spott, pero Spott no tiene una API key
+// que el Worker pueda usar solo (confirmado con Nicolas) — asi que por ahora esto se pega a mano
+// aqui. Importante al calcular estos numeros en Spott: los stageTotals crudos de un job NO
+// descuentan las aplicaciones ya rechazadas dentro de cada etapa, hay que restarlas antes de
+// pegar el numero (una aplicacion rechazada se queda contada en la etapa donde la rechazaron).
+function openEditPipelineModal(p){
+  document.getElementById("pipelineSourced").value = p.sourced ?? "";
+  document.getElementById("pipelineDirectApps").value = p.directApps ?? "";
+  document.getElementById("pipelineSubmitted").value = p.submittedCount ?? "";
+  document.getElementById("pipelineActive").value = p.activeCount ?? "";
+  document.getElementById("pipelineRejected").value = p.rejectedCount ?? "";
+  document.getElementById("editPipelineMsg").textContent = "";
+  document.getElementById("editPipelineModal").classList.add("open");
+}
+function closeEditPipelineModal(){
+  document.getElementById("editPipelineModal").classList.remove("open");
+}
+document.getElementById("editPipelineClose").addEventListener("click", closeEditPipelineModal);
+document.getElementById("editPipelineModal").addEventListener("click", (e)=>{
+  if(e.target.id === "editPipelineModal") closeEditPipelineModal();
+});
+document.getElementById("editPipelineSave").addEventListener("click", async ()=>{
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const msg = document.getElementById("editPipelineMsg");
+  const fields = [
+    {key:"sourced", header:"Sourced", inputId:"pipelineSourced"},
+    {key:"directApps", header:"Direct Apps", inputId:"pipelineDirectApps"},
+    {key:"submittedCount", header:"Submitted", inputId:"pipelineSubmitted"},
+    {key:"activeCount", header:"Active (count)", inputId:"pipelineActive"},
+    {key:"rejectedCount", header:"Rejected", inputId:"pipelineRejected"},
+  ].map(f => ({...f, value: document.getElementById(f.inputId).value.trim() || null}));
+  const changed = fields.filter(f => f.value !== (p[f.key] != null ? String(p[f.key]) : null));
+  if(!changed.length){
+    msg.textContent = "No changes to save.";
+    msg.style.color = "var(--text-muted)";
+    return;
+  }
+  changed.forEach(f => { p[f.key] = f.value; });
+  renderDetailModal();
+  renderPositions();
+  renderTracking();
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      for(const f of changed){
+        await graphUpdatePositionFieldByHeader(p.id, f.header, f.value ?? "");
+      }
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+      return;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+  setTimeout(closeEditPipelineModal, 900);
 });
 
 // Aplica un cambio de status ya confirmado (con su fecha si la exigia). Se usa tanto para
