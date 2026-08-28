@@ -507,6 +507,11 @@
     font-family: inherit; font-size: 13px; padding: 6px 8px; width: 100%;
     border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text-primary);
   }
+  /* Campo de Timeline que todavia no le toca al recruiter (el anterior en la secuencia sigue
+     vacio) — se ve gris/deshabilitado en vez de ocultarse, para que quede claro que existe y
+     que falta algo previo, sin dar la impresion de que no hay mas que llenar. */
+  .fact-date-input:disabled { opacity: 0.45; cursor: not-allowed; }
+  .tl-lock { font-size: 10px; cursor: help; }
   .clickable-stat { cursor: pointer; transition: opacity .12s; }
   /* Cualquier span de estado tipo "Saving…"/"Saved."/error (todos terminan su id en "Msg")
      cambia de color con un fundido corto en vez de saltar de golpe de gris a verde/rojo. */
@@ -545,6 +550,7 @@
   .timeline .tl-badge.auto { background: var(--surface-2); color: var(--text-secondary); }
   .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
   .timeline .tl-badge.status { background: rgba(111,147,201,0.16); color: var(--stage-blue); }
+  .timeline .tl-badge.guidance { background: rgba(224,112,63,0.14); color: var(--brand); }
   .timeline .tl-text { flex: 1; }
   .add-remark textarea {
     width: 100%; font-family: inherit; font-size: 13px; padding: 9px 11px;
@@ -1231,6 +1237,24 @@ const STATUS_DATE_FIELD = {
   "Kickoff": {key:"kickoff", col:"AA", label:"Kickoff Date"},
   "Intake Meeting Requested": {key:"intakeRequestedDate", col:"AN", label:"Date You Replied Requesting The Intake"},
   "Intake Pending": {key:"intakeScheduledDate", col:"AO", label:"Date The Intake Was Scheduled For"},
+};
+// Mensaje de "que hacer ahora" por status, logueado en Activity cada vez que un req entra a ese
+// status (al crearlo, o al cambiarlo) — Nicolas pidio esto para todos los status, no solo Kickoff.
+// El texto vive centralizado aqui para poder ajustarlo facil si el proceso real cambia.
+const STATUS_GUIDANCE = {
+  "Kickoff": "This requisition was just assigned. Accept it and request the intake meeting with the hiring manager, introducing yourself in the kickoff email.",
+  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability. Once they do, log it under Intake Scheduled For.",
+  "Intake Pending": "The intake meeting is scheduled. After it happens, log the actual date under Intake Meeting.",
+  "Sourcing": "Start sourcing candidates for this role.",
+  "Screening": "Screen the candidates you've sourced before submitting the strongest ones to the hiring manager.",
+  "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Keep the pipeline moving and log outcomes as they come in.",
+  "Technical Interview": "Candidates are in technical interviews. Coordinate scheduling and follow up on feedback.",
+  "Offer Request": "An offer is being requested for a candidate. Confirm the terms with the hiring manager before extending it.",
+  "Filled": "An offer was accepted. Log the Fill Date if you haven't already, and prepare for the candidate's start.",
+  "Hired": "The candidate started. Log the Hire Date if you haven't already — this requisition is complete.",
+  "Fell Through": "This requisition fell through. Add a remark explaining what happened, for the record.",
+  "On Hold": "This requisition is on hold. Check back periodically for updates from the hiring manager.",
+  "Cancelled": "This requisition was cancelled. No further action is needed.",
 };
 const STAGE_COLORS = {
   "Kickoff": "var(--seq-100)",
@@ -2474,7 +2498,7 @@ function buildTimeline(p){
     return (a.type==="auto"?0:1) - (b.type==="auto"?0:1);
   });
 }
-const TL_BADGE_LABELS = { auto: "Auto", manual: "Remark", status: "Status Change" };
+const TL_BADGE_LABELS = { auto: "Auto", manual: "Remark", status: "Status Change", guidance: "Next Step" };
 function timelineListHtml(timeline){
   return timeline.length ? timeline.map(e=>`
     <li>
@@ -2482,6 +2506,16 @@ function timelineListHtml(timeline){
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
       <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity logged yet.</li>`;
+}
+// Un campo de Timeline se ve siempre (nunca se oculta), pero se deshabilita con un candadito +
+// tooltip mientras el campo anterior de la secuencia siga vacio, para que el recruiter sepa que
+// existe sin poder llenarlo fuera de orden.
+function timelineFieldHtml(label, id, value, locked, unlockHint){
+  return `
+    <div>
+      <div class="fact-label">${escapeHtml(label)}${locked ? ` <span class="tl-lock" title="${escapeHtml(unlockHint)}">&#128274;</span>` : ""}</div>
+      <input type="date" class="fact-date-input" id="${id}" value="${escapeHtml(value)}" ${locked ? `disabled title="${escapeHtml(unlockHint)}"` : ""}>
+    </div>`;
 }
 // Actividad de la posicion actualmente seleccionada en Tracking, mostrada en el panel de la
 // izquierda (debajo de la lista) en vez de en el panel de detalle de la derecha — p null limpia
@@ -2630,13 +2664,13 @@ function renderDetailModal(){
       ])
     : `<div class="modal-section-title">Timeline</div>
     <div class="facts-grid">
-      <div><div class="fact-label">Kickoff Date</div><input type="date" class="fact-date-input" id="editKickoff" value="${escapeHtml(p.kickoff)}"></div>
-      <div><div class="fact-label">Intake Requested Date</div><input type="date" class="fact-date-input" id="editIntakeRequested" value="${escapeHtml(p.intakeRequestedDate)}"></div>
-      <div><div class="fact-label">Intake Scheduled For</div><input type="date" class="fact-date-input" id="editIntakeScheduled" value="${escapeHtml(p.intakeScheduledDate)}"></div>
-      <div><div class="fact-label">Intake Meeting</div><input type="date" class="fact-date-input" id="editIntake" value="${escapeHtml(p.intake)}"></div>
-      <div><div class="fact-label">Submit Date</div><input type="date" class="fact-date-input" id="editSubmit" value="${escapeHtml(p.submit)}"></div>
-      <div><div class="fact-label">Fill Date</div><input type="date" class="fact-date-input" id="editFill" value="${escapeHtml(p.fill)}"></div>
-      <div><div class="fact-label">Hire Date</div><input type="date" class="fact-date-input" id="editHire" value="${escapeHtml(p.hire)}"></div>
+      ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "")}
+      ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.")}
+      ${timelineFieldHtml("Intake Scheduled For", "editIntakeScheduled", p.intakeScheduledDate, !p.intakeRequestedDate, "Fill in Intake Requested Date first.")}
+      ${timelineFieldHtml("Intake Meeting", "editIntake", p.intake, !p.intakeScheduledDate, "Fill in Intake Scheduled For first.")}
+      ${timelineFieldHtml("Submit Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting first.")}
+      ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submit Date first.")}
+      ${timelineFieldHtml("Hire Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
     </div>
     <div style="margin-bottom:18px;">
       <button class="btn primary small" id="modalDatesSave" type="button">Save Dates</button>
@@ -3016,8 +3050,11 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
   const remarkText = dateField
     ? `Status changed from ${oldStatus} to ${newStatus} (${dateField.label}: ${dateVal}).`
     : `Status changed from ${oldStatus} to ${newStatus}.`;
+  const today = new Date().toISOString().slice(0,10);
   p.extra = p.extra || [];
-  p.extra.push({date: new Date().toISOString().slice(0,10), type:"status", author:"You", text:remarkText});
+  p.extra.push({date: today, type:"status", author:"You", text:remarkText});
+  const guidanceText = STATUS_GUIDANCE[newStatus];
+  if(guidanceText) p.extra.push({date: today, type:"guidance", text:guidanceText});
   p.status = newStatus;
   if(dateField) p[dateField.key] = dateVal;
   pendingStatusChange = null;
@@ -3038,6 +3075,9 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
       await graphUpdatePositionField(p.id, "G", newStatus);
       if(dateField) await graphUpdatePositionField(p.id, dateField.col, dateVal);
       await graphAppendHistorial(p.id, p.title, remarkText, "You");
+      // Se agrega despues del remark de status para que quede como el mas reciente (lo que
+      // mergeLatestRemarks() trae de vuelta como p.lastRemark en la proxima carga).
+      if(guidanceText) await graphAppendHistorial(p.id, p.title, guidanceText, "System");
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
     } catch(err){
@@ -4038,6 +4078,10 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       careersUrl,
     ];
     await graphAppendPosition(row);
+    // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
+    // ahora" segun el status inicial elegido — se escribe directo a HistorialTable (no hay un
+    // objeto en memoria todavia) para que loadFromGraph() lo traiga de vuelta como lastRemark.
+    if(STATUS_GUIDANCE[status]) await graphAppendHistorial(code, title, STATUS_GUIDANCE[status], "System");
     msg.textContent = "Position created. Reloading data…";
     msg.style.color = "var(--good)";
     await loadFromGraph();
