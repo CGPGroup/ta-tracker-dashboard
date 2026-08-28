@@ -1341,20 +1341,23 @@ const STATUS_DATE_FIELD = {
 // Mensaje de "que hacer ahora" por status, logueado en Activity cada vez que un req entra a ese
 // status (al crearlo, o al cambiarlo) — Nicolas pidio esto para todos los status, no solo Kickoff.
 // El texto vive centralizado aqui para poder ajustarlo facil si el proceso real cambia.
+// Texto grounded en el Playbook y el Master Prompt (nunca inventado) — cada uno describe los
+// pasos reales que tocan en ese momento, no una linea generica. Ver esos dos documentos como
+// fuente si algo aqui necesita ajustarse.
 const STATUS_GUIDANCE = {
-  "Kickoff": "This requisition was just assigned. Accept it and request the intake meeting with the hiring manager, introducing yourself in the kickoff email.",
-  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability. Once they do, move the status to Intake Pending and log the date.",
-  "Intake Pending": "Intake meeting date logged. Once the meeting actually happens, move the status to Sourcing to start building batches.",
-  "Sourcing": "Start sourcing candidates for this role.",
-  "Screening": "Screen the candidates you've sourced before submitting the strongest ones to the hiring manager.",
-  "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Keep the pipeline moving and log outcomes as they come in.",
-  "Technical Interview": "Candidates are in technical interviews. Coordinate scheduling and follow up on feedback.",
-  "Offer Request": "An offer is being requested for a candidate. Confirm the terms with the hiring manager before extending it.",
-  "Filled": "An offer was accepted. Log the Fill Date if you haven't already, and prepare for the candidate's start.",
-  "Hired": "The candidate started. Log the Hire Date if you haven't already — this requisition is complete.",
-  "Fell Through": "This requisition fell through. Add a remark explaining what happened, for the record.",
-  "On Hold": "This requisition is on hold. Check back periodically for updates from the hiring manager.",
-  "Cancelled": "This requisition was cancelled. No further action is needed.",
+  "Kickoff": "This requisition was just assigned. Send the Kickoff email to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting) and confirm you've accepted it. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
+  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or send written answers instead if a live call isn't possible). Once they confirm, move the status to Intake Pending and log the date — sourcing still can't start until the intake actually happens.",
+  "Intake Pending": "Intake meeting date logged. Use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone. Once the meeting has actually taken place, move status to Sourcing — the first batch is due within 7-9 business days from today.",
+  "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Curate a batch of 3-5 candidates, never more, and get it to the hiring manager within 7-9 business days of the intake meeting.",
+  "Screening": "Run Screening Interviews with your sourced candidates before submitting anyone formally. Only candidates you'd genuinely stand behind should move forward — leave your evaluation as a comment on each profile once you're ready to submit them.",
+  "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 5-business-day decision SLA per candidate, never per batch.",
+  "Technical Interview": "Candidates are in technical interviews, usually the round before the Hiring Manager Interview. Same rule applies: feedback due within 1-3 business days per candidate, logged in Workable's Review tab.",
+  "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
+  "Filled": "An offer was accepted. Log the Fill Date if you haven't already — this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
+  "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Hire Date if you haven't already; this requisition is complete.",
+  "Fell Through": "This requisition fell through. Add a remark explaining what happened — if it reopens, it most likely restarts at Sourcing rather than from scratch.",
+  "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
+  "Cancelled": "This requisition was cancelled by the client. No further action is needed.",
 };
 const STAGE_COLORS = {
   "Kickoff": "var(--seq-100)",
@@ -3298,7 +3301,21 @@ document.getElementById("editPipelineSave").addEventListener("click", async ()=>
     msg.style.color = "var(--text-muted)";
     return;
   }
+  // Si Submitted pasa de 0/vacio a un numero positivo, es la senal de que ya se sometieron
+  // candidatos al hiring manager (la etapa "Submission" en Spott) — dispara un recordatorio
+  // especifico de lo que sigue segun el Master Prompt (comentario en Workable, correo de
+  // notificacion al HM, SLA de feedback), en vez de esperar a que cambie el status del req.
+  const submittedChange = changed.find(f => f.key === "submittedCount");
+  const wasSubmittedZero = !p.submittedCount || Number(p.submittedCount) <= 0;
+  let submittedGuidanceText = null;
+  if(submittedChange && wasSubmittedZero && Number(submittedChange.value) > 0){
+    submittedGuidanceText = "Candidates are now showing as Submitted in Spott. Make sure you've left your evaluation comment on each profile in Workable's Review tab, sent the hiring manager the submission notification email, and that they know feedback is due within 1-3 business days per candidate.";
+  }
   changed.forEach(f => { p[f.key] = f.value; });
+  if(submittedGuidanceText){
+    p.extra = p.extra || [];
+    p.extra.push({date: new Date().toISOString().slice(0,10), type:"guidance", text: submittedGuidanceText});
+  }
   renderDetailModal();
   renderPositions();
   renderTracking();
@@ -3309,6 +3326,7 @@ document.getElementById("editPipelineSave").addEventListener("click", async ()=>
       for(const f of changed){
         await graphUpdatePositionFieldByHeader(p.id, f.header, f.value ?? "");
       }
+      if(submittedGuidanceText) await graphAppendHistorial(p.id, p.title, submittedGuidanceText, "System", "guidance");
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
     } catch(err){
