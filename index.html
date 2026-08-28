@@ -89,16 +89,16 @@
   /* ============================================================
      TEMA CLARO — activado con [data-theme="light"] en <html> (documentElement), fijado ANTES
      de pintar la pagina para no parpadear el tema viejo un instante (ver el script inline al
-     principio de <head>). La sidebar (logo, nav, credito
-     CGP/KeyStone) se queda SIEMPRE oscura sin importar el tema (ver la regla ".sidebar" mas
-     abajo que re-fija estas mismas variables a sus valores oscuros): el wordmark "CGP GROUP" en
-     logos/cgp-group.svg esta dibujado en blanco solido, no existe una version del logo pensada
-     para fondo claro, asi que la sidebar es el ancla de marca fija (patron comun: Vercel,
-     Linear, Notion tambien mantienen su rail de navegacion oscuro aunque el contenido cambie).
-     Solo topbar + content (donde de verdad se trabaja todo el dia) responden al toggle.
+     principio de <head>). La sidebar SI cambia con el resto de la app (no se queda ancla fija);
+     el unico problema real era el wordmark "CGP GROUP" en logos/cgp-group.svg, dibujado en
+     blanco solido sin version para fondo claro — se resuelve dandole su propio chip oscuro fijo
+     (.cgp-credit-logo-wrap mas abajo) en vez de sacrificar el tema de toda la sidebar por un
+     solo logo. El loading splash inicial (.app-loading-overlay) si se queda fijo en oscuro
+     porque ahi aparecen TRES logos con texto blanco (CGP, KeyStone, Irth) a la vez.
      ============================================================ */
   :root[data-theme="light"] {
     color-scheme: light;
+    --sidebar-bg: #ffffff;
     --surface-1: #ffffff;
     --surface-2: #f2ede7;
     --page: #f7f4f0;
@@ -139,16 +139,9 @@
   .shell { display: flex; min-height: 100vh; }
 
   .sidebar {
-    /* Re-fija estos tokens a sus valores oscuros pase lo que pase con el tema activo en <body>
-       — la sidebar es el ancla de marca fija (ver el comentario junto a body[data-theme="light"]
-       mas arriba). Una vez declarados aqui, todo lo de adentro que use var(--text-secondary) etc.
-       (nav-item, sidebar-foot...) hereda ESTOS valores, no los que ponga el tema del body. */
-    --surface-1: #1e1b19; --surface-2: #221f1d; --page: #0c0b0a;
-    --text-primary: #f2ede6; --text-secondary: #b3a89c; --text-muted: #85796d;
-    --border: rgba(255,255,255,0.08); --hover-wash: rgba(255,255,255,0.06);
     width: 232px; flex: none;
     background: var(--sidebar-bg);
-    color: #fff;
+    color: var(--text-primary);
     display: flex; flex-direction: column;
     padding: 20px 14px;
   }
@@ -161,6 +154,10 @@
   /* ---------- Pantalla de carga inicial: evita el "flash" de datos viejos/de ejemplo antes
      de que trysilentConnect() termine de resolver datos reales (Graph o el proxy publico). ---------- */
   .app-loading-overlay {
+    /* Fijo en oscuro pase lo que pase con el tema: aqui salen a la vez los wordmarks de CGP Y
+       KeyStone, ambos en blanco solido sin version para fondo claro (ver el comentario grande
+       junto a body[data-theme="light"] mas arriba). */
+    --page: #0c0b0a; --text-primary: #f2ede6; --text-muted: #85796d; --border: rgba(255,255,255,0.08);
     position: fixed; inset: 0; z-index: 9999;
     background: var(--page);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
@@ -193,26 +190,29 @@
     border-left: 3px solid transparent;
   }
   .nav-item { transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
-  .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
-  .nav-item.active { background: rgba(var(--brand-rgb),0.22); color: #fff; border-left: 3px solid var(--brand); }
+  .nav-item:hover { background: var(--hover-wash); color: var(--text-primary); }
+  .nav-item.active { background: rgba(var(--brand-rgb),0.22); color: var(--text-primary); border-left: 3px solid var(--brand); }
   .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
   .nav-ic svg { width: 100%; height: 100%; display: block; }
 
   .sidebar-foot {
     margin-top: auto; padding: 12px 8px 4px;
     font-size: 11px; color: var(--text-muted); line-height: 1.5;
-    border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
+    border-top: 1px solid var(--border); padding-top: 14px;
   }
   .sidebar-tagline {
     color: var(--text-secondary); font-weight: 600; margin-bottom: 12px; padding-bottom: 14px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid var(--border);
   }
   .sidebar-cgp-credit { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
   .sidebar-cgp-label {
     font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--text-muted);
   }
-  .cgp-credit-logo { height: 32px; width: auto; }
+  /* Chip fijo siempre-oscuro solo para este logo (wordmark blanco solido, sin version clara) —
+     asi la sidebar entera puede seguir el tema activo sin sacrificar este logo especifico. */
+  .cgp-credit-logo-wrap { background: #131211; border-radius: 8px; padding: 8px 12px; display: inline-flex; }
+  .cgp-credit-logo { height: 32px; width: auto; display: block; }
 
   .dashboard-body { display: flex; align-items: flex-start; gap: 20px; }
   .team-rail { width: 260px; flex: none; }
@@ -751,7 +751,7 @@
     <div class="sidebar-foot">
       <div class="sidebar-cgp-credit">
         <div class="sidebar-cgp-label">Managed By</div>
-        <img src="logos/cgp-group.svg" alt="CGP Group" class="cgp-credit-logo">
+        <div class="cgp-credit-logo-wrap"><img src="logos/cgp-group.svg" alt="CGP Group" class="cgp-credit-logo"></div>
       </div>
       <div class="sidebar-tagline">The Team's Single Source Of Truth</div>
       You're seeing live data already.<br>
