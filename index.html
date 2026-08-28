@@ -3206,9 +3206,18 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
 
 // Sourced/Direct Apps/Submitted/Active/Rejected vienen de Spott, pero Spott no tiene una API key
 // que el Worker pueda usar solo (confirmado con Nicolas) — asi que por ahora esto se pega a mano
-// aqui. Importante al calcular estos numeros en Spott: los stageTotals crudos de un job NO
-// descuentan las aplicaciones ya rechazadas dentro de cada etapa, hay que restarlas antes de
-// pegar el numero (una aplicacion rechazada se queda contada en la etapa donde la rechazaron).
+// aqui. Como calcular cada uno en Spott (etapas de application_stages):
+//   Sourced      = Initial Sourcing / Mapping
+//   Direct Apps  = Application / Job Postings
+//   Submitted    = Submission / CV Sent / SL
+//   Active       = Submission / CV Sent / SL + Client 1st IV + Client 2nd / Final IV
+//                  (si, se solapa con Submitted a proposito — Submitted es cuantos se han
+//                  mandado en total, Active es cuantos siguen vivos ahora mismo en el tramo
+//                  submission-a-client2nd)
+//   Rejected     = aplicaciones con applicationState.state === "rejected", cualquier etapa
+// Importante: los stageTotals crudos de un job en Spott NO descuentan las aplicaciones ya
+// rechazadas dentro de cada etapa (una rechazada se queda contada en la etapa donde la
+// rechazaron) — siempre hay que restarlas antes de pegar el numero aqui.
 function openEditPipelineModal(p){
   document.getElementById("pipelineSourced").value = p.sourced ?? "";
   document.getElementById("pipelineDirectApps").value = p.directApps ?? "";
