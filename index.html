@@ -3669,12 +3669,18 @@ function activateView(view){
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById("view-"+view).classList.add("active");
-  document.getElementById("topbarTitle").textContent = view === "dashboard"
-    ? (activeDashboardScope ? "Recruiter Dashboard" : "Team Dashboard")
-    : TITLES[view][0];
-  document.getElementById("topbarSub").textContent = view === "tracking" && activeDashboardScope
-    ? `${activeDashboardScope}'s requisitions — codes, SLA, and the latest activity`
-    : TITLES[view][1];
+  if(activeDashboardScope){
+    // Dentro del perfil de un reclutador, el titulo grande es su Workspace personal — constante
+    // sin importar en que vista este parado — y Dashboard/Positions/Tracking pasan a ser
+    // secciones DENTRO de ese workspace, no el nombre del workspace en si (antes decia
+    // "Recruiter Dashboard" incluso estando en Tracking o Positions, lo cual no tenia sentido).
+    document.getElementById("topbarTitle").textContent = `${activeDashboardScope} Workspace`;
+    const viewLabel = view === "dashboard" ? "Recruiter Dashboard" : TITLES[view][0];
+    document.getElementById("topbarSub").textContent = `${viewLabel} — ${TITLES[view][1]}`;
+  } else {
+    document.getElementById("topbarTitle").textContent = view === "dashboard" ? "Team Dashboard" : TITLES[view][0];
+    document.getElementById("topbarSub").textContent = TITLES[view][1];
+  }
   dockDetailModal(view === "tracking");
   // renderTracking() no se dispara solo al cambiar de vista/perfil (solo con los filtros del
   // toolbar) — sin esto, el flag de "editable" (identidad conectada vs activeDashboardScope)
