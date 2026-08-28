@@ -533,7 +533,10 @@
      texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
      menu es una lista simple debajo, cada item con su propio punto de color via STAGE_COLORS. */
   .status-dropdown { position: relative; display: inline-block; }
-  .status-dropdown-trigger { border: none; cursor: pointer; font: inherit; }
+  /* .status-chip ya trae su propio font-size/weight/family — el <button> nativo pone su propia
+     fuente/tamaño por defecto que los pisaba (por eso se veia mas grande y con otra fuente que
+     el badge identico de Work Arrangement); solo se resetea el borde y el cursor, nada de font. */
+  .status-dropdown-trigger { border: none; cursor: pointer; font-family: inherit; }
   .status-dropdown-menu {
     display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
@@ -670,6 +673,19 @@
             <div id="pendingAssignmentZone"></div>
             <div class="kpi-row" id="kpiRow"></div>
 
+            <!-- Solo tiene sentido dentro del perfil de un reclutador (que es exactamente el
+                 alcance que ya calcula dashboardPositions()/renderTrackingActivity()) — oculto
+                 por defecto en Team Dashboard, se muestra en setDashboardScope(). Antes vivia en
+                 Tracking, mal ubicado ahi (Tracking es para trabajar reqs uno por uno, no para
+                 ver un feed de actividad reciente). -->
+            <div class="panel" id="recentActivityZone" style="display:none; margin-bottom:16px;">
+              <details class="panel-details" id="recentActivityDetails">
+                <summary>Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></summary>
+                <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
+                <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
+              </details>
+            </div>
+
             <div class="dash-cols">
               <div class="dash-col">
                 <div class="panel">
@@ -778,13 +794,6 @@
           <h3>Needs Attention</h3>
           <div class="panel-sub">Your active positions out of SLA or at risk, plus requisitions falling behind on Kickoff/Intake follow-up, most urgent first.</div>
           <div id="needsAttentionList"></div>
-        </div>
-        <div class="panel" style="margin-bottom:16px;">
-          <details class="panel-details" id="recentActivityDetails">
-            <summary>Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></summary>
-            <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
-            <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
-          </details>
         </div>
         <div class="tracking-split">
           <div class="tracking-list-col">
@@ -1377,6 +1386,7 @@ function dashboardPositions(){
 }
 function renderDashboardPanels(){
   renderPendingAssignments();
+  renderTrackingActivity();
   renderKpis();
   renderEstadoChart();
   renderReclutadorChart();
@@ -1489,6 +1499,7 @@ function setDashboardScope(name){
   document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
   document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
+  document.getElementById("recentActivityZone").style.display = name ? "" : "none";
   activateView((name && wasOnTracking) ? "tracking" : "dashboard");
   renderDashboardPanels();
   renderTeamPanel();
@@ -2473,7 +2484,6 @@ function renderNeedsAttention(){
 }
 function renderTracking(){
   renderNeedsAttention();
-  renderTrackingActivity();
   const statusSel = document.getElementById("trackingStatus");
   const ttsSel = document.getElementById("trackingTTS");
   const ttfSel = document.getElementById("trackingTTF");
@@ -2794,10 +2804,13 @@ function renderDetailModal(){
   // SLA). Solo en modo edicion; en vista se omite para no saturar el resumen rapido.
   // Mismo lenguaje visual que SLA/Requisition Completion (sla-grid de sla-card con un tag a la
   // derecha), en vez de una lista de timeline suelta que no combinaba con el resto del panel.
-  // Sin batches todavia no es un problema si el req sigue en Kickoff/Intake (nadie deberia
-  // haber mandado candidatos aun); si ya paso a Sourcing o mas adelante, si vale la pena
-  // avisarlo con el mismo lenguaje de alert-banner que el resto del tracker.
-  const EARLY_STATUSES = ["Kickoff", "Intake Meeting Requested", "Intake Pending"];
+  // Sin batches todavia no es un problema por si solo — el SLA real (TTS, ver computeSla()) ya
+  // dice exactamente cuando empieza a ser un problema: 9 dias habiles desde el dia siguiente al
+  // Intake Meeting. Antes de eso, aunque el req ya este en Sourcing, es normal no tener batches
+  // todavia (el reclutador sigue dentro de su ventana). Reusa el mismo TTS que ya se ve en la
+  // tarjeta de SLA mas abajo, para no tener dos calculos de dias habiles que puedan divergir.
+  const batchesTts = computeSla(p).TTS;
+  const batchesOverdue = batchesTts.status === "out";
   const batchesHtml = isView ? "" : `
     <div class="modal-section-title">Submission Batches</div>
     ${p.batches && p.batches.length ? `<div class="sla-grid">
@@ -2806,9 +2819,9 @@ function renderDetailModal(){
           <div class="sla-name"><span>${escapeHtml(b.date)}</span><span class="tag ${b.type==="Pivot Follow-up" ? "internal" : "official"}">${escapeHtml(b.type)}</span></div>
           <div style="font-size:13px; font-weight:600;">${b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : "Count not set"}</div>
         </div>`).join("")}
-    </div>` : (EARLY_STATUSES.includes(p.status)
-        ? `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`
-        : `<div class="alert-banner tier-yellow compact">No submission batches logged yet, even though this req is already in "${escapeHtml(p.status)}".</div>`)}
+    </div>` : (batchesOverdue
+        ? `<div class="alert-banner tier-yellow compact">No submission batches logged yet, and it's been ${batchesTts.elapsed} business days since the intake meeting (TTS target: ${batchesTts.target}).</div>`
+        : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`)}
     <div style="margin-bottom:22px;">
       <button type="button" class="btn ghost small" id="logBatchBtn">+ Log Batch</button>
     </div>`;
