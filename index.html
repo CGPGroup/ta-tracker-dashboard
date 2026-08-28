@@ -167,12 +167,22 @@
   .recent-req-row:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
   .recent-req-row .rr-code { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
 
+  /* Banner de perfil del Recruiter Dashboard: identidad (foto + nombre) mas visible arriba,
+     no solo el cuadrito chiquito enterrado en la lista del sidebar — para que se sienta como
+     "tu espacio de trabajo", no solo otra vista mas de metricas genericas. */
   .scope-banner {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    display: flex; align-items: center; gap: 14px;
     background: rgba(224,112,63,0.10); border: 1px solid rgba(224,112,63,0.32);
-    border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px;
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;
   }
-  .scope-banner b { color: var(--text-primary); }
+  .scope-banner-avatar {
+    width: 48px; height: 48px; border-radius: 50%; flex: none; background-size: cover; background-position: center;
+    display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #fff;
+  }
+  .scope-banner-info { flex: 1; min-width: 0; }
+  .scope-banner-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .scope-banner-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .scope-banner-actions { display: flex; gap: 8px; flex: none; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -1565,13 +1575,20 @@ function setDashboardScope(name){
     return;
   }
   const count = POSITIONS.filter(p=>p.recruiter===name).length;
+  const photo = RECRUITER_PHOTOS[name];
+  const title = RECRUITER_TITLES[name] || "Recruiter";
+  const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
   banner.style.display = "";
   banner.innerHTML = `
-    <span>Viewing <b>${escapeHtml(name)}'s</b> dashboard &middot; ${count} position${count===1?"":"s"}</span>
-    <span style="display:flex; gap:8px;">
+    <div class="scope-banner-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(name))}</div>
+    <div class="scope-banner-info">
+      <div class="scope-banner-name">${escapeHtml(name)}</div>
+      <div class="scope-banner-sub">${escapeHtml(title)} &middot; ${count} position${count===1?"":"s"}</div>
+    </div>
+    <div class="scope-banner-actions">
       <button class="btn primary small" id="scopeEditBtn" type="button">Open Tracking →</button>
       <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team Dashboard</button>
-    </span>`;
+    </div>`;
   document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
   document.getElementById("scopeEditBtn").addEventListener("click", ()=> jumpToRecruiterTracking(name));
 }
