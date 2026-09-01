@@ -1363,26 +1363,56 @@
 
 <!-- ======================= LOG SUBMISSION BATCH MODAL ======================= -->
 <!-- Un batch = un grupo de candidatos (tipicamente 3-5) enviado al hiring manager de una vez.
-     Batch Type se auto-sugiere (Initial la primera vez; Pivot Follow-up si ya hay batches
-     previos Y el Pivot SLA esta aprobado para ese req) pero siempre se puede cambiar a mano
-     antes de guardar — ver suggestBatchType()/openLogBatchModal(). -->
+     Batch Type ya no se elige a mano: el primero siempre es "Initial" (y fija Submission Date
+     automaticamente), cualquiera despues del primero SOLO existe porque aplica un Pivot SLA
+     (ver "Batch Cadence" en la guia), asi que el modal cambia de estado solo segun
+     isSlaExceptionApproved()/p.batches.length — ver openLogBatchModal(). -->
 <div class="modal-overlay" id="logBatchModal">
   <div class="modal-card" style="max-width:480px;">
     <div class="modal-head">
-      <div><h2 style="margin:0; font-size:16px;">Log Submission Batch</h2></div>
+      <div><h2 style="margin:0; font-size:16px;" id="logBatchModalTitle">Log Submission Batch</h2></div>
       <button class="modal-close" id="logBatchClose" type="button">&times;</button>
     </div>
-    <div class="form-grid">
-      <div class="form-field"><label>Date</label><input type="date" id="logBatchDate"></div>
-      <div class="form-field"><label>Candidates In This Batch</label><input type="number" id="logBatchCount" min="1" placeholder="e.g. 4"></div>
-      <div class="form-field full">
-        <label>Batch Type</label>
-        <select id="logBatchType"><option value="Initial">Initial</option><option value="Pivot Follow-up">Pivot Follow-up</option></select>
+
+    <div id="logBatchFormState">
+      <div class="form-grid">
+        <div class="form-field"><label>Date</label><input type="date" id="logBatchDate"></div>
+        <div class="form-field"><label>Candidates In This Batch</label><input type="number" id="logBatchCount" min="1" placeholder="e.g. 4"></div>
+        <div class="form-field full">
+          <label>Batch Type</label>
+          <div style="font-size:13px; font-weight:600; padding:6px 0;" id="logBatchTypeDisplay"></div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" type="button" id="logBatchSave">Save Batch</button>
       </div>
     </div>
-    <div class="form-actions">
-      <button class="btn primary" type="button" id="logBatchSave">Save Batch</button>
+
+    <div id="pivotRequestState" style="display:none;">
+      <div class="panel-sub" style="margin:0 0 10px;">Any batch after the first only happens because a Pivot SLA applies. Explain what happened, against the Intake Summary, this needs approval from both Nicolás (Lead Talent Partner) and Immy Nader before this batch can be logged.</div>
+      <div class="form-grid">
+        <div class="form-field full"><label>What happened?</label><textarea id="pivotJustificationInput" rows="4" placeholder="e.g. Hiring manager rejected the full batch; candidates matched what was agreed in the Intake Summary..."></textarea></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" type="button" id="pivotRequestSave">Request Pivot SLA</button>
+      </div>
     </div>
+
+    <div id="pivotPendingState" style="display:none;">
+      <div class="panel-sub" style="margin:0 0 10px;">Pivot SLA requested <span id="pivotPendingDate"></span>. Not confirmed yet, the batch can't be logged until both approvals are in.</div>
+      <div class="callout prose" id="pivotPendingJustification" style="margin-bottom:14px;"></div>
+      <div class="facts-grid" style="margin-bottom:6px;">
+        <div>
+          <div class="fact-label">Approved By Lead</div>
+          <div id="pivotLeadStatus"></div>
+        </div>
+        <div>
+          <div class="fact-label">Confirmed By Immy</div>
+          <div id="pivotImmyStatus"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="panel-sub" id="logBatchMsg" style="margin-top:8px;"></div>
   </div>
 </div>
@@ -1970,6 +2000,10 @@ function calendarDaysBetween(start,end){
   return Math.max(0, Math.round(ms / 86400000));
 }
 function isSlaExceptionApproved(p){
+  // Fuente de verdad nueva: las dos aprobaciones reales (Lead + Immy) via el flujo de
+  // Request Pivot SLA en Log Batch. p.slaException (columna vieja "Pivot SLA Approved?") se
+  // deja como fallback para requisiciones aprobadas antes de que este flujo existiera.
+  if(p.pivotApprovedByLeadDate && p.pivotConfirmedByImmyDate) return true;
   const v = p.slaException;
   return v === true || v === "Yes" || v === "yes" || v === "YES";
 }
@@ -3072,7 +3106,7 @@ function renderDetailModal(){
       ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "", true)}
       ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true)}
       ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true)}
-      ${timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting Date first.", true)}
+      ${timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake || !(p.batches && p.batches.length), !p.intake ? "Fill in Intake Meeting Date first." : "Log the first submission batch first (+ Log Batch below).", true)}
       ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submission Date first.")}
       ${timelineFieldHtml("Hire Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
     </div>
@@ -3147,6 +3181,7 @@ function renderDetailModal(){
     </div>` : (batchesOverdue
         ? `<div class="alert-banner tier-yellow compact">No submission batches logged yet, and it's been ${batchesTts.elapsed} business days since the intake meeting (TTS target: ${batchesTts.target}).</div>`
         : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`)}
+    ${p.pivotRequestedDate && !isSlaExceptionApproved(p) ? `<div class="alert-banner tier-yellow compact">Pivot SLA requested on ${escapeHtml(p.pivotRequestedDate)}, waiting on approval from ${!p.pivotApprovedByLeadDate ? "Nicolás" : "Immy Nader"} before the next batch can be logged.</div>` : ""}
     <div style="margin-bottom:22px;">
       <button type="button" class="btn ghost small" id="logBatchBtn">+ Log Batch</button>
     </div>`;
@@ -3515,20 +3550,84 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
   setTimeout(closeEditReqInfoModal, 900);
 });
 
-// El primer batch de un req siempre se sugiere "Initial". Despues de eso, se sugiere "Pivot
-// Follow-up" solo si el Pivot SLA ya esta aprobado (columna "Pivot SLA Approved?") — si hay mas
-// batches pero el Pivot SLA no esta aprobado, se sigue sugiriendo "Initial" (ej. candidatos
-// adicionales dentro de la misma ventana original). Siempre editable a mano antes de guardar.
-function suggestBatchType(p){
-  const hasBatches = p.batches && p.batches.length > 0;
-  if(!hasBatches) return "Initial";
-  return isSlaExceptionApproved(p) ? "Pivot Follow-up" : "Initial";
+function renderPivotPendingState(p){
+  document.getElementById("pivotPendingDate").textContent = p.pivotRequestedDate ? `on ${p.pivotRequestedDate}` : "";
+  document.getElementById("pivotPendingJustification").textContent = p.pivotJustification || "(no justification on file)";
+  const leadEl = document.getElementById("pivotLeadStatus");
+  const immyEl = document.getElementById("pivotImmyStatus");
+  leadEl.innerHTML = p.pivotApprovedByLeadDate
+    ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>${escapeHtml(p.pivotApprovedByLeadDate)}</span>`
+    : `<button class="btn ghost small" type="button" id="pivotApproveLeadBtn">Mark Approved</button>`;
+  immyEl.innerHTML = p.pivotConfirmedByImmyDate
+    ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>${escapeHtml(p.pivotConfirmedByImmyDate)}</span>`
+    : `<button class="btn ghost small" type="button" id="pivotConfirmImmyBtn">Mark Confirmed</button>`;
+  const leadBtn = document.getElementById("pivotApproveLeadBtn");
+  if(leadBtn) leadBtn.addEventListener("click", ()=> markPivotApproval(p, "lead"));
+  const immyBtn = document.getElementById("pivotConfirmImmyBtn");
+  if(immyBtn) immyBtn.addEventListener("click", ()=> markPivotApproval(p, "immy"));
+}
+async function markPivotApproval(p, who){
+  const today = localTodayStr();
+  const msg = document.getElementById("logBatchMsg");
+  const header = who === "lead" ? "Pivot Approved By Lead Date" : "Pivot Confirmed By Immy Date";
+  const text = who === "lead" ? "Pivot SLA approved by Nicolás (Lead Talent Partner)." : "Pivot SLA confirmed by Immy Nader.";
+  if(who === "lead") p.pivotApprovedByLeadDate = today; else p.pivotConfirmedByImmyDate = today;
+  p.extra = p.extra || [];
+  p.extra.push({date: today, type:"action", author:"You", text});
+  renderDetailModal();
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      await graphUpdatePositionFieldByHeader(p.id, header, today);
+      await graphAppendHistorial(p.id, p.title, text, "You", "action");
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+  // No se llama openLogBatchModal() de nuevo aqui porque eso borraria el mensaje de arriba
+  // (Saving.../Saved.) antes de que se alcance a ver.
+  if(isSlaExceptionApproved(p)){
+    document.getElementById("pivotPendingState").style.display = "none";
+    document.getElementById("logBatchFormState").style.display = "";
+    document.getElementById("logBatchModalTitle").textContent = "Log Submission Batch";
+    document.getElementById("logBatchDate").value = localTodayStr();
+    document.getElementById("logBatchCount").value = "";
+    document.getElementById("logBatchTypeDisplay").textContent = "Pivot Follow-up";
+  } else {
+    renderPivotPendingState(p);
+  }
 }
 function openLogBatchModal(p){
-  document.getElementById("logBatchDate").value = localTodayStr();
-  document.getElementById("logBatchCount").value = "";
-  document.getElementById("logBatchType").value = suggestBatchType(p);
   document.getElementById("logBatchMsg").textContent = "";
+  const isFirst = !(p.batches && p.batches.length);
+  const pivotOk = isSlaExceptionApproved(p);
+  const hasPendingRequest = !!p.pivotRequestedDate && !pivotOk;
+  document.getElementById("logBatchFormState").style.display = "none";
+  document.getElementById("pivotRequestState").style.display = "none";
+  document.getElementById("pivotPendingState").style.display = "none";
+  if(isFirst || pivotOk){
+    document.getElementById("logBatchModalTitle").textContent = "Log Submission Batch";
+    document.getElementById("logBatchFormState").style.display = "";
+    document.getElementById("logBatchDate").value = localTodayStr();
+    document.getElementById("logBatchCount").value = "";
+    document.getElementById("logBatchTypeDisplay").textContent = isFirst ? "Initial" : "Pivot Follow-up";
+  } else if(hasPendingRequest){
+    document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
+    document.getElementById("pivotPendingState").style.display = "";
+    renderPivotPendingState(p);
+  } else {
+    document.getElementById("logBatchModalTitle").textContent = "Request Pivot SLA";
+    document.getElementById("pivotRequestState").style.display = "";
+    document.getElementById("pivotJustificationInput").value = "";
+  }
   document.getElementById("logBatchModal").classList.add("open");
 }
 function closeLogBatchModal(){
@@ -3544,7 +3643,8 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   const msg = document.getElementById("logBatchMsg");
   const date = document.getElementById("logBatchDate").value;
   const count = document.getElementById("logBatchCount").value.trim();
-  const type = document.getElementById("logBatchType").value;
+  const isFirst = !(p.batches && p.batches.length);
+  const type = isFirst ? "Initial" : "Pivot Follow-up";
   if(!date){
     msg.textContent = "Pick a date for this batch.";
     msg.style.color = "var(--critical)";
@@ -3560,12 +3660,16 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   }
   p.batches = p.batches || [];
   p.batches.push({ date, type, count: count || null });
+  // El primer batch fija Submission Date automaticamente, ese campo queda bloqueado en Timeline
+  // hasta que exista al menos un batch (ver timelineFieldHtml() en renderDetailModal()).
+  if(isFirst) p.submit = date;
   renderDetailModal();
   if(isConnected()){
     msg.textContent = "Saving…";
     msg.style.color = "var(--text-muted)";
     try {
       await graphAppendBatch(p.id, date, type, count || "");
+      if(isFirst) await graphUpdatePositionField(p.id, "I", date);
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
     } catch(err){
@@ -3579,6 +3683,47 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--warning)";
   }
   setTimeout(closeLogBatchModal, 900);
+});
+document.getElementById("pivotRequestSave").addEventListener("click", async ()=>{
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const msg = document.getElementById("logBatchMsg");
+  const text = document.getElementById("pivotJustificationInput").value.trim();
+  if(!text){
+    msg.textContent = "Explain what happened before requesting the Pivot SLA.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const today = localTodayStr();
+  p.pivotJustification = text;
+  p.pivotRequestedDate = today;
+  p.extra = p.extra || [];
+  const remarkText = `Requested Pivot SLA: ${text}`;
+  p.extra.push({date: today, type:"action", author:"You", text: remarkText});
+  renderDetailModal();
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      await graphUpdatePositionFieldByHeader(p.id, "Pivot Justification", text);
+      await graphUpdatePositionFieldByHeader(p.id, "Pivot Requested Date", today);
+      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      msg.textContent = "Requested. Waiting on approval from Nicolás and Immy Nader.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+      return;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+  document.getElementById("pivotRequestState").style.display = "none";
+  document.getElementById("pivotPendingState").style.display = "";
+  document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
+  renderPivotPendingState(p);
 });
 
 // Sourced/Direct Apps/Submitted/Active/Rejected vienen de Spott, pero Spott no tiene una API key
@@ -4371,6 +4516,10 @@ function parsePositionsTable(posHeaders, posRows){
       hire: excelValToDateStr(r[idx("Hire Date")]),
       lastRemark: r[idx("Last Remark")],
       slaException: r[idx("Pivot SLA Approved?")],
+      pivotJustification: r[idx("Pivot Justification")] || null,
+      pivotRequestedDate: excelValToDateStr(r[idx("Pivot Requested Date")]),
+      pivotApprovedByLeadDate: excelValToDateStr(r[idx("Pivot Approved By Lead Date")]),
+      pivotConfirmedByImmyDate: excelValToDateStr(r[idx("Pivot Confirmed By Immy Date")]),
       extra: [],
       batches: [],
       remarksHistory: [],
