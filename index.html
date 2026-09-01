@@ -1282,7 +1282,6 @@
 
     <div class="modal-section-title" id="modalCompletionTitle">Requisition Completion</div>
     <div class="sla-grid" id="modalCompletionGrid"></div>
-    <div class="panel-sub" id="modalCompletionNote" style="display:none; margin-top:6px;"></div>
     <div id="modalCompletionAlert"></div>
 
     <!-- En Tracking (docked) esto se oculta: la actividad de la posicion seleccionada vive en el
@@ -3240,30 +3239,25 @@ function renderDetailModal(){
     const c = computeCompletion(p);
     const step1Chip = c.step1.status==="none" ? `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`
       : `<span class="sla-chip ${c.step1.status==="within"?"within":"out"}"><span class="dot" style="background:${STATUS_META[c.step1.status==="within"?"within":"out"].color}"></span>${c.step1.elapsed}d/${c.step1.target}d</span>`;
-    const followUpChip = (status)=> status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done</span>`
-      : status==="overdue" ? `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Overdue</span>`
-      : status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting</span>`
+    const followUpChip = (s)=> s.status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done</span>`
+      : s.status==="overdue" ? `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Overdue &middot; ${s.elapsed}d/${s.target}d</span>`
+      : s.status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting &middot; ${s.elapsed}d/${s.target}d</span>`
       : `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`;
     const completionCards = [
-      {label:"Accept & Request Intake", tag:"Recruiter Owned", chip: step1Chip},
-      {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2.status)},
+      {label:"Accept & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
+      {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
+        note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.` : null},
     ];
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
         <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}">${cc.tag}</span></div>
         ${cc.chip}
+        ${cc.note ? `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>` : ""}
       </div>`).join("");
     const alerts = [];
     if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
     if(c.step2.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step2.elapsed} business days since it was requested (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
     document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">${a.text}</div>`).join("");
-    const completionNote = document.getElementById("modalCompletionNote");
-    if(c.step2.status==="waiting"){
-      completionNote.textContent = `Still within Irth's 5-business-day ceiling for getting this scheduled (${ESCALATION_CONTACT} actively tracks hiring-manager calendars to keep it on track).`;
-      completionNote.style.display = "";
-    } else {
-      completionNote.style.display = "none";
-    }
   }
 
   if(!isView){
@@ -4381,7 +4375,7 @@ function parsePositionsTable(posHeaders, posRows){
       batches: [],
       remarksHistory: [],
     };
-  }).filter(p => p.id);
+  }).filter(p => p.id).reverse(); // reqs se agregan al final del Excel; invertido = mas reciente primero en todo el tracker
 }
 // Reemplaza el ultimo remark de cada posicion por el mas reciente segun HistorialTable.
 // Ademas de p.lastRemark (usado en la columna "Last Update" de Tracking), guarda el HISTORIAL
