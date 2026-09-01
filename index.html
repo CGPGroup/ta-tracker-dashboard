@@ -1669,7 +1669,7 @@ function renderPendingAssignments(){
 async function acceptAssignment(positionId){
   const p = POSITIONS.find(x=>x.id===positionId);
   if(!p) return;
-  const today = new Date().toISOString().slice(0,10);
+  const today = localTodayStr();
   p.recruiterAcceptedDate = today;
   // "action", no "auto" ni "manual" — esto no se desprende solo de una fecha (eso seria "auto",
   // ej. "Intake meeting held.") ni es un remark de texto libre — es un clic concreto que el
@@ -2717,7 +2717,7 @@ function slaChip(s){
 function renderTrackingActivity(){
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 7);
-  const cutoffStr = cutoff.toISOString().slice(0,10);
+  const cutoffStr = cutoff.getFullYear() + "-" + String(cutoff.getMonth()+1).padStart(2,"0") + "-" + String(cutoff.getDate()).padStart(2,"0");
   const entries = [];
   dashboardPositions().forEach(p=>{
     buildTimeline(p).forEach(e=>{
@@ -3531,7 +3531,7 @@ function suggestBatchType(p){
   return isSlaExceptionApproved(p) ? "Pivot Follow-up" : "Initial";
 }
 function openLogBatchModal(p){
-  document.getElementById("logBatchDate").value = new Date().toISOString().slice(0,10);
+  document.getElementById("logBatchDate").value = localTodayStr();
   document.getElementById("logBatchCount").value = "";
   document.getElementById("logBatchType").value = suggestBatchType(p);
   document.getElementById("logBatchMsg").textContent = "";
@@ -3649,7 +3649,7 @@ document.getElementById("editPipelineSave").addEventListener("click", async ()=>
   changed.forEach(f => { p[f.key] = f.value; });
   if(submittedGuidanceText){
     p.extra = p.extra || [];
-    p.extra.push({date: new Date().toISOString().slice(0,10), type:"guidance", text: submittedGuidanceText});
+    p.extra.push({date: localTodayStr(), type:"guidance", text: submittedGuidanceText});
   }
   renderDetailModal();
   renderPositions();
@@ -3687,7 +3687,7 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
   const remarkText = dateField
     ? `Status changed from ${oldStatus} to ${newStatus} (${dateField.label}: ${dateVal}).`
     : `Status changed from ${oldStatus} to ${newStatus}.`;
-  const today = new Date().toISOString().slice(0,10);
+  const today = localTodayStr();
   p.extra = p.extra || [];
   p.extra.push({date: today, type:"status", author:"You", text:remarkText});
   const guidanceText = STATUS_GUIDANCE[newStatus];
@@ -3735,7 +3735,7 @@ async function saveModalRemark(){
   const text = document.getElementById("modalRemarkText").value.trim();
   if(!text) return;
   p.extra = p.extra || [];
-  p.extra.push({date: new Date().toISOString().slice(0,10), type:"manual", author:"You", text});
+  p.extra.push({date: localTodayStr(), type:"manual", author:"You", text});
   p.lastRemark = text;
   renderDetailModal();
   renderTracking();
@@ -4621,7 +4621,7 @@ async function graphUpdateRecruiterField(name, columnLetter, value){
 // pasado se veia como un remark generico sin importar que fuera en realidad (ver
 // mergeLatestRemarks()/buildTimeline()).
 async function graphAppendHistorial(positionId, positionTitle, remark, author, type){
-  const today = new Date().toISOString().slice(0,10);
+  const today = localTodayStr();
   await graphFetch(`${await workbookBase()}/tables('HistorialTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
