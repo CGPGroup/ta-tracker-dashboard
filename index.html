@@ -1103,6 +1103,16 @@
           </div>
 
           <div class="panel" style="margin-bottom:14px;">
+            <h3>Requisition Completion</h3>
+            <div class="panel-sub">The two checkpoints between Kickoff and the intake meeting, and which one actually counts against the recruiter</div>
+            <ul>
+              <li><b>Accept &amp; Request Intake (Recruiter Owned):</b> within <b>1 business day</b> of Kickoff, the recruiter accepts the requisition and requests the intake meeting with the hiring manager. This is the only piece of Requisition Completion counted as a real recruiter miss.</li>
+              <li><b>Intake Meeting Held (Follow-Up Only):</b> once requested, the target is <b>3 business days</b> for the intake meeting to actually happen. This step depends on the hiring manager's availability, not the recruiter, so it never counts against them directly, it only surfaces as a reminder to follow up or, past target, to escalate to Immy Nader.</li>
+              <li>Added together, these two targets put the intake meeting at <b>4 business days</b> after Kickoff, inside the <b>5-business-day ceiling</b> Immy Nader holds Irth to for getting it scheduled. She has direct visibility into hiring managers' calendars and proactively pushes if one goes unresponsive, so a requisition rarely needs the full 5 days in practice.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
             <h3>Sourcing Channels</h3>
             <div class="panel-sub">Three ways a candidate enters the pipeline, and why only one of them needs manual work</div>
             <ul>
@@ -1245,6 +1255,7 @@
 
     <div class="modal-section-title" id="modalCompletionTitle">Requisition Completion</div>
     <div class="sla-grid" id="modalCompletionGrid"></div>
+    <div class="panel-sub" id="modalCompletionNote" style="display:none; margin-top:6px;"></div>
     <div id="modalCompletionAlert"></div>
 
     <!-- En Tracking (docked) esto se oculta: la actividad de la posicion seleccionada vive en el
@@ -3210,6 +3221,13 @@ function renderDetailModal(){
     if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
     if(c.step2.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step2.elapsed} business days since it was requested (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
     document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">${a.text}</div>`).join("");
+    const completionNote = document.getElementById("modalCompletionNote");
+    if(c.step2.status==="waiting"){
+      completionNote.textContent = `Still within Irth's 5-business-day ceiling for getting this scheduled (${ESCALATION_CONTACT} actively tracks hiring-manager calendars to keep it on track).`;
+      completionNote.style.display = "";
+    } else {
+      completionNote.style.display = "none";
+    }
   }
 
   if(!isView){
