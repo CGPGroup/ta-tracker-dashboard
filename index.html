@@ -957,6 +957,11 @@
               <div class="panel-sub" id="trackingSelectedActivitySub">Select a requisition on the left to see its history here.</div>
               <ul class="timeline" id="trackingSelectedActivityList"></ul>
             </div>
+            <div class="panel" style="margin-top:16px;">
+              <h3 style="margin:0 0 2px;">Remarks</h3>
+              <div class="panel-sub" id="trackingSelectedRemarksSub">Free-text notes only, most recent first.</div>
+              <ul class="timeline" id="trackingSelectedRemarksList"></ul>
+            </div>
           </div>
           <div class="tracking-resize-handle" id="trackingResizeHandle"></div>
           <div class="tracking-detail-col" id="trackingDetailHost"></div>
@@ -1290,6 +1295,9 @@
     <div id="modalActivityBlock">
       <div class="modal-section-title">Activity</div>
       <ul class="timeline" id="modalTimeline"></ul>
+      <div class="modal-section-title">Remarks</div>
+      <div class="panel-sub" style="margin:0 0 6px;">Free-text notes only, most recent first.</div>
+      <ul class="timeline" id="modalRemarksList"></ul>
     </div>
 
     <div class="modal-section-title" id="modalRemarkTitle">Add A Remark</div>
@@ -1389,7 +1397,7 @@
     </div>
 
     <div id="pivotRequestState" style="display:none;">
-      <div class="panel-sub" style="margin:0 0 10px;">Any batch after the first only happens because a Pivot SLA applies. Explain what happened, against the Intake Summary, this needs approval from both Nicolás (Lead Talent Partner) and Immy Nader before this batch can be logged.</div>
+      <div class="panel-sub" style="margin:0 0 10px;">Any batch after the first only happens because a Pivot SLA applies. Explain what happened, against the Intake Summary, this needs approval from both CGP (Nicolás Patarroyo, Lead Talent Partner) and Irth TA (Immy Nader) before this batch can be logged.</div>
       <div class="form-grid">
         <div class="form-field full"><label>What happened?</label><textarea id="pivotJustificationInput" rows="4" placeholder="e.g. Hiring manager rejected the full batch; candidates matched what was agreed in the Intake Summary..."></textarea></div>
       </div>
@@ -1403,11 +1411,11 @@
       <div class="callout prose" id="pivotPendingJustification" style="margin-bottom:14px;"></div>
       <div class="facts-grid" style="margin-bottom:6px;">
         <div>
-          <div class="fact-label">Approved By Lead</div>
+          <div class="fact-label">Approved By CGP</div>
           <div id="pivotLeadStatus"></div>
         </div>
         <div>
-          <div class="fact-label">Confirmed By Immy</div>
+          <div class="fact-label">Confirmed By Irth TA</div>
           <div id="pivotImmyStatus"></div>
         </div>
       </div>
@@ -2928,13 +2936,18 @@ function buildTimeline(p){
   });
 }
 const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step" };
-function timelineListHtml(timeline){
+function timelineListHtml(timeline, emptyText){
   return timeline.length ? timeline.map(e=>`
     <li>
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
       <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
-    </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity logged yet.</li>`;
+    </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">${emptyText || "No activity logged yet."}</li>`;
+}
+// Igual que buildTimeline() pero solo las notas de texto libre (type "manual") — se muestra en
+// su propia lista aparte de Activity, todas comparten el mismo tag "Remark" por definicion.
+function remarksOnly(timeline){
+  return timeline.filter(e => e.type === "manual");
 }
 // Un campo de Timeline se ve siempre (nunca se oculta), pero se deshabilita con un candadito +
 // tooltip mientras el campo anterior de la secuencia siga vacio, para que el recruiter sepa que
@@ -2960,13 +2973,20 @@ function timelineFieldHtml(label, id, value, locked, unlockHint, capToday){
 function renderTrackingSelectedActivity(p, timeline){
   const sub = document.getElementById("trackingSelectedActivitySub");
   const list = document.getElementById("trackingSelectedActivityList");
+  const remarksSub = document.getElementById("trackingSelectedRemarksSub");
+  const remarksList = document.getElementById("trackingSelectedRemarksList");
   if(!p){
     sub.textContent = "Select a requisition on the left to see its history here.";
     list.innerHTML = "";
+    remarksSub.textContent = "Select a requisition on the left to see its remarks here.";
+    remarksList.innerHTML = "";
     return;
   }
+  const t = timeline || buildTimeline(p).slice().reverse();
   sub.innerHTML = `${posLabel(p)} — most recent first.`;
-  list.innerHTML = timelineListHtml(timeline || buildTimeline(p).slice().reverse());
+  list.innerHTML = timelineListHtml(t);
+  remarksSub.innerHTML = `${posLabel(p)} — free-text notes only, most recent first.`;
+  remarksList.innerHTML = timelineListHtml(remarksOnly(t), "No remarks yet.");
 }
 
 let activeDetailId = null;
@@ -3006,6 +3026,7 @@ function renderDetailPlaceholder(){
   document.getElementById("modalRemarkTitle").style.display = "none";
   document.getElementById("modalRemarkSection").style.display = "none";
   document.getElementById("modalTimeline").innerHTML = "";
+  document.getElementById("modalRemarksList").innerHTML = "";
   document.getElementById("modalDeleteZone").style.display = "none";
   renderTrackingSelectedActivity(null);
 }
@@ -3181,7 +3202,7 @@ function renderDetailModal(){
     </div>` : (batchesOverdue
         ? `<div class="alert-banner tier-yellow compact">No submission batches logged yet, and it's been ${batchesTts.elapsed} business days since the intake meeting (TTS target: ${batchesTts.target}).</div>`
         : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`)}
-    ${p.pivotRequestedDate && !isSlaExceptionApproved(p) ? `<div class="alert-banner tier-yellow compact">Pivot SLA requested on ${escapeHtml(p.pivotRequestedDate)}, waiting on approval from ${!p.pivotApprovedByLeadDate ? "Nicolás" : "Immy Nader"} before the next batch can be logged.</div>` : ""}
+    ${p.pivotRequestedDate && !isSlaExceptionApproved(p) ? `<div class="alert-banner tier-yellow compact">Pivot SLA requested on ${escapeHtml(p.pivotRequestedDate)}, waiting on approval from ${!p.pivotApprovedByLeadDate ? "CGP (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"} before the next batch can be logged.</div>` : ""}
     <div style="margin-bottom:22px;">
       <button type="button" class="btn ghost small" id="logBatchBtn">+ Log Batch</button>
     </div>`;
@@ -3307,6 +3328,7 @@ function renderDetailModal(){
 
   const timeline = buildTimeline(p).slice().reverse();
   document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
+  document.getElementById("modalRemarksList").innerHTML = timelineListHtml(remarksOnly(timeline), "No remarks yet.");
   // En Tracking (docked), la Activity vive en el panel de la izquierda en vez de aqui, para
   // dejar mas espacio vertical a la lista de reqs (ver #trackingSelectedActivityPanel).
   document.getElementById("modalActivityBlock").style.display =
@@ -3570,7 +3592,7 @@ async function markPivotApproval(p, who){
   const today = localTodayStr();
   const msg = document.getElementById("logBatchMsg");
   const header = who === "lead" ? "Pivot Approved By Lead Date" : "Pivot Confirmed By Immy Date";
-  const text = who === "lead" ? "Pivot SLA approved by Nicolás (Lead Talent Partner)." : "Pivot SLA confirmed by Immy Nader.";
+  const text = who === "lead" ? "Pivot SLA approved by CGP (Nicolás Patarroyo, Lead Talent Partner)." : "Pivot SLA confirmed by Irth TA (Immy Nader).";
   if(who === "lead") p.pivotApprovedByLeadDate = today; else p.pivotConfirmedByImmyDate = today;
   p.extra = p.extra || [];
   p.extra.push({date: today, type:"action", author:"You", text});
