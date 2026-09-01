@@ -1558,7 +1558,7 @@ const STATUS_DATE_FIELD = {
 // pasos reales que tocan en ese momento, no una linea generica. Ver esos dos documentos como
 // fuente si algo aqui necesita ajustarse.
 const STATUS_GUIDANCE = {
-  "Kickoff": "This requisition was just assigned. Send the Kickoff email to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting) and confirm you've accepted it. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
+  "Kickoff": "Send the Kickoff email to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting) and confirm you've accepted it. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
   "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or send written answers instead if a live call isn't possible). Once they confirm, move the status to Intake Pending and log the date — sourcing still can't start until the intake actually happens.",
   "Intake Pending": "Intake meeting date logged. Use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone. Once the meeting has actually taken place, move status to Sourcing — the first batch is due within 7-9 business days from today.",
   "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Curate a batch of 3-5 candidates, never more, and get it to the hiring manager within 7-9 business days of the intake meeting.",
@@ -2934,8 +2934,20 @@ function renderTracking(){
 /* ============================================================
    Position detail: combined automatic + manual activity log
    ============================================================ */
+// Prioridad para desempatar entries del MISMO dia (buildTimeline ordena ascendente, los que
+// llaman a esto lo invierten para mostrar mas reciente primero) — de mas "vieja" a mas
+// "fresca" en ese orden ascendente: auto (el hecho fundacional, ej. "fue asignada") -> action
+// (algo concreto que alguien hizo, ej. aceptar) -> status (un cambio de status) -> manual (un
+// comentario humano sobre la situacion actual) -> guidance (el "next step" vigente ahora
+// mismo, siempre lo mas accionable, por eso queda de ultimo = mas arriba una vez invertido).
+const TIMELINE_TYPE_ORDER = { auto: 0, action: 1, status: 2, manual: 3, guidance: 4 };
 function buildTimeline(p){
   const entries = [];
+  // "assigned, esperando que el reclutador acepte" es el primer hecho real de la vida de un
+  // req (todo lo demas depende de esto) — antes no tenia su propio milestone, quedaba
+  // mezclado dentro del texto de guidance de "Kickoff", lo cual generaba un orden confuso
+  // entre "Accepted the assignment" y el guidance en el mismo dia.
+  if(p.kickoff) entries.push({date:p.kickoff, type:"auto", text:`Requisition assigned, waiting on ${p.recruiter || "the recruiter"} to accept.`});
   if(p.intakeRequestedDate) entries.push({date:p.intakeRequestedDate, type:"auto", text:"Requisition accepted, intake meeting requested."});
   if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
   if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
@@ -2947,7 +2959,7 @@ function buildTimeline(p){
   (p.extra || []).forEach(e=> entries.push(e));
   return entries.filter(e=>e.date).sort((a,b)=>{
     if(a.date !== b.date) return a.date < b.date ? -1 : 1;
-    return (a.type==="auto"?0:1) - (b.type==="auto"?0:1);
+    return (TIMELINE_TYPE_ORDER[a.type] ?? 3) - (TIMELINE_TYPE_ORDER[b.type] ?? 3);
   });
 }
 const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step" };
@@ -3394,6 +3406,11 @@ function renderDetailModal(){
 async function saveModalDates(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
+  // .filter(): cuando no hay batches todavia, "Submission Date" no es un <input> sino un
+  // boton que abre Log Batch (ver renderDetailModal()/pivotSlaFactHtml()) — su inputId no
+  // existe en el DOM en ese caso, y sin este filtro document.getElementById(...).value
+  // truena con "Cannot read properties of null" y saveModalDates() no hace nada, ni error
+  // ni guardado (asi se reporto el bug).
   const fields = [
     {key:"kickoff", inputId:"editKickoff", col:"AA", label:"Kickoff Date", capToday:true},
     {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN", label:"Intake Requested Date", capToday:true},
@@ -3401,7 +3418,7 @@ async function saveModalDates(){
     {key:"submit", inputId:"editSubmit", col:"I", label:"Submission Date", capToday:true},
     {key:"fill", inputId:"editFill", col:"J"},
     {key:"hire", inputId:"editHire", col:"K"},
-  ];
+  ].filter(f => document.getElementById(f.inputId));
   // Estos cuatro campos registran algo que ya paso en la realidad (no una fecha planeada a
   // futuro), asi que una fecha posterior a hoy es siempre un error de captura.
   const todayStr = localTodayStr();
