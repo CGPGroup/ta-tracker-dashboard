@@ -1124,6 +1124,33 @@
           </div>
 
           <div class="panel" style="margin-bottom:14px;">
+            <h3>Tags & Status Colors</h3>
+            <div class="panel-sub">What every badge, chip, and color across the tracker actually means</div>
+            <p style="margin:0; font-weight:700; color:var(--text-primary);">SLA status colors (SLA and Requisition Completion cards)</p>
+            <ul>
+              <li><b>Within SLA</b> (green): on track, inside target.</li>
+              <li><b>At Risk</b> (yellow): approaching the target, not past it yet.</li>
+              <li><b>Out Of SLA</b> (red): past target.</li>
+              <li><b>Not Started</b> (gray): this metric's clock hasn't started yet, its starting date isn't filled in.</li>
+            </ul>
+            <p style="margin:12px 0 0; font-weight:700; color:var(--text-primary);">SLA / Requisition Completion tags</p>
+            <ul>
+              <li><b>Official SLA:</b> a real, contractual KPI agreed with Irth (TTS only).</li>
+              <li><b>Internal Goal:</b> an internal health metric Cornerstone tracks, not a contractual KPI with the client (TTF, TTH).</li>
+              <li><b>Recruiter Owned:</b> counted as a real recruiter miss if it goes out of target.</li>
+              <li><b>Follow-Up Only:</b> never counted against the recruiter, it only surfaces as a reminder to follow up or escalate.</li>
+            </ul>
+            <p style="margin:12px 0 0; font-weight:700; color:var(--text-primary);">Activity badges</p>
+            <ul>
+              <li><b>Milestone:</b> generated automatically the moment a Timeline date (Kickoff, Intake Requested, Intake Meeting, Submission, Fill, Hire) is filled in.</li>
+              <li><b>Status Change:</b> generated automatically whenever the requisition's status changes.</li>
+              <li><b>Next Step:</b> automatic guidance suggesting what to do next for the current status.</li>
+              <li><b>Action:</b> a specific action the recruiter actually took (e.g., accepting an assignment), logged automatically the moment they took it.</li>
+              <li><b>Remark:</b> a free-text note someone wrote manually.</li>
+            </ul>
+          </div>
+
+          <div class="panel" style="margin-bottom:14px;">
             <h3>SLAs & Targets</h3>
             <div class="panel-sub">What each metric actually measures, and where its clock starts</div>
             <div class="callout prose"><b>Time To Submit (TTS)</b> is the official KPI on this account. Its clock starts the business day after the intake meeting, never at kickoff. Target: <b>7-9 business days</b> for the first batch.</div>
@@ -2853,6 +2880,7 @@ function renderTracking(){
    ============================================================ */
 function buildTimeline(p){
   const entries = [];
+  if(p.intakeRequestedDate) entries.push({date:p.intakeRequestedDate, type:"auto", text:"Requisition accepted, intake meeting requested."});
   if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
   if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
   if(p.fill)   entries.push({date:p.fill,   type:"auto", text:"Offer accepted, position filled."});
@@ -2878,11 +2906,19 @@ function timelineListHtml(timeline){
 // Un campo de Timeline se ve siempre (nunca se oculta), pero se deshabilita con un candadito +
 // tooltip mientras el campo anterior de la secuencia siga vacio, para que el recruiter sepa que
 // existe sin poder llenarlo fuera de orden.
-function timelineFieldHtml(label, id, value, locked, unlockHint){
+// toISOString() convierte a UTC, asi que en Bogota (UTC-5) cualquier hora despues de ~7pm ya
+// cuenta como "manana" y rompe cualquier validacion de "no puede ser una fecha futura" — esta
+// usa los componentes locales (getFullYear/getMonth/getDate) en vez de eso.
+function localTodayStr(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function timelineFieldHtml(label, id, value, locked, unlockHint, capToday){
+  const max = capToday ? ` max="${localTodayStr()}"` : "";
   return `
     <div>
       <div class="fact-label">${escapeHtml(label)}${locked ? ` <span class="tl-lock" title="${escapeHtml(unlockHint)}">&#128274;</span>` : ""}</div>
-      <input type="date" class="fact-date-input" id="${id}" value="${escapeHtml(value)}" ${locked ? `disabled title="${escapeHtml(unlockHint)}"` : ""}>
+      <input type="date" class="fact-date-input" id="${id}" value="${escapeHtml(value)}"${max} ${locked ? `disabled title="${escapeHtml(unlockHint)}"` : ""}>
     </div>`;
 }
 // Actividad de la posicion actualmente seleccionada en Tracking, mostrada en el panel de la
@@ -3027,18 +3063,18 @@ function renderDetailModal(){
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
         {label:"Intake Requested Date", value:escapeHtml(p.intakeRequestedDate) || "-"},
-        {label:"Intake Meeting", value:escapeHtml(p.intake) || "-"},
-        {label:"Submit Date", value:escapeHtml(p.submit) || "-"},
+        {label:"Intake Meeting Date", value:escapeHtml(p.intake) || "-"},
+        {label:"Submission Date", value:escapeHtml(p.submit) || "-"},
         {label:"Fill Date", value:escapeHtml(p.fill) || "-"},
         {label:"Hire Date", value:escapeHtml(p.hire) || "-"},
       ])
     : `<div class="modal-section-title">Timeline</div>
     <div class="facts-grid">
-      ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "")}
-      ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.")}
-      ${timelineFieldHtml("Intake Meeting", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.")}
-      ${timelineFieldHtml("Submit Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting first.")}
-      ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submit Date first.")}
+      ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "", true)}
+      ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true)}
+      ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true)}
+      ${timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting Date first.", true)}
+      ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submission Date first.")}
       ${timelineFieldHtml("Hire Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
     </div>
     <div style="margin-bottom:24px;">
@@ -3263,13 +3299,23 @@ async function saveModalDates(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
   const fields = [
-    {key:"kickoff", inputId:"editKickoff", col:"AA"},
-    {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN"},
-    {key:"intake", inputId:"editIntake", col:"H"},
-    {key:"submit", inputId:"editSubmit", col:"I"},
+    {key:"kickoff", inputId:"editKickoff", col:"AA", label:"Kickoff Date", capToday:true},
+    {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN", label:"Intake Requested Date", capToday:true},
+    {key:"intake", inputId:"editIntake", col:"H", label:"Intake Meeting Date", capToday:true},
+    {key:"submit", inputId:"editSubmit", col:"I", label:"Submission Date", capToday:true},
     {key:"fill", inputId:"editFill", col:"J"},
     {key:"hire", inputId:"editHire", col:"K"},
   ];
+  // Estos cuatro campos registran algo que ya paso en la realidad (no una fecha planeada a
+  // futuro), asi que una fecha posterior a hoy es siempre un error de captura.
+  const todayStr = localTodayStr();
+  const futureField = fields.find(f=>f.capToday && document.getElementById(f.inputId).value > todayStr);
+  if(futureField){
+    const m = document.getElementById("modalDatesMsg");
+    m.textContent = `${futureField.label} can't be in the future, it logs something that already happened.`;
+    m.style.color = "var(--critical)";
+    return;
+  }
   const changed = [];
   fields.forEach(f=>{
     const raw = document.getElementById(f.inputId).value;
