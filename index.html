@@ -2084,6 +2084,7 @@ function completionFlags(p){
   const flags = [];
   if(c.step1.status==="out") flags.push(`🚩 Accept & Request Intake: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
   if(c.step2.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Intake meeting hasn't happened, ${c.step2.elapsed} business days since requested (target ${c.step2.target})`);
+  if(p.pivotRequestedDate && !isSlaExceptionApproved(p)) flags.push(`⏳ Pivot SLA pending: waiting on ${!p.pivotApprovedByLeadDate ? "CGP (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"}`);
   return flags;
 }
 
@@ -2820,8 +2821,9 @@ function attentionRowsHtml(slaRows, completionRows){
     </div>`).join("");
   const completionHtml = completionRows.map(p=>{
     const c = computeCompletion(p);
+    const pivotPending = p.pivotRequestedDate && !isSlaExceptionApproved(p);
     const cls = (c.step1.status==="out" || c.step2.overdue) ? "out" : "risk";
-    const label = c.step1.status==="out" ? "Not Accepted/Requested" : (c.step2.overdue ? "Escalate" : "Overdue");
+    const label = c.step1.status==="out" ? "Not Accepted/Requested" : (c.step2.overdue ? "Escalate" : (pivotPending ? "Pivot Pending" : "Overdue"));
     return `
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
@@ -3204,7 +3206,7 @@ function renderDetailModal(){
         : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`)}
     ${p.pivotRequestedDate && !isSlaExceptionApproved(p) ? `<div class="alert-banner tier-yellow compact">Pivot SLA requested on ${escapeHtml(p.pivotRequestedDate)}, waiting on approval from ${!p.pivotApprovedByLeadDate ? "CGP (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"} before the next batch can be logged.</div>` : ""}
     <div style="margin-bottom:22px;">
-      <button type="button" class="btn ghost small" id="logBatchBtn">+ Log Batch</button>
+      <button type="button" class="btn ghost small" id="logBatchBtn">${p.batches && p.batches.length ? "+ Log Follow-up Batch" : "+ Log Batch"}</button>
     </div>`;
 
   document.getElementById("modalFacts").innerHTML =
@@ -3295,14 +3297,15 @@ function renderDetailModal(){
     const c = computeCompletion(p);
     const step1Chip = c.step1.status==="none" ? `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`
       : `<span class="sla-chip ${c.step1.status==="within"?"within":"out"}"><span class="dot" style="background:${STATUS_META[c.step1.status==="within"?"within":"out"].color}"></span>${c.step1.elapsed}d/${c.step1.target}d</span>`;
-    const followUpChip = (s)=> s.status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done</span>`
+    const followUpChip = (s)=> s.status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done &middot; ${s.elapsed}d/${s.target}d</span>`
       : s.status==="overdue" ? `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Overdue &middot; ${s.elapsed}d/${s.target}d</span>`
       : s.status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting &middot; ${s.elapsed}d/${s.target}d</span>`
       : `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`;
     const completionCards = [
       {label:"Accept & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
       {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
-        note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.` : null},
+        note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
+          : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
     ];
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
