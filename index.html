@@ -1846,8 +1846,8 @@ function openProfileGate(name){
   let html = "";
   if(pending.length){
     html += `<div class="modal-section-title">New Assignments</div>` + pending.map(p=>`
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0;">
-        <span>${posLabel(p)} <span style="color:var(--text-muted);">— assigned ${escapeHtml(p.kickoff)}</span></span>
+      <div class="pending-offer-row">
+        <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">Assigned ${escapeHtml(p.kickoff)}</div></div>
         <button class="btn primary small" type="button" data-gate-accept-id="${escapeHtml(p.id)}">Accept</button>
       </div>`).join("");
   }
