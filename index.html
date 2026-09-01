@@ -5026,7 +5026,7 @@ applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "li
 // Cuando la data real (Graph o el proxy publico) esta cacheada/es rapida, trysilentConnect()
 // puede resolver en unos pocos cientos de ms, muy rapido para realmente ver la pantalla de
 // carga. Se fuerza un minimo de tiempo visible para que siempre se alcance a leer/ver bien.
-const APP_LOADING_MIN_MS = 6000;
+const APP_LOADING_MIN_MS = 4000;
 const appLoadingStartedAt = Date.now();
 function hideAppLoadingOverlay(){
   const el = document.getElementById("appLoadingOverlay");
