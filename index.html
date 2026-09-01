@@ -5088,18 +5088,20 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   msg.textContent = "Saving…";
   msg.style.color = "var(--text-muted)";
   try {
-    // Orden de columnas A a AO de PositionsTable (ver build_real_tracker.py):
+    // Orden de columnas A a AV de PositionsTable, verificado contra el archivo real (ya no
+    // contra el viejo build_real_tracker.py, que quedo desactualizado tras varias rondas de
+    // columnas agregadas/eliminadas a mano en el Excel real):
     // A-K: ID, Title, Client, HM, Recruiter, Country, Status, Intake, Submit, Fill, Hire
     // L-W: 12 columnas de formula (SLA), se dejan vacias aqui y graphAppendPosition() las
     // rellena con las formulas reales despues de crear la fila (ver esa funcion)
     // X-Z: Last Remark, Last Remark Date, Pivot SLA Approved
     // AA: Kickoff Date | AB-AJ: campos de Spott (se llenan despues a mano si aplica)
     // AK-AL: Work Arrangement, City | AM: Spott Job ID (id real de Spott, no el Job Code)
-    // AN: Intake Requested Date | AO: Intake Meeting Scheduled Date (columna en extincion, ver
-    // graphSetupDeleteScheduledColumn() — se deja en null aqui hasta que Nicolas confirme que ya
-    // la borro del archivo real; ese dia hay que quitar tambien este slot del array)
-    // AP: Recruiter Accepted Date (siempre vacio aqui, una posicion nueva nunca nace ya aceptada)
-    // AQ: Irth Careers Page (Workable) URL, si la columna ya existe en el Excel real
+    // AN: Intake Requested Date | AO: Recruiter Accepted Date (siempre vacio aqui, una posicion
+    // nueva nunca nace ya aceptada) | AP: Irth Careers Page (Workable) URL | AQ: LinkedIn
+    // Recruiter URL (este formulario no la pide, se deja vacia)
+    // AR-AV: Pivot Justification, Pivot Requested/Approved/Confirmed Date, Calibration Call
+    // Date — ninguna aplica a una posicion recien creada, todas vacias
     const row = [
       code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
       null,null,null,null,null,null,null,null,null,null,null,null,
@@ -5109,8 +5111,8 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       workArrangement, city,
       null,
       intakeRequestedDate, null,
-      null,
-      careersUrl,
+      careersUrl, null,
+      null, null, null, null, null,
     ];
     await graphAppendPosition(row);
     // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
