@@ -1383,6 +1383,7 @@
     </div>
 
     <div id="logBatchFormState">
+      <div class="panel-sub" id="logBatchFormNote" style="display:none; margin:0 0 10px;"></div>
       <div class="form-grid">
         <div class="form-field"><label>Date</label><input type="date" id="logBatchDate"></div>
         <div class="form-field"><label>Candidates In This Batch</label><input type="number" id="logBatchCount" min="1" placeholder="e.g. 4"></div>
@@ -1397,9 +1398,9 @@
     </div>
 
     <div id="pivotRequestState" style="display:none;">
-      <div class="panel-sub" style="margin:0 0 10px;">Any batch after the first only happens because a Pivot SLA applies. Explain what happened, against the Intake Summary, this needs approval from both CGP (Nicolás Patarroyo, Lead Talent Partner) and Irth TA (Immy Nader) before this batch can be logged.</div>
+      <div class="panel-sub" style="margin:0 0 10px;">Warning: this sends a request to CGP (Nicolás Patarroyo, Lead Talent Partner) and Irth TA (Immy Nader) to approve the Pivot SLA, driven by a calibration call needed with the hiring manager. Explain why below, against the Intake Summary.</div>
       <div class="form-grid">
-        <div class="form-field full"><label>What happened?</label><textarea id="pivotJustificationInput" rows="4" placeholder="e.g. Hiring manager rejected the full batch; candidates matched what was agreed in the Intake Summary..."></textarea></div>
+        <div class="form-field full"><label>Why is a calibration call needed?</label><textarea id="pivotJustificationInput" rows="4" placeholder="e.g. Hiring manager rejected the full batch, candidates matched the Intake Summary, pool looks genuinely limited at the approved compensation..."></textarea></div>
       </div>
       <div class="form-actions">
         <button class="btn primary" type="button" id="pivotRequestSave">Request Pivot SLA</button>
@@ -1409,7 +1410,7 @@
     <div id="pivotPendingState" style="display:none;">
       <div class="panel-sub" style="margin:0 0 10px;">Pivot SLA requested <span id="pivotPendingDate"></span>. Not confirmed yet, the batch can't be logged until both approvals are in.</div>
       <div class="callout prose" id="pivotPendingJustification" style="margin-bottom:14px;"></div>
-      <div class="facts-grid" style="margin-bottom:6px;">
+      <div class="facts-grid" style="margin-bottom:14px;">
         <div>
           <div class="fact-label">Approved By CGP</div>
           <div id="pivotLeadStatus"></div>
@@ -1419,6 +1420,11 @@
           <div id="pivotImmyStatus"></div>
         </div>
       </div>
+      <div class="form-grid" style="margin-bottom:10px;">
+        <div class="form-field"><label>Calibration Call Date</label><input type="date" id="calibrationCallDateInput"></div>
+        <div class="form-field" style="align-self:end;"><button class="btn ghost small" type="button" id="calibrationCallSave">Save</button></div>
+      </div>
+      <div class="sla-grid" id="calibrationCallCard"></div>
     </div>
 
     <div class="panel-sub" id="logBatchMsg" style="margin-top:8px;"></div>
@@ -1969,7 +1975,11 @@ let SLA_TARGETS = { TTS: 9, TTF: 40, TTH: 50 };
 // paso aparte ("hmResponse", 3 dias) y otro para la reunion en si (5 dias) — Nicolas confirmo
 // que en la practica son el mismo evento (si el HM responde con fecha, esa fecha ES la reunion),
 // asi que se fusionaron en un solo target de 3 dias.
-const COMPLETION_TARGETS = { acceptRequest: 1, intakeHeld: 3 };
+// calibrationCallHeld: 3 dias habiles es un supuesto propio (no confirmado con Nicolas todavia,
+// a diferencia de acceptRequest/intakeHeld que si vienen de el) — mismo target que intakeHeld
+// porque es el mismo tipo de accion (agendar una llamada con el hiring manager). Ajustar si dice
+// otra cosa.
+const COMPLETION_TARGETS = { acceptRequest: 1, intakeHeld: 3, calibrationCallHeld: 3 };
 const ESCALATION_CONTACT = "Immy Nader";
 // "Pivot SLA": allowance de dias calendario que se suma al target de TTF/TTH cuando la posicion
 // tiene "SLA Exception Approved?" = Yes (batch completo rechazado, atribuible al cliente segun
@@ -2075,7 +2085,17 @@ function computeCompletion(p){
     step2 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld};
   }
 
-  return {step1, step2};
+  // step3 solo aplica si se pidio un Pivot SLA (no todos los req llegan aqui) — mide cuanto
+  // tarda en pasar la calibration call desde que se pidio el Pivot.
+  let step3 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.calibrationCallHeld, overdue:false};
+  const pivotRequested = parseD(p.pivotRequestedDate);
+  const calibrationHeld = parseD(p.calibrationCallDate);
+  if(pivotRequested){
+    const elapsed = bizDaysBetween(pivotRequested, calibrationHeld || today);
+    step3 = {status: calibrationHeld ? "done" : (elapsed>COMPLETION_TARGETS.calibrationCallHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.calibrationCallHeld, overdue: !calibrationHeld && elapsed>COMPLETION_TARGETS.calibrationCallHeld};
+  }
+
+  return {step1, step2, step3};
 }
 // Texto tipo slaFlags() pero para el checklist de arriba: solo aparece algo si hay una falla
 // real del reclutador (step1 out) o un recordatorio de seguimiento pendiente (step2/step3).
@@ -2961,6 +2981,26 @@ function localTodayStr(){
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
 }
+// Item de Timeline entre Submission Date y Fill Date (no es un campo de fecha, es un boton que
+// abre el mismo Log Batch modal — ver openLogBatchModal()) — su texto refleja el estado real:
+// bloqueado hasta el primer batch, "Request" si nunca se ha pedido, "Pending" mientras falta
+// alguna de las dos aprobaciones, "Active" una vez las dos estan.
+function pivotSlaFactHtml(p){
+  const hasBatch = p.batches && p.batches.length;
+  const active = isSlaExceptionApproved(p);
+  const pending = p.pivotRequestedDate && !active;
+  let inner;
+  if(!hasBatch){
+    inner = `<button type="button" class="fact-date-input" style="text-align:left;" disabled title="Log the first submission batch first.">Log first batch first</button>`;
+  } else if(active){
+    inner = `<button type="button" class="fact-date-input pivotSlaTrigger" style="text-align:left; color:var(--good); font-weight:600;">Active (+${PIVOT_SLA_ALLOWANCE_DAYS}d) &rarr;</button>`;
+  } else if(pending){
+    inner = `<button type="button" class="fact-date-input pivotSlaTrigger" style="text-align:left; color:var(--warning); font-weight:600;">Pending approval &rarr;</button>`;
+  } else {
+    inner = `<button type="button" class="fact-date-input pivotSlaTrigger" style="text-align:left;">Request Pivot SLA &rarr;</button>`;
+  }
+  return `<div><div class="fact-label">Pivot SLA</div>${inner}</div>`;
+}
 function timelineFieldHtml(label, id, value, locked, unlockHint, capToday){
   const max = capToday ? ` max="${localTodayStr()}"` : "";
   return `
@@ -3129,7 +3169,13 @@ function renderDetailModal(){
       ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "", true)}
       ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true)}
       ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true)}
-      ${timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake || !(p.batches && p.batches.length), !p.intake ? "Fill in Intake Meeting Date first." : "Log the first submission batch first (+ Log Batch below).", true)}
+      ${(p.batches && p.batches.length)
+        ? timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting Date first.", true)
+        : `<div>
+            <div class="fact-label">Submission Date${!p.intake ? ` <span class="tl-lock" title="Fill in Intake Meeting Date first.">&#128274;</span>` : ""}</div>
+            <button type="button" class="fact-date-input" id="submissionDateTrigger" style="text-align:left;"${!p.intake ? " disabled" : ""}>Log first batch to set this &rarr;</button>
+          </div>`}
+      ${pivotSlaFactHtml(p)}
       ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submission Date first.")}
       ${timelineFieldHtml("Hire Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
     </div>
@@ -3224,6 +3270,9 @@ function renderDetailModal(){
   if(!isView){
     document.getElementById("editPipelineBtn").addEventListener("click", ()=> openEditPipelineModal(p));
     document.getElementById("logBatchBtn").addEventListener("click", ()=> openLogBatchModal(p));
+    const submissionTrigger = document.getElementById("submissionDateTrigger");
+    if(submissionTrigger) submissionTrigger.addEventListener("click", ()=> openLogBatchModal(p));
+    document.querySelectorAll(".pivotSlaTrigger").forEach(btn=> btn.addEventListener("click", ()=> openLogBatchModal(p)));
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
@@ -3590,6 +3639,18 @@ function renderPivotPendingState(p){
   if(leadBtn) leadBtn.addEventListener("click", ()=> markPivotApproval(p, "lead"));
   const immyBtn = document.getElementById("pivotConfirmImmyBtn");
   if(immyBtn) immyBtn.addEventListener("click", ()=> markPivotApproval(p, "immy"));
+  document.getElementById("calibrationCallDateInput").value = p.calibrationCallDate || "";
+  document.getElementById("calibrationCallDateInput").max = localTodayStr();
+  const c3 = computeCompletion(p).step3;
+  const chip3 = c3.status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done &middot; ${c3.elapsed}d/${c3.target}d</span>`
+    : c3.status==="overdue" ? `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Overdue &middot; ${c3.elapsed}d/${c3.target}d</span>`
+    : c3.status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting &middot; ${c3.elapsed}d/${c3.target}d</span>`
+    : "";
+  document.getElementById("calibrationCallCard").innerHTML = chip3 ? `
+    <div class="sla-card">
+      <div class="sla-name"><span>Calibration Call Held</span><span class="tag internal">Follow-Up Only</span></div>
+      ${chip3}
+    </div>` : "";
 }
 async function markPivotApproval(p, who){
   const today = localTodayStr();
@@ -3644,6 +3705,13 @@ function openLogBatchModal(p){
     document.getElementById("logBatchDate").value = localTodayStr();
     document.getElementById("logBatchCount").value = "";
     document.getElementById("logBatchTypeDisplay").textContent = isFirst ? "Initial" : "Pivot Follow-up";
+    const formNote = document.getElementById("logBatchFormNote");
+    if(isFirst){
+      formNote.textContent = "Remember, this triggers the first batch and its corresponding SLAs, this field is what's used for the initial batch.";
+      formNote.style.display = "";
+    } else {
+      formNote.style.display = "none";
+    }
   } else if(hasPendingRequest){
     document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
     document.getElementById("pivotPendingState").style.display = "";
@@ -3748,6 +3816,41 @@ document.getElementById("pivotRequestSave").addEventListener("click", async ()=>
   document.getElementById("pivotRequestState").style.display = "none";
   document.getElementById("pivotPendingState").style.display = "";
   document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
+  renderPivotPendingState(p);
+});
+document.getElementById("calibrationCallSave").addEventListener("click", async ()=>{
+  const p = POSITIONS.find(x=>x.id===activeDetailId);
+  if(!p) return;
+  const msg = document.getElementById("logBatchMsg");
+  const date = document.getElementById("calibrationCallDateInput").value;
+  if(!date){
+    msg.textContent = "Pick a date for the calibration call.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  p.calibrationCallDate = date;
+  const remarkText = `Calibration call held with the hiring manager on ${date}.`;
+  p.extra = p.extra || [];
+  p.extra.push({date, type:"action", author:"You", text: remarkText});
+  renderDetailModal();
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      await graphUpdatePositionFieldByHeader(p.id, "Calibration Call Date", date);
+      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      msg.textContent = "Saved.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+      return;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
   renderPivotPendingState(p);
 });
 
@@ -4269,6 +4372,18 @@ let msalReady = msalInstance.initialize();
 
 function isConnected(){ return !!graphAccount; }
 
+let autoRefreshTimer = null;
+// Reemplaza el boton manual de "Reload Data": mientras haya sesion de Microsoft 365, refresca
+// solo cada 2 minutos para que cambios de otros recruiters/otra pestaña se vean sin que alguien
+// tenga que acordarse de recargar. El volumen de llamadas extra a Graph es insignificante para
+// el numero de personas usando este tracker.
+function startAutoRefresh(){
+  if(autoRefreshTimer) return;
+  autoRefreshTimer = setInterval(async ()=>{
+    if(!isConnected()) return;
+    try { await loadFromGraph(); } catch(err){ console.error("Auto-refresh failed:", err); }
+  }, 120000);
+}
 function setConnectionUi(connected, label){
   const pill = document.getElementById("connectionPill");
   const btn = document.getElementById("connectBtn");
@@ -4279,14 +4394,19 @@ function setConnectionUi(connected, label){
     pill.classList.remove("demo");
     pill.style.background = "var(--brand-wash)";
     pill.style.color = "var(--brand-dark)";
-    btn.textContent = "Reload Data";
+    // Ya no hay boton manual "Reload Data": el auto-refresh (startAutoRefresh(), cada 2 min)
+    // se encarga de traer cambios de otros recruiters/pestañas, sin que Nicolas tenga que
+    // acordarse de darle click. El boton solo hace falta para el login inicial.
+    btn.style.display = "none";
     banner.style.display = "none";
     modalNote.textContent = "Connected to Microsoft 365, changes here are saved straight to the shared file.";
     modalNote.classList.remove("tier-yellow");
     modalNote.classList.add("tier-good");
+    startAutoRefresh();
   } else {
     pill.textContent = "Not connected";
     btn.textContent = "Connect Microsoft 365";
+    btn.style.display = "";
     banner.style.display = "";
     modalNote.textContent = 'Not connected to Microsoft 365, updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the shared file.';
     modalNote.classList.remove("tier-good");
@@ -4545,6 +4665,7 @@ function parsePositionsTable(posHeaders, posRows){
       pivotRequestedDate: excelValToDateStr(r[idx("Pivot Requested Date")]),
       pivotApprovedByLeadDate: excelValToDateStr(r[idx("Pivot Approved By Lead Date")]),
       pivotConfirmedByImmyDate: excelValToDateStr(r[idx("Pivot Confirmed By Immy Date")]),
+      calibrationCallDate: excelValToDateStr(r[idx("Calibration Call Date")]),
       extra: [],
       batches: [],
       remarksHistory: [],
