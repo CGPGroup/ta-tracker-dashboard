@@ -255,6 +255,12 @@
      ya se usan en Recently Assigned, misma familia visual) — max-height+scroll para que la
      tarjeta no tenga que crecer si hay muchas activas a la vez. */
   .active-positions-list { max-height: 132px; overflow-y: auto; margin-top: 8px; text-align: left; }
+  /* Encabezado de grupo de headcounts (varias reqs = mismo rol, distintos codigos de job en
+     Irth) — mismo tratamiento tipografico que .rail-section-title pero sin mayusculas, para no
+     confundirse con las etiquetas de seccion reales del sidebar. Las filas hijas se indentan un
+     poco para dejar claro que "pertenecen" al grupo, sin perder el mismo hover clickeable. */
+  .active-positions-group-header { font-size: 10.5px; font-weight: 600; color: var(--text-muted); padding: 6px 10px 2px; }
+  .recent-req-row.grouped { padding-left: 18px; }
 
   /* Switcher Team Workspace / My Workspace, desplegado justo debajo de Dashboard SOLO mientras
      Dashboard es la vista activa (ver activateView()) — como un acordeon de sidebar normal,
@@ -599,6 +605,11 @@
   }
   .form-field input:disabled { background: var(--surface-1); color: var(--text-muted); }
   .form-actions { display: flex; gap: 10px; margin-top: 18px; }
+  /* Checkbox de una linea para el checklist de Accept Handoff — el checkbox alineado con la
+     PRIMERA linea del texto (no centrado en todo el bloque) para que un texto de 2 lineas no
+     deje el checkbox flotando raro a la mitad. */
+  .handoff-check { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; padding: 6px 0; cursor: pointer; }
+  .handoff-check input { margin-top: 2px; flex: none; }
   .btn {
     /* Pill completo en vez de rounded-rect: asi son los botones tanto en cgpgroup.com como en
        gokeystone.ai (incluyendo el mismo detalle de flecha circular en los CTAs principales,
@@ -897,6 +908,7 @@
               <div class="panel panel-ring">
                 <h3>Active Positions</h3>
                 <div class="panel-sub">Positions not yet in a terminal status, right now.</div>
+                <div class="panel-sub" id="activePositionsRolesStat" style="margin-top:-4px;"></div>
                 <div id="statRingActive"></div>
                 <!-- Lista de las mismas posiciones activas, cada una clickeable directo a su
                      modal — antes solo se podia llegar ahi haciendo clic en el anillo entero
@@ -1101,6 +1113,11 @@
             <div class="form-grid">
               <div class="form-field"><label>Position Title</label><input type="text" id="newPosTitle" placeholder="e.g. Backend Engineer"></div>
               <div class="form-field"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
+              <div class="form-field full">
+                <label>Headcount Group (Optional)</label>
+                <input type="text" id="newPosHeadcountGroup" placeholder="e.g. ENG-010-Group">
+                <div class="panel-sub" style="margin:4px 0 0;">Irth posts one job code per headcount even when it's really the same role — use the exact same label here on every sibling req to group them as "1 role, several headcounts" on the Dashboard, without merging the rows.</div>
+              </div>
               <div class="form-field full"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
@@ -1574,6 +1591,62 @@
   </div>
 </div>
 
+<!-- ======================= REASSIGN RECRUITER MODAL ======================= -->
+<!-- Handoff: la req no es nueva, pero PARA el reclutador que la recibe si lo es — ver
+     openAcceptHandoffModal() para el otro lado de este flujo. -->
+<div class="modal-overlay" id="reassignModal">
+  <div class="modal-card" style="max-width:460px;">
+    <div class="modal-head">
+      <div>
+        <h2 style="margin:0; font-size:16px;">Reassign Requisition</h2>
+        <div class="modal-sub" id="reassignSub">Hands this req off to another recruiter — they'll need to accept it before it's fully theirs.</div>
+      </div>
+      <button class="modal-close" id="reassignClose" type="button">&times;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field full"><label>New Recruiter</label><select id="reassignSelect"></select></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="reassignSave">Reassign</button>
+    </div>
+    <div class="panel-sub" id="reassignMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- ======================= ACCEPT HANDOFF MODAL ======================= -->
+<!-- Reemplaza el "Accept + Request Intake" de una asignacion fresca de Kickoff: aqui la req ya
+     tiene historia, asi que lo que de verdad importa es si el contexto se transfirio de verdad.
+     Item 1 obligatorio; de item 2/3 hace falta al menos uno (confirmado con Nicolas). -->
+<div class="modal-overlay" id="acceptHandoffModal">
+  <div class="modal-card" style="max-width:480px;">
+    <div class="modal-head">
+      <div>
+        <h2 style="margin:0; font-size:16px;">Accept Handoff</h2>
+        <div class="modal-sub" id="acceptHandoffSub"></div>
+      </div>
+      <button class="modal-close" id="acceptHandoffClose" type="button">&times;</button>
+    </div>
+    <label class="handoff-check">
+      <input type="checkbox" id="handoffLoopedIn">
+      <span>I was looped into the Kickoff email thread for this requisition.</span>
+    </label>
+    <div class="panel-sub" style="margin:2px 0 10px;">Required — you can't accept a handoff without visibility into how this req actually started.</div>
+    <label class="handoff-check">
+      <input type="checkbox" id="handoffPostIntakeNotes">
+      <span>I have access to the post-intake meeting notes.</span>
+    </label>
+    <label class="handoff-check">
+      <input type="checkbox" id="handoffHmCalibrated">
+      <span>The hiring manager was calibrated on the role some other way (e.g. by email), even without a live meeting.</span>
+    </label>
+    <div class="panel-sub" style="margin:2px 0 10px;">At least one of these two — you need some real signal you understand what the hiring manager wants, not just the req existing.</div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="acceptHandoffSave">Accept Handoff</button>
+    </div>
+    <div class="panel-sub" id="acceptHandoffMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
 <!-- ======================= GENERIC SINGLE-FIELD EDIT MODAL ======================= -->
 <!-- Reutilizado por cualquier campo tipo "un solo link/valor por posicion" (Spott Job ID,
      Irth Careers Page URL, Hiring Manager, Country, City, Work Arrangement...) — ver
@@ -1785,7 +1858,9 @@ function renderPendingAssignments(){
   // que estes mirando de paso) — es una accion que solo tu puedes tomar, asi que no tiene
   // sentido que aparezca en ningun otro contexto.
   if(MY_RECRUITER_NAME && activeDashboardScope === MY_RECRUITER_NAME){
-    const pending = POSITIONS.filter(p=>p.recruiter===MY_RECRUITER_NAME && p.kickoff && !p.recruiterAcceptedDate);
+    // Handoffs se excluyen de aqui (tienen su propio banner abajo, con su propio checklist de
+    // aceptacion) para no mostrar el mismo req dos veces con dos botones distintos.
+    const pending = POSITIONS.filter(p=>p.recruiter===MY_RECRUITER_NAME && p.kickoff && !p.recruiterAcceptedDate && !p.handoffFrom);
     if(pending.length){
       html += `<div class="alert-banner tier-orange" style="flex-direction:column; align-items:stretch;">
         <div><b>You have ${pending.length} new assignment${pending.length===1?"":"s"}</b> waiting on your acceptance.</div>
@@ -1793,6 +1868,19 @@ function renderPendingAssignments(){
           <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
             <span>${posLabel(p)} <span style="color:var(--text-muted);">— assigned ${escapeHtml(p.kickoff)}</span></span>
             <button class="btn primary small" type="button" data-accept-id="${escapeHtml(p.id)}">Accept</button>
+          </div>`).join("")}
+      </div>`;
+    }
+    // Handoffs pendientes: req que le llego a este reclutador desde otro (ver openReassignModal),
+    // requiere el checklist de contexto de openAcceptHandoffModal, no el Accept simple de arriba.
+    const pendingHandoffs = POSITIONS.filter(p=>p.recruiter===MY_RECRUITER_NAME && p.handoffFrom && !p.handoffAcceptedDate);
+    if(pendingHandoffs.length){
+      html += `<div class="alert-banner tier-orange" style="flex-direction:column; align-items:stretch;">
+        <div><b>You have ${pendingHandoffs.length} handoff${pendingHandoffs.length===1?"":"s"}</b> waiting on your acceptance.</div>
+        ${pendingHandoffs.map(p=>`
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <span>${posLabel(p)} <span style="color:var(--text-muted);">— handed off from ${escapeHtml(p.handoffFrom)}</span></span>
+            <button class="btn primary small" type="button" data-accept-handoff-id="${escapeHtml(p.id)}">Accept Handoff</button>
           </div>`).join("")}
       </div>`;
     }
@@ -1806,6 +1894,12 @@ function renderPendingAssignments(){
   zone.innerHTML = html;
   zone.querySelectorAll("[data-accept-id]").forEach(btn=>{
     btn.addEventListener("click", ()=> acceptAssignment(btn.dataset.acceptId));
+  });
+  zone.querySelectorAll("[data-accept-handoff-id]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const p = POSITIONS.find(x=>x.id===btn.dataset.acceptHandoffId);
+      if(p) openAcceptHandoffModal(p);
+    });
   });
   zone.querySelectorAll("[data-dismiss-id]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
@@ -1986,7 +2080,7 @@ let SLA_TARGETS = { TTS: 9, TTF: 40, TTH: 50 };
 // a diferencia de acceptRequest/intakeHeld que si vienen de el) — mismo target que intakeHeld
 // porque es el mismo tipo de accion (agendar una llamada con el hiring manager). Ajustar si dice
 // otra cosa.
-const COMPLETION_TARGETS = { acceptRequest: 1, intakeHeld: 3, calibrationCallHeld: 3 };
+const COMPLETION_TARGETS = { acceptRequest: 1, intakeHeld: 3, calibrationCallHeld: 3, handoffConfirmed: 2 };
 const ESCALATION_CONTACT = "Immy Nader";
 // "Pivot SLA": allowance de dias calendario que se suma al target de TTF/TTH cuando la posicion
 // tiene "SLA Exception Approved?" = Yes (batch completo rechazado, atribuible al cliente segun
@@ -2115,6 +2209,21 @@ function computeCompletion(p){
     step2 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld};
   }
 
+  // Si esta req le llego a este reclutador por Handoff (no fue una asignacion nueva desde Irth),
+  // step2 se reemplaza por "confirmar contexto" en vez de "sostener el intake meeting" — el
+  // reclutador que recibe el handoff no tiene por que repetir el intake, solo confirmar que
+  // tiene visibilidad real (ver openAcceptHandoffModal()). Se usa handoffDate como el punto de
+  // partida (equivalente a "requested" en el flujo normal).
+  let stepHandoff = {status:"none", elapsed:null, target:COMPLETION_TARGETS.handoffConfirmed, overdue:false};
+  if(p.handoffFrom){
+    const handoffStart = parseD(p.handoffDate) || kickoff;
+    const confirmed = parseD(p.handoffAcceptedDate);
+    if(handoffStart){
+      const elapsed = bizDaysBetween(handoffStart, confirmed || today);
+      stepHandoff = {status: confirmed ? "done" : (elapsed>COMPLETION_TARGETS.handoffConfirmed ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.handoffConfirmed, overdue: !confirmed && elapsed>COMPLETION_TARGETS.handoffConfirmed};
+    }
+  }
+
   // step3 solo aplica si se pidio un Pivot SLA (no todos los req llegan aqui) — mide cuanto
   // tarda en pasar la calibration call desde que se pidio el Pivot.
   let step3 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.calibrationCallHeld, overdue:false};
@@ -2125,7 +2234,7 @@ function computeCompletion(p){
     step3 = {status: calibrationHeld ? "done" : (elapsed>COMPLETION_TARGETS.calibrationCallHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.calibrationCallHeld, overdue: !calibrationHeld && elapsed>COMPLETION_TARGETS.calibrationCallHeld};
   }
 
-  return {step1, step2, step3};
+  return {step1, step2, step3, stepHandoff};
 }
 // Texto tipo slaFlags() pero para el checklist de arriba: solo aparece algo si hay una falla
 // real del reclutador (step1 out) o un recordatorio de seguimiento pendiente (step2/step3).
@@ -2133,7 +2242,11 @@ function completionFlags(p){
   const c = computeCompletion(p);
   const flags = [];
   if(c.step1.status==="out") flags.push(`🚩 ${p.recruiterAcceptedDate ? "Request Intake Meeting" : "Accept Requisition & Request Intake"}: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
-  if(c.step2.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Intake meeting hasn't happened, ${c.step2.elapsed} business days since requested (target ${c.step2.target})`);
+  if(p.handoffFrom){
+    if(c.stepHandoff.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Handoff context hasn't been confirmed, ${c.stepHandoff.elapsed} business days since the handoff (target ${c.stepHandoff.target})`);
+  } else {
+    if(c.step2.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Intake meeting hasn't happened, ${c.step2.elapsed} business days since requested (target ${c.step2.target})`);
+  }
   if(c.step3.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Calibration call hasn't happened, ${c.step3.elapsed} business days since the Pivot SLA was requested (target ${c.step3.target})`);
   if(p.pivotRequestedDate && !isSlaExceptionApproved(p)) flags.push(`⏳ Pivot SLA pending: waiting on ${!p.pivotApprovedByLeadDate ? "CGP TA (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"}`);
   return flags;
@@ -2255,14 +2368,48 @@ function renderKpis(){
     [active.length ? "var(--brand)" : "var(--grid)"], "Active", 168, null, active.length>0 ? ()=>{
       openQuickList("Active Positions", `${active.length} position${active.length===1?"":"s"} not yet in a terminal status`, active);
     } : null);
+  // Headcounts: p.headcountGroup agrupa varias reqs (Irth publica un codigo de job distinto por
+  // cada headcount, aunque sea el mismo rol) — el conteo de "requisitions" (active.length, lo que
+  // ya mostraba el anillo) y el de "roles distintos" (grupos unicos) son cosas diferentes, y
+  // mezclarlos confunde ("si tengo 3 headcounts no son 3 reqs, es 1 req con 3 headcounts" —
+  // exactamente al reves para este tracker, que sigue siendo 1 fila = 1 req/headcount, pero el
+  // CONTEO de roles si debe distinguirse). Cada posicion sin headcountGroup es su propio rol de 1.
+  const groupKey = p => p.headcountGroup || `__solo_${p.id}`;
+  const groupsMap = new Map();
+  active.forEach(p=>{
+    const key = groupKey(p);
+    if(!groupsMap.has(key)) groupsMap.set(key, []);
+    groupsMap.get(key).push(p);
+  });
+  const roleCount = groupsMap.size;
+  const rolesStatEl = document.getElementById("activePositionsRolesStat");
+  if(rolesStatEl){
+    rolesStatEl.textContent = (active.length && roleCount !== active.length)
+      ? `${active.length} requisitions across ${roleCount} distinct role${roleCount===1?"":"s"} (some roles post 1 job code per headcount)`
+      : "";
+  }
+
   // Mismas posiciones activas, listadas debajo del anillo — cada una va directo a su propio
   // modal (mismo modo "view" que usa openQuickList para sus filas), sin pasar por el quick-list
   // generico primero. La tarjeta no crece: .active-positions-list tiene su propio scroll.
-  document.getElementById("activePositionsList").innerHTML = active.map(p=>`
-    <div class="recent-req-row" data-id="${escapeHtml(p.id)}">
-      <div>${escapeHtml(p.title)}</div>
-      <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(p.status)}</div>
-    </div>`).join("");
+  // Grupos de headcount (mas de 1 miembro) llevan un encabezado con el nombre del grupo + cuantos
+  // headcounts tiene; grupos de 1 sola posicion se ven exactamente igual que antes.
+  document.getElementById("activePositionsList").innerHTML = [...groupsMap.values()].map(members=>{
+    if(members.length === 1){
+      const p = members[0];
+      return `<div class="recent-req-row" data-id="${escapeHtml(p.id)}">
+        <div>${escapeHtml(p.title)}</div>
+        <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(p.status)}</div>
+      </div>`;
+    }
+    return `
+      <div class="active-positions-group-header">${escapeHtml(members[0].headcountGroup)} &middot; ${members.length} headcounts</div>
+      ${members.map(p=>`
+        <div class="recent-req-row grouped" data-id="${escapeHtml(p.id)}">
+          <div>${escapeHtml(p.title)}</div>
+          <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(p.status)}</div>
+        </div>`).join("")}`;
+  }).join("");
   document.querySelectorAll("#activePositionsList .recent-req-row").forEach(row=>{
     row.addEventListener("click", ()=> openDetailModal(row.dataset.id, "view", false, true));
   });
@@ -3254,7 +3401,10 @@ function renderDetailModal(){
   // texto fijo aqui, para poder corregirlos sin tener que ir al Excel (ej. un req marcado
   // United States que en realidad era para Canada).
   if(isView) positionFacts.push({label:"Hiring Manager", value:escapeHtml(p.hiringManager)});
-  positionFacts.push({label:"Recruiter", value:escapeHtml(p.recruiter)});
+  // Reassign solo en modo edicion (Tracking) — es una accion de gestion, no algo que un
+  // viewer de solo lectura (drill-down desde Dashboard/Positions) deba poder disparar.
+  positionFacts.push({label:"Recruiter", value: isView ? escapeHtml(p.recruiter)
+    : `${escapeHtml(p.recruiter)} <button class="fact-edit-link" type="button" id="reassignBtn">Reassign</button>`});
   if(isView){
     positionFacts.push({label:"Status", value:statusChip(p.status)});
     positionFacts.push({label:"Location", value:locationOnly(p)});
@@ -3262,6 +3412,15 @@ function renderDetailModal(){
   }
   if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
+  // Editable en los dos modos (a diferencia de Product Line/Salary Range, que son solo lectura):
+  // reqs ya existentes tambien necesitan poder agruparse retroactivamente por headcount, no
+  // solo las que se crean nuevas desde SSOT Management.
+  if(isView){
+    if(p.headcountGroup) positionFacts.push({label:"Headcount Group", value:escapeHtml(p.headcountGroup)});
+  } else {
+    const hgDisplay = p.headcountGroup ? escapeHtml(p.headcountGroup) : `<span style="color:var(--text-muted);">Not set</span>`;
+    positionFacts.push({label:"Headcount Group", value:`${hgDisplay} <button class="fact-edit-link" type="button" id="editHeadcountGroupBtn">${p.headcountGroup ? "Edit" : "Add"}</button>`});
+  }
 
   // Las 3 URLs (Irth/Spott/LinkedIn) van en su propia fila de 3 columnas, en los dos modos —
   // antes en modo vista vivian mezcladas dentro de positionFacts, y segun cuantos campos
@@ -3393,6 +3552,23 @@ function renderDetailModal(){
     document.querySelectorAll(".pivotSlaTrigger").forEach(btn=> btn.addEventListener("click", ()=> openLogBatchModal(p)));
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
+    document.getElementById("reassignBtn").addEventListener("click", ()=> openReassignModal(p));
+    document.getElementById("editHeadcountGroupBtn").addEventListener("click", ()=>{
+      openEditFieldModal({
+        title: "Edit Headcount Group",
+        label: "Headcount Group",
+        placeholder: "e.g. ENG-010-Group — use the same label on every sibling headcount",
+        value: p.headcountGroup,
+        onSave: async (newVal)=>{
+          p.headcountGroup = newVal;
+          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Headcount Group", newVal || "");
+          renderDetailModal();
+          renderPositions();
+          renderTracking();
+          renderKpis();
+        },
+      });
+    });
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit Spott Job URL",
@@ -3468,11 +3644,18 @@ function renderDetailModal(){
       : s.status==="overdue" ? `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Overdue &middot; ${s.elapsed}d/${s.target}d</span>`
       : s.status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting &middot; ${s.elapsed}d/${s.target}d</span>`
       : `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`;
+    // Si la req llego por Handoff, la segunda tarjeta pasa de "Intake Meeting Held" a "Handoff
+    // Context Confirmed" — el reclutador que recibe no vuelve a sostener el intake, solo confirma
+    // que tiene visibilidad real via el checklist de openAcceptHandoffModal().
     const completionCards = [
       {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
-      {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
-        note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
-          : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
+      p.handoffFrom
+        ? {label:"Handoff Context Confirmed", tag:"Follow-Up Only", chip: followUpChip(c.stepHandoff),
+            note: c.stepHandoff.status==="waiting" ? `Handed off from ${escapeHtml(p.handoffFrom)}, ${ESCALATION_CONTACT} tracks that context gets confirmed quickly.`
+              : c.stepHandoff.status==="done" ? `Confirmed on ${p.handoffAcceptedDate}.` : null}
+        : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
+            note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
+              : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
     ];
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
@@ -3482,7 +3665,11 @@ function renderDetailModal(){
       </div>`).join("");
     const alerts = [];
     if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
-    if(c.step2.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step2.elapsed} business days since it was requested (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
+    if(p.handoffFrom){
+      if(c.stepHandoff.overdue) alerts.push({tier:"tier-red", text:`Handoff context hasn't been confirmed yet, ${c.stepHandoff.elapsed} business days since the handoff (target ${c.stepHandoff.target}). Please escalate to ${ESCALATION_CONTACT}.`});
+    } else {
+      if(c.step2.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step2.elapsed} business days since it was requested (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
+    }
     document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">${a.text}</div>`).join("");
   }
 
@@ -3976,6 +4163,141 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
     msg.style.color = "var(--warning)";
   }
   renderPivotPendingState(p);
+});
+
+// ======================= REASSIGN / HANDOFF =======================
+// Reassign entrega el req a otro reclutador (sin borrar el historial ni el req en si — sigue
+// siendo la misma fila). handoffAcceptedDate arranca en null: el nuevo reclutador no queda
+// "listo" hasta que confirma el checklist de contexto en openAcceptHandoffModal(). Ver el swap
+// de Requisition Completion (step2 -> stepHandoff) en computeCompletion().
+function openReassignModal(p){
+  const sel = document.getElementById("reassignSelect");
+  sel.innerHTML = RECRUITERS.filter(r=>r!==p.recruiter).map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+  document.getElementById("reassignSub").innerHTML = `Hands ${posLabel(p)} off to another recruiter — they'll need to confirm they have real context before it's fully theirs.`;
+  document.getElementById("reassignMsg").textContent = "";
+  document.getElementById("reassignModal").dataset.positionId = p.id;
+  document.getElementById("reassignModal").classList.add("open");
+}
+function closeReassignModal(){
+  document.getElementById("reassignModal").classList.remove("open");
+}
+document.getElementById("reassignClose").addEventListener("click", closeReassignModal);
+document.getElementById("reassignModal").addEventListener("click", (e)=>{
+  if(e.target.id === "reassignModal") closeReassignModal();
+});
+document.getElementById("reassignSave").addEventListener("click", async ()=>{
+  const p = POSITIONS.find(x=>x.id===document.getElementById("reassignModal").dataset.positionId);
+  if(!p) return;
+  const msg = document.getElementById("reassignMsg");
+  const newRecruiter = document.getElementById("reassignSelect").value;
+  if(!newRecruiter){
+    msg.textContent = "Pick a recruiter to hand this off to.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const oldRecruiter = p.recruiter;
+  const today = localTodayStr();
+  p.recruiter = newRecruiter;
+  p.handoffFrom = oldRecruiter;
+  p.handoffDate = today;
+  p.handoffAcceptedDate = null;
+  const remarkText = `Handed off from ${oldRecruiter} to ${newRecruiter}.`;
+  p.extra = p.extra || [];
+  p.extra.push({date: today, type:"action", author:"You", text: remarkText});
+  renderDetailModal();
+  renderPositions();
+  renderTracking();
+  renderPendingAssignments();
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      await graphUpdatePositionFieldByHeader(p.id, "Recruiter", newRecruiter);
+      await graphUpdatePositionFieldByHeader(p.id, "Handoff From", oldRecruiter);
+      await graphUpdatePositionFieldByHeader(p.id, "Handoff Date", today);
+      await graphUpdatePositionFieldByHeader(p.id, "Handoff Accepted Date", "");
+      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      msg.textContent = "Reassigned.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+      return;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+  setTimeout(closeReassignModal, 900);
+});
+// Regla exacta del usuario: el checkbox 1 (looped en el thread del kickoff) es obligatorio si
+// o si; de los otros dos (notas post-intake / HM calibrado por correo) basta con marcar UNO —
+// es un OR, no un AND, porque cualquiera de los dos ya demuestra visibilidad real del rol.
+function acceptHandoffValid(){
+  const loopedIn = document.getElementById("handoffLoopedIn").checked;
+  const postIntake = document.getElementById("handoffPostIntakeNotes").checked;
+  const hmCalibrated = document.getElementById("handoffHmCalibrated").checked;
+  return loopedIn && (postIntake || hmCalibrated);
+}
+function openAcceptHandoffModal(p){
+  document.getElementById("acceptHandoffSub").innerHTML = `${posLabel(p)} — handed off from ${escapeHtml(p.handoffFrom || "")}.`;
+  document.getElementById("handoffLoopedIn").checked = false;
+  document.getElementById("handoffPostIntakeNotes").checked = false;
+  document.getElementById("handoffHmCalibrated").checked = false;
+  document.getElementById("acceptHandoffMsg").textContent = "";
+  document.getElementById("acceptHandoffModal").dataset.positionId = p.id;
+  document.getElementById("acceptHandoffModal").classList.add("open");
+}
+function closeAcceptHandoffModal(){
+  document.getElementById("acceptHandoffModal").classList.remove("open");
+}
+document.getElementById("acceptHandoffClose").addEventListener("click", closeAcceptHandoffModal);
+document.getElementById("acceptHandoffModal").addEventListener("click", (e)=>{
+  if(e.target.id === "acceptHandoffModal") closeAcceptHandoffModal();
+});
+document.getElementById("acceptHandoffSave").addEventListener("click", async ()=>{
+  const p = POSITIONS.find(x=>x.id===document.getElementById("acceptHandoffModal").dataset.positionId);
+  if(!p) return;
+  const msg = document.getElementById("acceptHandoffMsg");
+  if(!acceptHandoffValid()){
+    msg.textContent = "You need the kickoff thread, plus at least one of post-intake notes or a calibrated hiring manager.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const today = localTodayStr();
+  const checkedLabels = [
+    "looped into the kickoff email thread",
+    document.getElementById("handoffPostIntakeNotes").checked ? "has access to the post-intake notes" : null,
+    document.getElementById("handoffHmCalibrated").checked ? "hiring manager calibrated by email" : null,
+  ].filter(Boolean);
+  p.handoffAcceptedDate = today;
+  const remarkText = `Accepted handoff from ${p.handoffFrom}: ${checkedLabels.join(", ")}.`;
+  p.extra = p.extra || [];
+  p.extra.push({date: today, type:"action", author:"You", text: remarkText});
+  renderPendingAssignments();
+  renderDetailModal();
+  renderPositions();
+  renderTracking();
+  if(isConnected()){
+    msg.textContent = "Saving…";
+    msg.style.color = "var(--text-muted)";
+    try {
+      await graphUpdatePositionFieldByHeader(p.id, "Handoff Accepted Date", today);
+      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      msg.textContent = "Handoff accepted.";
+      msg.style.color = "var(--good)";
+    } catch(err){
+      console.error(err);
+      msg.textContent = "Could not save: " + err.message;
+      msg.style.color = "var(--critical)";
+      return;
+    }
+  } else {
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+  setTimeout(closeAcceptHandoffModal, 900);
 });
 
 // Aplica un cambio de status ya confirmado (con su fecha si la exigia). Se usa tanto para
@@ -4773,6 +5095,17 @@ function parsePositionsTable(posHeaders, posRows){
       pivotApprovedByLeadDate: excelValToDateStr(r[idx("Pivot Approved By Lead Date")]),
       pivotConfirmedByImmyDate: excelValToDateStr(r[idx("Pivot Confirmed By Immy Date")]),
       calibrationCallDate: excelValToDateStr(r[idx("Calibration Call Date")]),
+      // Handoff: si esta req se le paso a este reclutador desde otro (en vez de asignada nueva
+      // desde Irth), handoffFrom guarda el nombre de quien la tenia antes y handoffAcceptedDate
+      // queda null hasta que el nuevo reclutador confirma el checklist de contexto. Ver
+      // openAcceptHandoffModal() y el swap de Requisition Completion en computeCompletion().
+      handoffFrom: r[idx("Handoff From")] || null,
+      handoffDate: excelValToDateStr(r[idx("Handoff Date")]),
+      handoffAcceptedDate: excelValToDateStr(r[idx("Handoff Accepted Date")]),
+      // Headcount Group: opcional, mismo texto en varias reqs = son el mismo rol pero Irth los
+      // publica como codigos de job separados (uno por headcount). No cambia el modelo de datos
+      // (sigue siendo 1 fila = 1 req), solo agrupa visualmente.
+      headcountGroup: r[idx("Headcount Group")] || null,
       extra: [],
       batches: [],
       remarksHistory: [],
@@ -5190,6 +5523,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   // del Intake Meeting (ver STATUS_DATE_FIELD).
   const intake = status === "Intake Pending" ? statusDateVal : null;
   const remark = document.getElementById("newPosRemark").value.trim();
+  const headcountGroup = document.getElementById("newPosHeadcountGroup").value.trim() || null;
 
   if(!title || !code){
     msg.textContent = "Position title and job code are required.";
@@ -5223,6 +5557,9 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // Recruiter URL (este formulario no la pide, se deja vacia)
     // AR-AV: Pivot Justification, Pivot Requested/Approved/Confirmed Date, Calibration Call
     // Date — ninguna aplica a una posicion recien creada, todas vacias
+    // AW-AZ (nuevas, paso manual pendiente): Handoff From, Handoff Date, Handoff Accepted Date,
+    // Headcount Group, en ese orden exacto — ninguna req nueva nace con un handoff, asi que las
+    // primeras 3 siempre van vacias; Headcount Group se llena solo si el usuario lo escribio.
     const row = [
       code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
       null,null,null,null,null,null,null,null,null,null,null,null,
@@ -5234,6 +5571,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       intakeRequestedDate, null,
       careersUrl, null,
       null, null, null, null, null,
+      null, null, null, headcountGroup,
     ];
     await graphAppendPosition(row);
     // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
@@ -5245,6 +5583,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     await loadFromGraph();
     document.getElementById("newPosTitle").value = "";
     document.getElementById("newPosCode").value = "";
+    document.getElementById("newPosHeadcountGroup").value = "";
     document.getElementById("newPosCareersUrl").value = "";
     document.getElementById("newPosHM").value = "";
     document.getElementById("newPosRemark").value = "";
@@ -5258,7 +5597,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosHeadcountGroup","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newPosStatus").value = "Kickoff";
   updateStatusDateUI("newPos", "Kickoff", null);
   document.getElementById("createPositionMsg").textContent = "";
