@@ -1532,32 +1532,6 @@
   </div>
 </div>
 
-<!-- ======================= EDIT PIPELINE MODAL ======================= -->
-<!-- Sourced/Direct Apps/Submitted/Active/Rejected: hoy se pegan a mano desde Spott (no hay
-     credencial de Spott que el Worker pueda usar para traerlos solo) — ver openEditPipelineModal(). -->
-<div class="modal-overlay" id="editPipelineModal">
-  <div class="modal-card" style="max-width:480px;">
-    <div class="modal-head">
-      <div>
-        <h2 style="margin:0; font-size:16px;">Edit Pipeline</h2>
-        <div class="modal-sub">From Spott — enter the current counts for this requisition.</div>
-      </div>
-      <button class="modal-close" id="editPipelineClose" type="button">&times;</button>
-    </div>
-    <div class="form-grid">
-      <div class="form-field"><label>Sourced</label><input type="number" id="pipelineSourced" min="0"></div>
-      <div class="form-field"><label>Direct Apps</label><input type="number" id="pipelineDirectApps" min="0"></div>
-      <div class="form-field"><label>Submitted</label><input type="number" id="pipelineSubmitted" min="0"></div>
-      <div class="form-field"><label>Active</label><input type="number" id="pipelineActive" min="0"></div>
-      <div class="form-field"><label>Rejected</label><input type="number" id="pipelineRejected" min="0"></div>
-    </div>
-    <div class="form-actions">
-      <button class="btn primary" type="button" id="editPipelineSave">Save Pipeline</button>
-    </div>
-    <div class="panel-sub" id="editPipelineMsg" style="margin-top:8px;"></div>
-  </div>
-</div>
-
 <!-- ======================= EDIT RECRUITER MODAL ======================= -->
 <div class="modal-overlay" id="editRecruiterModal">
   <div class="modal-card" style="max-width:520px;">
@@ -2135,7 +2109,7 @@ function computeCompletion(p){
 function completionFlags(p){
   const c = computeCompletion(p);
   const flags = [];
-  if(c.step1.status==="out") flags.push(`🚩 ${p.recruiterAcceptedDate ? "Request Intake Meeting" : "Accept & Request Intake"}: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
+  if(c.step1.status==="out") flags.push(`🚩 ${p.recruiterAcceptedDate ? "Request Intake Meeting" : "Accept Requisition & Request Intake"}: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
   if(c.step2.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Intake meeting hasn't happened, ${c.step2.elapsed} business days since requested (target ${c.step2.target})`);
   if(c.step3.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Calibration call hasn't happened, ${c.step3.elapsed} business days since the Pivot SLA was requested (target ${c.step3.target})`);
   if(p.pivotRequestedDate && !isSlaExceptionApproved(p)) flags.push(`⏳ Pivot SLA pending: waiting on ${!p.pivotApprovedByLeadDate ? "CGP TA (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"}`);
@@ -3221,26 +3195,20 @@ function renderDetailModal(){
     positionFacts.push({label:"Location", value:locationOnly(p)});
     positionFacts.push({label:"Work Arrangement", value:arrangementBadge(p)});
   }
-  // En modo edicion, Irth/Spott/LinkedIn ya se muestran aparte via urlFactCell() (con su boton
-  // Edit) — repetirlos aqui tambien salia redundante, dos filas por campo. Orden: Irth primero
-  // (la pagina publica de la vacante), luego Spott (el sistema interno), luego LinkedIn.
-  if(isView){
-    if(p.careersUrl) positionFacts.push({label:"Irth Careers Page URL", value: linkifyIfUrl(p.careersUrl, "View Posting")});
-    if(p.spottJobId) positionFacts.push({label:"Spott Job URL", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
-    if(p.linkedinRecruiterUrl) positionFacts.push({label:"LinkedIn Recruiter URL", value: linkifyIfUrl(p.linkedinRecruiterUrl, "View Job Post")});
-  }
   if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
   if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
 
-  // != null no bastaba: Graph devuelve celda vacia como "" (string vacio), no null/undefined,
-  // asi que sin el chequeo de "" estos campos se mostraban como filas vacias y el banner de
-  // sincronizado se creia "ya sincronizado" con puros campos en blanco.
-  const pipelineFacts = [];
-  if(p.sourced != null && p.sourced !== "") pipelineFacts.push({label:"Sourced", value:escapeHtml(p.sourced)});
-  if(p.directApps != null && p.directApps !== "") pipelineFacts.push({label:"Direct Apps", value:escapeHtml(p.directApps)});
-  if(p.submittedCount != null && p.submittedCount !== "") pipelineFacts.push({label:"Submitted", value:escapeHtml(p.submittedCount)});
-  if(p.activeCount != null && p.activeCount !== "") pipelineFacts.push({label:"Active", value:escapeHtml(p.activeCount)});
-  if(p.rejectedCount != null && p.rejectedCount !== "") pipelineFacts.push({label:"Rejected", value:escapeHtml(p.rejectedCount)});
+  // Las 3 URLs (Irth/Spott/LinkedIn) van en su propia fila de 3 columnas, en los dos modos —
+  // antes en modo vista vivian mezcladas dentro de positionFacts, y segun cuantos campos
+  // vinieran antes (Hiring Manager/Recruiter/Status/Location/Work Arrangement) el grid de 3
+  // columnas las partia en 2 filas distintas (Irth Careers URL sola, Spott+LinkedIn en la
+  // siguiente). Con su propio facts-grid aparte, siempre quedan juntas sin importar que mas
+  // haya arriba. Orden: Irth primero (la pagina publica de la vacante), luego Spott (el
+  // sistema interno), luego LinkedIn.
+  const urlFacts = [];
+  if(p.careersUrl) urlFacts.push({label:"Irth Careers Page URL", value: linkifyIfUrl(p.careersUrl, "View Posting")});
+  if(p.spottJobId) urlFacts.push({label:"Spott Job URL", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
+  if(p.linkedinRecruiterUrl) urlFacts.push({label:"LinkedIn Recruiter URL", value: linkifyIfUrl(p.linkedinRecruiterUrl, "View Job Post")});
 
   const outcomeFacts = [];
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
@@ -3307,11 +3275,11 @@ function renderDetailModal(){
       <button type="button" class="btn ghost small" id="editReqInfoBtn">Edit Basic Info</button>
     </div>`;
 
-  // Editable solo en modo edicion (Tracking). Si ya tiene valor, se muestra compacto (link +
-  // boton Edit) en vez de dejar el formulario de captura siempre abierto ocupando espacio;
-  // Edit/Add abren el modal generico de un solo campo. Las tres van juntas en una sola fila
-  // de 3 columnas: Irth primero, luego Spott, luego LinkedIn.
-  const urlFactsHtml = isView ? "" : `
+  // En vista: texto fijo (los mismos urlFacts de arriba). En edicion (Tracking): compacto (link
+  // + boton Edit) si ya tiene valor, formulario de captura si no; Edit/Add abren el modal
+  // generico de un solo campo. Las tres van juntas en una sola fila de 3 columnas en los dos
+  // modos: Irth primero, luego Spott, luego LinkedIn.
+  const urlFactsHtml = isView ? factsSection("", urlFacts) : `
     <div class="facts-grid" style="margin-bottom:22px;">
       ${urlFactCell("Irth Careers Page URL", p.careersUrl, "View Posting", "editCareersUrlBtn")}
       ${urlFactCell("Spott Job URL", p.spottJobId, "View In Spott", "editSpottIdBtn")}
@@ -3351,15 +3319,9 @@ function renderDetailModal(){
     basicInfoEditHtml +
     urlFactsHtml +
     timelineHtml +
-    factsSection("Pipeline (From Spott)", pipelineFacts) +
-    (pipelineFacts.length
-      ? `<div class="alert-banner tier-good compact">Synced automatically from Spott every day at 12:00 PM CT.</div>`
-      : `<div class="alert-banner tier-yellow compact">Not synced yet — this fills in automatically from Spott every day at 12:00 PM CT once a Spott Job URL is set.</div>`) +
-    (isView ? "" : `<div style="margin-bottom:22px;"><button type="button" class="btn ghost small" id="editPipelineBtn">Edit Pipeline</button></div>`) +
     batchesHtml +
     factsSection("Outcome", outcomeFacts);
   if(!isView){
-    document.getElementById("editPipelineBtn").addEventListener("click", ()=> openEditPipelineModal(p));
     document.getElementById("logBatchBtn").addEventListener("click", ()=> openLogBatchModal(p));
     const submissionTrigger = document.getElementById("submissionDateTrigger");
     if(submissionTrigger) submissionTrigger.addEventListener("click", ()=> openLogBatchModal(p));
@@ -3442,7 +3404,7 @@ function renderDetailModal(){
       : s.status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting &middot; ${s.elapsed}d/${s.target}d</span>`
       : `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`;
     const completionCards = [
-      {label:"Accept & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
+      {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
       {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
         note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
           : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
@@ -3949,96 +3911,6 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
     msg.style.color = "var(--warning)";
   }
   renderPivotPendingState(p);
-});
-
-// Sourced/Direct Apps/Submitted/Active/Rejected vienen de Spott, pero Spott no tiene una API key
-// que el Worker pueda usar solo (confirmado con Nicolas) — asi que por ahora esto se pega a mano
-// aqui. Como calcular cada uno en Spott (etapas de application_stages):
-//   Sourced      = Initial Sourcing / Mapping
-//   Direct Apps  = Application / Job Postings
-//   Submitted    = Submission / CV Sent / SL
-//   Active       = Submission / CV Sent / SL + Client 1st IV + Client 2nd / Final IV
-//                  (si, se solapa con Submitted a proposito — Submitted es cuantos se han
-//                  mandado en total, Active es cuantos siguen vivos ahora mismo en el tramo
-//                  submission-a-client2nd)
-//   Rejected     = aplicaciones con applicationState.state === "rejected", cualquier etapa
-// Importante: los stageTotals crudos de un job en Spott NO descuentan las aplicaciones ya
-// rechazadas dentro de cada etapa (una rechazada se queda contada en la etapa donde la
-// rechazaron) — siempre hay que restarlas antes de pegar el numero aqui.
-function openEditPipelineModal(p){
-  document.getElementById("pipelineSourced").value = p.sourced ?? "";
-  document.getElementById("pipelineDirectApps").value = p.directApps ?? "";
-  document.getElementById("pipelineSubmitted").value = p.submittedCount ?? "";
-  document.getElementById("pipelineActive").value = p.activeCount ?? "";
-  document.getElementById("pipelineRejected").value = p.rejectedCount ?? "";
-  document.getElementById("editPipelineMsg").textContent = "";
-  document.getElementById("editPipelineModal").classList.add("open");
-}
-function closeEditPipelineModal(){
-  document.getElementById("editPipelineModal").classList.remove("open");
-}
-document.getElementById("editPipelineClose").addEventListener("click", closeEditPipelineModal);
-document.getElementById("editPipelineModal").addEventListener("click", (e)=>{
-  if(e.target.id === "editPipelineModal") closeEditPipelineModal();
-});
-document.getElementById("editPipelineSave").addEventListener("click", async ()=>{
-  const p = POSITIONS.find(x=>x.id===activeDetailId);
-  if(!p) return;
-  const msg = document.getElementById("editPipelineMsg");
-  const fields = [
-    {key:"sourced", header:"Sourced", inputId:"pipelineSourced"},
-    {key:"directApps", header:"Direct Apps", inputId:"pipelineDirectApps"},
-    {key:"submittedCount", header:"Submitted", inputId:"pipelineSubmitted"},
-    {key:"activeCount", header:"Active (count)", inputId:"pipelineActive"},
-    {key:"rejectedCount", header:"Rejected", inputId:"pipelineRejected"},
-  ].map(f => ({...f, value: document.getElementById(f.inputId).value.trim() || null}));
-  const changed = fields.filter(f => f.value !== (p[f.key] != null ? String(p[f.key]) : null));
-  if(!changed.length){
-    msg.textContent = "No changes to save.";
-    msg.style.color = "var(--text-muted)";
-    return;
-  }
-  // Si Submitted pasa de 0/vacio a un numero positivo, es la senal de que ya se sometieron
-  // candidatos al hiring manager (la etapa "Submission" en Spott) — dispara un recordatorio
-  // especifico de lo que sigue segun el Master Prompt (comentario en Workable, correo de
-  // notificacion al HM, SLA de feedback), en vez de esperar a que cambie el status del req.
-  // El SLA exige un batch de minimo 3 candidatos (nunca se manda de a 1 o 2) — el umbral real
-  // es cruzar a 3+, no simplemente pasar de 0 a cualquier numero positivo.
-  const submittedChange = changed.find(f => f.key === "submittedCount");
-  const wasBelowMinBatch = !p.submittedCount || Number(p.submittedCount) < 3;
-  let submittedGuidanceText = null;
-  if(submittedChange && wasBelowMinBatch && Number(submittedChange.value) >= 3){
-    submittedGuidanceText = "Candidates are now showing as Submitted in Spott. Make sure you've left your evaluation comment on each profile in Workable's Review tab, sent the hiring manager the submission notification email, and that they know feedback is due within 1-3 business days per candidate.";
-  }
-  changed.forEach(f => { p[f.key] = f.value; });
-  if(submittedGuidanceText){
-    p.extra = p.extra || [];
-    p.extra.push({date: localTodayStr(), type:"guidance", text: submittedGuidanceText});
-  }
-  renderDetailModal();
-  renderPositions();
-  renderTracking();
-  if(isConnected()){
-    msg.textContent = "Saving…";
-    msg.style.color = "var(--text-muted)";
-    try {
-      for(const f of changed){
-        await graphUpdatePositionFieldByHeader(p.id, f.header, f.value ?? "");
-      }
-      if(submittedGuidanceText) await graphAppendHistorial(p.id, p.title, submittedGuidanceText, "System", "guidance");
-      msg.textContent = "Saved.";
-      msg.style.color = "var(--good)";
-    } catch(err){
-      console.error(err);
-      msg.textContent = "Could not save: " + err.message;
-      msg.style.color = "var(--critical)";
-      return;
-    }
-  } else {
-    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
-    msg.style.color = "var(--warning)";
-  }
-  setTimeout(closeEditPipelineModal, 900);
 });
 
 // Aplica un cambio de status ya confirmado (con su fecha si la exigia). Se usa tanto para
