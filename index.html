@@ -126,7 +126,12 @@
     --baseline: #d9d2c8;
     --border: rgba(20,16,12,0.11);
     --hover-wash: rgba(20,16,12,0.045);
-    --shadow: none;
+    /* KeyStone solo se inspecciono en dark mode (no hay una referencia real de su claro) — aqui
+       se aplica el mismo CONCEPTO (sombra sutil real, no cero) en vez de copiar un valor que no
+       existe. --track-bg reusa --grid: es el mismo gris ya usado para tracks/lineas en claro,
+       no el translucido casi negro de --track-bg en oscuro (ese se ve mal sobre fondo blanco). */
+    --shadow: 0 1px 3px 0 rgba(20,16,12,0.08), 0 1px 2px -1px rgba(20,16,12,0.08);
+    --track-bg: var(--grid);
     /* Los tres semanticos necesitan su propio tono mas oscuro/saturado en claro — los de arriba
        son pasteles pensados para resaltar sobre fondo casi negro; sobre blanco, esos mismos
        valores como TEXTO (no solo como wash de fondo) casi no tienen contraste. */
