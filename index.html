@@ -458,6 +458,22 @@
   .barlist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
   .barlist-value { font-size: 12px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 
+  /* Funnel real estilo KeyStone (Active Pipeline By Status): a diferencia de .barlist, cada fila
+     lleva un bloque de stat de 2 lineas (valor grande + "% of top") y, entre filas consecutivas,
+     una pildora "advanced %" con flecha — el detalle que hacia que la version anterior (donut +
+     lista) se sintiera generica. El fill se degrada de --brand a mas palido por fila (mas opacas
+     las primeras etapas, mas tenues las de menor volumen), igual que en la referencia real. */
+  .funnel { display: flex; flex-direction: column; }
+  .funnel-row { display: grid; grid-template-columns: 1fr 74px; align-items: center; gap: 14px; }
+  .funnel-label { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; grid-column: 1 / -1; }
+  .funnel-track { position: relative; height: 30px; background: var(--track-bg); border-radius: 4px; overflow: hidden; }
+  .funnel-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .funnel-stat { text-align: right; font-variant-numeric: tabular-nums; }
+  .funnel-value { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+  .funnel-pct { font-size: 11px; color: var(--text-muted); line-height: 1.3; }
+  .funnel-dropoff { display: flex; align-items: center; gap: 6px; padding: 6px 0; font-size: 11px; color: var(--text-muted); }
+  .funnel-dropoff-pill { background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; }
+
   .workload-grid { display: flex; flex-wrap: wrap; gap: 10px; }
   .workload-card {
     display: flex; flex-direction: column; align-items: center; gap: 5px;
@@ -902,7 +918,7 @@
                 <div class="panel">
                   <h3>Active Pipeline By Status</h3>
                   <div class="panel-sub">Open positions, grouped by funnel stage</div>
-                  <div class="barlist" id="chartEstado"></div>
+                  <div class="funnel" id="chartEstado"></div>
                 </div>
                 <div class="panel" id="panelPositionByLocation">
                   <h3>Position By Location/Work Arrangement</h3>
@@ -2310,6 +2326,37 @@ function renderBarlist(elId, rows, colorVar, onClickRow){
   }
 }
 
+// rows viene ya ordenado (etapa 1 primero). El fill se degrada de opacidad 1.0 en la primera
+// fila a 0.35 en la ultima — no una paleta de N colores fijos, para que funcione igual de bien
+// con 2 etapas activas que con 8.
+function renderFunnel(elId, rows, onClickRow){
+  const top = rows[0]?.value || 1;
+  const n = rows.length;
+  const rowsHtml = rows.map((r,i)=>{
+    const opacity = n<=1 ? 1 : (1 - (i/(n-1))*0.65).toFixed(2);
+    const pctOfTop = Math.round(r.value/top*100);
+    const dropoff = i>0 && rows[i-1].value>0
+      ? `<div class="funnel-dropoff"><span>↓</span><span class="funnel-dropoff-pill">${Math.round(r.value/rows[i-1].value*100)}% advanced</span></div>`
+      : "";
+    return `
+    ${dropoff}
+    <div class="funnel-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
+      <div class="funnel-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
+      <div class="funnel-track"><div class="funnel-fill" style="width:${(r.value/top*100).toFixed(1)}%; background:rgba(var(--brand-rgb),${opacity});"></div></div>
+      <div class="funnel-stat">
+        <div class="funnel-value">${r.value}</div>
+        <div class="funnel-pct">${pctOfTop}% of top</div>
+      </div>
+    </div>`;
+  }).join("");
+  document.getElementById(elId).innerHTML = rowsHtml;
+  if(onClickRow){
+    document.querySelectorAll(`#${elId} .funnel-row`).forEach((el,i)=>{
+      el.addEventListener("click", ()=>onClickRow(rows[+el.dataset.idx]));
+    });
+  }
+}
+
 function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onClickRow){
   size = size || 140;
   // realTotal es la suma de verdad (puede ser 0); arcTotal nunca es 0, solo para que la
@@ -2361,8 +2408,7 @@ function renderEstadoChart(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const stages = STATUS_ORDER.filter(s=>!TERMINAL.includes(s));
   const counts = stages.map(s=>({label:s, value: active.filter(p=>p.status===s).length})).filter(r=>r.value>0);
-  const colors = counts.map(c=>STAGE_COLORS[c.label] || "var(--neutral)");
-  renderDonut("chartEstado", counts, colors, "Active", 110, null, (row)=>{
+  renderFunnel("chartEstado", counts, (row)=>{
     openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
       active.filter(p=>p.status===row.label));
   });
