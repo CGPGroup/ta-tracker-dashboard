@@ -225,19 +225,12 @@
 
   .dashboard-body { display: flex; align-items: flex-start; gap: 20px; }
   .team-rail { width: 260px; flex: none; }
-  .team-rail-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-  .team-rail-sub { font-size: 11px; color: var(--text-muted); margin: 2px 0 12px; }
   .dashboard-main { flex: 1; min-width: 0; transition: opacity 0.18s ease; }
   @media (max-width: 900px) { .dashboard-body { flex-direction: column; } .team-rail { width: 100%; } }
-  .team-grid { display: flex; flex-wrap: wrap; gap: 12px; }
-  .team-card {
-    display: flex; flex-direction: column; align-items: center; gap: 8px;
-    width: 120px; padding: 16px 10px; border-radius: 10px; cursor: pointer;
-    background: var(--surface-2); border: 1px solid var(--border); text-align: center;
-    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-  }
-  .team-card:hover { border-color: var(--brand); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.28); }
-  .team-card.active { border-color: var(--brand); background: rgba(var(--brand-rgb),0.14); }
+  /* Header del panel de perfil (lado izquierdo, solo dentro de un workspace de reclutador) —
+     mismo avatar/nombre/cargo que antes vivian en la tarjeta de Team o en el scope-banner,
+     ahora como la unica identidad visible, sin grid de tarjetas ni banner de marca aparte. */
+  .rail-profile { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
   .team-avatar {
     width: 52px; height: 52px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -246,38 +239,34 @@
   }
   .team-name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
   .team-title { font-size: 10.5px; color: var(--text-muted); white-space: normal; word-break: break-word; max-width: 100%; }
+  .rail-section-title { font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 18px 0 8px; padding: 0 4px; }
+  .rail-section-title:first-of-type { margin-top: 0; }
 
-  .recent-reqs-title { font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 20px 0 6px; padding: 0 4px; }
   .recent-req-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
   .recent-req-row:hover { background: var(--hover-wash); color: var(--text-primary); }
   .recent-req-row .rr-code { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
 
-  /* Banner de perfil del Recruiter Dashboard: identidad (foto + nombre) mas visible arriba,
-     no solo el cuadrito chiquito enterrado en la lista del sidebar — para que se sienta como
-     "tu espacio de trabajo", no solo otra vista mas de metricas genericas. */
-  /* El unico momento "hero" de la app — mismo gradiente diagonal brand->brand-dark que usa el
-     hero real de gokeystone.ai, y a proposito NO responde al tema (igual que su hero tampoco
-     cambiaba al togglear claro/oscuro): es una franja de marca a todo color, no una superficie
-     de contenido, asi que el texto/botones de adentro son fijos en blanco en vez de var(). */
-  .scope-banner {
-    display: flex; align-items: center; gap: 14px;
-    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
-    border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
-    box-shadow: var(--shadow);
+  /* Switcher Team Workspace / My Workspace bajo el nav de Dashboard — reemplaza el viejo flujo
+     de clic-en-tu-tarjeta + Profile Gate modal por una eleccion siempre visible, sin pasos
+     intermedios. Solo dos opciones (no un dropdown de reclutadores): esto es exactamente lo que
+     Nicolas pidio, y hoy solo existe 1 reclutador real de todos modos. */
+  .nav-workspace-switch { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 10px 34px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .nav-workspace-btn {
+    appearance: none; background: none; border: none; text-align: left; cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-muted);
+    padding: 4px 0;
   }
-  .scope-banner-avatar {
-    width: 48px; height: 48px; border-radius: 50%; flex: none; background-size: cover; background-position: center;
-    display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; color: #fff;
-    border: 2px solid rgba(255,255,255,0.5);
-  }
-  .scope-banner-info { flex: 1; min-width: 0; }
-  .scope-banner-name { font-size: 15px; font-weight: 600; color: #fff; }
-  .scope-banner-sub { font-size: 12px; color: rgba(255,255,255,0.78); margin-top: 2px; }
-  .scope-banner-actions { display: flex; gap: 8px; flex: none; }
-  .scope-banner-actions .btn.primary { background: #fff; color: var(--brand-dark); }
-  .scope-banner-actions .btn.primary:hover { background: #f2ede6; }
-  .scope-banner-actions .btn.ghost { border-color: rgba(255,255,255,0.55); color: #fff; }
-  .scope-banner-actions .btn.ghost:hover { border-color: #fff; background: rgba(255,255,255,0.14); color: #fff; }
+  .nav-workspace-btn:hover { color: var(--text-primary); }
+  .nav-workspace-btn.active { color: var(--brand); }
+
+  /* Franja de stats dentro de Overview (no una tarjeta aparte flotando sobre los 4 tabs): solo
+     numeros, sin fondo/borde propio, separados por un divisor vertical sutil. */
+  .stat-strip { display: flex; gap: 28px; margin-bottom: 20px; }
+  .stat-strip-item { padding-right: 28px; border-right: 1px solid var(--border); }
+  .stat-strip-item:last-child { border-right: none; padding-right: 0; }
+  .stat-strip-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
+  .stat-strip-value { font-size: 22px; font-weight: 600; line-height: 1; }
+  .stat-strip-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; max-width: 220px; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -332,23 +321,9 @@
   .alert-banner.tier-good::before { content: "✓"; }
   .alert-banner.compact { font-size: 10.5px; margin-bottom: 18px; }
 
-  /* ---------- KPI tiles ---------- */
-  /* Solo Active Positions y Submitted Vs Expected, siempre visibles arriba de los tabs — las
-     otras 4 que habia antes (Offers Pending Decision, At SLA Risk, Out Of SLA, Offers Fell
-     Through) se quitaron del todo, no comunicaban nada por si solas. align-items:start evita
-     que "Submitted Vs Expected" (tiene subtitulo de 2 lineas) estire a su vecina. */
-  .kpi-row { display: grid; gap: 12px; align-items: start; }
-  #kpiRow { grid-template-columns: repeat(2, 1fr); margin-bottom: 22px; max-width: 700px; }
-  .kpi-tile {
-    background: var(--surface-1); border-radius: var(--radius); border: 1px solid var(--border);
-    box-shadow: var(--shadow); padding: 14px 16px;
-  }
-  .kpi-label { font-size: 14px; color: var(--text-muted); font-weight: 500; margin-bottom: 6px; }
-  .kpi-value { font-size: 24px; font-weight: 600; line-height: 1; }
-  .kpi-value.good { color: var(--good); }
-  .kpi-value.warning { color: var(--warning); }
-  .kpi-value.critical { color: var(--critical); }
-  .kpi-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; }
+  .stat-strip-value.good { color: var(--good); }
+  .stat-strip-value.warning { color: var(--warning); }
+  .stat-strip-value.critical { color: var(--critical); }
 
   /* ---------- Panels / charts ---------- */
   .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 16px; align-items: start; }
@@ -758,7 +733,7 @@
   .link-danger:hover { color: var(--critical); opacity: 1; text-decoration: underline; }
 
   @media (max-width: 1080px) {
-    #kpiRow { grid-template-columns: 1fr; }
+    .stat-strip { flex-wrap: wrap; row-gap: 14px; }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
     .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
   }
@@ -808,6 +783,14 @@
     </div>
     <nav class="nav">
       <button class="nav-item active" data-view="dashboard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span> Dashboard</button>
+      <!-- Reemplaza el viejo flujo de "clic en tu propia tarjeta de Team -> Profile Gate modal
+           -> confirmar" por un switcher de 2 opciones, siempre a la vista bajo Dashboard. Team
+           Workspace = vista agregada (activeDashboardScope=null); My Workspace = tu propio
+           perfil (nombre resuelto de MY_RECRUITER_NAME al conectarte) — ver setWorkspaceMode(). -->
+      <div class="nav-workspace-switch" id="navWorkspaceSwitch">
+        <button type="button" class="nav-workspace-btn active" id="navWorkspaceTeamBtn">Team Workspace</button>
+        <button type="button" class="nav-workspace-btn" id="navWorkspaceMineBtn" style="display:none;">My Workspace</button>
+      </div>
       <button class="nav-item" data-view="positions"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span> Positions</button>
       <button class="nav-item" data-view="tracking" style="display:none;"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Tracking</button>
       <button class="nav-item" data-view="manage"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="5" x2="14" y2="5"/><line x1="10" y1="5" x2="3" y2="5"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="19" x2="16" y2="19"/><line x1="12" y1="19" x2="3" y2="19"/><line x1="14" y1="3" x2="14" y2="7"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="17" x2="16" y2="21"/></svg></span> SSOT Management</button>
@@ -847,29 +830,23 @@
       <!-- ======================= DASHBOARD ======================= -->
       <section class="view active" id="view-dashboard">
         <div class="dashboard-body">
-          <aside class="team-rail">
-            <div class="team-rail-title" id="teamRailTitle">Team</div>
-            <div class="team-rail-sub" id="teamRailSub">Click a recruiter to open their workspace</div>
-            <div class="team-grid" id="teamGrid"></div>
+          <!-- Solo existe dentro del workspace de un reclutador (setDashboardScope() la
+               muestra/oculta entera) — en Team Workspace no aportaba nada (la vieja grilla de
+               tarjetas de reclutadores se quito, ver el nuevo switcher Team/My Workspace bajo el
+               nav de Dashboard) asi que directamente desaparece y dashboard-main usa todo el
+               ancho. Aqui adentro: quien eres (avatar/nombre/cargo), que necesita atencion, y tu
+               actividad reciente — el "perfil" que antes vivia repartido entre el scope-banner y
+               Recent Activity. -->
+          <aside class="team-rail" id="teamRail" style="display:none;">
+            <div class="rail-profile" id="railProfile"></div>
+            <div class="rail-section-title">Needs Attention</div>
+            <div id="railAttentionList"></div>
+            <div class="rail-section-title">Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></div>
+            <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
             <div id="recentReqsZone"></div>
           </aside>
           <div class="dashboard-main" id="dashboardMain">
-            <div class="scope-banner" id="dashboardScopeBanner" style="display:none;"></div>
             <div id="pendingAssignmentZone"></div>
-            <div class="kpi-row" id="kpiRow"></div>
-
-            <!-- Solo tiene sentido dentro del perfil de un reclutador (que es exactamente el
-                 alcance que ya calcula dashboardPositions()/renderTrackingActivity()) — oculto
-                 por defecto en Team Dashboard, se muestra en setDashboardScope(). Antes vivia en
-                 Tracking, mal ubicado ahi (Tracking es para trabajar reqs uno por uno, no para
-                 ver un feed de actividad reciente). -->
-            <div class="panel" id="recentActivityZone" style="display:none; margin-bottom:16px;">
-              <details class="panel-details" id="recentActivityDetails">
-                <summary>Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></summary>
-                <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
-                <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
-              </details>
-            </div>
 
             <div class="dash-tabs" id="dashTabs" role="tablist">
               <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
@@ -879,6 +856,11 @@
             </div>
 
             <div class="dash-tab-panel active" data-dash-panel="team">
+              <!-- Antes 2 tarjetas con borde flotando ENCIMA de los tabs, aplicando a los 4 por
+                   igual sin importar cual estuviera activo — igual que KeyStone, donde cada tab
+                   (Sourcing/Jobs/Outreach) trae su PROPIA fila de stats, esta franja ahora vive
+                   dentro de Overview especificamente, sin chrome de tarjeta (solo numeros). -->
+              <div class="stat-strip" id="statStrip"></div>
               <div class="dash-grid">
                 <div class="panel" id="panelWorkloadByRecruiter">
                   <h3>Active Workload By Recruiter</h3>
@@ -1541,23 +1523,6 @@
   </div>
 </div>
 
-<!-- ======================= PROFILE ENTRY GATE (before entering a recruiter's dashboard) ======================= -->
-<div class="modal-overlay" id="profileGateModal">
-  <div class="modal-card" style="max-width:640px;">
-    <div class="modal-head">
-      <div>
-        <h2 id="gateTitle" style="margin:0; font-size:16px;"></h2>
-        <div class="modal-sub" id="gateSub">Here's what's pending before you go in.</div>
-      </div>
-      <button class="modal-close" id="gateClose" type="button">&times;</button>
-    </div>
-    <div id="gateBody"></div>
-    <div class="form-actions" style="margin-top:18px;">
-      <button class="btn primary" type="button" id="gateContinueBtn">Continue To Workspace →</button>
-    </div>
-  </div>
-</div>
-
 <!-- ======================= EDIT RECRUITER MODAL ======================= -->
 <div class="modal-overlay" id="editRecruiterModal">
   <div class="modal-card" style="max-width:520px;">
@@ -1718,6 +1683,10 @@ function trackingCanEdit(){
 // Cuando activeDashboardScope tiene un nombre, el Dashboard (KPIs, graficas, SLA) se calcula
 // solo con las posiciones de ese reclutador en vez del libro completo. null = vista de equipo.
 let activeDashboardScope = null;
+// Solo la PRIMERA vez que tu correo resuelve a un reclutador en esta pestaña — sin este guard,
+// el auto-refresh de cada 2 minutos (que tambien pasa por loadFromGraph) te sacaria de Team
+// Workspace o de Positions/Tracking cada vez que recarga, aunque hayas navegado a otro lado.
+let didAutoEnterWorkspace = false;
 function dashboardPositions(){
   return activeDashboardScope ? POSITIONS.filter(p=>p.recruiter===activeDashboardScope) : POSITIONS;
 }
@@ -1735,6 +1704,24 @@ function renderDashboardPanels(){
   renderHiresTrend();
   renderPlacementsMonth();
   renderPendingOffers();
+  // A diferencia de todo lo de arriba (siempre visible, cambia con el scope), el panel lateral
+  // de perfil solo existe DENTRO de un workspace — pero tiene que refrescarse en cada
+  // renderDashboardPanels(), no solo la vez que entras al workspace, para que Needs Attention
+  // no se quede viejo despues de guardar un cambio o del auto-refresh de 2 minutos.
+  if(activeDashboardScope) renderRailProfile();
+}
+function renderRailProfile(){
+  const name = activeDashboardScope;
+  const photo = RECRUITER_PHOTOS[name];
+  const title = RECRUITER_TITLES[name] || "Recruiter";
+  const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
+  document.getElementById("railProfile").innerHTML = `
+    <div class="team-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(name))}</div>
+    <div>
+      <div class="team-name">${escapeHtml(name)}</div>
+      <div class="team-title">${escapeHtml(title)}</div>
+    </div>`;
+  renderRailAttention();
 }
 // Solo tiene sentido dentro de un perfil (panelAvgTts esta oculto en la vista de equipo), pero
 // no cuesta nada calcularlo siempre.
@@ -1822,18 +1809,11 @@ async function acceptAssignment(positionId){
     }
   }
 }
-// Usado por el boton "Edit My Requisitions" del dashboard personal: activeDashboardScope ya
-// esta seteado al reclutador correcto para cuando esto se llama, asi que Tracking (que
-// siempre esta filtrado por dashboardPositions()) ya muestra exactamente lo suyo.
-function jumpToRecruiterTracking(name){
-  activateView("tracking");
-}
 // Tracking solo existe dentro del perfil de un reclutador (nunca en la vista de equipo), asi
-// que el tab entero se oculta sin scope, y si estabas ahi cuando alguien le da "Back To Team
-// Dashboard" hay que sacarte de una vista que ya no deberia ser alcanzable.
+// que el tab entero se oculta sin scope.
 function setDashboardScope(name){
-  // Un reclutador conectado que no es admin puede ver a TODO el equipo (Team Dashboard, sus
-  // KPIs, la lista de tarjetas) sin restriccion — de eso se trata Team. Lo unico que no puede
+  // Un reclutador conectado que no es admin puede ver a TODO el equipo (Team Workspace, sus
+  // KPIs) sin restriccion — de eso se trata Team. Lo unico que no puede
   // es ENTRAR al workspace personal de otro reclutador (su perfil individual, editable, con
   // sus propios KPIs/Tracking) — eso se corrige aqui mismo, una sola vez para todos los
   // callers, en vez de tener que acordarse de blindar cada boton por separado. Si necesita ver
@@ -1841,7 +1821,6 @@ function setDashboardScope(name){
   // ver renderPositions()) — nunca entrando a su workspace. isAdmin() ya trata "sin conexion"
   // como admin (pruebas locales / gente viendo el link publico sin loguearse).
   if(!isAdmin() && MY_RECRUITER_NAME && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
-  const wasOnTracking = document.getElementById("view-tracking").classList.contains("active");
   activeDashboardScope = name;
   document.querySelector('.nav-item[data-view="tracking"]').style.display = name ? "" : "none";
   // SSOT Management es administracion de todo el equipo (crear posiciones/reclutadores,
@@ -1851,7 +1830,6 @@ function setDashboardScope(name){
   document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
   document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
-  document.getElementById("recentActivityZone").style.display = name ? "" : "none";
   // Positions es intencionalmente el directorio COMPLETO para cualquiera, admin o no — es el
   // camino sancionado para ver requisitions de otro reclutador sin entrar a su workspace. Solo
   // se pre-filtra como comodidad al entrar a un workspace (el tuyo o, si eres admin, el de
@@ -1860,16 +1838,17 @@ function setDashboardScope(name){
   // renderPositions() ya deriva positionsPanelSub del valor real de este select (ver ahi), asi
   // que no hace falta duplicar ese texto aqui.
   if(posRecSel){ posRecSel.value = name || ""; posRecSel.disabled = false; renderPositions(); }
-  // El card-grid de "Team" (todo el equipo, para cambiar o ver a alguien mas) solo pertenece
-  // al Team Workspace colectivo. Dentro del workspace personal de un reclutador ya no cumple
-  // ninguna funcion — no es un switcher (no se puede entrar a nadie mas desde ahi) y ya no es
-  // informacion tuya, asi que se esconde entero (titulo, subtitulo, y las tarjetas). Lo unico
-  // que sigue viviendo en esa columna dentro de tu workspace es "Recently Assigned" (mas abajo,
-  // siempre fue scope-only) — tu propia informacion, no la del equipo.
-  document.getElementById("teamRailTitle").style.display = name ? "none" : "";
-  document.getElementById("teamRailSub").style.display = name ? "none" : "";
-  document.getElementById("teamGrid").style.display = name ? "none" : "";
-  activateView((name && wasOnTracking) ? "tracking" : "dashboard");
+  // El panel lateral (perfil + Needs Attention + Recent Activity) solo existe DENTRO del
+  // workspace de un reclutador — en Team Workspace no aporta nada (ver el switcher Team/My
+  // Workspace bajo el nav de Dashboard, que ya reemplazo la vieja grilla de tarjetas), asi que
+  // desaparece entero y dashboard-main usa todo el ancho.
+  document.getElementById("teamRail").style.display = name ? "" : "none";
+  document.getElementById("navWorkspaceTeamBtn").classList.toggle("active", !name);
+  document.getElementById("navWorkspaceMineBtn").classList.toggle("active", !!name);
+  // Landing page de un workspace de reclutador es Tracking (todas sus posiciones, para trabajar
+  // una por una) — Dashboard con sus graficas queda como algo a lo que navegas, no lo primero
+  // que ves. Team Workspace se sigue quedando en Dashboard (no tiene un "Tracking" propio).
+  activateView(name ? "tracking" : "dashboard");
   // Fundido corto al cambiar de Team Dashboard a Recruiter Dashboard (o entre reclutadores) en
   // vez de que el contenido salte de golpe. requestAnimationFrame no sirve aqui (no corre si la
   // pestaña esta en segundo plano) — en vez de eso, se fuerza un reflow sincrono entre el salto
@@ -1880,101 +1859,28 @@ function setDashboardScope(name){
   main.style.opacity = "0";
   void main.offsetHeight;
   renderDashboardPanels();
-  renderTeamPanel();
   renderRecentReqs();
   main.style.transition = "";
   main.style.opacity = "1";
-  const banner = document.getElementById("dashboardScopeBanner");
-  if(!name){
-    banner.style.display = "none";
+}
+// Needs Attention del reclutador activo, en el panel lateral del workspace — mismos datos y
+// mismo componente visual que el panel "Needs Attention" de Tracking (buildAttentionRows +
+// attentionRowsHtml), asi que las banderas se ven identicas en los dos lugares.
+function renderRailAttention(){
+  const {slaRows, completionRows} = buildAttentionRows(dashboardPositions());
+  const list = document.getElementById("railAttentionList");
+  if(!slaRows.length && !completionRows.length){
+    list.innerHTML = `<div class="panel-sub" style="margin:0;">Nothing urgent right now.</div>`;
     return;
   }
-  const count = POSITIONS.filter(p=>p.recruiter===name).length;
-  const photo = RECRUITER_PHOTOS[name];
-  const title = RECRUITER_TITLES[name] || "Recruiter";
-  const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
-  banner.style.display = "";
-  banner.innerHTML = `
-    <div class="scope-banner-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(name))}</div>
-    <div class="scope-banner-info">
-      <div class="scope-banner-name">${escapeHtml(name)}</div>
-      <div class="scope-banner-sub">${escapeHtml(title)} &middot; ${count} position${count===1?"":"s"}</div>
-    </div>
-    <div class="scope-banner-actions">
-      <button class="btn primary small" id="scopeEditBtn" type="button">Open Tracking →</button>
-      <button class="btn ghost small" id="scopeBackBtn" type="button">← Back To Team</button>
-    </div>`;
-  document.getElementById("scopeBackBtn").addEventListener("click", ()=> setDashboardScope(null));
-  document.getElementById("scopeEditBtn").addEventListener("click", ()=> jumpToRecruiterTracking(name));
-}
-// Punto de entrada unico para un clic en una tarjeta de Team. Admin (o tu propia tarjeta):
-// entra al perfil normalmente via el Profile Gate. Un reclutador no-admin mirando la tarjeta
-// de alguien mas: no entra a su workspace (setDashboardScope() lo bloquearia igual), en vez de
-// eso lo mandamos derecho a Positions filtrado a esa persona — el camino real para ver
-// requisitions de otro sin poder editarlas ni entrar a su espacio personal.
-function openTeamCard(name){
-  if(isAdmin() || name === MY_RECRUITER_NAME){ openProfileGate(name); return; }
-  // El select se fija ANTES de activateView() para que el subtitulo del topbar (que lee el
-  // valor actual de este select para Positions, ver activateView()) ya lo vea correcto.
-  const recSel = document.getElementById("positionsRecruiter");
-  if(recSel) recSel.value = name;
-  activateView("positions");
-  if(recSel) renderPositions();
-}
-// Pantalla intermedia entre hacer clic en una tarjeta de Team y realmente entrar al perfil:
-// un resumen de lo pendiente (nuevas asignaciones por aceptar + Needs Attention de ESE
-// reclutador) para que no quede como un banner facil de ignorar.
-function openProfileGate(name){
-  document.getElementById("gateTitle").textContent = name;
-  // "Aceptar" es una accion que solo le corresponde tomar al reclutador mismo — cualquiera
-  // mas (o nadie logueado, el caso mas comun ahora que hay gente viendo sin conectarse) solo
-  // deberia poder VER que hay pendiente, nunca un boton para actuar en su nombre.
-  const isMe = MY_RECRUITER_NAME === name;
-  const positions = POSITIONS.filter(p=>p.recruiter===name);
-  const pending = isMe ? positions.filter(p=>p.kickoff && !p.recruiterAcceptedDate) : [];
-  const {slaRows, completionRows} = buildAttentionRows(positions);
-  let html = "";
-  if(pending.length){
-    html += `<div class="modal-section-title">New Assignments</div>` + pending.map(p=>`
-      <div class="pending-offer-row">
-        <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">Assigned ${escapeHtml(p.kickoff)}</div></div>
-        <button class="btn primary small" type="button" data-gate-accept-id="${escapeHtml(p.id)}">Accept</button>
-      </div>`).join("");
-  }
-  if(slaRows.length || completionRows.length){
-    html += `<div class="modal-section-title">Needs Attention</div>` + attentionRowsHtml(slaRows, completionRows);
-  }
-  if(!pending.length && !slaRows.length && !completionRows.length){
-    html += `<div class="panel-sub" style="margin:0;">Nothing pending, this book is in good shape.</div>`;
-  }
-  const body = document.getElementById("gateBody");
-  body.innerHTML = html;
-  body.querySelectorAll("[data-gate-accept-id]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      await acceptAssignment(btn.dataset.gateAcceptId);
-      openProfileGate(name);
-    });
-  });
-  body.querySelectorAll(".pending-offer-row").forEach(row=>{
+  list.innerHTML = attentionRowsHtml(slaRows, completionRows);
+  list.querySelectorAll(".pending-offer-row").forEach(row=>{
     row.addEventListener("click", ()=>{
-      closeProfileGate();
-      setDashboardScope(name);
       activateView("tracking");
       openDetailModal(row.dataset.id, trackingCanEdit() ? "edit" : "view");
     });
   });
-  document.getElementById("profileGateModal").classList.add("open");
 }
-function closeProfileGate(){
-  document.getElementById("profileGateModal").classList.remove("open");
-}
-document.getElementById("gateClose").addEventListener("click", closeProfileGate);
-document.getElementById("profileGateModal").addEventListener("click", (e)=>{ if(e.target.id==="profileGateModal") closeProfileGate(); });
-document.getElementById("gateContinueBtn").addEventListener("click", ()=>{
-  const name = document.getElementById("gateTitle").textContent;
-  closeProfileGate();
-  setDashboardScope(name);
-});
 function renderRecentReqs(){
   const zone = document.getElementById("recentReqsZone");
   if(!activeDashboardScope){ zone.innerHTML = ""; return; }
@@ -1983,7 +1889,7 @@ function renderRecentReqs(){
     .slice(0, 10);
   if(!recent.length){ zone.innerHTML = ""; return; }
   zone.innerHTML = `
-    <div class="recent-reqs-title">Recently Assigned</div>
+    <div class="rail-section-title">Recently Assigned</div>
     ${recent.map(p=>`
       <div class="recent-req-row" data-id="${escapeHtml(p.id)}">
         <div>${escapeHtml(p.title)}</div>
@@ -1994,27 +1900,6 @@ function renderRecentReqs(){
       activateView("tracking");
       openDetailModal(row.dataset.id, trackingCanEdit() ? "edit" : "view");
     });
-  });
-}
-function renderTeamPanel(){
-  const el = document.getElementById("teamGrid");
-  // Team siempre muestra a todo el equipo, a cualquiera — de eso se trata. Lo que cambia por
-  // tarjeta es a donde te lleva el clic, ver openTeamCard().
-  el.innerHTML = RECRUITERS.map(name=>{
-    const photo = RECRUITER_PHOTOS[name];
-    const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(name)};`;
-    const title = RECRUITER_TITLES[name] || "Recruiter";
-    const isOwn = isAdmin() || name === MY_RECRUITER_NAME;
-    const hint = isOwn ? `Open ${name === MY_RECRUITER_NAME ? "your" : name + "'s"} workspace` : `See ${name}'s positions`;
-    return `
-    <div class="team-card${activeDashboardScope===name?' active':''}" data-name="${escapeHtml(name)}" title="${escapeHtml(hint)}">
-      <div class="team-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(name))}</div>
-      <div class="team-name">${escapeHtml(name)}</div>
-      <div class="team-title">${escapeHtml(title)}</div>
-    </div>`;
-  }).join("");
-  el.querySelectorAll(".team-card").forEach(card=>{
-    card.addEventListener("click", ()=> openTeamCard(card.dataset.name));
   });
 }
 const TERMINAL = ["Hired","Cancelled","Fell Through"];
@@ -2278,10 +2163,11 @@ function statusChip(status){
 // Antes esto traia 6 tiles (Offers Pending Decision, At SLA Risk, Out Of SLA, Offers Fell
 // Through incluidas) — Nicolas las quito por completo: no comunicaban nada por si solas y la
 // misma informacion ya vive, mejor explicada, en SLA Health/SLA Compliance (tab SLA &
-// Completion) y Pending Offers (tab Offers & Placements). Active Positions y Submitted Vs
-// Expected son las unicas dos que de verdad hacen falta ver siempre, sin importar el tab.
+// Completion) y Pending Offers (tab Offers & Placements). Ahora vive dentro de Overview (no
+// flotando encima de los 4 tabs) como una franja de stats sin chrome de tarjeta.
 function renderKpis(){
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  const all = dashboardPositions();
+  const active = all.filter(p=>!TERMINAL.includes(p.status));
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
   // pipeline de submissions: con batches de 3 a 5 candidatos por posicion (promedio 3.5, regla
@@ -2299,14 +2185,19 @@ function renderKpis(){
     {label:"Submitted Vs Expected", value: submittedTotal, cls: submittedCls, sub: active.length ? `Expected ≥${minExpected} for ${active.length} active (3.5 candidates/position, the SLA minimum batch size)` : "", onClick: active.length>0 ? ()=>{
       openQuickList("Submitted Vs Expected", `${submittedTotal} submitted across ${active.length} active position${active.length===1?"":"s"} &middot; expected at least ${minExpected}`, active);
     } : null},
+    // Independiente del estado (incluye Hired/Cancelled/Fell Through) — "cuantos reqs hemos
+    // gestionado en total", no solo los que siguen abiertos hoy.
+    {label:"Total Reqs Managed", value: all.length, cls:"", sub: "All time, any status", onClick: all.length>0 ? ()=>{
+      openQuickList("Total Reqs Managed", `${all.length} requisition${all.length===1?"":"s"} managed all time, any status`, all);
+    } : null},
   ];
-  document.getElementById("kpiRow").innerHTML = tiles.map((t,i)=>`
-    <div class="kpi-tile${t.onClick?' clickable-stat':''}" data-idx="${i}">
-      <div class="kpi-label">${t.label}</div>
-      <div class="kpi-value ${t.cls}">${t.value}</div>
-      ${t.sub ? `<div class="kpi-sub">${t.sub}</div>` : ""}
+  document.getElementById("statStrip").innerHTML = tiles.map((t,i)=>`
+    <div class="stat-strip-item${t.onClick?' clickable-stat':''}" data-idx="${i}">
+      <div class="stat-strip-label">${t.label}</div>
+      <div class="stat-strip-value ${t.cls}">${t.value}</div>
+      ${t.sub ? `<div class="stat-strip-sub">${t.sub}</div>` : ""}
     </div>`).join("");
-  document.querySelectorAll("#kpiRow .kpi-tile").forEach((el,i)=>{
+  document.querySelectorAll("#statStrip .stat-strip-item").forEach((el,i)=>{
     if(tiles[i].onClick) el.addEventListener("click", tiles[i].onClick);
   });
 }
@@ -4345,10 +4236,9 @@ function activateView(view){
   const who = activeDashboardScope || "Talent Acquisition Team";
   document.getElementById("topbarTitle").innerHTML = `<span class="topbar-eyebrow">Workspace</span>${escapeHtml(who)}`;
   // Positions es la unica vista cuya descripcion cambia de verdad segun donde estes parado, y
-  // se lee del valor real del select de Recruiter (no de activeDashboardScope) porque el
-  // filtro de Positions puede apuntar a alguien distinto al workspace en el que estas parado
-  // (ver openTeamCard(), que te deja ver las requisitions de otro sin sacarte de tu propio
-  // workspace) — las demas vistas ya eran ciertas tal cual.
+  // se lee del valor real del select de Recruiter (no de activeDashboardScope) porque ese
+  // filtro se puede apuntar a cualquier reclutador sin salir del workspace en el que estas
+  // parado — las demas vistas ya eran ciertas tal cual.
   const posRecVal = view === "positions" ? document.getElementById("positionsRecruiter").value : "";
   const desc = (view === "positions" && posRecVal) ? `Pre-filtered to ${posRecVal}'s requisitions` : TITLES[view][1];
   document.getElementById("topbarSub").textContent = `${TITLES[view][0]} — ${desc}`;
@@ -4378,6 +4268,14 @@ function dockDetailModal(shouldDock){
 document.querySelectorAll(".nav-item").forEach(btn=>{
   btn.addEventListener("click", ()=> activateView(btn.dataset.view));
 });
+document.getElementById("navWorkspaceTeamBtn").addEventListener("click", ()=> setDashboardScope(null));
+document.getElementById("navWorkspaceMineBtn").addEventListener("click", ()=> setDashboardScope(MY_RECRUITER_NAME));
+// "My Workspace" solo tiene sentido si tu correo conectado resolvio a un reclutador concreto
+// (MY_RECRUITER_NAME) — sin eso (nadie logueado, o tu correo no coincide con ningun reclutador)
+// no hay a que workspace entrar, asi que el boton ni aparece.
+function updateWorkspaceSwitchVisibility(){
+  document.getElementById("navWorkspaceMineBtn").style.display = MY_RECRUITER_NAME ? "" : "none";
+}
 // Tabs del Dashboard (Team / Pipeline & SLA / Offers & Placements) — puramente visual, ningun
 // render*() de mas abajo depende de cual tab esta activo, todos siguen llenando los mismos ids
 // de siempre; esto solo decide cual <div> se ve.
@@ -4485,8 +4383,8 @@ function renderAll(){
   renderNewPosRecruiterSelect();
   renderEditRecruiterSelect();
   updateDangerZoneVisibility();
+  updateWorkspaceSwitchVisibility();
   renderDashboardPanels();
-  renderTeamPanel();
   renderPositions();
   renderTracking();
 }
@@ -4926,6 +4824,13 @@ async function loadFromGraph(){
   LOCATIONS = [...new Set(newPositions.map(p => p.country).filter(Boolean))];
   POSITIONS = newPositions;
   renderAll();
+  // Aterrizas directo en TU workspace (Tracking, ver setDashboardScope) en vez de Team
+  // Dashboard — Team Workspace sigue a un clic bajo Dashboard en el nav, para el que lo
+  // necesite, pero ya no es lo primero que ves si tu correo es de un reclutador conocido.
+  if(myRecruiterName && !didAutoEnterWorkspace){
+    didAutoEnterWorkspace = true;
+    setDashboardScope(myRecruiterName);
+  }
 }
 // Proxy publico de solo lectura (Cloudflare Worker), para gente que solo necesita VER el
 // tracker sin loguearse (Nicole, Immy, Sara, Chris Watkins...): el Worker guarda su propia
