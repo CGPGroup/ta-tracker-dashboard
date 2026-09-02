@@ -322,10 +322,11 @@
   .alert-banner.compact { font-size: 10.5px; margin-bottom: 18px; }
 
   /* ---------- KPI tiles ---------- */
-  .kpi-row {
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
-    margin-bottom: 22px;
-  }
+  /* #kpiRow (siempre visible arriba de los tabs) solo trae 2 tiles ahora (Active Positions,
+     Submitted Vs Expected); las otras 4 viven en #kpiRowSecondary dentro del tab Overview. */
+  .kpi-row { display: grid; gap: 12px; }
+  #kpiRow { grid-template-columns: repeat(2, 1fr); margin-bottom: 22px; max-width: 700px; }
+  #kpiRowSecondary { grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; }
   .kpi-tile {
     background: var(--surface-1); border-radius: var(--radius);
     box-shadow: var(--shadow); padding: 14px 16px;
@@ -345,12 +346,12 @@
      marca en la activa, resto en texto muted, sin fondo propio (el KPI row de arriba se queda
      fijo siempre visible, no depende de que tab este activo). */
   .dash-tabs {
-    display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+    display: flex; justify-content: center; gap: 26px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
   }
   .dash-tab {
     appearance: none; background: none; border: none; cursor: pointer;
     font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-muted);
-    padding: 10px 4px; margin-right: 22px; border-bottom: 2px solid transparent;
+    padding: 10px 4px; border-bottom: 2px solid transparent;
     transform: translateY(1px);
   }
   .dash-tab:hover { color: var(--text-primary); }
@@ -724,7 +725,7 @@
   .link-danger:hover { color: var(--critical); opacity: 1; text-decoration: underline; }
 
   @media (max-width: 1080px) {
-    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    #kpiRow, #kpiRowSecondary { grid-template-columns: repeat(2, 1fr); }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
     .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
   }
@@ -838,13 +839,14 @@
             </div>
 
             <div class="dash-tabs" id="dashTabs" role="tablist">
-              <button type="button" class="dash-tab active" data-dash-tab="team">Team</button>
+              <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
               <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
               <button type="button" class="dash-tab" data-dash-tab="pipeline">Pipeline</button>
               <button type="button" class="dash-tab" data-dash-tab="offers">Offers &amp; Placements</button>
             </div>
 
             <div class="dash-tab-panel active" data-dash-panel="team">
+              <div class="kpi-row" id="kpiRowSecondary"></div>
               <div class="dash-grid">
                 <div class="panel" id="panelWorkloadByRecruiter">
                   <h3>Active Workload By Recruiter</h3>
@@ -2285,15 +2287,23 @@ function renderKpis(){
       openQuickList("Offers Fell Through", `${fellThrough} position${fellThrough===1?"":"s"}`, fellThroughPositions);
     } : null},
   ];
-  document.getElementById("kpiRow").innerHTML = tiles.map((t,i)=>`
+  // Solo Active Positions/Submitted Vs Expected se quedan siempre visibles arriba de los tabs
+  // (son los dos numeros que de verdad hacen falta ver sin importar en que tab estes); el
+  // resto no aportaba nada estando siempre fijo, ahora vive dentro del tab Overview.
+  const tileHtml = (t,i)=>`
     <div class="kpi-tile${t.onClick?' clickable-stat':''}" data-idx="${i}">
       <div class="kpi-label">${t.label}</div>
       <div class="kpi-value ${t.cls}">${t.value}</div>
       ${t.sub ? `<div class="kpi-sub">${t.sub}</div>` : ""}
-    </div>`).join("");
-  document.querySelectorAll("#kpiRow .kpi-tile").forEach((el,i)=>{
-    if(tiles[i].onClick) el.addEventListener("click", tiles[i].onClick);
-  });
+    </div>`;
+  const wireTiles = (containerId, tileSubset)=>{
+    document.getElementById(containerId).innerHTML = tileSubset.map(tileHtml).join("");
+    document.querySelectorAll(`#${containerId} .kpi-tile`).forEach((el,i)=>{
+      if(tileSubset[i].onClick) el.addEventListener("click", tileSubset[i].onClick);
+    });
+  };
+  wireTiles("kpiRow", tiles.slice(0,2));
+  wireTiles("kpiRowSecondary", tiles.slice(2));
 }
 
 function renderBarlist(elId, rows, colorVar, onClickRow){
@@ -2604,7 +2614,11 @@ function renderHiresTrend(){
     if(d.getFullYear()===year && d.getMonth() < months.length){ counts[d.getMonth()]++; positionsByMonth[d.getMonth()].push(p); }
   });
 
-  const w=560, h=170, padL=30, padR=16, padT=20, padB=26;
+  // w:h bien "ancho" (no cuadrado) a propocito — la referencia de KeyStone AI tiene esa misma
+  // proporcion elongada, la version anterior (560x170, casi 3:1) se veia como un bloque
+  // "gigante" una vez estirada al ancho completo de la tarjeta; esta (900x130, ~7:1) es fiel a
+  // la proporcion real de la referencia.
+  const w=900, h=130, padL=38, padR=16, padT=18, padB=34;
   const rawMax = Math.max(...counts, 1);
   const niceMax = Math.max(2, Math.ceil(rawMax/2)*2);
   const stepX = (w - padL - padR) / (months.length - 1);
@@ -2638,9 +2652,13 @@ function renderHiresTrend(){
   const gridLabels = gridVals.map(v=>
     `<text x="${padL-8}" y="${(yFor(v)+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${v}</text>`
   ).join("");
+  // Titulo del eje Y rotado, mismo detalle que trae la referencia de KeyStone AI ("Sessions",
+  // "Searches", etc. de lado) en vez de dejar los numeros del eje sin ninguna etiqueta.
+  const yAxisTitle = `<text x="12" y="${((padT+h-padB)/2).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-muted)" transform="rotate(-90 12 ${((padT+h-padB)/2).toFixed(1)})">Hires</text>`;
   const xLabels = points.map((p,i)=>
-    `<text x="${p.x.toFixed(1)}" y="${h-10}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${months[i]}</text>`
+    `<text x="${p.x.toFixed(1)}" y="${h-18}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${months[i]}</text>`
   ).join("");
+  const xAxisTitle = `<text x="${(w/2).toFixed(1)}" y="${h-4}" text-anchor="middle" font-size="8" fill="var(--text-muted)">Month</text>`;
   const dots = points.map((p,i)=>
     `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="1.5" data-month-i="${i}" style="pointer-events:none;"/>`
     + `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="transparent" data-month-i="${i}" style="cursor:pointer;"/>`
@@ -2658,6 +2676,8 @@ function renderHiresTrend(){
       </defs>
       ${gridLines}
       ${gridLabels}
+      ${yAxisTitle}
+      ${xAxisTitle}
       <path d="${areaPath}" fill="url(#hiresTrendGradient)" stroke="none"/>
       <path d="${linePath}" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
       ${dots}
