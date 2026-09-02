@@ -206,6 +206,13 @@
   .nav-item.active { background: rgba(var(--brand-rgb),0.22); color: var(--text-primary); border-left: 3px solid var(--brand); }
   .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
   .nav-ic svg { width: 100%; height: 100%; display: block; }
+  /* "Workspace" es su propio acordeon, independiente de en que vista estes parado (antes su
+     visibilidad dependia de que Dashboard fuera la vista activa, lo cual no se sentia como un
+     desplegable real) — toggleWorkspaceMenu() controla esta caret y muestra/oculta
+     #navWorkspaceSwitch directamente. */
+  .nav-group-header { justify-content: flex-start; }
+  .nav-group-caret { width: 14px; height: 14px; flex: none; margin-left: auto; opacity: 0.7; transition: transform 0.15s ease; }
+  .nav-group-caret.collapsed { transform: rotate(-90deg); }
 
   .sidebar-foot {
     margin-top: auto; padding: 12px 8px 4px;
@@ -337,6 +344,7 @@
     font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-muted);
     padding: 10px 4px; border-bottom: 2px solid transparent;
     transform: translateY(1px);
+    display: inline-flex; align-items: center; gap: 6px;
   }
   .dash-tab:hover { color: var(--text-primary); }
   .dash-tab.active { color: var(--text-primary); border-bottom-color: var(--brand); }
@@ -783,20 +791,24 @@
          Solo visible dentro de tu propio workspace (setDashboardScope() lo muestra/oculta). -->
     <div class="sidebar-profile" id="sidebarProfile" style="display:none;"></div>
     <nav class="nav">
-      <button class="nav-item active" data-view="dashboard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span> Dashboard</button>
-      <!-- Reemplaza el viejo flujo de "clic en tu propia tarjeta de Team -> Profile Gate modal
-           -> confirmar" por un switcher de 2 opciones bajo Dashboard, como un desplegable: solo
-           visible mientras Dashboard es la vista activa (ver activateView()), igual que un
-           acordeon de sidebar normal. Team Workspace = vista agregada (activeDashboardScope=
-           null); My Workspace = tu propio perfil (nombre resuelto de MY_RECRUITER_NAME al
-           conectarte). Elegir cualquiera de las dos SIEMPRE te deja viendo Dashboard (nunca te
-           salta a Tracking) — solo cambia que datos ve el Dashboard, no en que vista estas. -->
+      <!-- "Workspace" (de que datos se trata: Team o tu propio perfil) y "Dashboard" (a donde
+           vas: los tabs con las graficas) son 2 cosas distintas — antes vivian mezcladas en un
+           solo boton "Dashboard" con el switcher anidado debajo, lo cual generaba dudas (el
+           switcher solo aparecia si Dashboard era la vista activa, no se sentia como un
+           desplegable de verdad). Ahora "Workspace" es su propio acordeon, con su propio toggle
+           independiente de en que vista estes parado (ver toggleWorkspaceMenu()). Elegir Team o
+           tu titulo SIEMPRE te deja viendo Dashboard — solo cambia que datos ve. -->
+      <button type="button" class="nav-item nav-group-header" id="workspaceMenuToggle">
+        <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
+        Workspace
+        <svg class="nav-group-caret" id="workspaceMenuCaret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
       <div class="nav-workspace-switch" id="navWorkspaceSwitch">
-        <button type="button" class="nav-workspace-btn active" id="navWorkspaceTeamBtn">Team Workspace</button>
+        <button type="button" class="nav-workspace-btn active" id="navWorkspaceTeamBtn">Team</button>
         <button type="button" class="nav-workspace-btn" id="navWorkspaceMineBtn" style="display:none;">My Workspace</button>
       </div>
+      <button class="nav-item active" data-view="dashboard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="10" y1="10" x2="10" y2="20"/></svg></span> Dashboard</button>
       <button class="nav-item" data-view="positions"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span> Positions</button>
-      <button class="nav-item" data-view="tracking" style="display:none;"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Tracking</button>
       <button class="nav-item" data-view="manage"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="5" x2="14" y2="5"/><line x1="10" y1="5" x2="3" y2="5"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="19" x2="16" y2="19"/><line x1="12" y1="19" x2="3" y2="19"/><line x1="14" y1="3" x2="14" y2="7"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="17" x2="16" y2="21"/></svg></span> SSOT Management</button>
       <button class="nav-item" data-view="guide"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> Process & SLA Guide</button>
       <div id="sidebarRecentReqsZone"></div>
@@ -832,22 +844,29 @@
         This view is showing sample data. Click "Connect Microsoft 365" above and sign in with your work account to load the real shared data and enable saving.
       </div>
 
+      <div id="pendingAssignmentZone"></div>
+
+      <!-- Vive FUERA de view-dashboard/view-tracking (los 2 son secciones .view separadas,
+           mutuamente excluyentes) para que la fila de tabs siga visible sin importar cual de
+           las 2 este activa — si viviera adentro de una sola, se desaparecia entera al navegar
+           a la otra. Solo visible cuando la vista activa es "dashboard" o "tracking" (ver
+           activateView()), oculta en Positions/SSOT/Guide. Tracking es un tab mas aqui (icono +
+           label, mismo trato visual que los demas) en vez de un boton aparte en el nav
+           principal — pero a diferencia de los otros 4 (que solo alternan que .dash-tab-panel
+           se ve), este SI navega a una vista distinta (activateView("tracking")) porque
+           Tracking es un layout completo aparte (lista+detalle acoplado), no algo que quepa
+           dentro de un dash-tab-panel mas. Solo visible dentro de tu propio workspace. -->
+      <div class="dash-tabs" id="dashTabs" role="tablist">
+        <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
+        <button type="button" class="dash-tab" id="dashTabTracking" data-dash-tab="tracking" style="display:none;"><span class="nav-ic" style="width:15px;height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Tracking</button>
+        <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
+        <button type="button" class="dash-tab" data-dash-tab="pipeline">Pipeline</button>
+        <button type="button" class="dash-tab" data-dash-tab="offers">Offers &amp; Placements</button>
+      </div>
+
       <!-- ======================= DASHBOARD ======================= -->
       <section class="view active" id="view-dashboard">
         <div class="dashboard-main" id="dashboardMain">
-          <!-- Needs Attention es un banner arriba de los tabs (mismo tratamiento que
-               pendingAssignmentZone justo debajo: un solo alert-banner con las filas adentro,
-               no una lista sola en un panel lateral aparte, que ya no existe). -->
-          <div id="dashboardAttentionZone"></div>
-          <div id="pendingAssignmentZone"></div>
-
-          <div class="dash-tabs" id="dashTabs" role="tablist">
-            <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
-            <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
-            <button type="button" class="dash-tab" data-dash-tab="pipeline">Pipeline</button>
-            <button type="button" class="dash-tab" data-dash-tab="offers">Offers &amp; Placements</button>
-          </div>
-
           <div class="dash-tab-panel active" data-dash-panel="team">
             <!-- Antes 2 tarjetas con borde flotando ENCIMA de los tabs, aplicando a los 4 por
                  igual sin importar cual estuviera activo — igual que KeyStone, donde cada tab
@@ -883,6 +902,9 @@
                 <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
               </div>
             </div>
+            <!-- Antes vivia arriba de los tabs, aplicando a los 4 por igual — Needs Attention es
+                 informacion de Overview especificamente, asi que ahora vive adentro. -->
+            <div id="dashboardAttentionZone"></div>
           </div>
 
             <div class="dash-tab-panel" data-dash-panel="sla">
@@ -1831,7 +1853,7 @@ function setDashboardScope(name){
   // como admin (pruebas locales / gente viendo el link publico sin loguearse).
   if(!isAdmin() && MY_RECRUITER_NAME && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
   activeDashboardScope = name;
-  document.querySelector('.nav-item[data-view="tracking"]').style.display = name ? "" : "none";
+  document.getElementById("dashTabTracking").style.display = name ? "" : "none";
   // SSOT Management es administracion de todo el equipo (crear posiciones/reclutadores,
   // compartir acceso, borrar data) — no tiene sentido dentro del perfil de un solo reclutador,
   // asi que se esconde ahi, igual que Tracking se esconde fuera de un perfil.
@@ -4227,11 +4249,19 @@ const TITLES = {
   guide: ["Process & SLA Guide", "How the requisition process actually works end to end, and how every SLA is defined"],
 };
 function activateView(view){
-  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
-  // El switcher Team/My Workspace es un desplegable de "Dashboard": solo se ve mientras
-  // Dashboard es la vista activa, como un acordeon de sidebar normal (en cualquier otra vista
-  // se colapsa solo, no hace falta un boton aparte para cerrarlo).
-  document.getElementById("navWorkspaceSwitch").style.display = view === "dashboard" ? "" : "none";
+  // El nav-item "Dashboard" se mantiene resaltado tambien en Tracking (Tracking es un tab MAS
+  // de Dashboard ahora, no una seccion hermana independiente) — ver el tab dedicado en
+  // #dashTabs en vez de un boton aparte en el nav principal.
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view || (b.dataset.view==="dashboard" && view==="tracking")));
+  // La fila de tabs (Overview/Tracking/SLA & Completion/Pipeline/Offers) vive fuera de ambas
+  // secciones .view para no desaparecer al saltar entre Dashboard y Tracking (ver el comentario
+  // en el HTML) — solo se ve mientras estas en cualquiera de las 2.
+  document.getElementById("dashTabs").style.display = (view === "dashboard" || view === "tracking") ? "" : "none";
+  // Si llegaste a Tracking sin pasar por el click del tab (ej. el auto-entry al conectar, o
+  // "Edit In Tracking" desde Positions), el tab de Tracking igual tiene que verse resaltado.
+  if(view === "tracking"){
+    document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b.dataset.dashTab==="tracking"));
+  }
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById("view-"+view).classList.add("active");
   // El titulo grande siempre sigue el mismo patron sin importar en que vista o en que workspace
@@ -4274,26 +4304,60 @@ function dockDetailModal(shouldDock){
     activeDetailId = null;
   }
 }
-document.querySelectorAll(".nav-item").forEach(btn=>{
+// [data-view]: excluye a #workspaceMenuToggle, que tambien es .nav-item por estilo pero no
+// navega a ninguna vista (solo abre/cierra el switcher, ver toggleWorkspaceMenu()).
+document.querySelectorAll(".nav-item[data-view]").forEach(btn=>{
   btn.addEventListener("click", ()=> activateView(btn.dataset.view));
 });
 // Elegir Team/My Workspace siempre te deja viendo Dashboard (nunca salta a Tracking) — solo
 // cambia el scope de datos que el Dashboard muestra.
-document.getElementById("navWorkspaceTeamBtn").addEventListener("click", ()=>{ setDashboardScope(null); activateView("dashboard"); });
-document.getElementById("navWorkspaceMineBtn").addEventListener("click", ()=>{ setDashboardScope(MY_RECRUITER_NAME); activateView("dashboard"); });
+function goToDashboard(name){
+  setDashboardScope(name);
+  // Por si el tab de Tracking se habia quedado marcado activo de una visita anterior — elegir
+  // Team/My Workspace desde el switcher siempre te deja viendo el ultimo dash-tab-panel real
+  // (Overview u otro), nunca a Tracking con su boton sin resaltar.
+  document.getElementById("dashTabTracking").classList.remove("active");
+  activateView("dashboard");
+}
+document.getElementById("navWorkspaceTeamBtn").addEventListener("click", ()=> goToDashboard(null));
+document.getElementById("navWorkspaceMineBtn").addEventListener("click", ()=> goToDashboard(MY_RECRUITER_NAME));
+// "Workspace" es su propio acordeon: un boolean simple, independiente de en que vista estes
+// parado (antes su visibilidad dependia de que Dashboard fuera la vista activa, lo cual no se
+// sentia como un desplegable real — se colapsaba solo al navegar a otro lado).
+let workspaceMenuExpanded = true;
+function toggleWorkspaceMenu(){
+  workspaceMenuExpanded = !workspaceMenuExpanded;
+  document.getElementById("navWorkspaceSwitch").style.display = workspaceMenuExpanded ? "" : "none";
+  document.getElementById("workspaceMenuCaret").classList.toggle("collapsed", !workspaceMenuExpanded);
+}
+document.getElementById("workspaceMenuToggle").addEventListener("click", toggleWorkspaceMenu);
 // "My Workspace" solo tiene sentido si tu correo conectado resolvio a un reclutador concreto
 // (MY_RECRUITER_NAME) — sin eso (nadie logueado, o tu correo no coincide con ningun reclutador)
-// no hay a que workspace entrar, asi que el boton ni aparece.
+// no hay a que workspace entrar, asi que el boton ni aparece. Se etiqueta con tu cargo real
+// (RECRUITER_TITLES) en vez de un generico "My Workspace" — "Team" arriba ya deja claro que la
+// otra opcion es la vista agregada, asi que esta puede ser tu titulo puntual.
 function updateWorkspaceSwitchVisibility(){
-  document.getElementById("navWorkspaceMineBtn").style.display = MY_RECRUITER_NAME ? "" : "none";
+  const btn = document.getElementById("navWorkspaceMineBtn");
+  btn.style.display = MY_RECRUITER_NAME ? "" : "none";
+  if(MY_RECRUITER_NAME) btn.textContent = RECRUITER_TITLES[MY_RECRUITER_NAME] || "My Workspace";
 }
-// Tabs del Dashboard (Team / Pipeline & SLA / Offers & Placements) — puramente visual, ningun
-// render*() de mas abajo depende de cual tab esta activo, todos siguen llenando los mismos ids
-// de siempre; esto solo decide cual <div> se ve.
+// Tabs del Dashboard: Overview/SLA & Completion/Pipeline/Offers & Placements solo alternan cual
+// .dash-tab-panel se ve (ningun render*() depende de cual esta activo, todos siguen llenando
+// los mismos ids de siempre) y te garantizan quedarte en Dashboard. Tracking es la excepcion:
+// no tiene un .dash-tab-panel (es un layout completo aparte, lista+detalle acoplado), asi que
+// en vez de alternar paneles navega de verdad a la vista Tracking.
 document.querySelectorAll(".dash-tab").forEach(btn=>{
+  if(btn.dataset.dashTab === "tracking"){
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b===btn));
+      activateView("tracking");
+    });
+    return;
+  }
   btn.addEventListener("click", ()=>{
     document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b===btn));
     document.querySelectorAll(".dash-tab-panel").forEach(p=> p.classList.toggle("active", p.dataset.dashPanel===btn.dataset.dashTab));
+    activateView("dashboard");
   });
 });
 
