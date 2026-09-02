@@ -31,12 +31,13 @@
     /* Un paso mas claro que antes (#1a1817) — con las tarjetas soltando el borde para volverse
        "borderless" (ver .panel/.kpi-tile/.modal-card mas abajo), la separacion contra --page
        tiene que notarse solo con el cambio de superficie + sombra, sin la muleta del borde. */
-    --surface-1: #1e1b19;
-    --surface-2: #221f1d;
-    /* Antes #0c0b0a: casi negro puro contra un --surface-1 bastante mas claro, el salto era
-       demasiado brusco ("agresivo", segun Nicolas) — este tono se queda mas cerca de las
-       superficies, mismo family de color calido, menos contraste duro entre pagina y tarjeta. */
-    --page: #17130f;
+    /* Paleta calibrada contra las capturas de KeyStone AI que Nicolas dio como referencia:
+       pagina y tarjeta son el mismo cafe oscuro casi identico, la separacion la da la sombra
+       (--shadow), no un salto de color — antes --page (#0c0b0a) era casi negro puro contra un
+       --surface-1 notoriamente mas claro, ese salto brusco era el problema. */
+    --surface-1: #211d1a;
+    --surface-2: #26221e;
+    --page: #1c1814;
     --text-primary: #f2ede6;
     --text-secondary: #b3a89c;
     --text-muted: #85796d;
@@ -77,9 +78,12 @@
     /* Paleta propia de Work Arrangement — deliberadamente distinta de las --stage-* de arriba
        (que son de Status) para que dos columnas adyacentes en la misma fila (Status,
        Arrangement) nunca muestren el mismo color por dos razones distintas. */
-    --arr-remote: #4fb8c9;
-    --arr-hybrid: #cc9a3d;
-    --arr-onsite: #8a95a6;
+    /* Antes cian/dorado/gris azulado, sin relacion con la marca — ahora usa la misma familia
+       naranja+neutral que STAGE_COLORS, para que ninguna grafica del Dashboard rompa la
+       identidad visual con un tono que no viene de la paleta de marca. */
+    --arr-remote: var(--brand);
+    --arr-hybrid: var(--seq-300);
+    --arr-onsite: var(--neutral);
 
     /* Wash generico para "algo aqui es hoverable/clickeable" en superficies que no tienen ya su
        propio color (recent-req-row, etc.) — blanco translucido tiene sentido sobre superficies
@@ -319,15 +323,15 @@
 
   /* ---------- KPI tiles ---------- */
   .kpi-row {
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;
-    margin-bottom: 14px;
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
+    margin-bottom: 22px;
   }
   .kpi-tile {
     background: var(--surface-1); border-radius: var(--radius);
-    box-shadow: var(--shadow); padding: 10px 14px;
+    box-shadow: var(--shadow); padding: 14px 16px;
   }
-  .kpi-label { font-size: 13.5px; color: var(--text-primary); font-weight: 700; margin-bottom: 4px; }
-  .kpi-value { font-size: 24px; font-weight: 700; line-height: 1; }
+  .kpi-label { font-size: 13.5px; color: var(--text-primary); font-weight: 700; margin-bottom: 6px; }
+  .kpi-value { font-size: 30px; font-weight: 700; line-height: 1; }
   .kpi-value.good { color: var(--good); }
   .kpi-value.warning { color: var(--warning); }
   .kpi-value.critical { color: var(--critical); }
@@ -426,11 +430,14 @@
   .danger-zone-details { margin-top: 26px; }
   .danger-zone-details summary { color: var(--critical); }
 
-  .barlist { display: flex; flex-direction: column; gap: 6px; }
+  /* Antes 16px de alto con esquinas apenas redondeadas (4px) — se veian como una barra de
+     progreso generica. Full pill-shape (radius = mitad del alto) + mas grosor, mismo
+     tratamiento que las barras del funnel de referencia de KeyStone AI. */
+  .barlist { display: flex; flex-direction: column; gap: 10px; }
   .barlist-row { display: grid; grid-template-columns: 108px 1fr 34px; align-items: center; gap: 10px; }
   .barlist-label { font-size: 12px; color: var(--text-secondary); white-space: normal; word-break: break-word; }
-  .barlist-track { position: relative; height: 16px; background: var(--grid); border-radius: 4px; overflow: hidden; }
-  .barlist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px 0 0 4px; }
+  .barlist-track { position: relative; height: 22px; background: var(--grid); border-radius: 11px; overflow: hidden; }
+  .barlist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 11px; }
   .barlist-value { font-size: 12px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 
   .workload-grid { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -832,7 +839,8 @@
 
             <div class="dash-tabs" id="dashTabs" role="tablist">
               <button type="button" class="dash-tab active" data-dash-tab="team">Team</button>
-              <button type="button" class="dash-tab" data-dash-tab="pipeline">Pipeline &amp; SLA</button>
+              <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
+              <button type="button" class="dash-tab" data-dash-tab="pipeline">Pipeline</button>
               <button type="button" class="dash-tab" data-dash-tab="offers">Offers &amp; Placements</button>
             </div>
 
@@ -843,11 +851,6 @@
                   <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max.</div>
                   <div class="workload-grid" id="chartReclutador"></div>
                 </div>
-                <div class="panel">
-                  <h3>SLA Health</h3>
-                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
-                  <div id="chartSla"></div>
-                </div>
                 <div class="panel" id="panelAvgTts" style="display:none;">
                   <h3>Average Time To Submit</h3>
                   <div class="panel-sub">Their own average TTS across active positions where submitting has started, vs the 9 business day target.</div>
@@ -856,12 +859,12 @@
               </div>
             </div>
 
-            <div class="dash-tab-panel" data-dash-panel="pipeline">
+            <div class="dash-tab-panel" data-dash-panel="sla">
               <div class="dash-grid">
                 <div class="panel">
-                  <h3>Active Pipeline By Status</h3>
-                  <div class="panel-sub">Open positions, grouped by funnel stage</div>
-                  <div class="barlist" id="chartEstado"></div>
+                  <h3>SLA Health</h3>
+                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
+                  <div id="chartSla"></div>
                 </div>
                 <div class="panel">
                   <h3>SLA Compliance</h3>
@@ -872,6 +875,16 @@
                   <h3>Requisition Completion</h3>
                   <div class="panel-sub">Share of assigned requisitions where the recruiter accepted and requested the intake meeting within 1 business day of Kickoff.</div>
                   <div id="chartCompletion"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-tab-panel" data-dash-panel="pipeline">
+              <div class="dash-grid">
+                <div class="panel">
+                  <h3>Active Pipeline By Status</h3>
+                  <div class="panel-sub">Open positions, grouped by funnel stage</div>
+                  <div class="barlist" id="chartEstado"></div>
                 </div>
                 <div class="panel" id="panelPositionByLocation">
                   <h3>Position By Location/Work Arrangement</h3>
@@ -1613,21 +1626,27 @@ const STATUS_GUIDANCE = {
   "On Hold — Internal Candidates": "The hiring manager wants to see the outcome of Irth's internal candidate process before deciding on the external candidates already interviewed. This is not an SLA violation — there's no fixed deadline, since that internal process runs on Irth's own timeline, not Cornerstone's. Keep a periodic (e.g. weekly) check-in with the hiring manager for a status update regardless. Sourcing/other work on this requisition can continue in parallel where it applies — only the decision on already-interviewed candidates is paused.",
   "Cancelled": "This requisition was cancelled by the client. No further action is needed.",
 };
+// Antes usaba --stage-blue/teal/purple/mauve para las etapas activas: colores sin relacion
+// con la marca, se veian genericos comparado con el naranja monocromatico que usa KeyStone AI
+// en sus propias graficas (ver captura de referencia). El progreso activo ahora es una sola
+// rampa de naranja (mas clara = etapas tempranas, mas oscura = etapas tardias); solo los
+// estados terminales rompen la rampa, y solo para los que de verdad son semanticamente
+// distintos (exito real vs. no-progreso), nunca por variedad visual sola.
 const STAGE_COLORS = {
   "Kickoff": "var(--seq-100)",
   "Intake Meeting Requested": "var(--seq-200)",
   "Intake Pending": "var(--seq-300)",
-  "Sourcing": "var(--stage-blue)",
-  "Screening": "var(--stage-teal)",
-  "Hiring Manager Interview": "var(--brand)",
-  "Technical Interview": "var(--stage-purple)",
+  "Sourcing": "var(--seq-400)",
+  "Screening": "var(--seq-500)",
+  "Hiring Manager Interview": "var(--seq-600)",
+  "Technical Interview": "var(--brand-dark)",
   "Offer Request": "var(--warning)",
   "Filled": "var(--good)",
   "Hired": "var(--good)",
   "Fell Through": "var(--critical)",
   "On Hold": "var(--neutral)",
-  "On Hold — Internal Candidates": "var(--seq-500)",
-  "Cancelled": "var(--stage-mauve)",
+  "On Hold — Internal Candidates": "var(--neutral)",
+  "Cancelled": "var(--neutral)",
 };
 // Refresca la aclaracion (STATUS_SUBTITLE) y el campo de fecha obligatoria (STATUS_DATE_FIELD)
 // debajo de un selector de status. Se usa tanto en el modal de detalle como en New Position,
@@ -2585,14 +2604,28 @@ function renderHiresTrend(){
     if(d.getFullYear()===year && d.getMonth() < months.length){ counts[d.getMonth()]++; positionsByMonth[d.getMonth()].push(p); }
   });
 
-  const w=560, h=85, padL=30, padR=16, padT=12, padB=18;
+  const w=560, h=170, padL=30, padR=16, padT=20, padB=26;
   const rawMax = Math.max(...counts, 1);
   const niceMax = Math.max(2, Math.ceil(rawMax/2)*2);
   const stepX = (w - padL - padR) / (months.length - 1);
   const yFor = v => padT + (h - padT - padB) * (1 - v/niceMax);
   const points = counts.map((v,i)=>({x: padL + i*stepX, y: yFor(v), v}));
 
-  const linePath = points.map((p,i)=> (i===0?"M":"L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+  // Curva suave (Catmull-Rom -> Bezier cubica, tension 1/6) en vez de segmentos rectos entre
+  // puntos — el mismo tratamiento que la grafica de referencia de KeyStone AI, una linea recta
+  // segmentada se ve "cruda" comparada con eso.
+  const smoothPath = (pts)=>{
+    if(pts.length < 2) return "";
+    let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+    for(let i=0; i<pts.length-1; i++){
+      const p0 = pts[i===0?0:i-1], p1 = pts[i], p2 = pts[i+1], p3 = pts[i+2<pts.length?i+2:pts.length-1];
+      const c1x = p1.x + (p2.x-p0.x)/6, c1y = p1.y + (p2.y-p0.y)/6;
+      const c2x = p2.x - (p3.x-p1.x)/6, c2y = p2.y - (p3.y-p1.y)/6;
+      d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+    }
+    return d;
+  };
+  const linePath = smoothPath(points);
   const baseY = (h - padB).toFixed(1);
   const areaPath = linePath
     + ` L${points[points.length-1].x.toFixed(1)},${baseY}`
@@ -2603,24 +2636,30 @@ function renderHiresTrend(){
     `<line x1="${padL}" x2="${w-padR}" y1="${yFor(v).toFixed(1)}" y2="${yFor(v).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`
   ).join("");
   const gridLabels = gridVals.map(v=>
-    `<text x="${padL-8}" y="${(yFor(v)+3).toFixed(1)}" text-anchor="end" font-size="7" fill="var(--text-muted)">${v}</text>`
+    `<text x="${padL-8}" y="${(yFor(v)+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${v}</text>`
   ).join("");
   const xLabels = points.map((p,i)=>
-    `<text x="${p.x.toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="7" fill="var(--text-muted)">${months[i]}</text>`
+    `<text x="${p.x.toFixed(1)}" y="${h-10}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${months[i]}</text>`
   ).join("");
   const dots = points.map((p,i)=>
-    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="1.5" data-month-i="${i}" style="pointer-events:none;"/>`
-    + `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="7" fill="transparent" data-month-i="${i}" style="cursor:pointer;"/>`
+    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="1.5" data-month-i="${i}" style="pointer-events:none;"/>`
+    + `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="transparent" data-month-i="${i}" style="cursor:pointer;"/>`
   ).join("");
   const last = points[points.length-1];
-  const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-8).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="var(--text-primary)">${last.v}</text>`;
+  const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-10).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text-primary)">${last.v}</text>`;
 
   document.getElementById("chartHiresTrend").innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
+      <defs>
+        <linearGradient id="hiresTrendGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--brand)" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="var(--brand)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
       ${gridLines}
       ${gridLabels}
-      <path d="${areaPath}" fill="var(--brand)" opacity="0.10" stroke="none"/>
-      <path d="${linePath}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${areaPath}" fill="url(#hiresTrendGradient)" stroke="none"/>
+      <path d="${linePath}" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
       ${dots}
       ${endLabel}
       ${xLabels}
