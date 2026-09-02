@@ -324,7 +324,11 @@
   /* ---------- KPI tiles ---------- */
   /* #kpiRow (siempre visible arriba de los tabs) solo trae 2 tiles ahora (Active Positions,
      Submitted Vs Expected); las otras 4 viven en #kpiRowSecondary dentro del tab Overview. */
-  .kpi-row { display: grid; gap: 12px; }
+  /* align-items:start es el fix real de "las tarjetas quedaron mal": sin esto, el grid por
+     defecto estira TODAS las tiles de la fila a la altura de la que tenga mas texto (ej.
+     "Submitted Vs Expected" o "Offers Fell Through" con su subtitulo de 2 lineas), dejando a
+     las demas con un hueco vacio abajo en vez de su propia altura natural. */
+  .kpi-row { display: grid; gap: 12px; align-items: start; }
   #kpiRow { grid-template-columns: repeat(2, 1fr); margin-bottom: 22px; max-width: 700px; }
   #kpiRowSecondary { grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; }
   .kpi-tile {
