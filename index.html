@@ -2207,6 +2207,14 @@ function statusChip(status){
 // flotando encima de los 4 tabs) como 2 anillos reales (renderDonut), no numeros sueltos en
 // una tarjeta — Active Positions es decorativo (un solo valor, sin "de cuanto"); Submitted Vs
 // Expected si tiene una proporcion real que mostrar (submitted / minimo esperado).
+// Suma los candidatos logueados en Submission Batches — reemplaza el viejo p.submittedCount
+// que dependia de Pipeline (From Spott) (removido: nunca hubo sync real, era pegado a mano en
+// ese formulario). Log Batch si es real y ya lo usa Nicolas para cada envio, asi que "Submitted
+// Vs Expected" ahora se calcula de la misma fuente en vez de quedar huerfano sin forma de
+// actualizarse.
+function batchesSubmittedCount(p){
+  return (p.batches || []).reduce((sum,b)=> sum + (Number(b.count) || 0), 0);
+}
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   renderDonut("statRingActive", [{label:"Active Positions", value: active.length}],
@@ -2223,7 +2231,7 @@ function renderKpis(){
   // anillo se llena hasta ese minimo (nunca pasa de 100%, aunque haya sobre-sourcing) y el
   // centro muestra el % alcanzado, no el conteo crudo (el conteo crudo ya esta en el legend
   // del quick-list al hacer clic).
-  const submittedTotal = active.reduce((sum,p)=> sum + (p.submittedCount || 0), 0);
+  const submittedTotal = active.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
   const minExpected = Math.round(active.length * 3.5);
   const pct = minExpected>0 ? Math.round(Math.min(1, submittedTotal/minExpected) * 100) : null;
   const submittedColor = pct===null ? "var(--grid)" : (submittedTotal >= minExpected ? "var(--good)" : "var(--warning)");
