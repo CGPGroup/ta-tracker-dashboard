@@ -2854,7 +2854,7 @@ function renderTrackingActivity(){
   list.innerHTML = entries.length ? entries.map(e=>`
     <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; padding:8px 10px; margin:2px 0;" : ""}">
       <span class="tl-date">${e.date}</span>
-      <span class="tl-badge ${e.type}">${e.type==="auto"?"Auto":"Remark"}</span>
+      <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
       <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity in the last 7 days.</li>`;
   // Contador visible aunque el <details> este cerrado, para no tener que abrirlo solo para
