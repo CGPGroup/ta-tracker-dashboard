@@ -27,34 +27,40 @@
        Keystone AI, resuelve eso. */
     --font-body: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
 
-    /* Valores EXACTOS leidos con getComputedStyle() directo en gokeystone.ai/client (no una
-       aproximacion visual esta vez) — pagina/sidebar son literalmente #000, la tarjeta real
-       (su componente Card de shadcn/ui) es #292524 con borde solido #44403c, radius 6px, CERO
-       sombra. */
-    --sidebar-bg: #000000;
+    /* Valores leidos con getComputedStyle()/CSS custom properties DIRECTO en el DOM real de
+       gokeystone.ai/client (dos pasadas: la primera asumio pagina=negro puro por error; esta
+       segunda confirma con las custom properties reales de su tema shadcn/ui que --background,
+       --card Y --sidebar son EL MISMO #292524 — la pagina entera es practicamente monocromatica,
+       las tarjetas casi no se distinguen del fondo salvo por un borde solido #44403c y una sombra
+       sutil real (shadow-sm, NO box-shadow:none). */
+    --sidebar-bg: #292524;
     --surface-1: #292524;
     --surface-2: #332e29;
-    --page: #000000;
+    --page: #292524;
     --text-primary: #f5f5f4;
     --text-secondary: #b3a89c;
     --text-muted: #a8a29e;
     --grid: #44403c;
     --baseline: #44403c;
     --border: #44403c;
+    /* --muted real de KeyStone (#201d1a), usado al 60% de opacidad como fondo de tracks/barras
+       vacias (barlist-track) — mas oscuro que --surface-1, no el mismo --grid que el borde. */
+    --track-bg: rgba(32,29,26,0.6);
 
-    /* El naranja real de CGP/KeyStone tal cual sale de sus propios logos (ver logos/cgp-group.svg
-       y logos/keystone-ai.svg): #f26a21 el trazo claro, #da4826 el trazo oscuro — el mismo par
-       de dos tonos que ya usa la marca, no una aproximacion. Antes este token vivia atenuado un
-       paso (#e0703f) para no saturar toda la interfaz; en vez de diluir el color de marca, la
-       moderacion ahora vive en DONDE se usa a full color (botones primarios, estados activos,
-       acentos puntuales) — el resto de la interfaz sigue en superficies neutras. --brand-rgb
-       existe para poder construir washes/rgba() de este mismo color sin repetir el numero suelto
-       en cada regla (antes habia 5+ rgba(224,112,63,...) hardcodeados, desincronizados del token
-       apenas alguien cambiara --brand). */
-    --brand: #f26a21;
-    --brand-dark: #da4826;
-    --brand-rgb: 242,106,33;
+    /* --primary real de KeyStone (barras del funnel, KPIs, acentos) es #f97015 — mas saturado
+       que el naranja de los logos de CGP, asi que en esta pasada se reemplaza (antes se habia
+       preservado el color del logo por purismo de marca, pero la prioridad ahora es igualar el
+       identico tono que usa KeyStone en sus graficas). --brand-dark ya no es un tono inventado:
+       es el MISMO #dc4405 que KeyStone usa para el trazo de sus graficas de linea (su propio
+       "naranja oscuro" secundario, no un derivado nuestro). */
+    --brand: #f97015;
+    --brand-dark: #dc4405;
+    --brand-rgb: 249,112,21;
     --brand-wash: rgba(var(--brand-rgb),0.14);
+    /* Color especifico para graficas de linea (Hires Per Month) — KeyStone usa un naranja
+       distinto para sus line charts (#dc4405) del que usa para barras/KPIs (#f97015). */
+    --chart-line: #dc4405;
+    --chart-line-rgb: 220,68,5;
 
     --seq-100: #f2c7a8; --seq-200: #e8a274; --seq-300: #e0813f; --seq-400: var(--brand); --seq-500: #c65a2a; --seq-600: #8f3f1d;
 
@@ -88,10 +94,11 @@
        segun el tema activo en vez de estar hardcodeado a un solo caso. */
     --hover-wash: rgba(255,255,255,0.06);
 
-    /* Tambien exacto de KeyStone: su Card real usa border-radius:6px y box-shadow:none (el
-       shadow que trae shadcn por defecto sale con todos los valores en 0/transparente ahi). */
+    /* Tambien exacto de KeyStone: su Card real usa border-radius:6px. La primera pasada asumio
+       box-shadow:none pero el DOM real trae shadow-sm de Tailwind (sombra sutil de 2 capas, no
+       cero) — se corrige aqui con el valor real en vez de "ninguna sombra". */
     --radius: 6px;
-    --shadow: none;
+    --shadow: 0 2px 3px 0 rgba(13,13,13,.18), 0 1px 2px -1px rgba(13,13,13,.18);
   }
 
   /* ============================================================
@@ -442,7 +449,7 @@
   .barlist-label { font-size: 12px; color: var(--text-secondary); white-space: normal; word-break: break-word; }
   /* border-radius:4px exacto (getComputedStyle en la barra real del funnel de KeyStone) — nada
      de pill-shape, apenas una esquina suave. */
-  .barlist-track { position: relative; height: 22px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+  .barlist-track { position: relative; height: 22px; background: var(--track-bg); border-radius: 4px; overflow: hidden; }
   .barlist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
   .barlist-value { font-size: 12px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -2637,26 +2644,20 @@ function renderHiresTrend(){
   ).join("");
   const xAxisTitle = `<text x="${(w/2).toFixed(1)}" y="${h-4}" text-anchor="middle" font-size="8" fill="var(--text-muted)">Month</text>`;
   const dots = points.map((p,i)=>
-    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="var(--brand)" stroke="var(--surface-1)" stroke-width="1.5" data-month-i="${i}" style="pointer-events:none;"/>`
+    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="var(--chart-line)" stroke="var(--surface-1)" stroke-width="1.5" data-month-i="${i}" style="pointer-events:none;"/>`
     + `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="transparent" data-month-i="${i}" style="cursor:pointer;"/>`
   ).join("");
   const last = points[points.length-1];
-  const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-10).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text-primary)">${last.v}</text>`;
+  const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-10).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">${last.v}</text>`;
 
   document.getElementById("chartHiresTrend").innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
-      <defs>
-        <linearGradient id="hiresTrendGradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="var(--brand)" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="var(--brand)" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
       ${gridLines}
       ${gridLabels}
       ${yAxisTitle}
       ${xAxisTitle}
-      <path d="${areaPath}" fill="url(#hiresTrendGradient)" stroke="none"/>
-      <path d="${linePath}" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${areaPath}" fill="rgba(var(--chart-line-rgb),0.12)" stroke="none"/>
+      <path d="${linePath}" fill="none" stroke="var(--chart-line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
       ${dots}
       ${endLabel}
       ${xLabels}
