@@ -577,6 +577,12 @@
   .sla-chip.out { background: rgba(var(--critical-rgb),0.16); color: var(--critical); }
   .sla-chip.none { background: var(--surface-2); color: var(--text-muted); }
   .sla-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+  /* Marca chica dentro del chip de TTS cuando el conteo de dias habiles descarto al menos 1
+     feriado — el title nativo del span ya trae el tooltip completo, esto es solo el aviso
+     visual de "hay algo mas que ver aqui". */
+  .sla-chip-holiday {
+    font-size: 9px; font-weight: 700; opacity: 0.75; margin-left: 1px; cursor: help;
+  }
 
   /* ---------- Insert form ---------- */
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
@@ -2007,6 +2013,20 @@ function bizDaysBetween(start,end){
   while(d<=end){ if(isBizDay(d)) c++; d.setDate(d.getDate()+1); }
   return c;
 }
+// Mismo rango que bizDaysBetween (excluye start, incluye end) pero cuenta feriados entre
+// semana en vez de dias habiles — para poder avisar en el chip de TTS que el numero ya
+// descuenta N feriados, en vez de que se vea como si estuviera mal contado (ver slaChip()).
+function holidaysBetween(start,end){
+  if(!start||!end) return 0;
+  if(end<start) return 0;
+  let c=0; const d=new Date(start); d.setDate(d.getDate()+1);
+  while(d<=end){
+    const w=d.getDay();
+    if(w!==0 && w!==6 && HOLIDAYS_SET.has(d.toISOString().slice(0,10))) c++;
+    d.setDate(d.getDate()+1);
+  }
+  return c;
+}
 // Equivalente a WORKDAY(d, 1, holidays) en Excel: el siguiente dia habil despues de d.
 // Este es el punto de partida real y comun para TTS, TTF, y TTH (el master prompt es
 // explicito: los tres arrancan "el dia habil siguiente al intake meeting", nunca el intake
@@ -2051,7 +2071,11 @@ function slaFor(p, key, closeDateStr){
     else if(elapsed>target) status="out";
     else if(elapsed>=target*RISK_THRESHOLD) status="risk";
     else status="within";
-    return {status, elapsed, target};
+    // Cuantos feriados entre semana cayeron dentro de la ventana contada — Nicolas pidio que
+    // esto se vea en el chip (ver slaChip()) para que un TTS mas bajo de lo esperado no se
+    // sienta como un error de conteo cuando en realidad es un feriado real descontado.
+    const holidaysInWindow = holidaysBetween(intake, ref);
+    return {status, elapsed, target, holidaysInWindow};
   }
 
   // TTF / TTH: dias calendario desde el mismo start, con el allowance de Pivot SLA sumado al
@@ -2820,7 +2844,12 @@ function renderPositions(){
    ============================================================ */
 function slaChip(s){
   const m = STATUS_META[s.status];
-  return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}</span>`;
+  // holidaysInWindow solo lo trae TTS (ver slaFor()) — cuando hay al menos 1, se agrega una
+  // marca chica con tooltip para que el numero no se sienta "mal contado" cuando en realidad
+  // es un feriado real descontado del conteo de dias habiles.
+  const h = s.holidaysInWindow;
+  const holidayNote = h ? `<span class="sla-chip-holiday" title="Includes ${h} holiday${h===1?"":"s"} excluded from this business-day count">+${h}h</span>` : "";
+  return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}${holidayNote}</span>`;
 }
 function renderTrackingActivity(){
   const cutoff = new Date();
