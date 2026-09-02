@@ -2039,7 +2039,12 @@ function slaFor(p, key, closeDateStr){
 
   if(key === "TTS"){
     // Dias habiles, umbral de riesgo como % del target (comportamiento ya validado).
-    const elapsed = bizDaysBetween(start, ref);
+    // bizDaysBetween(start,end) YA cuenta desde start+1 (ese es su contrato: excluye start,
+    // incluye end) — pasarle "start" (que ya es nextBizDay(intake)) lo desplazaba una segunda
+    // vez, saltandose por completo el primer dia habil real del reloj de TTS y subcontando
+    // siempre en exactamente 1 dia habil. Pasando el intake crudo, el propio +1 interno de
+    // bizDaysBetween produce el arranque correcto (el dia habil siguiente al intake).
+    const elapsed = bizDaysBetween(intake, ref);
     const target = baseTarget;
     let status;
     if(close){ status = elapsed<=target ? "within" : "out"; }
