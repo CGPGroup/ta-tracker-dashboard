@@ -27,23 +27,20 @@
        Keystone AI, resuelve eso. */
     --font-body: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
 
-    --sidebar-bg: #131211;
-    /* Un paso mas claro que antes (#1a1817) — con las tarjetas soltando el borde para volverse
-       "borderless" (ver .panel/.kpi-tile/.modal-card mas abajo), la separacion contra --page
-       tiene que notarse solo con el cambio de superficie + sombra, sin la muleta del borde. */
-    /* Paleta calibrada contra las capturas de KeyStone AI que Nicolas dio como referencia:
-       pagina y tarjeta son el mismo cafe oscuro casi identico, la separacion la da la sombra
-       (--shadow), no un salto de color — antes --page (#0c0b0a) era casi negro puro contra un
-       --surface-1 notoriamente mas claro, ese salto brusco era el problema. */
-    --surface-1: #211d1a;
-    --surface-2: #26221e;
-    --page: #1c1814;
+    --sidebar-bg: #100f0d;
+    /* Segundo intento, mas fiel a las capturas reales de KeyStone AI: pagina casi negra (no cafe
+       claro), tarjetas apenas un paso mas claras, y la separacion la da un borde delgado real
+       (ver .panel/.kpi-tile mas abajo), no una sombra difusa tipo "card flotante" — KeyStone usa
+       tarjetas planas con borde, no elevacion. */
+    --surface-1: #1a1713;
+    --surface-2: #1f1c17;
+    --page: #131110;
     --text-primary: #f2ede6;
     --text-secondary: #b3a89c;
     --text-muted: #85796d;
     --grid: #2d2925;
     --baseline: #3d3833;
-    --border: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.12);
 
     /* El naranja real de CGP/KeyStone tal cual sale de sus propios logos (ver logos/cgp-group.svg
        y logos/keystone-ai.svg): #f26a21 el trazo claro, #da4826 el trazo oscuro — el mismo par
@@ -92,7 +89,9 @@
     --hover-wash: rgba(255,255,255,0.06);
 
     --radius: 12px;
-    --shadow: 0 1px 2px rgba(0,0,0,0.24), 0 6px 20px rgba(0,0,0,0.34);
+    /* Casi nada de sombra a proposito: KeyStone distingue sus tarjetas con un borde delgado, no
+       con elevacion/glow, este shadow es solo un empujoncito minimo de profundidad. */
+    --shadow: 0 1px 2px rgba(0,0,0,0.18);
   }
 
   /* ============================================================
@@ -120,7 +119,7 @@
     --baseline: #d9d2c8;
     --border: rgba(20,16,12,0.11);
     --hover-wash: rgba(20,16,12,0.045);
-    --shadow: 0 1px 2px rgba(20,16,12,0.05), 0 6px 18px rgba(20,16,12,0.08);
+    --shadow: 0 1px 2px rgba(20,16,12,0.05);
     /* Los tres semanticos necesitan su propio tono mas oscuro/saturado en claro — los de arriba
        son pasteles pensados para resaltar sobre fondo casi negro; sobre blanco, esos mismos
        valores como TEXTO (no solo como wash de fondo) casi no tienen contraste. */
@@ -153,7 +152,7 @@
   .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
   .brand-mark { width: 34px; height: 34px; object-fit: contain; display: block; }
   .brand-text { line-height: 1.2; }
-  .brand-text .l1 { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+  .brand-text .l1 { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
   .brand-text .l2 { font-size: 10.5px; color: var(--text-secondary); }
 
   /* ---------- Pantalla de carga inicial: evita el "flash" de datos viejos/de ejemplo antes
@@ -171,8 +170,8 @@
   .app-loading-logo.cgp { height: 42px; }
   .app-loading-logo.keystone { height: 20px; margin-left: 8px; }
   .app-loading-logo.irth { height: 44px; }
-  .app-loading-plus { font-size: 20px; font-weight: 700; color: var(--text-muted); }
-  .app-loading-title { font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: 0.02em; }
+  .app-loading-plus { font-size: 20px; font-weight: 600; color: var(--text-muted); }
+  .app-loading-title { font-size: 18px; font-weight: 600; color: var(--text-primary); letter-spacing: 0.02em; }
   .app-loading-spinner {
     width: 26px; height: 26px; border-radius: 50%;
     border: 3px solid var(--border); border-top-color: var(--brand);
@@ -185,7 +184,7 @@
   .nav-item {
     display: flex; align-items: center; gap: 10px;
     padding: 10px 12px; border-radius: 8px;
-    color: var(--text-secondary); font-size: 13.5px; font-weight: 700;
+    color: var(--text-secondary); font-size: 13.5px; font-weight: 600;
     cursor: pointer; user-select: none;
     border: none; background: none; text-align: left; width: 100%;
     border-left: 3px solid transparent;
@@ -207,14 +206,14 @@
   }
   .sidebar-cgp-credit { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
   .sidebar-cgp-label {
-    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--text-muted);
   }
   .cgp-credit-logo { height: 32px; width: auto; display: block; }
 
   .dashboard-body { display: flex; align-items: flex-start; gap: 20px; }
   .team-rail { width: 260px; flex: none; }
-  .team-rail-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .team-rail-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
   .team-rail-sub { font-size: 11px; color: var(--text-muted); margin: 2px 0 12px; }
   .dashboard-main { flex: 1; min-width: 0; transition: opacity 0.18s ease; }
   @media (max-width: 900px) { .dashboard-body { flex-direction: column; } .team-rail { width: 100%; } }
@@ -230,13 +229,13 @@
   .team-avatar {
     width: 52px; height: 52px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px; font-weight: 700; color: #fff;
+    font-size: 18px; font-weight: 600; color: #fff;
     background-size: cover; background-position: center;
   }
-  .team-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
+  .team-name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
   .team-title { font-size: 10.5px; color: var(--text-muted); white-space: normal; word-break: break-word; max-width: 100%; }
 
-  .recent-reqs-title { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 20px 0 6px; padding: 0 4px; }
+  .recent-reqs-title { font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 20px 0 6px; padding: 0 4px; }
   .recent-req-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
   .recent-req-row:hover { background: var(--hover-wash); color: var(--text-primary); }
   .recent-req-row .rr-code { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
@@ -256,11 +255,11 @@
   }
   .scope-banner-avatar {
     width: 48px; height: 48px; border-radius: 50%; flex: none; background-size: cover; background-position: center;
-    display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; color: #fff;
     border: 2px solid rgba(255,255,255,0.5);
   }
   .scope-banner-info { flex: 1; min-width: 0; }
-  .scope-banner-name { font-size: 15px; font-weight: 700; color: #fff; }
+  .scope-banner-name { font-size: 15px; font-weight: 600; color: #fff; }
   .scope-banner-sub { font-size: 12px; color: rgba(255,255,255,0.78); margin-top: 2px; }
   .scope-banner-actions { display: flex; gap: 8px; flex: none; }
   .scope-banner-actions .btn.primary { background: #fff; color: var(--brand-dark); }
@@ -277,7 +276,7 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 24px;
   }
-  .topbar h1 { font-size: 16px; margin: 0; font-weight: 700; }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
   .topbar h1 .topbar-eyebrow { color: var(--text-muted); font-weight: 600; }
   .topbar h1 .topbar-eyebrow::after { content: "·"; margin: 0 7px; color: var(--border); font-weight: 400; }
   .topbar .sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
@@ -309,7 +308,7 @@
      pagina completa o nota chiquita dentro de un modal) debe usar .alert-banner + un nivel
      (tier-yellow/tier-orange/tier-red) segun que tan grave sea, en vez de estilos sueltos. */
   .alert-banner {
-    border-radius: var(--radius); padding: 6px 14px; font-size: 11px; font-weight: 700 !important;
+    border-radius: var(--radius); padding: 6px 14px; font-size: 11px; font-weight: 600 !important;
     margin-bottom: 10px; display: flex; align-items: center; gap: 8px; border: 1px solid; line-height: 1.4;
   }
   .alert-banner::before { content: "⚠"; font-size: 12px; flex: none; }
@@ -322,17 +321,14 @@
   .alert-banner.compact { font-size: 10.5px; margin-bottom: 18px; }
 
   /* ---------- KPI tiles ---------- */
-  /* #kpiRow (siempre visible arriba de los tabs) solo trae 2 tiles ahora (Active Positions,
-     Submitted Vs Expected); las otras 4 viven en #kpiRowSecondary dentro del tab Overview. */
-  /* align-items:start es el fix real de "las tarjetas quedaron mal": sin esto, el grid por
-     defecto estira TODAS las tiles de la fila a la altura de la que tenga mas texto (ej.
-     "Submitted Vs Expected" o "Offers Fell Through" con su subtitulo de 2 lineas), dejando a
-     las demas con un hueco vacio abajo en vez de su propia altura natural. */
+  /* Solo Active Positions y Submitted Vs Expected, siempre visibles arriba de los tabs — las
+     otras 4 que habia antes (Offers Pending Decision, At SLA Risk, Out Of SLA, Offers Fell
+     Through) se quitaron del todo, no comunicaban nada por si solas. align-items:start evita
+     que "Submitted Vs Expected" (tiene subtitulo de 2 lineas) estire a su vecina. */
   .kpi-row { display: grid; gap: 12px; align-items: start; }
   #kpiRow { grid-template-columns: repeat(2, 1fr); margin-bottom: 22px; max-width: 700px; }
-  #kpiRowSecondary { grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; }
   .kpi-tile {
-    background: var(--surface-1); border-radius: var(--radius);
+    background: var(--surface-1); border-radius: var(--radius); border: 1px solid var(--border);
     box-shadow: var(--shadow); padding: 14px 16px;
   }
   .kpi-label { font-size: 13.5px; color: var(--text-primary); font-weight: 600; margin-bottom: 6px; }
@@ -411,7 +407,7 @@
   .modal-overlay.docked .modal-card { max-width: none; width: 100%; transform: none !important; }
 
   .panel {
-    background: var(--surface-1); border-radius: var(--radius);
+    background: var(--surface-1); border-radius: var(--radius); border: 1px solid var(--border);
     box-shadow: var(--shadow); padding: 16px 18px;
   }
   /* 700 se veia "agresivo" en Poppins comparado con la referencia de KeyStone AI (su bold de
@@ -427,7 +423,7 @@
      contenido pueda crecer mucho (ej. Recent Activity) — el color normal es el mismo que un
      <h3>; Danger Zone lo pisa a rojo aparte. */
   .panel-details summary, .danger-zone-details summary {
-    font-size: 13.5px; font-weight: 700; color: var(--text-primary); cursor: pointer;
+    font-size: 13.5px; font-weight: 600; color: var(--text-primary); cursor: pointer;
     list-style: none; display: flex; align-items: center; gap: 6px;
   }
   .panel-details summary::-webkit-details-marker, .danger-zone-details summary::-webkit-details-marker { display: none; }
@@ -458,10 +454,10 @@
   .workload-avatar {
     width: 38px; height: 38px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 700; color: #fff;
+    font-size: 13px; font-weight: 600; color: #fff;
     background-size: cover; background-position: center;
   }
-  .workload-name { font-size: 11px; font-weight: 700; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
+  .workload-name { font-size: 11px; font-weight: 600; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
   .workload-count { font-size: 10.5px; color: var(--text-muted); }
@@ -475,7 +471,7 @@
   .stackbar > div { height: 100%; }
   .stackbar-legend { display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--text-secondary); }
   .stackbar-legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .stackbar-counts { font-size: 10.5px; font-weight: 700 !important; color: var(--text-muted); margin-top: 5px; }
+  .stackbar-counts { font-size: 10.5px; font-weight: 600 !important; color: var(--text-muted); margin-top: 5px; }
 
   .meter-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px 0 4px; }
   .meter-value { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -492,7 +488,7 @@
     position: absolute; inset: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; pointer-events: none;
   }
-  .donut-center-value { font-size: 22px; line-height: 1; }
+  .donut-center-value { font-size: 22px; line-height: 1; font-weight: 700; }
   .donut-center-label { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
   .donut-legend { display: flex; flex-direction: column; gap: 9px; min-width: 140px; }
   .donut-legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -520,7 +516,7 @@
   .filter-badge {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 16px; height: 16px; padding: 0 4px; margin-left: 6px;
-    border-radius: 999px; background: var(--brand); color: #fff; font-size: 10px; font-weight: 700;
+    border-radius: 999px; background: var(--brand); color: #fff; font-size: 10px; font-weight: 600;
   }
   .filter-more-panel {
     margin-bottom: 14px; margin-top: -4px; padding: 12px;
@@ -535,7 +531,7 @@
   }
   .filter-chip button {
     background: none; border: none; color: inherit; cursor: pointer; font-size: 14px;
-    line-height: 1; padding: 0 2px; opacity: 0.7; font-weight: 700;
+    line-height: 1; padding: 0 2px; opacity: 0.7; font-weight: 600;
   }
   .filter-chip button:hover { opacity: 1; }
   .filter-chips-clear {
@@ -546,7 +542,7 @@
   table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   table.data th {
     text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em;
-    color: var(--text-muted); font-weight: 700; padding: 7px 8px; border-bottom: 1px solid var(--grid);
+    color: var(--text-muted); font-weight: 600; padding: 7px 8px; border-bottom: 1px solid var(--grid);
     white-space: nowrap;
   }
   table.data td { padding: 7px 8px; border-bottom: 1px solid var(--grid); vertical-align: middle; transition: background 0.12s ease; }
@@ -555,7 +551,7 @@
   table.data tr.clickable:hover td { background: var(--brand-wash); }
 
   .pos-title { font-weight: 600; }
-  .pos-code { color: var(--text-muted); font-weight: 700; font-size: 11.5px; margin-left: 5px; white-space: nowrap; }
+  .pos-code { color: var(--text-muted); font-weight: 600; font-size: 11.5px; margin-left: 5px; white-space: nowrap; }
   td.cell-position { white-space: normal; min-width: 220px; }
 
   .status-chip {
@@ -601,16 +597,16 @@
 
   .callout {
     background: var(--brand-wash); border: 1px solid rgba(var(--brand-rgb),0.30); border-radius: var(--radius);
-    padding: 12px 16px; font-size: 11px; font-weight: 700 !important; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;
+    padding: 12px 16px; font-size: 11px; font-weight: 600 !important; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;
   }
-  .callout b { color: var(--text-primary); font-weight: 700 !important; }
+  .callout b { color: var(--text-primary); font-weight: 600 !important; }
   .callout.prose { font-weight: 400 !important; }
-  .callout.prose b { font-weight: 700 !important; }
+  .callout.prose b { font-weight: 600 !important; }
 
   /* ---------- Process & SLA Guide ---------- */
   .guide-wrap { max-width: 860px; }
   .guide-wrap p, .guide-wrap li { font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); }
-  .guide-wrap li b, .guide-wrap p b { color: var(--text-primary); font-weight: 700 !important; }
+  .guide-wrap li b, .guide-wrap p b { color: var(--text-primary); font-weight: 600 !important; }
   .guide-wrap ul, .guide-wrap ol { margin: 6px 0 0; padding-left: 20px; }
   .guide-wrap ul li, .guide-wrap ol li { margin-bottom: 7px; }
   .guide-wrap ul li:last-child, .guide-wrap ol li:last-child { margin-bottom: 0; }
@@ -675,7 +671,7 @@
   .quick-list-row:hover .pos-title { color: var(--brand); }
   .sla-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
   .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
-  .sla-card .sla-name { font-size: 10.5px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .sla-card .sla-name { font-size: 10.5px; font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .modal-section-title { font-size: 12.5px; font-weight: 600; margin: 22px 0 8px; }
   .modal-section-title:first-child { margin-top: 0; }
   /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
@@ -703,7 +699,7 @@
   .timeline li:last-child { border-bottom: none; }
   .timeline .tl-date { flex: none; width: 76px; color: var(--text-muted); font-size: 11px; padding-top: 1px; }
   .timeline .tl-badge {
-    flex: none; font-size: 9.5px; font-weight: 700; text-transform: uppercase; padding: 2px 6px;
+    flex: none; font-size: 9.5px; font-weight: 600; text-transform: uppercase; padding: 2px 6px;
     border-radius: 5px; height: fit-content; margin-top: 1px;
   }
   /* 5 tags de Activity, cada uno con un significado especifico (ver TL_BADGE_LABELS):
@@ -732,7 +728,7 @@
   .link-danger:hover { color: var(--critical); opacity: 1; text-decoration: underline; }
 
   @media (max-width: 1080px) {
-    #kpiRow, #kpiRowSecondary { grid-template-columns: repeat(2, 1fr); }
+    #kpiRow { grid-template-columns: 1fr; }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
     .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
   }
@@ -853,7 +849,6 @@
             </div>
 
             <div class="dash-tab-panel active" data-dash-panel="team">
-              <div class="kpi-row" id="kpiRowSecondary"></div>
               <div class="dash-grid">
                 <div class="panel" id="panelWorkloadByRecruiter">
                   <h3>Active Workload By Recruiter</h3>
@@ -898,10 +893,10 @@
                 <div class="panel" id="panelPositionByLocation">
                   <h3>Position By Location/Work Arrangement</h3>
                   <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
-                  <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
+                  <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
                   <div class="barlist" id="chartHiredLoc"></div>
                   <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
-                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
+                    <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
                     <div class="barlist" id="chartWorkArrangement"></div>
                   </div>
                 </div>
@@ -1190,21 +1185,21 @@
           <div class="panel" style="margin-bottom:14px;">
             <h3>Tags & Status Colors</h3>
             <div class="panel-sub">What every badge, chip, and color across the tracker actually means</div>
-            <p style="margin:0; font-weight:700; color:var(--text-primary);">SLA status colors (SLA and Requisition Completion cards)</p>
+            <p style="margin:0; font-weight:600; color:var(--text-primary);">SLA status colors (SLA and Requisition Completion cards)</p>
             <ul>
               <li><b>Within SLA</b> (green): on track, inside target.</li>
               <li><b>At Risk</b> (yellow): approaching the target, not past it yet.</li>
               <li><b>Out Of SLA</b> (red): past target.</li>
               <li><b>Not Started</b> (gray): this metric's clock hasn't started yet, its starting date isn't filled in.</li>
             </ul>
-            <p style="margin:12px 0 0; font-weight:700; color:var(--text-primary);">SLA / Requisition Completion tags</p>
+            <p style="margin:12px 0 0; font-weight:600; color:var(--text-primary);">SLA / Requisition Completion tags</p>
             <ul>
               <li><b>Official SLA:</b> a real, contractual KPI agreed with Irth (TTS only).</li>
               <li><b>Internal Goal:</b> an internal health metric Cornerstone tracks, not a contractual KPI with the client (TTF, TTH).</li>
               <li><b>Recruiter Owned:</b> counted as a real recruiter miss if it goes out of target.</li>
               <li><b>Follow-Up Only:</b> never counted against the recruiter, it only surfaces as a reminder to follow up or escalate.</li>
             </ul>
-            <p style="margin:12px 0 0; font-weight:700; color:var(--text-primary);">Activity badges</p>
+            <p style="margin:12px 0 0; font-weight:600; color:var(--text-primary);">Activity badges</p>
             <ul>
               <li><b>Milestone:</b> generated automatically the moment a Timeline date (Kickoff, Intake Requested, Intake Meeting, Submission, Fill, Hire) is filled in.</li>
               <li><b>Status Change:</b> generated automatically whenever the requisition's status changes.</li>
@@ -1223,7 +1218,7 @@
               <li><b>Time To Fill (TTF):</b> same start point as TTS, ends when Irth confirms by email that the hiring manager sent the Offer Request. This is the edge of Cornerstone's scope in the process. Target: <b>30-40 calendar days.</b></li>
               <li><b>Time To Hire (TTH):</b> same start point, ends on the candidate's actual first day, not when they sign the offer (a candidate can still fall through between those two dates). Target: <b>40-50 calendar days.</b></li>
             </ul>
-            <p style="margin:12px 0 0; font-weight:700; color:var(--text-primary);">Health buckets (reference only, not a hard pass/fail rule):</p>
+            <p style="margin:12px 0 0; font-weight:600; color:var(--text-primary);">Health buckets (reference only, not a hard pass/fail rule):</p>
             <ul>
               <li>30-35 days: excellent</li>
               <li>36-40 days: healthy, on track</li>
@@ -1912,7 +1907,7 @@ function openProfileGate(name){
   if(pending.length){
     html += `<div class="modal-section-title">New Assignments</div>` + pending.map(p=>`
       <div class="pending-offer-row">
-        <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">Assigned ${escapeHtml(p.kickoff)}</div></div>
+        <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">Assigned ${escapeHtml(p.kickoff)}</div></div>
         <button class="btn primary small" type="button" data-gate-accept-id="${escapeHtml(p.id)}">Accept</button>
       </div>`).join("");
   }
@@ -2250,17 +2245,13 @@ function statusChip(status){
 /* ============================================================
    DASHBOARD: KPIs + charts
    ============================================================ */
+// Antes esto traia 6 tiles (Offers Pending Decision, At SLA Risk, Out Of SLA, Offers Fell
+// Through incluidas) — Nicolas las quito por completo: no comunicaban nada por si solas y la
+// misma informacion ya vive, mejor explicada, en SLA Health/SLA Compliance (tab SLA &
+// Completion) y Pending Offers (tab Offers & Placements). Active Positions y Submitted Vs
+// Expected son las unicas dos que de verdad hacen falta ver siempre, sin importar el tab.
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  let atRisk=0, outOfSla=0;
-  active.forEach(p=>{
-    const s = computeSla(p);
-    if(["TTS","TTF","TTH"].some(k=>s[k].status==="risk")) atRisk++;
-    if(["TTS","TTF","TTH"].some(k=>s[k].status==="out")) outOfSla++;
-  });
-  const fellThroughPositions = dashboardPositions().filter(p=>p.fill && p.status==="Fell Through");
-  const fellThrough = fellThroughPositions.length;
-
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
   // pipeline de submissions: con batches de 3 a 5 candidatos por posicion (promedio 3.5, regla
@@ -2271,7 +2262,6 @@ function renderKpis(){
   const minExpected = Math.round(active.length * 3.5);
   const submittedCls = active.length===0 ? "" : (submittedTotal < minExpected ? "warning" : "good");
 
-  const offersPending = dashboardPositions().filter(p=>p.status==="Offer Request");
   const tiles = [
     {label:"Active Positions", value: active.length, cls:"", onClick: active.length>0 ? ()=>{
       openQuickList("Active Positions", `${active.length} position${active.length===1?"":"s"} not yet in a terminal status`, active);
@@ -2279,38 +2269,16 @@ function renderKpis(){
     {label:"Submitted Vs Expected", value: submittedTotal, cls: submittedCls, sub: active.length ? `Expected ≥${minExpected} for ${active.length} active (3.5 candidates/position, the SLA minimum batch size)` : "", onClick: active.length>0 ? ()=>{
       openQuickList("Submitted Vs Expected", `${submittedTotal} submitted across ${active.length} active position${active.length===1?"":"s"} &middot; expected at least ${minExpected}`, active);
     } : null},
-    {label:"Offers Pending Decision", value: offersPending.length, cls:"", onClick: offersPending.length>0 ? ()=>{
-      openQuickList("Offers Pending Decision", `${offersPending.length} position${offersPending.length===1?"":"s"} waiting on an offer decision`, offersPending);
-    } : null},
-    {label:"At SLA Risk", value: atRisk, cls: atRisk>0 ? "warning":"", onClick: atRisk>0 ? ()=>{
-      const matches = active.filter(p=>["TTS","TTF","TTH"].some(k=>computeSla(p)[k].status==="risk"));
-      openQuickList("At SLA Risk", `${matches.length} position${matches.length===1?"":"s"}`, matches, slaFlags);
-    } : null},
-    {label:"Out Of SLA", value: outOfSla, cls: outOfSla>0 ? "critical":"", onClick: outOfSla>0 ? ()=>{
-      const matches = active.filter(p=>["TTS","TTF","TTH"].some(k=>computeSla(p)[k].status==="out"));
-      openQuickList("Out Of SLA", `${matches.length} position${matches.length===1?"":"s"}`, matches, slaFlags);
-    } : null},
-    {label:"Offers Fell Through", value: fellThrough, cls: fellThrough>0 ? "critical":"", sub: "Filled positions where the placement later fell through", onClick: fellThrough>0 ? ()=>{
-      openQuickList("Offers Fell Through", `${fellThrough} position${fellThrough===1?"":"s"}`, fellThroughPositions);
-    } : null},
   ];
-  // Solo Active Positions/Submitted Vs Expected se quedan siempre visibles arriba de los tabs
-  // (son los dos numeros que de verdad hacen falta ver sin importar en que tab estes); el
-  // resto no aportaba nada estando siempre fijo, ahora vive dentro del tab Overview.
-  const tileHtml = (t,i)=>`
+  document.getElementById("kpiRow").innerHTML = tiles.map((t,i)=>`
     <div class="kpi-tile${t.onClick?' clickable-stat':''}" data-idx="${i}">
       <div class="kpi-label">${t.label}</div>
       <div class="kpi-value ${t.cls}">${t.value}</div>
       ${t.sub ? `<div class="kpi-sub">${t.sub}</div>` : ""}
-    </div>`;
-  const wireTiles = (containerId, tileSubset)=>{
-    document.getElementById(containerId).innerHTML = tileSubset.map(tileHtml).join("");
-    document.querySelectorAll(`#${containerId} .kpi-tile`).forEach((el,i)=>{
-      if(tileSubset[i].onClick) el.addEventListener("click", tileSubset[i].onClick);
-    });
-  };
-  wireTiles("kpiRow", tiles.slice(0,2));
-  wireTiles("kpiRowSecondary", tiles.slice(2));
+    </div>`).join("");
+  document.querySelectorAll("#kpiRow .kpi-tile").forEach((el,i)=>{
+    if(tiles[i].onClick) el.addEventListener("click", tiles[i].onClick);
+  });
 }
 
 function renderBarlist(elId, rows, colorVar, onClickRow){
@@ -2718,7 +2686,7 @@ function renderPlacementsMonth(){
   document.getElementById("chartPlacementsMonth").innerHTML = `
     <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
       <div style="font-size:32px; color:var(--brand); line-height:1;">${thisMonthCount}</div>
-      <div style="font-size:11.5px; font-weight:700 !important; color:${deltaColor};">${deltaText}</div>
+      <div style="font-size:11.5px; font-weight:600 !important; color:${deltaColor};">${deltaText}</div>
     </div>
     <div class="barlist">
       <div class="barlist-row clickable-stat" data-which="last">
@@ -2750,7 +2718,7 @@ function renderPendingOffers(){
   list.innerHTML = offers.map(p=>{
     const s = computeSla(p);
     return `<div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${escapeHtml(p.recruiter)} · ${escapeHtml(p.hiringManager)}</div></div>
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">${escapeHtml(p.recruiter)} · ${escapeHtml(p.hiringManager)}</div></div>
       ${slaChip(s.TTF)}
     </div>`;
   }).join("");
@@ -2932,7 +2900,7 @@ function buildAttentionRows(positions){
 function attentionRowsHtml(slaRows, completionRows){
   const slaHtml = slaRows.map(({p, s, worstKey})=>`
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${slaFlags(p)}</div></div>
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">${slaFlags(p)}</div></div>
       ${slaChip(s[worstKey])}
     </div>`).join("");
   const completionHtml = completionRows.map(p=>{
@@ -2946,7 +2914,7 @@ function attentionRowsHtml(slaRows, completionRows){
     const label = c.step1.status==="out" ? (p.recruiterAcceptedDate ? "Intake Not Requested" : "Not Accepted") : (c.step2.overdue || c.step3.overdue ? "Escalate" : (pivotPending ? "Pivot Pending" : "Overdue"));
     return `
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:700 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
       <span class="sla-chip ${cls}"><span class="dot" style="background:${STATUS_META[cls].color}"></span>${label}</span>
     </div>`;
   }).join("");
