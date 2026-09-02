@@ -33,7 +33,10 @@
        tiene que notarse solo con el cambio de superficie + sombra, sin la muleta del borde. */
     --surface-1: #1e1b19;
     --surface-2: #221f1d;
-    --page: #0c0b0a;
+    /* Antes #0c0b0a: casi negro puro contra un --surface-1 bastante mas claro, el salto era
+       demasiado brusco ("agresivo", segun Nicolas) — este tono se queda mas cerca de las
+       superficies, mismo family de color calido, menos contraste duro entre pagina y tarjeta. */
+    --page: #17130f;
     --text-primary: #f2ede6;
     --text-secondary: #b3a89c;
     --text-muted: #85796d;
@@ -333,10 +336,31 @@
   /* ---------- Panels / charts ---------- */
   .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 16px; align-items: start; }
   .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
-  /* Layout tipo "masonry" para el Dashboard: los paneles se acomodan sin dejar huecos
-     cuando un vecino es mas corto (a diferencia de un grid de filas fijas). */
-  .dash-cols { display: flex; gap: 12px; align-items: flex-start; }
-  .dash-col { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; }
+  /* Tabs del Dashboard (Team / Pipeline & SLA / Offers & Placements): mismo concepto que las
+     pestañas de analytics de KeyStone AI que Nicolas señaló como referencia — subrayado de
+     marca en la activa, resto en texto muted, sin fondo propio (el KPI row de arriba se queda
+     fijo siempre visible, no depende de que tab este activo). */
+  .dash-tabs {
+    display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+  }
+  .dash-tab {
+    appearance: none; background: none; border: none; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-muted);
+    padding: 10px 4px; margin-right: 22px; border-bottom: 2px solid transparent;
+    transform: translateY(1px);
+  }
+  .dash-tab:hover { color: var(--text-primary); }
+  .dash-tab.active { color: var(--text-primary); border-bottom-color: var(--brand); }
+  .dash-tab-panel { display: none; }
+  .dash-tab-panel.active { display: block; }
+  /* Reemplaza el viejo layout de 2 columnas fijas (.dash-cols/.dash-col): cada tab trae pocas
+     tarjetas (2-4, no las 9-10 de antes apiladas juntas), asi que un grid normal con mas aire
+     entre tarjetas ya no se siente apachurrado — align-items:start evita que una tarjeta corta
+     se estire a la altura de su vecina mas alta. */
+  .dash-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; align-items: start;
+  }
+  @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
 
   /* Tracking: lista a la izquierda, detalle fijo a la derecha (no tapa la lista al abrir una
      posicion). El mismo #detailModal que usan Positions/Dashboard se "acopla" aqui via JS
@@ -379,7 +403,7 @@
 
   .panel {
     background: var(--surface-1); border-radius: var(--radius);
-    box-shadow: var(--shadow); padding: 12px 16px;
+    box-shadow: var(--shadow); padding: 16px 18px;
   }
   .panel h3 { font-size: 13.5px; margin: 0 0 2px; font-weight: 700; }
   /* Sin ".panel" de ancestro (asi estaba antes) esto solo aplicaba dentro de un .panel real —
@@ -695,7 +719,6 @@
   @media (max-width: 1080px) {
     .kpi-row { grid-template-columns: repeat(3, 1fr); }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
-    .dash-cols { flex-direction: column; }
     .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
   }
 
@@ -807,8 +830,34 @@
               </details>
             </div>
 
-            <div class="dash-cols">
-              <div class="dash-col">
+            <div class="dash-tabs" id="dashTabs" role="tablist">
+              <button type="button" class="dash-tab active" data-dash-tab="team">Team</button>
+              <button type="button" class="dash-tab" data-dash-tab="pipeline">Pipeline &amp; SLA</button>
+              <button type="button" class="dash-tab" data-dash-tab="offers">Offers &amp; Placements</button>
+            </div>
+
+            <div class="dash-tab-panel active" data-dash-panel="team">
+              <div class="dash-grid">
+                <div class="panel" id="panelWorkloadByRecruiter">
+                  <h3>Active Workload By Recruiter</h3>
+                  <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max.</div>
+                  <div class="workload-grid" id="chartReclutador"></div>
+                </div>
+                <div class="panel">
+                  <h3>SLA Health</h3>
+                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
+                  <div id="chartSla"></div>
+                </div>
+                <div class="panel" id="panelAvgTts" style="display:none;">
+                  <h3>Average Time To Submit</h3>
+                  <div class="panel-sub">Their own average TTS across active positions where submitting has started, vs the 9 business day target.</div>
+                  <div id="chartAvgTts"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-tab-panel" data-dash-panel="pipeline">
+              <div class="dash-grid">
                 <div class="panel">
                   <h3>Active Pipeline By Status</h3>
                   <div class="panel-sub">Open positions, grouped by funnel stage</div>
@@ -824,38 +873,6 @@
                   <div class="panel-sub">Share of assigned requisitions where the recruiter accepted and requested the intake meeting within 1 business day of Kickoff.</div>
                   <div id="chartCompletion"></div>
                 </div>
-                <div class="panel">
-                  <h3>Pending Offers</h3>
-                  <div class="panel-sub">Positions currently waiting on an offer decision</div>
-                  <div id="listPendingOffers"></div>
-                </div>
-                <div class="panel">
-                  <h3 id="hiresTrendTitle">Hires Per Month</h3>
-                  <div class="panel-sub">Confirmed placements per month, year to date. Click a point to see who.</div>
-                  <div id="chartHiresTrend"></div>
-                </div>
-              </div>
-              <div class="dash-col">
-                <div class="panel">
-                  <h3>SLA Health</h3>
-                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
-                  <div id="chartSla"></div>
-                </div>
-                <div class="panel" id="panelWorkloadByRecruiter">
-                  <h3>Active Workload By Recruiter</h3>
-                  <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max.</div>
-                  <div class="workload-grid" id="chartReclutador"></div>
-                </div>
-                <div class="panel" id="panelAvgTts" style="display:none;">
-                  <h3>Average Time To Submit</h3>
-                  <div class="panel-sub">Their own average TTS across active positions where submitting has started, vs the 9 business day target.</div>
-                  <div id="chartAvgTts"></div>
-                </div>
-                <div class="panel">
-                  <h3>Placements This Month</h3>
-                  <div class="panel-sub">Confirmed hires, this month vs last month</div>
-                  <div id="chartPlacementsMonth"></div>
-                </div>
                 <div class="panel" id="panelPositionByLocation">
                   <h3>Position By Location/Work Arrangement</h3>
                   <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
@@ -865,6 +882,26 @@
                     <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
                     <div class="barlist" id="chartWorkArrangement"></div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-tab-panel" data-dash-panel="offers">
+              <div class="dash-grid">
+                <div class="panel">
+                  <h3>Pending Offers</h3>
+                  <div class="panel-sub">Positions currently waiting on an offer decision</div>
+                  <div id="listPendingOffers"></div>
+                </div>
+                <div class="panel">
+                  <h3>Placements This Month</h3>
+                  <div class="panel-sub">Confirmed hires, this month vs last month</div>
+                  <div id="chartPlacementsMonth"></div>
+                </div>
+                <div class="panel" style="grid-column:1 / -1;">
+                  <h3 id="hiresTrendTitle">Hires Per Month</h3>
+                  <div class="panel-sub">Confirmed placements per month, year to date. Click a point to see who.</div>
+                  <div id="chartHiresTrend"></div>
                 </div>
               </div>
             </div>
@@ -4252,6 +4289,15 @@ function dockDetailModal(shouldDock){
 }
 document.querySelectorAll(".nav-item").forEach(btn=>{
   btn.addEventListener("click", ()=> activateView(btn.dataset.view));
+});
+// Tabs del Dashboard (Team / Pipeline & SLA / Offers & Placements) — puramente visual, ningun
+// render*() de mas abajo depende de cual tab esta activo, todos siguen llenando los mismos ids
+// de siempre; esto solo decide cual <div> se ve.
+document.querySelectorAll(".dash-tab").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b===btn));
+    document.querySelectorAll(".dash-tab-panel").forEach(p=> p.classList.toggle("active", p.dataset.dashPanel===btn.dataset.dashTab));
+  });
 });
 
 document.getElementById("positionsSearch").addEventListener("input", renderPositions);
