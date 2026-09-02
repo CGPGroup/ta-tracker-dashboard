@@ -241,6 +241,13 @@
   .team-title { font-size: 10.5px; color: var(--text-muted); white-space: normal; word-break: break-word; max-width: 100%; }
   .rail-section-title { font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 18px 0 8px; padding: 0 4px; }
   .rail-section-title:first-of-type { margin-top: 0; }
+  .rail-link-btn {
+    display: block; width: 100%; text-align: left; appearance: none; cursor: pointer;
+    font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 12px; margin-bottom: 4px;
+  }
+  .rail-link-btn:hover { border-color: var(--brand); color: var(--brand); }
 
   .recent-req-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
   .recent-req-row:hover { background: var(--hover-wash); color: var(--text-primary); }
@@ -259,14 +266,14 @@
   .nav-workspace-btn:hover { color: var(--text-primary); }
   .nav-workspace-btn.active { color: var(--brand); }
 
-  /* Franja de stats dentro de Overview (no una tarjeta aparte flotando sobre los 4 tabs): solo
-     numeros, sin fondo/borde propio, separados por un divisor vertical sutil. */
-  .stat-strip { display: flex; gap: 28px; margin-bottom: 20px; }
-  .stat-strip-item { padding-right: 28px; border-right: 1px solid var(--border); }
-  .stat-strip-item:last-child { border-right: none; padding-right: 0; }
-  .stat-strip-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
-  .stat-strip-value { font-size: 22px; font-weight: 600; line-height: 1; }
-  .stat-strip-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; max-width: 220px; }
+  /* Franja de stats dentro de Overview (no una tarjeta aparte flotando sobre los 4 tabs): 2
+     anillos reales (renderDonut), no numeros sueltos — la leyenda que renderDonut agrega
+     siempre (uno o dos renglones) se oculta aqui porque el valor ya esta en el centro del
+     anillo, repetirlo abajo era ruido. */
+  .stat-strip { display: flex; gap: 36px; margin-bottom: 24px; }
+  .stat-ring-item { text-align: center; }
+  .stat-strip-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 8px; }
+  #statRingActive .donut-legend, #statRingSubmitted .donut-legend { display: none; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -320,10 +327,6 @@
   .alert-banner.tier-good { background: rgba(var(--good-rgb),0.08); border-color: rgba(var(--good-rgb),0.28); color: var(--good); }
   .alert-banner.tier-good::before { content: "✓"; }
   .alert-banner.compact { font-size: 10.5px; margin-bottom: 18px; }
-
-  .stat-strip-value.good { color: var(--good); }
-  .stat-strip-value.warning { color: var(--warning); }
-  .stat-strip-value.critical { color: var(--critical); }
 
   /* ---------- Panels / charts ---------- */
   .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 16px; align-items: start; }
@@ -839,6 +842,10 @@
                Recent Activity. -->
           <aside class="team-rail" id="teamRail" style="display:none;">
             <div class="rail-profile" id="railProfile"></div>
+            <!-- "Total Reqs Managed" no le dice nada al reclutador del dia a dia — lo que si
+                 necesita es un atajo para buscar una req vieja/cerrada puntual, que es
+                 exactamente lo que ya hace Positions (directorio completo, cualquier estado). -->
+            <button type="button" class="rail-link-btn" id="railPositionsBtn">Positions →</button>
             <div class="rail-section-title">Needs Attention</div>
             <div id="railAttentionList"></div>
             <div class="rail-section-title">Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></div>
@@ -859,8 +866,18 @@
               <!-- Antes 2 tarjetas con borde flotando ENCIMA de los tabs, aplicando a los 4 por
                    igual sin importar cual estuviera activo — igual que KeyStone, donde cada tab
                    (Sourcing/Jobs/Outreach) trae su PROPIA fila de stats, esta franja ahora vive
-                   dentro de Overview especificamente, sin chrome de tarjeta (solo numeros). -->
-              <div class="stat-strip" id="statStrip"></div>
+                   dentro de Overview especificamente. Son graficas de verdad (anillos), no
+                   numeros sueltos en una tarjeta. -->
+              <div class="stat-strip" id="statStrip">
+                <div class="stat-ring-item">
+                  <div class="stat-strip-label">Active Positions</div>
+                  <div id="statRingActive"></div>
+                </div>
+                <div class="stat-ring-item">
+                  <div class="stat-strip-label">Submitted Vs Expected</div>
+                  <div id="statRingSubmitted"></div>
+                </div>
+              </div>
               <div class="dash-grid">
                 <div class="panel" id="panelWorkloadByRecruiter">
                   <h3>Active Workload By Recruiter</h3>
@@ -2164,42 +2181,37 @@ function statusChip(status){
 // Through incluidas) — Nicolas las quito por completo: no comunicaban nada por si solas y la
 // misma informacion ya vive, mejor explicada, en SLA Health/SLA Compliance (tab SLA &
 // Completion) y Pending Offers (tab Offers & Placements). Ahora vive dentro de Overview (no
-// flotando encima de los 4 tabs) como una franja de stats sin chrome de tarjeta.
+// flotando encima de los 4 tabs) como 2 anillos reales (renderDonut), no numeros sueltos en
+// una tarjeta — Active Positions es decorativo (un solo valor, sin "de cuanto"); Submitted Vs
+// Expected si tiene una proporcion real que mostrar (submitted / minimo esperado).
 function renderKpis(){
-  const all = dashboardPositions();
-  const active = all.filter(p=>!TERMINAL.includes(p.status));
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  renderDonut("statRingActive", [{label:"Active Positions", value: active.length}],
+    [active.length ? "var(--brand)" : "var(--grid)"], "Active", 92, null, active.length>0 ? ()=>{
+      openQuickList("Active Positions", `${active.length} position${active.length===1?"":"s"} not yet in a terminal status`, active);
+    } : null);
+
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
   // pipeline de submissions: con batches de 3 a 5 candidatos por posicion (promedio 3.5, regla
   // de Nicolas), N posiciones activas deberian tener un PISO de N*3.5 submitted acumulados.
   // Es un minimo, no un rango, mas submitted nunca es malo. Por debajo del minimo es señal
-  // real de under-sourcing agregado (complementa, no reemplaza, el TTS por posicion).
+  // real de under-sourcing agregado (complementa, no reemplaza, el TTS por posicion). El
+  // anillo se llena hasta ese minimo (nunca pasa de 100%, aunque haya sobre-sourcing) y el
+  // centro muestra el % alcanzado, no el conteo crudo (el conteo crudo ya esta en el legend
+  // del quick-list al hacer clic).
   const submittedTotal = active.reduce((sum,p)=> sum + (p.submittedCount || 0), 0);
   const minExpected = Math.round(active.length * 3.5);
-  const submittedCls = active.length===0 ? "" : (submittedTotal < minExpected ? "warning" : "good");
-
-  const tiles = [
-    {label:"Active Positions", value: active.length, cls:"", onClick: active.length>0 ? ()=>{
-      openQuickList("Active Positions", `${active.length} position${active.length===1?"":"s"} not yet in a terminal status`, active);
-    } : null},
-    {label:"Submitted Vs Expected", value: submittedTotal, cls: submittedCls, sub: active.length ? `Expected ≥${minExpected} for ${active.length} active (3.5 candidates/position, the SLA minimum batch size)` : "", onClick: active.length>0 ? ()=>{
+  const pct = minExpected>0 ? Math.round(Math.min(1, submittedTotal/minExpected) * 100) : null;
+  const submittedColor = pct===null ? "var(--grid)" : (submittedTotal >= minExpected ? "var(--good)" : "var(--warning)");
+  renderDonut("statRingSubmitted",
+    [{label:"Submitted", value: pct===null ? 0 : Math.min(submittedTotal,minExpected)},
+     {label:"Remaining", value: pct===null ? 1 : Math.max(0, minExpected-submittedTotal)}],
+    [submittedColor, "var(--grid)"], "Submitted Vs Expected", 92,
+    {value: pct===null ? "-" : pct+"%", label:"of expected"},
+    active.length>0 ? ()=>{
       openQuickList("Submitted Vs Expected", `${submittedTotal} submitted across ${active.length} active position${active.length===1?"":"s"} &middot; expected at least ${minExpected}`, active);
-    } : null},
-    // Independiente del estado (incluye Hired/Cancelled/Fell Through) — "cuantos reqs hemos
-    // gestionado en total", no solo los que siguen abiertos hoy.
-    {label:"Total Reqs Managed", value: all.length, cls:"", sub: "All time, any status", onClick: all.length>0 ? ()=>{
-      openQuickList("Total Reqs Managed", `${all.length} requisition${all.length===1?"":"s"} managed all time, any status`, all);
-    } : null},
-  ];
-  document.getElementById("statStrip").innerHTML = tiles.map((t,i)=>`
-    <div class="stat-strip-item${t.onClick?' clickable-stat':''}" data-idx="${i}">
-      <div class="stat-strip-label">${t.label}</div>
-      <div class="stat-strip-value ${t.cls}">${t.value}</div>
-      ${t.sub ? `<div class="stat-strip-sub">${t.sub}</div>` : ""}
-    </div>`).join("");
-  document.querySelectorAll("#statStrip .stat-strip-item").forEach((el,i)=>{
-    if(tiles[i].onClick) el.addEventListener("click", tiles[i].onClick);
-  });
+    } : null);
 }
 
 function renderBarlist(elId, rows, colorVar, onClickRow){
@@ -4270,6 +4282,9 @@ document.querySelectorAll(".nav-item").forEach(btn=>{
 });
 document.getElementById("navWorkspaceTeamBtn").addEventListener("click", ()=> setDashboardScope(null));
 document.getElementById("navWorkspaceMineBtn").addEventListener("click", ()=> setDashboardScope(MY_RECRUITER_NAME));
+// Pre-filtrado a ti mismo por comodidad (igual que al entrar al workspace), pero el filtro se
+// quita con un clic si la req vieja que buscas es de otro reclutador.
+document.getElementById("railPositionsBtn").addEventListener("click", ()=> activateView("positions"));
 // "My Workspace" solo tiene sentido si tu correo conectado resolvio a un reclutador concreto
 // (MY_RECRUITER_NAME) — sin eso (nadie logueado, o tu correo no coincide con ningun reclutador)
 // no hay a que workspace entrar, asi que el boton ni aparece.
