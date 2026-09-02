@@ -331,7 +331,7 @@
     background: var(--surface-1); border-radius: var(--radius);
     box-shadow: var(--shadow); padding: 14px 16px;
   }
-  .kpi-label { font-size: 13.5px; color: var(--text-primary); font-weight: 700; margin-bottom: 6px; }
+  .kpi-label { font-size: 13.5px; color: var(--text-primary); font-weight: 600; margin-bottom: 6px; }
   .kpi-value { font-size: 30px; font-weight: 700; line-height: 1; }
   .kpi-value.good { color: var(--good); }
   .kpi-value.warning { color: var(--warning); }
@@ -410,7 +410,10 @@
     background: var(--surface-1); border-radius: var(--radius);
     box-shadow: var(--shadow); padding: 16px 18px;
   }
-  .panel h3 { font-size: 13.5px; margin: 0 0 2px; font-weight: 700; }
+  /* 700 se veia "agresivo" en Poppins comparado con la referencia de KeyStone AI (su bold de
+     titulo es notoriamente mas liviano que el regular-vs-bold de aca) — 600 es bold de sobra
+     para distinguirse del texto normal sin la sensacion de peso extra. */
+  .panel h3 { font-size: 13.5px; margin: 0 0 2px; font-weight: 600; }
   /* Sin ".panel" de ancestro (asi estaba antes) esto solo aplicaba dentro de un .panel real —
      un monton de usos de .panel-sub viven dentro de modales (#modalFacts, #logBatchModal, etc.),
      donde nunca tuvo efecto y el texto se veia con el color/peso por defecto en vez de gris. */
@@ -669,7 +672,7 @@
   .sla-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
   .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
   .sla-card .sla-name { font-size: 10.5px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-  .modal-section-title { font-size: 12.5px; font-weight: 700; margin: 22px 0 8px; }
+  .modal-section-title { font-size: 12.5px; font-weight: 600; margin: 22px 0 8px; }
   .modal-section-title:first-child { margin-top: 0; }
   /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
      texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
