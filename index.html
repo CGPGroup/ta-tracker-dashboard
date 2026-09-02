@@ -267,13 +267,12 @@
   .nav-workspace-btn:hover { color: var(--text-primary); }
   .nav-workspace-btn.active { color: var(--brand); }
 
-  /* Franja de stats dentro de Overview (no una tarjeta aparte flotando sobre los 4 tabs): 2
-     anillos reales (renderDonut), no numeros sueltos — la leyenda que renderDonut agrega
-     siempre (uno o dos renglones) se oculta aqui porque el valor ya esta en el centro del
-     anillo, repetirlo abajo era ruido. */
-  .stat-strip { display: flex; gap: 36px; margin-bottom: 24px; }
-  .stat-ring-item { text-align: center; }
-  .stat-strip-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 8px; }
+  /* Active Positions/Submitted Vs Expected: cada anillo (renderDonut) vive en su PROPIA tarjeta
+     grande dentro de dash-grid, mismo tratamiento que "Applications by channel" en KeyStone —
+     titulo+subtitulo alineados a la izquierda (igual que cualquier .panel), pero el anillo
+     centrado abajo. La leyenda que renderDonut agrega siempre se oculta aqui porque el valor ya
+     esta en el centro del anillo, repetirlo abajo era ruido. */
+  .panel-ring .donut-wrap { justify-content: center; padding-top: 6px; }
   #statRingActive .donut-legend, #statRingSubmitted .donut-legend { display: none; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -738,7 +737,6 @@
   .link-danger:hover { color: var(--critical); opacity: 1; text-decoration: underline; }
 
   @media (max-width: 1080px) {
-    .stat-strip { flex-wrap: wrap; row-gap: 14px; }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
     .facts-grid, .sla-grid { grid-template-columns: 1fr 1fr; }
   }
@@ -864,7 +862,7 @@
         <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
         <button type="button" class="dash-tab" id="dashTabTracking" data-dash-tab="tracking" style="display:none;"><span class="nav-ic" style="width:15px;height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Tracking</button>
         <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
-        <button type="button" class="dash-tab" data-dash-tab="pipeline">Pipeline</button>
+        <button type="button" class="dash-tab" id="dashTabPipeline" data-dash-tab="pipeline">Pipeline</button>
         <button type="button" class="dash-tab" data-dash-tab="offers">Offers &amp; Placements</button>
       </div>
 
@@ -872,22 +870,21 @@
       <section class="view active" id="view-dashboard">
         <div class="dashboard-main" id="dashboardMain">
           <div class="dash-tab-panel active" data-dash-panel="team">
-            <!-- Antes 2 tarjetas con borde flotando ENCIMA de los tabs, aplicando a los 4 por
-                 igual sin importar cual estuviera activo — igual que KeyStone, donde cada tab
-                 (Sourcing/Jobs/Outreach) trae su PROPIA fila de stats, esta franja ahora vive
-                 dentro de Overview especificamente. Son graficas de verdad (anillos), no
-                 numeros sueltos en una tarjeta. -->
-            <div class="stat-strip" id="statStrip">
-              <div class="stat-ring-item">
-                <div class="stat-strip-label">Active Positions</div>
+            <!-- Antes una franja compacta sin tarjeta propia flotando encima del grid — ahora
+                 cada anillo es su PROPIA tarjeta grande dentro del mismo dash-grid que el resto
+                 de Overview, mismo tratamiento visual que "Applications by channel" en
+                 KeyStone: titulo + subtitulo arriba, anillo grande y centrado abajo. -->
+            <div class="dash-grid">
+              <div class="panel panel-ring">
+                <h3>Active Positions</h3>
+                <div class="panel-sub">Positions not yet in a terminal status, right now.</div>
                 <div id="statRingActive"></div>
               </div>
-              <div class="stat-ring-item">
-                <div class="stat-strip-label">Submitted Vs Expected</div>
+              <div class="panel panel-ring">
+                <h3>Submitted Vs Expected</h3>
+                <div class="panel-sub">Submitted candidates vs the SLA minimum batch size (3.5 per active position).</div>
                 <div id="statRingSubmitted"></div>
               </div>
-            </div>
-            <div class="dash-grid">
               <div class="panel" id="panelWorkloadByRecruiter">
                 <h3>Active Workload By Recruiter</h3>
                 <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max.</div>
@@ -1855,12 +1852,19 @@ function setDashboardScope(name){
   if(!isAdmin() && MY_RECRUITER_NAME && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
   activeDashboardScope = name;
   document.getElementById("dashTabTracking").style.display = name ? "" : "none";
+  // Pipeline (funnel de status + Position By Location/Work Arrangement) es una vista de equipo
+  // — no le sirve de nada a un solo reclutador viendo unicamente sus propias posiciones. Si
+  // estabas parado ahi cuando entras a tu workspace, te caes a Overview (que si existe siempre).
+  document.getElementById("dashTabPipeline").style.display = name ? "none" : "";
+  if(name && document.querySelector('.dash-tab[data-dash-tab="pipeline"]').classList.contains("active")){
+    document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b.dataset.dashTab==="team"));
+    document.querySelectorAll(".dash-tab-panel").forEach(p=> p.classList.toggle("active", p.dataset.dashPanel==="team"));
+  }
   // SSOT Management es administracion de todo el equipo (crear posiciones/reclutadores,
   // compartir acceso, borrar data) — no tiene sentido dentro del perfil de un solo reclutador,
   // asi que se esconde ahi, igual que Tracking se esconde fuera de un perfil.
   document.querySelector('.nav-item[data-view="manage"]').style.display = name ? "none" : "";
   document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
-  document.getElementById("panelPositionByLocation").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   document.getElementById("panelRecentActivity").style.display = name ? "" : "none";
   // Positions es intencionalmente el directorio COMPLETO para cualquiera, admin o no — es el
@@ -2203,7 +2207,7 @@ function statusChip(status){
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   renderDonut("statRingActive", [{label:"Active Positions", value: active.length}],
-    [active.length ? "var(--brand)" : "var(--grid)"], "Active", 92, null, active.length>0 ? ()=>{
+    [active.length ? "var(--brand)" : "var(--grid)"], "Active", 168, null, active.length>0 ? ()=>{
       openQuickList("Active Positions", `${active.length} position${active.length===1?"":"s"} not yet in a terminal status`, active);
     } : null);
 
@@ -2223,7 +2227,7 @@ function renderKpis(){
   renderDonut("statRingSubmitted",
     [{label:"Submitted", value: pct===null ? 0 : Math.min(submittedTotal,minExpected)},
      {label:"Remaining", value: pct===null ? 1 : Math.max(0, minExpected-submittedTotal)}],
-    [submittedColor, "var(--grid)"], "Submitted Vs Expected", 92,
+    [submittedColor, "var(--grid)"], "Submitted Vs Expected", 168,
     {value: pct===null ? "-" : pct+"%", label:"of expected"},
     active.length>0 ? ()=>{
       openQuickList("Submitted Vs Expected", `${submittedTotal} submitted across ${active.length} active position${active.length===1?"":"s"} &middot; expected at least ${minExpected}`, active);
