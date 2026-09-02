@@ -251,6 +251,10 @@
   .recent-req-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
   .recent-req-row:hover { background: var(--hover-wash); color: var(--text-primary); }
   .recent-req-row .rr-code { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+  /* Lista clickeable de posiciones activas debajo del anillo (mismas filas .recent-req-row que
+     ya se usan en Recently Assigned, misma familia visual) — max-height+scroll para que la
+     tarjeta no tenga que crecer si hay muchas activas a la vez. */
+  .active-positions-list { max-height: 132px; overflow-y: auto; margin-top: 8px; text-align: left; }
 
   /* Switcher Team Workspace / My Workspace, desplegado justo debajo de Dashboard SOLO mientras
      Dashboard es la vista activa (ver activateView()) — como un acordeon de sidebar normal,
@@ -710,7 +714,11 @@
   .status-dropdown-item:hover { background: var(--surface-2); }
   .status-dropdown-item .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
   .timeline { list-style: none; margin: 0 0 14px; padding: 0; max-height: 220px; overflow-y: auto; }
-  .timeline li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
+  /* padding horizontal parejo en TODAS las filas (no solo las "manual" resaltadas) — antes solo
+     las manual llevaban 10px de padding lateral via inline style, lo que corria su badge/fecha/
+     texto respecto a las demas filas sin ese padding. Con el mismo padding base para todas,
+     resaltar una fila (background+radius) ya no desalinea nada. */
+  .timeline li { display: flex; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
   .timeline li:last-child { border-bottom: none; }
   .timeline .tl-date { flex: none; width: 76px; color: var(--text-muted); font-size: 11px; padding-top: 1px; }
   .timeline .tl-badge {
@@ -890,6 +898,12 @@
                 <h3>Active Positions</h3>
                 <div class="panel-sub">Positions not yet in a terminal status, right now.</div>
                 <div id="statRingActive"></div>
+                <!-- Lista de las mismas posiciones activas, cada una clickeable directo a su
+                     modal — antes solo se podia llegar ahi haciendo clic en el anillo entero
+                     (abria un quick-list generico). max-height+scroll para que la tarjeta no
+                     crezca si hay muchas posiciones activas; con pocas (el caso real hoy) cabe
+                     entera sin scroll. -->
+                <div class="active-positions-list" id="activePositionsList"></div>
               </div>
               <div class="panel">
                 <h3>Submitted Vs Expected</h3>
@@ -2131,6 +2145,16 @@ const STATUS_META = {
   out: {label:"Out of SLA", color:"var(--critical)"},
   none: {label:"Not started", color:"var(--neutral)"},
 };
+// Tooltip nativo (title) para los chips ".tag" que aparecen sueltos por todo el tracker (SLA
+// Health, las tarjetas de SLA/Requisition Completion del detalle) — mismo texto exacto que ya
+// vive en Process & SLA Guide, asi que quien no quiera ir a leer la guia completa igual entiende
+// que significa cada uno pasando el mouse encima, sin duplicar la explicacion con otras palabras.
+const TAG_EXPLANATIONS = {
+  "Official SLA": "A real, contractual KPI agreed with Irth.",
+  "Internal Goal": "An internal health metric Cornerstone tracks, not a contractual KPI with the client.",
+  "Recruiter Owned": "Counted as a real recruiter miss if it goes out of target.",
+  "Follow-Up Only": "Never counted against the recruiter — it only surfaces as a reminder to follow up or escalate.",
+};
 const STATUS_WORD = {within:"Within SLA", risk:"At Risk", out:"Out Of SLA", none:"Not Started"};
 // Lista de banderas (con emoji) de cuales de las 3 SLAs de una posicion estan mal, para
 // mostrar "por que" en los quick lists de KPIs/Needs Attention en vez de solo "la peor".
@@ -2231,6 +2255,17 @@ function renderKpis(){
     [active.length ? "var(--brand)" : "var(--grid)"], "Active", 168, null, active.length>0 ? ()=>{
       openQuickList("Active Positions", `${active.length} position${active.length===1?"":"s"} not yet in a terminal status`, active);
     } : null);
+  // Mismas posiciones activas, listadas debajo del anillo — cada una va directo a su propio
+  // modal (mismo modo "view" que usa openQuickList para sus filas), sin pasar por el quick-list
+  // generico primero. La tarjeta no crece: .active-positions-list tiene su propio scroll.
+  document.getElementById("activePositionsList").innerHTML = active.map(p=>`
+    <div class="recent-req-row" data-id="${escapeHtml(p.id)}">
+      <div>${escapeHtml(p.title)}</div>
+      <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(p.status)}</div>
+    </div>`).join("");
+  document.querySelectorAll("#activePositionsList .recent-req-row").forEach(row=>{
+    row.addEventListener("click", ()=> openDetailModal(row.dataset.id, "view", false, true));
+  });
 
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
@@ -2487,7 +2522,7 @@ function renderSlaChart(){
       <div class="stackbar-wrap">
         <div class="stackbar-title">
           <span><b>${m.label}</b></span>
-          <span class="tag ${m.tag}">${m.tagLabel}</span>
+          <span class="tag ${m.tag}" title="${TAG_EXPLANATIONS[m.tagLabel] || ""}">${m.tagLabel}</span>
         </div>
         <div class="stackbar">${seg("within")}${seg("risk")}${seg("out")}${seg("none")}</div>
         <div class="stackbar-counts">${parts.join(" · ") || "No active positions"} out of ${total} active</div>
@@ -2874,7 +2909,7 @@ function renderTrackingActivity(){
   });
   const list = document.getElementById("trackingActivityList");
   list.innerHTML = entries.length ? entries.map(e=>`
-    <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; padding:8px 10px; margin:2px 0;" : ""}">
+    <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; margin:2px 0;" : ""}">
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
       <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
@@ -3419,7 +3454,7 @@ function renderDetailModal(){
   ];
   document.getElementById("modalSlaGrid").innerHTML = slaCards.map(c=>`
     <div class="sla-card">
-      <div class="sla-name"><span>${c.label}</span><span class="tag ${c.tag==="Official SLA"?"official":"internal"}">${c.tag}</span></div>
+      <div class="sla-name"><span>${c.label}</span><span class="tag ${c.tag==="Official SLA"?"official":"internal"}" title="${TAG_EXPLANATIONS[c.tag] || ""}">${c.tag}</span></div>
       ${slaChip(s[c.key])}
     </div>`).join("");
 
@@ -3441,7 +3476,7 @@ function renderDetailModal(){
     ];
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
-        <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}">${cc.tag}</span></div>
+        <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}" title="${TAG_EXPLANATIONS[cc.tag] || ""}">${cc.tag}</span></div>
         ${cc.chip}
         ${cc.note ? `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>` : ""}
       </div>`).join("");
@@ -3736,7 +3771,7 @@ function renderPivotPendingState(p){
     : "";
   document.getElementById("calibrationCallCard").innerHTML = chip3 ? `
     <div class="sla-card">
-      <div class="sla-name"><span>Calibration Call Held</span><span class="tag internal">Follow-Up Only</span></div>
+      <div class="sla-name"><span>Calibration Call Held</span><span class="tag internal" title="${TAG_EXPLANATIONS["Follow-Up Only"]}">Follow-Up Only</span></div>
       ${chip3}
     </div>
     ${c3.overdue ? `<div class="alert-banner tier-red compact">The calibration call hasn't happened yet, ${c3.elapsed} business days since the Pivot SLA was requested (target ${c3.target}). Please escalate to ${ESCALATION_CONTACT}.</div>` : ""}` : "";
