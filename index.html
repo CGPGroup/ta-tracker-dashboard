@@ -4262,6 +4262,15 @@ function activateView(view){
   // secciones .view para no desaparecer al saltar entre Dashboard y Tracking (ver el comentario
   // en el HTML) — solo se ve mientras estas en cualquiera de las 2.
   document.getElementById("dashTabs").style.display = (view === "dashboard" || view === "tracking") ? "" : "none";
+  // pendingAssignmentZone y dashboardAttentionZone tambien viven fuera de view-dashboard (mismo
+  // motivo que dashTabs), pero a diferencia de la fila de tabs, estos SI son exclusivos de
+  // Dashboard — Tracking ya trae su propio panel "Needs Attention" (renderNeedsAttention()), y
+  // Positions/SSOT/Guide nunca los necesitaron. Sin este toggle se quedaban visibles en TODAS
+  // las vistas, empujando el contenido real hacia abajo — ese corrimiento (no un bug real en
+  // Log Batch) era la causa de que los clics fallaran.
+  const dashboardOnly = view === "dashboard" ? "" : "none";
+  document.getElementById("pendingAssignmentZone").style.display = dashboardOnly;
+  document.getElementById("dashboardAttentionZone").style.display = dashboardOnly;
   // Si llegaste a Tracking sin pasar por el click del tab (ej. el auto-entry al conectar, o
   // "Edit In Tracking" desde Positions), el tab de Tracking igual tiene que verse resaltado.
   if(view === "tracking"){
