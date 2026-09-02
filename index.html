@@ -2203,10 +2203,18 @@ function computeCompletion(p){
 
   // Antes esto eran dos pasos (HM responde con fecha / reunion realmente sucede) — fusionados
   // en uno solo porque en la practica son el mismo evento (ver COMPLETION_TARGETS arriba).
-  let step2 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.intakeHeld, overdue:false};
+  let step2 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.intakeHeld, overdue:false, waived:false};
   if(requested){
     const elapsed = bizDaysBetween(requested, held || today);
-    step2 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld};
+    // Waived: nunca hubo (ni habra) una intake meeting propia para esta req, con una razon valida
+    // (ej. headcount adicional del mismo rol, ya cubierto por el intake original de una req
+    // hermana) — cuenta como "done" igual que si se hubiera sostenido, sin disparar la alerta de
+    // escalacion. Solo aplica si de verdad no se sostuvo (si held ya tiene fecha, esa manda).
+    if(!held && p.intakeWaivedReason){
+      step2 = {status:"done", elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue:false, waived:true};
+    } else {
+      step2 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld, waived:false};
+    }
   }
 
   // Si esta req le llego a este reclutador por Handoff (no fue una asignacion nueva desde Irth),
@@ -3647,6 +3655,17 @@ function renderDetailModal(){
     // Si la req llego por Handoff, la segunda tarjeta pasa de "Intake Meeting Held" a "Handoff
     // Context Confirmed" — el reclutador que recibe no vuelve a sostener el intake, solo confirma
     // que tiene visibilidad real via el checklist de openAcceptHandoffModal().
+    // Intake Waived: cuando esta req nunca tuvo (ni va a tener) su propia intake meeting con una
+    // razon valida (ej. headcount adicional del mismo rol, ya cubierto por el intake de una req
+    // hermana). Solo se ofrece en el flujo normal (no en el de Handoff, que ya tiene su propio
+    // mecanismo de confirmacion de contexto). El link cambia segun el estado: invita a explicar
+    // si todavia no hay nada, o deja editar/quitar la razon si ya se marco.
+    const intakeAction = isView || p.handoffFrom ? "" :
+      !c.step2.waived && (c.step2.status==="waiting" || c.step2.status==="overdue")
+        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-left:6px;">No Meeting Needed? Explain Why</button>`
+        : c.step2.waived
+          ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-left:6px;">Edit</button>`
+          : "";
     const completionCards = [
       {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
       p.handoffFrom
@@ -3654,15 +3673,34 @@ function renderDetailModal(){
             note: c.stepHandoff.status==="waiting" ? `Handed off from ${escapeHtml(p.handoffFrom)}, ${ESCALATION_CONTACT} tracks that context gets confirmed quickly.`
               : c.stepHandoff.status==="done" ? `Confirmed on ${p.handoffAcceptedDate}.` : null}
         : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
-            note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
-              : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
+            note: c.step2.waived ? `Waived: ${escapeHtml(p.intakeWaivedReason)}`
+              : c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
+              : c.step2.status==="done" ? `Held on ${p.intake}.` : null,
+            actionHtml: intakeAction},
     ];
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
         <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}" title="${TAG_EXPLANATIONS[cc.tag] || ""}">${cc.tag}</span></div>
         ${cc.chip}
-        ${cc.note ? `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>` : ""}
+        ${cc.note || cc.actionHtml ? `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${cc.note ? escapeHtml(cc.note) : ""}${cc.actionHtml || ""}</div>` : ""}
       </div>`).join("");
+    if(document.getElementById("editIntakeWaivedBtn")){
+      document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=>{
+        openEditFieldModal({
+          title: "Waive Intake Meeting",
+          label: "Why wasn't a separate intake meeting needed?",
+          placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
+          value: p.intakeWaivedReason,
+          onSave: async (newVal)=>{
+            p.intakeWaivedReason = newVal;
+            if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
+            renderDetailModal();
+            renderPositions();
+            renderTracking();
+          },
+        });
+      });
+    }
     const alerts = [];
     if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
     if(p.handoffFrom){
@@ -5106,6 +5144,10 @@ function parsePositionsTable(posHeaders, posRows){
       // publica como codigos de job separados (uno por headcount). No cambia el modelo de datos
       // (sigue siendo 1 fila = 1 req), solo agrupa visualmente.
       headcountGroup: r[idx("Headcount Group")] || null,
+      // Intake Waived: cuando hubo Kickoff pero nunca hubo (ni habra) una intake meeting propia
+      // para esta req especifica, con una razon valida (ej. headcount adicional del mismo rol,
+      // ya cubierto por el intake original). Presencia de texto = waived; ver computeCompletion().
+      intakeWaivedReason: r[idx("Intake Waived Reason")] || null,
       extra: [],
       batches: [],
       remarksHistory: [],
@@ -5557,9 +5599,10 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // Recruiter URL (este formulario no la pide, se deja vacia)
     // AR-AV: Pivot Justification, Pivot Requested/Approved/Confirmed Date, Calibration Call
     // Date — ninguna aplica a una posicion recien creada, todas vacias
-    // AW-AZ (nuevas, paso manual pendiente): Handoff From, Handoff Date, Handoff Accepted Date,
-    // Headcount Group, en ese orden exacto — ninguna req nueva nace con un handoff, asi que las
-    // primeras 3 siempre van vacias; Headcount Group se llena solo si el usuario lo escribio.
+    // AW-BA (nuevas, paso manual pendiente): Handoff From, Handoff Date, Handoff Accepted Date,
+    // Headcount Group, Intake Waived Reason, en ese orden exacto — ninguna req nueva nace con un
+    // handoff ni con el intake ya marcado como waived, asi que las primeras 3 y la ultima siempre
+    // van vacias; Headcount Group se llena solo si el usuario lo escribio.
     const row = [
       code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
       null,null,null,null,null,null,null,null,null,null,null,null,
@@ -5571,7 +5614,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       intakeRequestedDate, null,
       careersUrl, null,
       null, null, null, null, null,
-      null, null, null, headcountGroup,
+      null, null, null, headcountGroup, null,
     ];
     await graphAppendPosition(row);
     // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
