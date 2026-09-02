@@ -845,6 +845,10 @@
       </div>
 
       <div id="pendingAssignmentZone"></div>
+      <!-- De vuelta a como quedo establecido antes: un banner visible sin importar cual de los
+           4 dash-tab-panels este activo (Overview/SLA/Pipeline/Offers), no algo exclusivo de
+           Overview — mismo tratamiento que pendingAssignmentZone justo arriba. -->
+      <div id="dashboardAttentionZone"></div>
 
       <!-- Vive FUERA de view-dashboard/view-tracking (los 2 son secciones .view separadas,
            mutuamente excluyentes) para que la fila de tabs siga visible sin importar cual de
@@ -902,9 +906,6 @@
                 <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
               </div>
             </div>
-            <!-- Antes vivia arriba de los tabs, aplicando a los 4 por igual — Needs Attention es
-                 informacion de Overview especificamente, asi que ahora vive adentro. -->
-            <div id="dashboardAttentionZone"></div>
           </div>
 
             <div class="dash-tab-panel" data-dash-panel="sla">
