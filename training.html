@@ -1046,7 +1046,7 @@
             <span id="positionsBulkCount"></span>
             <div style="display:flex; gap:8px;">
               <button class="btn ghost small" type="button" id="positionsBulkClearBtn">Clear Selection</button>
-              <button class="btn primary small" type="button" id="positionsBulkReassignBtn">Reassign Selected</button>
+              <button class="btn primary small" type="button" id="positionsBulkReassignBtn">Reassign / Handoff</button>
             </div>
           </div>
           <div style="overflow-x:auto;">
@@ -1102,7 +1102,7 @@
                 <span id="trackingBulkCount"></span>
                 <div style="display:flex; gap:8px;">
                   <button class="btn ghost small" type="button" id="trackingBulkClearBtn">Clear Selection</button>
-                  <button class="btn primary small" type="button" id="trackingBulkReassignBtn">Reassign Selected</button>
+                  <button class="btn primary small" type="button" id="trackingBulkReassignBtn">Reassign / Handoff</button>
                 </div>
               </div>
               <div class="tracking-table-scroll">
@@ -3562,8 +3562,7 @@ function renderDetailModal(){
   if(isView) positionFacts.push({label:"Hiring Manager", value:escapeHtml(p.hiringManager)});
   // Reassign solo en modo edicion (Tracking) — es una accion de gestion, no algo que un
   // viewer de solo lectura (drill-down desde Dashboard/Positions) deba poder disparar.
-  positionFacts.push({label:"Recruiter", value: isView ? escapeHtml(p.recruiter)
-    : `${escapeHtml(p.recruiter)} <button class="fact-edit-link" type="button" id="reassignBtn">Reassign</button>`});
+  positionFacts.push({label:"Recruiter", value: escapeHtml(p.recruiter)});
   if(isView){
     positionFacts.push({label:"Status", value:statusChip(p.status)});
     positionFacts.push({label:"Location", value:locationOnly(p)});
@@ -3711,7 +3710,6 @@ function renderDetailModal(){
     document.querySelectorAll(".pivotSlaTrigger").forEach(btn=> btn.addEventListener("click", ()=> openLogBatchModal(p)));
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
-    document.getElementById("reassignBtn").addEventListener("click", ()=> openReassignModal([p]));
     document.getElementById("editHeadcountGroupBtn").addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit Headcount Group",
