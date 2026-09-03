@@ -4940,13 +4940,35 @@ async function resolveFileIds(){
     const item = await graphFetch(`/me/drive/root:${filePathSegment()}`);
     RESOLVED_DRIVE_ID = item.parentReference.driveId;
     RESOLVED_ITEM_ID = item.id;
-  } catch(err){
+    return;
+  } catch(err){ /* sigue abajo */ }
+  // Segundo intento: sharedWithMe. En la practica resulto NO ser confiable — caso real
+  // 2026-09-04, un reclutador nuevo cuya cuenta SI tenia el archivo compartido (lo abrio
+  // directo desde el correo de invitacion de OneDrive, confirmado) pero sharedWithMe seguia sin
+  // listarlo al conectar el tracker.
+  try {
     const shared = await graphFetch(`/me/drive/sharedWithMe`);
     const match = (shared.value || []).find(x => x.name === "TA_Tracker.xlsx");
-    if(!match) throw new Error("Could not find TA_Tracker.xlsx in your OneDrive or in files shared with you. Ask Nicolás to share it with your account.");
-    RESOLVED_DRIVE_ID = match.remoteItem.parentReference.driveId;
-    RESOLVED_ITEM_ID = match.remoteItem.id;
-  }
+    if(match){
+      RESOLVED_DRIVE_ID = match.remoteItem.parentReference.driveId;
+      RESOLVED_ITEM_ID = match.remoteItem.id;
+      return;
+    }
+  } catch(err){ console.error("sharedWithMe lookup failed:", err); }
+  // Tercer intento: archivos recientes. Si la cuenta ya abrio el archivo aunque sea una vez
+  // (ej. justo desde el correo de invitacion), Graph lo trae aqui de forma mucho mas confiable
+  // que sharedWithMe — esto fue lo que de verdad resolvio el caso real de arriba.
+  try {
+    const recent = await graphFetch(`/me/drive/recent`);
+    const match = (recent.value || []).find(x => x.name === "TA_Tracker.xlsx");
+    if(match){
+      const resolved = match.remoteItem || match;
+      RESOLVED_DRIVE_ID = resolved.parentReference.driveId;
+      RESOLVED_ITEM_ID = resolved.id;
+      return;
+    }
+  } catch(err){ console.error("recent files lookup failed:", err); }
+  throw new Error("Could not find TA_Tracker.xlsx in your OneDrive, in files shared with you, or in your recent files. Ask Nicolás to share it with your account, then open the file once from the email invite before reconnecting here.");
 }
 async function workbookBase(){
   await resolveFileIds();
