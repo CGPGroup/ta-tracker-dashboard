@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Todo el tracker es un solo archivo HTML (sin build ni assets con hash), asi que el
+     navegador cacheando esta pagina significa cacheando literalmente TODO el codigo — gente
+     usando una version vieja sin saberlo, necesitando Ctrl+Shift+R para ver un fix real.
+     Estas 3 etiquetas le piden al navegador no guardar copia de este documento en absoluto. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Irth Solutions &middot; Talent Acquisition Tracker</title>
 <script>
   // Se aplica ANTES que nada mas se pinte (sync, bloqueante a proposito) para que quien ya eligio
