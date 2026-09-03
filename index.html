@@ -5809,7 +5809,11 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
         shareNote = ` File shared with ${email} and invite emailed.`;
         try {
           await graphSendTrackerLinkEmail(email, TRACKER_URL, name);
-          shareNote += " Tracker link emailed too.";
+          // Microsoft's "shared with me" list has proven unreliable to reflect a brand-new
+          // share right away (real case, 2026-09-04) — opening the file once from the
+          // invitation email first makes it show up in "recent files" instead, which the
+          // tracker's Connect flow checks too and is far more reliable.
+          shareNote += " Tracker link emailed too. Tell them to open the Excel file from the invitation email FIRST, before clicking Connect Microsoft 365 on the tracker — otherwise Connect may not find the file right away.";
         } catch(mailErr){
           console.error(mailErr);
           shareNote += ` Couldn't email the tracker link separately (${mailErr.message}), share the link with them yourself: ${TRACKER_URL}`;
@@ -6025,7 +6029,10 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
     msg.style.color = "var(--good)";
     try {
       await graphSendTrackerLinkEmail(email, TRACKER_URL);
-      msg.textContent += " They'll get the file access invite plus a separate email with the tracker link.";
+      // Ver la misma nota en createRecruiterBtn: sharedWithMe no es confiable para reflejar un
+      // share nuevo de inmediato, abrir el archivo una vez desde el correo si lo llena en
+      // "recent files", que si funciona de forma confiable.
+      msg.textContent += " They'll get the file access invite plus a separate email with the tracker link. Tell them to open the Excel file from the invitation email FIRST, before clicking Connect Microsoft 365 on the tracker.";
     } catch(mailErr){
       console.error(mailErr);
       msg.textContent += ` Couldn't email them the tracker link (${mailErr.message}), share it yourself: ${TRACKER_URL}`;
