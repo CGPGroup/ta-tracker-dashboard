@@ -1036,9 +1036,22 @@
             <button class="btn ghost small" type="button" id="positionsDeleteFilterBtn">Delete Saved</button>
           </div>
           <div class="filter-chips" id="positionsChips"></div>
+          <!-- Barra de accion en lote, solo para admin (mismo criterio que el boton de borrar
+               posiciones): reasignar una por una desde aqui no tenia sentido cuando alguien
+               necesita mover muchas reqs de golpe (ej. varias headcounts de la misma persona
+               que se va, o redistribuir carga). Reusa el mismo #reassignModal/flujo de siempre,
+               solo que ahora puede recibir varias posiciones a la vez en vez de una sola. -->
+          <div class="alert-banner tier-orange" id="positionsBulkBar" style="display:none; align-items:center; justify-content:space-between;">
+            <span id="positionsBulkCount"></span>
+            <div style="display:flex; gap:8px;">
+              <button class="btn ghost small" type="button" id="positionsBulkClearBtn">Clear Selection</button>
+              <button class="btn primary small" type="button" id="positionsBulkReassignBtn">Reassign Selected</button>
+            </div>
+          </div>
           <div style="overflow-x:auto;">
             <table class="data" id="positionsTable">
               <thead><tr>
+                <th id="positionsSelectAllHeader" style="display:none;"><input type="checkbox" id="positionsSelectAllCheckbox"></th>
                 <th>Position</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
                 <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Remark</th><th>Placement</th>
               </tr></thead>
@@ -3035,10 +3048,20 @@ function renderPositions(){
     return true;
   });
   document.getElementById("positionsCount").textContent = rows.length + " positions";
+  // Checkbox de seleccion en lote: solo admin la ve (mismo criterio que borrar posiciones) —
+  // reasignar reqs de otras personas de golpe es una accion de gestion, no algo que cualquier
+  // recruiter viendo el directorio completo deba poder disparar.
+  const bulkOn = isAdmin();
+  document.getElementById("positionsSelectAllHeader").style.display = bulkOn ? "" : "none";
+  // Filtrar la seleccion a lo que sigue existiendo, para no arrastrar ids de posiciones
+  // borradas o que ya no calzan tras un Reset All Data.
+  const validIds = new Set(POSITIONS.map(p=>p.id));
+  positionsSelectedIds.forEach(id=>{ if(!validIds.has(id)) positionsSelectedIds.delete(id); });
   document.querySelector("#positionsTable tbody").innerHTML = rows.map(p=>{
     const s = computeSla(p);
     return `
     <tr class="clickable" data-id="${escapeHtml(p.id)}">
+      ${bulkOn ? `<td><input type="checkbox" class="positions-row-check" data-id="${escapeHtml(p.id)}" ${positionsSelectedIds.has(p.id)?"checked":""}></td>` : ""}
       <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.client)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
@@ -3049,7 +3072,51 @@ function renderPositions(){
   document.querySelectorAll("#positionsTable tbody tr.clickable").forEach(tr=>{
     tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, "view", isAdmin(), true));
   });
+  if(bulkOn){
+    document.querySelectorAll(".positions-row-check").forEach(cb=>{
+      cb.addEventListener("click", (e)=> e.stopPropagation());
+      cb.addEventListener("change", (e)=>{
+        if(e.target.checked) positionsSelectedIds.add(e.target.dataset.id);
+        else positionsSelectedIds.delete(e.target.dataset.id);
+        updatePositionsBulkBar();
+        syncPositionsSelectAllCheckbox(rows);
+      });
+    });
+    const selectAllCb = document.getElementById("positionsSelectAllCheckbox");
+    selectAllCb.onclick = (e)=> e.stopPropagation();
+    selectAllCb.onchange = (e)=>{
+      rows.forEach(p=>{
+        if(e.target.checked) positionsSelectedIds.add(p.id);
+        else positionsSelectedIds.delete(p.id);
+      });
+      renderPositions();
+    };
+    syncPositionsSelectAllCheckbox(rows);
+  }
+  updatePositionsBulkBar();
 }
+// Selecciona un array de ids (no toda la tabla, solo lo que este filtrado/visible ahora mismo)
+// para no confundir "select all" con "select absolutely everything regardless of filters".
+let positionsSelectedIds = new Set();
+function syncPositionsSelectAllCheckbox(rows){
+  const selectAllCb = document.getElementById("positionsSelectAllCheckbox");
+  if(!selectAllCb || !rows.length){ if(selectAllCb) selectAllCb.checked = false; return; }
+  selectAllCb.checked = rows.every(p=>positionsSelectedIds.has(p.id));
+}
+function updatePositionsBulkBar(){
+  const bar = document.getElementById("positionsBulkBar");
+  const n = positionsSelectedIds.size;
+  bar.style.display = n ? "flex" : "none";
+  document.getElementById("positionsBulkCount").textContent = `${n} position${n===1?"":"s"} selected`;
+}
+document.getElementById("positionsBulkClearBtn").addEventListener("click", ()=>{
+  positionsSelectedIds.clear();
+  renderPositions();
+});
+document.getElementById("positionsBulkReassignBtn").addEventListener("click", ()=>{
+  const selected = POSITIONS.filter(p=>positionsSelectedIds.has(p.id));
+  if(selected.length) openReassignModal(selected);
+});
 
 /* ============================================================
    TABLE: Tracking (SLA + click-through detail)
@@ -3578,7 +3645,7 @@ function renderDetailModal(){
     document.querySelectorAll(".pivotSlaTrigger").forEach(btn=> btn.addEventListener("click", ()=> openLogBatchModal(p)));
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
-    document.getElementById("reassignBtn").addEventListener("click", ()=> openReassignModal(p));
+    document.getElementById("reassignBtn").addEventListener("click", ()=> openReassignModal([p]));
     document.getElementById("editHeadcountGroupBtn").addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit Headcount Group",
@@ -4226,12 +4293,20 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
 // siendo la misma fila). handoffAcceptedDate arranca en null: el nuevo reclutador no queda
 // "listo" hasta que confirma el checklist de contexto en openAcceptHandoffModal(). Ver el swap
 // de Requisition Completion (step2 -> stepHandoff) en computeCompletion().
-function openReassignModal(p){
+// Acepta un array de posiciones (1 o varias) — el flujo de reasignar en si no cambia, solo se
+// repite por cada una. Con varias, si todas comparten el mismo reclutador actual se le excluye
+// del selector igual que antes; si vienen de reclutadores distintos (seleccion mixta desde
+// Positions), se listan todos, ya que excluir no tendria un solo dueño valido que excluir.
+function openReassignModal(positions){
   const sel = document.getElementById("reassignSelect");
-  sel.innerHTML = RECRUITERS.filter(r=>r!==p.recruiter).map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
-  document.getElementById("reassignSub").innerHTML = `Hands ${posLabel(p)} off to another recruiter — they'll need to confirm they have real context before it's fully theirs.`;
+  const currentRecruiters = new Set(positions.map(p=>p.recruiter));
+  const excluded = currentRecruiters.size === 1 ? [...currentRecruiters][0] : null;
+  sel.innerHTML = RECRUITERS.filter(r=>r!==excluded).map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+  document.getElementById("reassignSub").innerHTML = positions.length === 1
+    ? `Hands ${posLabel(positions[0])} off to another recruiter — they'll need to confirm they have real context before it's fully theirs.`
+    : `Hands ${positions.length} requisitions off to another recruiter — they'll need to confirm they have real context for each one before it's fully theirs.`;
   document.getElementById("reassignMsg").textContent = "";
-  document.getElementById("reassignModal").dataset.positionId = p.id;
+  document.getElementById("reassignModal").dataset.positionIds = JSON.stringify(positions.map(p=>p.id));
   document.getElementById("reassignModal").classList.add("open");
 }
 function closeReassignModal(){
@@ -4242,8 +4317,9 @@ document.getElementById("reassignModal").addEventListener("click", (e)=>{
   if(e.target.id === "reassignModal") closeReassignModal();
 });
 document.getElementById("reassignSave").addEventListener("click", async ()=>{
-  const p = POSITIONS.find(x=>x.id===document.getElementById("reassignModal").dataset.positionId);
-  if(!p) return;
+  const ids = JSON.parse(document.getElementById("reassignModal").dataset.positionIds || "[]");
+  const positions = ids.map(id=>POSITIONS.find(x=>x.id===id)).filter(Boolean);
+  if(!positions.length) return;
   const msg = document.getElementById("reassignMsg");
   const newRecruiter = document.getElementById("reassignSelect").value;
   if(!newRecruiter){
@@ -4251,40 +4327,58 @@ document.getElementById("reassignSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--critical)";
     return;
   }
-  const oldRecruiter = p.recruiter;
+  // En seleccion mixta, una req ya asignada al mismo reclutador elegido no se toca (no tiene
+  // sentido un "handoff" de alguien a si mismo) — se cuenta aparte para el mensaje final.
+  const toReassign = positions.filter(p=>p.recruiter!==newRecruiter);
+  const skipped = positions.length - toReassign.length;
   const today = localTodayStr();
-  p.recruiter = newRecruiter;
-  p.handoffFrom = oldRecruiter;
-  p.handoffDate = today;
-  p.handoffAcceptedDate = null;
-  const remarkText = `Handed off from ${oldRecruiter} to ${newRecruiter}.`;
-  p.extra = p.extra || [];
-  p.extra.push({date: today, type:"action", author:"You", text: remarkText});
+  let saveError = null;
+  for(let i=0; i<toReassign.length; i++){
+    const p = toReassign[i];
+    const oldRecruiter = p.recruiter;
+    p.recruiter = newRecruiter;
+    p.handoffFrom = oldRecruiter;
+    p.handoffDate = today;
+    p.handoffAcceptedDate = null;
+    const remarkText = `Handed off from ${oldRecruiter} to ${newRecruiter}.`;
+    p.extra = p.extra || [];
+    p.extra.push({date: today, type:"action", author:"You", text: remarkText});
+    if(toReassign.length > 1){
+      msg.textContent = `Reassigning ${i+1} of ${toReassign.length} (${p.id})…`;
+      msg.style.color = "var(--text-muted)";
+    }
+    if(isConnected()){
+      try {
+        await graphUpdatePositionFieldByHeader(p.id, "Recruiter", newRecruiter);
+        await graphUpdatePositionFieldByHeader(p.id, "Handoff From", oldRecruiter);
+        await graphUpdatePositionFieldByHeader(p.id, "Handoff Date", today);
+        await graphUpdatePositionFieldByHeader(p.id, "Handoff Accepted Date", "");
+        await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      } catch(err){
+        console.error(err);
+        saveError = err;
+        break;
+      }
+    }
+  }
   renderDetailModal();
   renderPositions();
   renderTracking();
   renderPendingAssignments();
+  if(saveError){
+    msg.textContent = "Could not save: " + saveError.message;
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const skippedNote = skipped ? ` (${skipped} already assigned to ${newRecruiter}, skipped)` : "";
   if(isConnected()){
-    msg.textContent = "Saving…";
-    msg.style.color = "var(--text-muted)";
-    try {
-      await graphUpdatePositionFieldByHeader(p.id, "Recruiter", newRecruiter);
-      await graphUpdatePositionFieldByHeader(p.id, "Handoff From", oldRecruiter);
-      await graphUpdatePositionFieldByHeader(p.id, "Handoff Date", today);
-      await graphUpdatePositionFieldByHeader(p.id, "Handoff Accepted Date", "");
-      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
-      msg.textContent = "Reassigned.";
-      msg.style.color = "var(--good)";
-    } catch(err){
-      console.error(err);
-      msg.textContent = "Could not save: " + err.message;
-      msg.style.color = "var(--critical)";
-      return;
-    }
+    msg.textContent = `Reassigned${toReassign.length>1?` ${toReassign.length}`:""}.${skippedNote}`;
+    msg.style.color = "var(--good)";
   } else {
-    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.textContent = `Kept in this browser tab only (not connected to Microsoft 365).${skippedNote}`;
     msg.style.color = "var(--warning)";
   }
+  positionsSelectedIds.clear();
   setTimeout(closeReassignModal, 900);
 });
 // Regla exacta del usuario: el checkbox 1 (looped en el thread del kickoff) es obligatorio si
