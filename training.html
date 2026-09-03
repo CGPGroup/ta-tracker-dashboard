@@ -611,6 +611,16 @@
     border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text-primary);
   }
   .form-field input:disabled { background: var(--surface-1); color: var(--text-muted); }
+  /* Una fila por headcount al crear un grupo (codigo + URL de careers page lado a lado, mas un
+     boton para quitar esa fila) — reemplaza el textarea de texto libre de antes, mas dificil de
+     usar mal ya que cada campo es evidentemente lo que es, sin depender de acordarse del "|". */
+  .headcount-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .headcount-row .form-field { margin: 0; }
+  .headcount-row-remove {
+    flex: none; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-2); color: var(--text-muted); cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .headcount-row-remove:hover { color: var(--critical); border-color: var(--critical); }
   .form-actions { display: flex; gap: 10px; margin-top: 18px; }
   /* Checkbox de una linea para el checklist de Accept Handoff — el checkbox alineado con la
      PRIMERA linea del texto (no centrado en todo el bloque) para que un texto de 2 lineas no
@@ -1154,9 +1164,10 @@
               </div>
               <div class="form-field" id="newPosCodeSingleWrap"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
               <div class="form-field full" id="newPosCodesGroupWrap" style="display:none;">
-                <label>Job Codes (One Per Line, One Per Headcount)</label>
-                <textarea rows="4" id="newPosCodesGroup" placeholder="ENG-010 | https://apply.workable.com/irth-solutions/j/AAAA&#10;ENG-011 | https://apply.workable.com/irth-solutions/j/BBBB&#10;ENG-012"></textarea>
-                <div class="panel-sub" style="margin:4px 0 0;">Each headcount usually gets its own Irth Careers Page URL — add it after a "|" on the same line (e.g. "ENG-010 | https://..."). Leave it off a line to add that one's URL later from the detail page.</div>
+                <label>Job Codes &amp; Careers Page URLs (One Row Per Headcount)</label>
+                <div id="newPosHeadcountRows"></div>
+                <button type="button" class="btn ghost small" id="newPosAddHeadcountRowBtn" style="margin-top:2px;">+ Add Another Headcount</button>
+                <div class="panel-sub" style="margin:4px 0 0;">Each headcount is usually its own posting on Irth's careers page — the URL is optional, leave it blank to add later from the detail page.</div>
               </div>
               <div class="form-field full" id="newPosHeadcountGroupWrap">
                 <label id="newPosHeadcountGroupLabel">Headcount Group (Optional)</label>
@@ -5826,7 +5837,7 @@ document.getElementById("newPosIsGroup").addEventListener("change", (e)=>{
   const isGroup = e.target.checked;
   document.getElementById("newPosCodeSingleWrap").style.display = isGroup ? "none" : "";
   document.getElementById("newPosCodesGroupWrap").style.display = isGroup ? "" : "none";
-  // La URL de careers page se pide por headcount (junto al codigo, ver newPosCodesGroup) en
+  // La URL de careers page se pide por headcount (junto al codigo, ver newPosHeadcountRows) en
   // modo grupo, no como un campo compartido — cada headcount tiene su propio posting real.
   document.getElementById("newPosCareersUrlWrap").style.display = isGroup ? "none" : "";
   document.getElementById("newPosHeadcountGroupLabel").textContent = isGroup ? "Headcount Group Label" : "Headcount Group (Optional)";
@@ -5834,8 +5845,28 @@ document.getElementById("newPosIsGroup").addEventListener("change", (e)=>{
   if(isGroup){
     newPosGroupAutoSynced = true;
     syncNewPosGroupLabel();
+    resetHeadcountRows();
   }
 });
+// Filas de headcount (codigo + URL separados, en vez del textarea de texto libre con "|" de
+// antes) — arrancan siempre en 3 al activar el modo grupo (el caso mas comun: Irth casi siempre
+// pide de a 3), con un boton para agregar mas si hace falta. addHeadcountRow() tambien la usa
+// el boton "+ Add Another Headcount".
+function addHeadcountRow(){
+  const row = document.createElement("div");
+  row.className = "headcount-row";
+  row.innerHTML = `
+    <div class="form-field" style="flex:1;"><input type="text" class="headcount-code-input" placeholder="Job Code, e.g. ENG-010"></div>
+    <div class="form-field" style="flex:2;"><input type="text" class="headcount-url-input" placeholder="Irth Careers Page URL (optional)"></div>
+    <button type="button" class="headcount-row-remove" title="Remove this headcount">&times;</button>`;
+  row.querySelector(".headcount-row-remove").addEventListener("click", ()=> row.remove());
+  document.getElementById("newPosHeadcountRows").appendChild(row);
+}
+function resetHeadcountRows(){
+  document.getElementById("newPosHeadcountRows").innerHTML = "";
+  for(let i=0;i<3;i++) addHeadcountRow();
+}
+document.getElementById("newPosAddHeadcountRowBtn").addEventListener("click", addHeadcountRow);
 // Orden de columnas A a AV de PositionsTable, verificado contra el archivo real (ya no
 // contra el viejo build_real_tracker.py, que quedo desactualizado tras varias rondas de
 // columnas agregadas/eliminadas a mano en el Excel real):
@@ -5892,17 +5923,17 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   // del Intake Meeting (ver STATUS_DATE_FIELD).
   fields.intake = fields.status === "Intake Pending" ? statusDateVal : null;
   const headcountGroup = document.getElementById("newPosHeadcountGroup").value.trim() || null;
-  // Grupo: una req por cada codigo pegado, una linea por headcount, con su propia Careers Page
-  // URL opcional despues de un "|" en la misma linea (cada headcount es un posting real
-  // distinto en Irth, asi que rara vez comparten URL). Sin grupo: el flujo de siempre, un solo
+  // Grupo: una req por cada fila de headcount (codigo + su propia Careers Page URL, cada una
+  // en su propio par de inputs — ver addHeadcountRow()). Cada headcount es un posting real
+  // distinto en Irth, asi que rara vez comparten URL. Sin grupo: el flujo de siempre, un solo
   // codigo + una sola URL, ambos de sus inputs normales.
   const codeEntriesMap = new Map();
   if(isGroup){
-    document.getElementById("newPosCodesGroup").value.split("\n").forEach(line=>{
-      const [codePart, urlPart] = line.split("|");
-      const code = (codePart || "").trim();
+    document.querySelectorAll("#newPosHeadcountRows .headcount-row").forEach(row=>{
+      const code = row.querySelector(".headcount-code-input").value.trim();
       if(!code) return;
-      codeEntriesMap.set(code, { code, careersUrl: (urlPart || "").trim() || null });
+      const careersUrl = row.querySelector(".headcount-url-input").value.trim() || null;
+      codeEntriesMap.set(code, { code, careersUrl });
     });
   } else {
     const code = document.getElementById("newPosCode").value.trim();
@@ -5955,7 +5986,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     await loadFromGraph();
     document.getElementById("newPosTitle").value = "";
     document.getElementById("newPosCode").value = "";
-    document.getElementById("newPosCodesGroup").value = "";
+    document.getElementById("newPosHeadcountRows").innerHTML = "";
     document.getElementById("newPosHeadcountGroup").value = "";
     document.getElementById("newPosIsGroup").checked = false;
     document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
@@ -5972,7 +6003,8 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosCodesGroup","newPosHeadcountGroup","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosHeadcountGroup","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("newPosHeadcountRows").innerHTML = "";
   document.getElementById("newPosIsGroup").checked = false;
   document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
   document.getElementById("newPosStatus").value = "Kickoff";
