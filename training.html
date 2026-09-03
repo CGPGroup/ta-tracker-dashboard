@@ -2222,17 +2222,19 @@ function computeCompletion(p){
   // Antes esto eran dos pasos (HM responde con fecha / reunion realmente sucede) — fusionados
   // en uno solo porque en la practica son el mismo evento (ver COMPLETION_TARGETS arriba).
   let step2 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.intakeHeld, overdue:false, waived:false};
-  if(requested){
+  // Waived: nunca hubo (ni habra) una intake meeting propia para esta req, con una razon valida
+  // (ej. headcount adicional del mismo rol, ya cubierto por un intake anterior, HM confirmo por
+  // correo que nada cambio). Se revisa PRIMERO y sin depender de "requested" — la decision de no
+  // pedirla suele tomarse antes de siquiera llegar a ese paso (caso real: Nicolas nunca peso el
+  // intake para 3 headcounts nuevos porque ya tenia el contexto de una req anterior del mismo
+  // rol), asi que exigir que "requested" ya estuviera puesto dejaba a este boton inalcanzable
+  // justo en el caso para el que se diseño.
+  if(!held && p.intakeWaivedReason){
+    const elapsed = requested ? bizDaysBetween(requested, today) : (kickoff ? bizDaysBetween(kickoff, today) : null);
+    step2 = {status:"done", elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue:false, waived:true};
+  } else if(requested){
     const elapsed = bizDaysBetween(requested, held || today);
-    // Waived: nunca hubo (ni habra) una intake meeting propia para esta req, con una razon valida
-    // (ej. headcount adicional del mismo rol, ya cubierto por el intake original de una req
-    // hermana) — cuenta como "done" igual que si se hubiera sostenido, sin disparar la alerta de
-    // escalacion. Solo aplica si de verdad no se sostuvo (si held ya tiene fecha, esa manda).
-    if(!held && p.intakeWaivedReason){
-      step2 = {status:"done", elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue:false, waived:true};
-    } else {
-      step2 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld, waived:false};
-    }
+    step2 = {status: held ? "done" : (elapsed>COMPLETION_TARGETS.intakeHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue: !held && elapsed>COMPLETION_TARGETS.intakeHeld, waived:false};
   }
 
   // Si esta req le llego a este reclutador por Handoff (no fue una asignacion nueva desde Irth),
@@ -3679,10 +3681,10 @@ function renderDetailModal(){
     // mecanismo de confirmacion de contexto). El link cambia segun el estado: invita a explicar
     // si todavia no hay nada, o deja editar/quitar la razon si ya se marco.
     const intakeAction = isView || p.handoffFrom ? "" :
-      !c.step2.waived && (c.step2.status==="waiting" || c.step2.status==="overdue")
-        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-left:6px;">No Meeting Needed? Explain Why</button>`
-        : c.step2.waived
-          ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-left:6px;">Edit</button>`
+      c.step2.waived
+        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-left:6px;">Edit</button>`
+        : c.step2.status !== "done"
+          ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-left:6px;">No Meeting Needed? Explain Why</button>`
           : "";
     const completionCards = [
       {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
