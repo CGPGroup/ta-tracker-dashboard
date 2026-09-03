@@ -1112,11 +1112,20 @@
             <div class="panel-sub">Added as a new row in the Positions sheet</div>
             <div class="form-grid">
               <div class="form-field"><label>Position Title</label><input type="text" id="newPosTitle" placeholder="e.g. Backend Engineer"></div>
-              <div class="form-field"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
               <div class="form-field full">
-                <label>Headcount Group (Optional)</label>
+                <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+                  <input type="checkbox" id="newPosIsGroup"> This Is A Group Of Headcounts (Same Role, Multiple Job Codes From Irth)
+                </label>
+                <div class="panel-sub" style="margin:4px 0 0;">Irth posts one job code per headcount even when it's really the same role. Check this and paste every code below to create one requisition per headcount in one go, all grouped together on the Dashboard.</div>
+              </div>
+              <div class="form-field" id="newPosCodeSingleWrap"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
+              <div class="form-field full" id="newPosCodesGroupWrap" style="display:none;">
+                <label>Job Codes (One Per Line, One Per Headcount)</label>
+                <textarea rows="4" id="newPosCodesGroup" placeholder="ENG-010&#10;ENG-011&#10;ENG-012"></textarea>
+              </div>
+              <div class="form-field full" id="newPosHeadcountGroupWrap">
+                <label id="newPosHeadcountGroupLabel">Headcount Group (Optional)</label>
                 <input type="text" id="newPosHeadcountGroup" placeholder="e.g. ENG-010-Group">
-                <div class="panel-sub" style="margin:4px 0 0;">Irth posts one job code per headcount even when it's really the same role — use the exact same label here on every sibling req to group them as "1 role, several headcounts" on the Dashboard, without merging the rows.</div>
               </div>
               <div class="form-field full"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
@@ -5584,29 +5593,108 @@ document.getElementById("newPosStatus").addEventListener("change", (e)=>{
   updateStatusDateUI("newPos", e.target.value, null);
 });
 document.getElementById("newPosRecruiter").addEventListener("change", updateNewPosCapacityHint);
+// Grupo de headcounts: alterna Job Code (un solo input) por Job Codes (textarea, uno por linea),
+// y auto-llena Headcount Group a partir del Titulo mientras el usuario no lo haya editado el
+// mismo a mano (mismo patron que un "slug" que se auto-genera del titulo hasta que lo tocas).
+let newPosGroupAutoSynced = true;
+let newPosGroupSyncing = false;
+function syncNewPosGroupLabel(){
+  if(!document.getElementById("newPosIsGroup").checked || !newPosGroupAutoSynced) return;
+  const title = document.getElementById("newPosTitle").value.trim();
+  newPosGroupSyncing = true;
+  document.getElementById("newPosHeadcountGroup").value = title ? `${title} Group` : "";
+  newPosGroupSyncing = false;
+}
+document.getElementById("newPosTitle").addEventListener("input", syncNewPosGroupLabel);
+document.getElementById("newPosHeadcountGroup").addEventListener("input", ()=>{
+  if(!newPosGroupSyncing) newPosGroupAutoSynced = false;
+});
+document.getElementById("newPosIsGroup").addEventListener("change", (e)=>{
+  const isGroup = e.target.checked;
+  document.getElementById("newPosCodeSingleWrap").style.display = isGroup ? "none" : "";
+  document.getElementById("newPosCodesGroupWrap").style.display = isGroup ? "" : "none";
+  document.getElementById("newPosHeadcountGroupLabel").textContent = isGroup ? "Headcount Group Label" : "Headcount Group (Optional)";
+  document.getElementById("createPositionBtn").textContent = isGroup ? "Add Positions" : "Add Position";
+  if(isGroup){
+    newPosGroupAutoSynced = true;
+    syncNewPosGroupLabel();
+  }
+});
+// Orden de columnas A a AV de PositionsTable, verificado contra el archivo real (ya no
+// contra el viejo build_real_tracker.py, que quedo desactualizado tras varias rondas de
+// columnas agregadas/eliminadas a mano en el Excel real):
+// A-K: ID, Title, Client, HM, Recruiter, Country, Status, Intake, Submit, Fill, Hire
+// L-W: 12 columnas de formula (SLA), se dejan vacias aqui y graphAppendPosition() las
+// rellena con las formulas reales despues de crear la fila (ver esa funcion)
+// X-Z: Last Remark, Last Remark Date, Pivot SLA Approved
+// AA: Kickoff Date | AB-AJ: campos de Spott (se llenan despues a mano si aplica)
+// AK-AL: Work Arrangement, City | AM: Spott Job ID (id real de Spott, no el Job Code)
+// AN: Intake Requested Date | AO: Recruiter Accepted Date (siempre vacio aqui, una posicion
+// nueva nunca nace ya aceptada) | AP: Irth Careers Page (Workable) URL | AQ: LinkedIn
+// Recruiter URL (este formulario no la pide, se deja vacia)
+// AR-AV: Pivot Justification, Pivot Requested/Approved/Confirmed Date, Calibration Call
+// Date — ninguna aplica a una posicion recien creada, todas vacias
+// AW-BA (nuevas, paso manual pendiente): Handoff From, Handoff Date, Handoff Accepted Date,
+// Headcount Group, Intake Waived Reason, en ese orden exacto — ninguna req nueva nace con un
+// handoff ni con el intake ya marcado como waived, asi que las primeras 3 y la ultima siempre
+// van vacias; Headcount Group se llena solo si el usuario lo escribio (o si es un grupo, con
+// el mismo valor compartido por todos los headcounts, ver el submit handler de abajo).
+function buildNewPositionRow(fields, code, headcountGroup){
+  return [
+    code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, null, null,
+    null,null,null,null,null,null,null,null,null,null,null,null,
+    fields.remark || "", null, "No",
+    fields.kickoff,
+    null, null, null, null, null, null, null, null, null,
+    fields.workArrangement, fields.city,
+    null,
+    fields.intakeRequestedDate, null,
+    fields.careersUrl, null,
+    null, null, null, null, null,
+    null, null, null, headcountGroup, null,
+  ];
+}
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
   const msg = document.getElementById("createPositionMsg");
+  const isGroup = document.getElementById("newPosIsGroup").checked;
   const title = document.getElementById("newPosTitle").value.trim();
-  const code = document.getElementById("newPosCode").value.trim();
-  const careersUrl = document.getElementById("newPosCareersUrl").value.trim() || null;
-  const hm = document.getElementById("newPosHM").value.trim();
-  const recruiter = document.getElementById("newPosRecruiter").value;
-  const country = document.getElementById("newPosCountry").value.trim();
-  const workArrangement = document.getElementById("newPosWorkArrangement").value;
-  const city = document.getElementById("newPosCity").value.trim() || null;
-  const status = document.getElementById("newPosStatus").value || "Sourcing";
-  const dateField = STATUS_DATE_FIELD[status];
+  const fields = {
+    title,
+    careersUrl: document.getElementById("newPosCareersUrl").value.trim() || null,
+    hm: document.getElementById("newPosHM").value.trim(),
+    recruiter: document.getElementById("newPosRecruiter").value,
+    country: document.getElementById("newPosCountry").value.trim(),
+    workArrangement: document.getElementById("newPosWorkArrangement").value,
+    city: document.getElementById("newPosCity").value.trim() || null,
+    status: document.getElementById("newPosStatus").value || "Sourcing",
+    remark: document.getElementById("newPosRemark").value.trim(),
+  };
+  const dateField = STATUS_DATE_FIELD[fields.status];
   const statusDateVal = dateField ? document.getElementById("newPosStatusDateInput").value : null;
-  const kickoff = status === "Kickoff" ? statusDateVal : null;
-  const intakeRequestedDate = status === "Intake Meeting Requested" ? statusDateVal : null;
+  fields.kickoff = fields.status === "Kickoff" ? statusDateVal : null;
+  fields.intakeRequestedDate = fields.status === "Intake Meeting Requested" ? statusDateVal : null;
   // "Intake Pending" ya no pide una fecha de "scheduled for" aparte, pide directo la fecha real
   // del Intake Meeting (ver STATUS_DATE_FIELD).
-  const intake = status === "Intake Pending" ? statusDateVal : null;
-  const remark = document.getElementById("newPosRemark").value.trim();
+  fields.intake = fields.status === "Intake Pending" ? statusDateVal : null;
   const headcountGroup = document.getElementById("newPosHeadcountGroup").value.trim() || null;
+  // Grupo: una req por cada codigo pegado, una linea por headcount. Sin grupo: el flujo de
+  // siempre, un solo codigo tomado del input normal.
+  const codes = isGroup
+    ? [...new Set(document.getElementById("newPosCodesGroup").value.split("\n").map(c=>c.trim()).filter(Boolean))]
+    : [document.getElementById("newPosCode").value.trim()].filter(Boolean);
 
-  if(!title || !code){
-    msg.textContent = "Position title and job code are required.";
+  if(!title || !codes.length){
+    msg.textContent = isGroup ? "Position title and at least one job code are required." : "Position title and job code are required.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(isGroup && codes.length < 2){
+    msg.textContent = "Enter at least 2 job codes for a group, or uncheck the group option to add a single position.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(isGroup && !headcountGroup){
+    msg.textContent = "A Headcount Group label is required for a group (it's auto-filled from the title, but can't be blank).";
     msg.style.color = "var(--critical)";
     return;
   }
@@ -5620,57 +5708,36 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     msg.style.color = "var(--critical)";
     return;
   }
-  msg.textContent = "Saving…";
-  msg.style.color = "var(--text-muted)";
   try {
-    // Orden de columnas A a AV de PositionsTable, verificado contra el archivo real (ya no
-    // contra el viejo build_real_tracker.py, que quedo desactualizado tras varias rondas de
-    // columnas agregadas/eliminadas a mano en el Excel real):
-    // A-K: ID, Title, Client, HM, Recruiter, Country, Status, Intake, Submit, Fill, Hire
-    // L-W: 12 columnas de formula (SLA), se dejan vacias aqui y graphAppendPosition() las
-    // rellena con las formulas reales despues de crear la fila (ver esa funcion)
-    // X-Z: Last Remark, Last Remark Date, Pivot SLA Approved
-    // AA: Kickoff Date | AB-AJ: campos de Spott (se llenan despues a mano si aplica)
-    // AK-AL: Work Arrangement, City | AM: Spott Job ID (id real de Spott, no el Job Code)
-    // AN: Intake Requested Date | AO: Recruiter Accepted Date (siempre vacio aqui, una posicion
-    // nueva nunca nace ya aceptada) | AP: Irth Careers Page (Workable) URL | AQ: LinkedIn
-    // Recruiter URL (este formulario no la pide, se deja vacia)
-    // AR-AV: Pivot Justification, Pivot Requested/Approved/Confirmed Date, Calibration Call
-    // Date — ninguna aplica a una posicion recien creada, todas vacias
-    // AW-BA (nuevas, paso manual pendiente): Handoff From, Handoff Date, Handoff Accepted Date,
-    // Headcount Group, Intake Waived Reason, en ese orden exacto — ninguna req nueva nace con un
-    // handoff ni con el intake ya marcado como waived, asi que las primeras 3 y la ultima siempre
-    // van vacias; Headcount Group se llena solo si el usuario lo escribio.
-    const row = [
-      code, title, "Irth Solutions", hm, recruiter, country, status, intake, null, null, null,
-      null,null,null,null,null,null,null,null,null,null,null,null,
-      remark || "", null, "No",
-      kickoff,
-      null, null, null, null, null, null, null, null, null,
-      workArrangement, city,
-      null,
-      intakeRequestedDate, null,
-      careersUrl, null,
-      null, null, null, null, null,
-      null, null, null, headcountGroup, null,
-    ];
-    await graphAppendPosition(row);
-    // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
-    // ahora" segun el status inicial elegido — se escribe directo a HistorialTable (no hay un
-    // objeto en memoria todavia) para que loadFromGraph() lo traiga de vuelta como lastRemark.
-    if(STATUS_GUIDANCE[status]) await graphAppendHistorial(code, title, STATUS_GUIDANCE[status], "System", "guidance");
-    msg.textContent = "Position created. Reloading data…";
+    // Secuencial, no en paralelo: graphAppendPosition() resuelve el indice de la fila recien
+    // creada para pegarle las formulas de SLA, y llamadas concurrentes podrian pisarse el
+    // indice unas a otras.
+    for(let i=0; i<codes.length; i++){
+      const code = codes[i];
+      msg.textContent = isGroup ? `Saving ${i+1} of ${codes.length} (${code})…` : "Saving…";
+      msg.style.color = "var(--text-muted)";
+      const row = buildNewPositionRow(fields, code, headcountGroup);
+      await graphAppendPosition(row);
+      // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
+      // ahora" segun el status inicial elegido — se escribe directo a HistorialTable (no hay un
+      // objeto en memoria todavia) para que loadFromGraph() lo traiga de vuelta como lastRemark.
+      if(STATUS_GUIDANCE[fields.status]) await graphAppendHistorial(code, title, STATUS_GUIDANCE[fields.status], "System", "guidance");
+    }
+    msg.textContent = `${codes.length} position${codes.length===1?"":"s"} created. Reloading data…`;
     msg.style.color = "var(--good)";
     await loadFromGraph();
     document.getElementById("newPosTitle").value = "";
     document.getElementById("newPosCode").value = "";
+    document.getElementById("newPosCodesGroup").value = "";
     document.getElementById("newPosHeadcountGroup").value = "";
+    document.getElementById("newPosIsGroup").checked = false;
+    document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
     document.getElementById("newPosCareersUrl").value = "";
     document.getElementById("newPosHM").value = "";
     document.getElementById("newPosRemark").value = "";
     document.getElementById("newPosStatus").value = "Kickoff";
     updateStatusDateUI("newPos", "Kickoff", null);
-    msg.textContent = "Position created and loaded.";
+    msg.textContent = `${codes.length} position${codes.length===1?"":"s"} created and loaded.`;
   } catch(err){
     console.error(err);
     msg.textContent = "Could not save: " + err.message;
@@ -5678,7 +5745,9 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosHeadcountGroup","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosCodesGroup","newPosHeadcountGroup","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("newPosIsGroup").checked = false;
+  document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
   document.getElementById("newPosStatus").value = "Kickoff";
   updateStatusDateUI("newPos", "Kickoff", null);
   document.getElementById("createPositionMsg").textContent = "";
