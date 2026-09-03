@@ -5715,7 +5715,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
     if(shouldShare){
       try {
         await graphShareFile(email, shareRole, TRACKER_URL);
-        shareNote = " File shared and invite emailed.";
+        shareNote = ` File shared with ${email} and invite emailed.`;
         try {
           await graphSendTrackerLinkEmail(email, TRACKER_URL, name);
           shareNote += " Tracker link emailed too.";
@@ -5930,7 +5930,7 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
   msg.style.color = "var(--text-muted)";
   try {
     await graphShareFile(email, role, TRACKER_URL);
-    msg.textContent = "Shared.";
+    msg.textContent = `Shared with ${email}.`;
     msg.style.color = "var(--good)";
     try {
       await graphSendTrackerLinkEmail(email, TRACKER_URL);
