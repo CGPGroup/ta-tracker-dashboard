@@ -1092,9 +1092,22 @@
                 <button class="btn ghost small" type="button" id="trackingDeleteFilterBtn">Delete Saved</button>
               </div>
               <div class="filter-chips" id="trackingChips"></div>
+              <!-- Barra de accion en lote, visible solo cuando el perfil que estas viendo es
+                   editable por ti (trackingCanEdit()) — mismo criterio que ya usa el boton
+                   individual de Reassign dentro del detalle. Reusa el mismo #reassignModal que
+                   Positions, solo que aqui es self-service (tus propias reqs), no una accion de
+                   admin sobre todo el equipo. -->
+              <div class="alert-banner tier-orange" id="trackingBulkBar" style="display:none; align-items:center; justify-content:space-between;">
+                <span id="trackingBulkCount"></span>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn ghost small" type="button" id="trackingBulkClearBtn">Clear Selection</button>
+                  <button class="btn primary small" type="button" id="trackingBulkReassignBtn">Reassign Selected</button>
+                </div>
+              </div>
               <div class="tracking-table-scroll">
                 <table class="data" id="trackingTable">
                   <thead><tr>
+                    <th id="trackingSelectAllHeader" style="display:none;"><input type="checkbox" id="trackingSelectAllCheckbox"></th>
                     <th>Position</th><th>Hiring Manager</th><th>Location</th><th>Arrangement</th><th>Status</th>
                     <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Update</th>
                   </tr></thead>
@@ -1141,13 +1154,14 @@
               <div class="form-field" id="newPosCodeSingleWrap"><label>Job Code</label><input type="text" id="newPosCode" placeholder="e.g. ENG-010"></div>
               <div class="form-field full" id="newPosCodesGroupWrap" style="display:none;">
                 <label>Job Codes (One Per Line, One Per Headcount)</label>
-                <textarea rows="4" id="newPosCodesGroup" placeholder="ENG-010&#10;ENG-011&#10;ENG-012"></textarea>
+                <textarea rows="4" id="newPosCodesGroup" placeholder="ENG-010 | https://apply.workable.com/irth-solutions/j/AAAA&#10;ENG-011 | https://apply.workable.com/irth-solutions/j/BBBB&#10;ENG-012"></textarea>
+                <div class="panel-sub" style="margin:4px 0 0;">Each headcount usually gets its own Irth Careers Page URL — add it after a "|" on the same line (e.g. "ENG-010 | https://..."). Leave it off a line to add that one's URL later from the detail page.</div>
               </div>
               <div class="form-field full" id="newPosHeadcountGroupWrap">
                 <label id="newPosHeadcountGroupLabel">Headcount Group (Optional)</label>
                 <input type="text" id="newPosHeadcountGroup" placeholder="e.g. ENG-010-Group">
               </div>
-              <div class="form-field full"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
+              <div class="form-field full" id="newPosCareersUrlWrap"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
               <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"></select></div>
@@ -3280,11 +3294,19 @@ function renderTracking(){
     return true;
   });
   document.getElementById("trackingCount").textContent = rows.length + " positions";
+  // Checkbox de seleccion en lote: solo si el perfil actual es editable por ti — reasignar
+  // reqs es una accion tuya sobre tus propias posiciones, no algo que tenga sentido mientras
+  // solo estas viendo el perfil de otro reclutador de paso.
+  const bulkOn = trackingCanEdit();
+  document.getElementById("trackingSelectAllHeader").style.display = bulkOn ? "" : "none";
+  const validTrackingIds = new Set(POSITIONS.map(p=>p.id));
+  trackingSelectedIds.forEach(id=>{ if(!validTrackingIds.has(id)) trackingSelectedIds.delete(id); });
   document.querySelector("#trackingTable tbody").innerHTML = rows.map(p=>{
     const s = computeSla(p);
     const t = buildTimeline(p);
     const last = t[t.length-1];
     return `<tr class="clickable" data-id="${escapeHtml(p.id)}">
+      ${bulkOn ? `<td><input type="checkbox" class="tracking-row-check" data-id="${escapeHtml(p.id)}" ${trackingSelectedIds.has(p.id)?"checked":""}></td>` : ""}
       <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
@@ -3294,7 +3316,49 @@ function renderTracking(){
   document.querySelectorAll("#trackingTable tbody tr.clickable").forEach(tr=>{
     tr.addEventListener("click", ()=> openDetailModal(tr.dataset.id, trackingCanEdit() ? "edit" : "view"));
   });
+  if(bulkOn){
+    document.querySelectorAll(".tracking-row-check").forEach(cb=>{
+      cb.addEventListener("click", (e)=> e.stopPropagation());
+      cb.addEventListener("change", (e)=>{
+        if(e.target.checked) trackingSelectedIds.add(e.target.dataset.id);
+        else trackingSelectedIds.delete(e.target.dataset.id);
+        updateTrackingBulkBar();
+        syncTrackingSelectAllCheckbox(rows);
+      });
+    });
+    const selectAllCb = document.getElementById("trackingSelectAllCheckbox");
+    selectAllCb.onclick = (e)=> e.stopPropagation();
+    selectAllCb.onchange = (e)=>{
+      rows.forEach(p=>{
+        if(e.target.checked) trackingSelectedIds.add(p.id);
+        else trackingSelectedIds.delete(p.id);
+      });
+      renderTracking();
+    };
+    syncTrackingSelectAllCheckbox(rows);
+  }
+  updateTrackingBulkBar();
 }
+let trackingSelectedIds = new Set();
+function syncTrackingSelectAllCheckbox(rows){
+  const cb = document.getElementById("trackingSelectAllCheckbox");
+  if(!cb || !rows.length){ if(cb) cb.checked = false; return; }
+  cb.checked = rows.every(p=>trackingSelectedIds.has(p.id));
+}
+function updateTrackingBulkBar(){
+  const bar = document.getElementById("trackingBulkBar");
+  const n = trackingSelectedIds.size;
+  bar.style.display = n ? "flex" : "none";
+  document.getElementById("trackingBulkCount").textContent = `${n} position${n===1?"":"s"} selected`;
+}
+document.getElementById("trackingBulkClearBtn").addEventListener("click", ()=>{
+  trackingSelectedIds.clear();
+  renderTracking();
+});
+document.getElementById("trackingBulkReassignBtn").addEventListener("click", ()=>{
+  const selected = POSITIONS.filter(p=>trackingSelectedIds.has(p.id));
+  if(selected.length) openReassignModal(selected);
+});
 
 /* ============================================================
    Position detail: combined automatic + manual activity log
@@ -4379,6 +4443,7 @@ document.getElementById("reassignSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--warning)";
   }
   positionsSelectedIds.clear();
+  trackingSelectedIds.clear();
   setTimeout(closeReassignModal, 900);
 });
 // Regla exacta del usuario: el checkbox 1 (looped en el thread del kickoff) es obligatorio si
@@ -5738,6 +5803,9 @@ document.getElementById("newPosIsGroup").addEventListener("change", (e)=>{
   const isGroup = e.target.checked;
   document.getElementById("newPosCodeSingleWrap").style.display = isGroup ? "none" : "";
   document.getElementById("newPosCodesGroupWrap").style.display = isGroup ? "" : "none";
+  // La URL de careers page se pide por headcount (junto al codigo, ver newPosCodesGroup) en
+  // modo grupo, no como un campo compartido — cada headcount tiene su propio posting real.
+  document.getElementById("newPosCareersUrlWrap").style.display = isGroup ? "none" : "";
   document.getElementById("newPosHeadcountGroupLabel").textContent = isGroup ? "Headcount Group Label" : "Headcount Group (Optional)";
   document.getElementById("createPositionBtn").textContent = isGroup ? "Add Positions" : "Add Position";
   if(isGroup){
@@ -5764,7 +5832,7 @@ document.getElementById("newPosIsGroup").addEventListener("change", (e)=>{
 // handoff ni con el intake ya marcado como waived, asi que las primeras 3 y la ultima siempre
 // van vacias; Headcount Group se llena solo si el usuario lo escribio (o si es un grupo, con
 // el mismo valor compartido por todos los headcounts, ver el submit handler de abajo).
-function buildNewPositionRow(fields, code, headcountGroup){
+function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
   return [
     code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, null, null,
     null,null,null,null,null,null,null,null,null,null,null,null,
@@ -5774,7 +5842,7 @@ function buildNewPositionRow(fields, code, headcountGroup){
     fields.workArrangement, fields.city,
     null,
     fields.intakeRequestedDate, null,
-    fields.careersUrl, null,
+    careersUrl, null,
     null, null, null, null, null,
     null, null, null, headcountGroup, null,
   ];
@@ -5785,7 +5853,6 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   const title = document.getElementById("newPosTitle").value.trim();
   const fields = {
     title,
-    careersUrl: document.getElementById("newPosCareersUrl").value.trim() || null,
     hm: document.getElementById("newPosHM").value.trim(),
     recruiter: document.getElementById("newPosRecruiter").value,
     country: document.getElementById("newPosCountry").value.trim(),
@@ -5802,11 +5869,23 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   // del Intake Meeting (ver STATUS_DATE_FIELD).
   fields.intake = fields.status === "Intake Pending" ? statusDateVal : null;
   const headcountGroup = document.getElementById("newPosHeadcountGroup").value.trim() || null;
-  // Grupo: una req por cada codigo pegado, una linea por headcount. Sin grupo: el flujo de
-  // siempre, un solo codigo tomado del input normal.
-  const codes = isGroup
-    ? [...new Set(document.getElementById("newPosCodesGroup").value.split("\n").map(c=>c.trim()).filter(Boolean))]
-    : [document.getElementById("newPosCode").value.trim()].filter(Boolean);
+  // Grupo: una req por cada codigo pegado, una linea por headcount, con su propia Careers Page
+  // URL opcional despues de un "|" en la misma linea (cada headcount es un posting real
+  // distinto en Irth, asi que rara vez comparten URL). Sin grupo: el flujo de siempre, un solo
+  // codigo + una sola URL, ambos de sus inputs normales.
+  const codeEntriesMap = new Map();
+  if(isGroup){
+    document.getElementById("newPosCodesGroup").value.split("\n").forEach(line=>{
+      const [codePart, urlPart] = line.split("|");
+      const code = (codePart || "").trim();
+      if(!code) return;
+      codeEntriesMap.set(code, { code, careersUrl: (urlPart || "").trim() || null });
+    });
+  } else {
+    const code = document.getElementById("newPosCode").value.trim();
+    if(code) codeEntriesMap.set(code, { code, careersUrl: document.getElementById("newPosCareersUrl").value.trim() || null });
+  }
+  const codes = [...codeEntriesMap.values()];
 
   if(!title || !codes.length){
     msg.textContent = isGroup ? "Position title and at least one job code are required." : "Position title and job code are required.";
@@ -5838,10 +5917,10 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // creada para pegarle las formulas de SLA, y llamadas concurrentes podrian pisarse el
     // indice unas a otras.
     for(let i=0; i<codes.length; i++){
-      const code = codes[i];
+      const { code, careersUrl } = codes[i];
       msg.textContent = isGroup ? `Saving ${i+1} of ${codes.length} (${code})…` : "Saving…";
       msg.style.color = "var(--text-muted)";
-      const row = buildNewPositionRow(fields, code, headcountGroup);
+      const row = buildNewPositionRow(fields, code, headcountGroup, careersUrl);
       await graphAppendPosition(row);
       // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
       // ahora" segun el status inicial elegido — se escribe directo a HistorialTable (no hay un
