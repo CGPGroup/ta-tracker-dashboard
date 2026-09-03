@@ -5007,7 +5007,19 @@ async function connectM365(){
   const btn = document.getElementById("connectBtn");
   btn.disabled = true;
   try {
-    await msalReady;
+    // Si msalInstance.initialize() nunca resuelve (bloqueado por un ad blocker/extension, un
+    // filtro de red corporativo, o cookies de terceros deshabilitadas), sin este timeout el
+    // boton quedaba deshabilitado para siempre SIN NINGUN mensaje — se sentia como "no pasa
+    // nada" al hacer clic. Encontrado 2026-09-02 con un reclutador nuevo cuyo Connect no hacia
+    // nada visible. Con el timeout, al menos se ve un error real y una pista de que revisar.
+    await Promise.race([
+      msalReady,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(
+        "Microsoft sign-in is taking too long to start. This is usually a browser extension "+
+        "(ad blocker / privacy extension) or a network filter blocking login.microsoftonline.com "+
+        "— try an incognito/private window, disable extensions, or a different network, then try again."
+      )), 8000)),
+    ]);
     if(!graphAccount){
       // loginRedirect recarga esta pestana entera hacia login.microsoftonline.com y de vuelta.
       // El resultado se procesa en trysilentConnect() via handleRedirectPromise() cuando la
@@ -5029,7 +5041,20 @@ async function connectM365(){
 }
 
 async function trysilentConnect(){
-  await msalReady;
+  // Mismo timeout que connectM365(): si msalReady nunca resuelve, sin esto el arranque se
+  // queda colgado ANTES de siquiera intentar el proxy publico de solo lectura — quien abre el
+  // link por primera vez veria la pantalla de carga (con su propio failsafe de 12s) pero
+  // despues, nada, ni siquiera data publica. Con el timeout, cae directo al proxy publico.
+  try {
+    await Promise.race([
+      msalReady,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("MSAL init timed out")), 8000)),
+    ]);
+  } catch(err){
+    console.error("MSAL never became ready, falling back to the public read-only snapshot:", err);
+    await tryLoadPublicSnapshotAndRender();
+    return;
+  }
   // Si venimos de un login que redirigio en esta misma pestana (popup bloqueado por el
   // navegador, por ejemplo), la respuesta llega en el hash de la URL. Hay que procesarla
   // explicitamente o MSAL nunca la toma en cuenta.
