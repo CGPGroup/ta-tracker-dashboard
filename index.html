@@ -4954,7 +4954,7 @@ async function fileItemBase(){
 // para reclutadores que van a editar sus propias posiciones, "read" para alguien que solo
 // necesita verlo (ej. Nicole/Immy si algun dia solo quieren mirar, no editar).
 async function graphShareFile(email, role, siteUrl){
-  await graphFetch(`${await fileItemBase()}/invite`, {
+  const result = await graphFetch(`${await fileItemBase()}/invite`, {
     method: "POST",
     body: JSON.stringify({
       requireSignIn: true,
@@ -4964,6 +4964,19 @@ async function graphShareFile(email, role, siteUrl){
       message: `You've been added to the Irth TA Tracker. Once you accept this, connect Microsoft 365 from the dashboard here to see live data: ${siteUrl}`,
     }),
   });
+  // Graph puede responder 200 sin haber concedido el acceso todavia (queda como invitacion
+  // pendiente en vez de permiso real) — sin revisar el body, eso se veia como "compartido" con
+  // exito cuando en realidad el destinatario todavia no podia abrir el archivo. Bug real
+  // encontrado 2026-09-03: un reclutador nuevo (mismo tenant, sin nada raro) recibio "File
+  // shared and invite emailed" pero su cuenta nunca encontro el archivo al conectar. Ahora solo
+  // se cuenta como exito si Graph devuelve una identidad ya resuelta (grantedToV2 /
+  // grantedToIdentitiesV2) para el permiso nuevo, no solo el eco de la invitacion pedida.
+  const granted = (result?.value || []).some(perm =>
+    perm.grantedToV2 || (perm.grantedToIdentitiesV2 && perm.grantedToIdentitiesV2.length)
+  );
+  if(!granted){
+    throw new Error(`Graph accepted the request but didn't confirm ${email} was actually granted access. Share TA_Tracker.xlsx with them manually from OneDrive (right-click the file → Share) to be safe.`);
+  }
 }
 // La invitacion de OneDrive de arriba trae un campo "message" con el link, pero Microsoft
 // reemplaza el cuerpo del correo por su propia plantilla en invitaciones a cuentas externas
