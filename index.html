@@ -3645,19 +3645,20 @@ function renderDetailModal(){
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
   if(p.finalComp) outcomeFacts.push({label:"Final Compensation", value:escapeHtml(p.finalComp)});
 
-  // Intake Waived vive junto al campo de Intake Meeting Date (no solo en la tarjeta de
-  // Requisition Completion, mas abajo) porque es justo ahi donde tiene sentido para quien esta
-  // llenando fechas: si esta req nunca va a tener su propia intake meeting, esta es la
-  // alternativa obvia al lado del campo vacio, no algo que haya que ir a buscar en otra
-  // seccion. Solo aplica al flujo normal (Handoff ya tiene su propio mecanismo de confirmacion
-  // de contexto, ver stepHandoff mas abajo).
-  const intakeWaiveStepForTimeline = computeCompletion(p).step2;
-  const intakeWaiveHtml = (isView || p.handoffFrom) ? "" :
-    intakeWaiveStepForTimeline.waived
-      ? `<div class="panel-sub" style="margin:4px 0 0; font-size:11px;">Waived: ${escapeHtml(p.intakeWaivedReason)} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
-      : intakeWaiveStepForTimeline.status !== "done"
-        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">No Meeting Needed? Explain Why</button>`
-        : "";
+  // Intake Waived vive como su propia celda ENTRE Intake Requested Date e Intake Meeting Date
+  // (no como boton suelto en Requisition Completion, mas abajo) — ahi es justo donde tiene
+  // sentido mientras se llenan fechas: es la alternativa directa a dejar Intake Meeting Date
+  // vacio. Un checkbox simple, no un modal aparte — la razon se guarda junto con el resto del
+  // Timeline, con el mismo boton "Save Dates". Solo aplica al flujo normal (Handoff ya tiene su
+  // propio mecanismo de confirmacion de contexto, ver stepHandoff mas abajo).
+  const intakeWaivedCellHtml = (isView || p.handoffFrom) ? "" : `
+    <div>
+      <div class="fact-label">Intake Waived</div>
+      <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; margin-top:9px; cursor:pointer;">
+        <input type="checkbox" id="intakeWaivedCheckbox" ${p.intakeWaivedReason ? "checked" : ""}> No meeting needed
+      </label>
+      <input type="text" class="fact-date-input" id="intakeWaivedReasonInput" placeholder="Why?" value="${escapeHtml(p.intakeWaivedReason || "")}" style="margin-top:6px;${p.intakeWaivedReason ? "" : " display:none;"}">
+    </div>`;
   const timelineHtml = isView
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
@@ -3671,7 +3672,8 @@ function renderDetailModal(){
     <div class="facts-grid">
       ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "", true)}
       ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true)}
-      ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true, intakeWaiveHtml)}
+      ${intakeWaivedCellHtml}
+      ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true)}
       ${(p.batches && p.batches.length)
         ? timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting Date first.", true)
         : `<div>
@@ -3788,21 +3790,16 @@ function renderDetailModal(){
         },
       });
     });
-    if(document.getElementById("editIntakeWaivedBtn")){
-      document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=>{
-        openEditFieldModal({
-          title: "Waive Intake Meeting",
-          label: "Why wasn't a separate intake meeting needed?",
-          placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
-          value: p.intakeWaivedReason,
-          onSave: async (newVal)=>{
-            p.intakeWaivedReason = newVal;
-            if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
-            renderDetailModal();
-            renderPositions();
-            renderTracking();
-          },
-        });
+    if(document.getElementById("intakeWaivedCheckbox")){
+      document.getElementById("intakeWaivedCheckbox").addEventListener("change", (e)=>{
+        const reasonInput = document.getElementById("intakeWaivedReasonInput");
+        if(e.target.checked){
+          reasonInput.style.display = "";
+          reasonInput.focus();
+        } else {
+          reasonInput.style.display = "none";
+          reasonInput.value = "";
+        }
       });
     }
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
@@ -3953,6 +3950,7 @@ async function saveModalDates(){
   const fields = [
     {key:"kickoff", inputId:"editKickoff", col:"AA", label:"Kickoff Date", capToday:true},
     {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN", label:"Intake Requested Date", capToday:true},
+    {key:"intakeWaivedReason", inputId:"intakeWaivedReasonInput", col:"BA", label:"Intake Waived Reason"},
     {key:"intake", inputId:"editIntake", col:"H", label:"Intake Meeting Date", capToday:true},
     {key:"submit", inputId:"editSubmit", col:"I", label:"Submission Date", capToday:true},
     {key:"fill", inputId:"editFill", col:"J"},
@@ -3965,6 +3963,13 @@ async function saveModalDates(){
   if(futureField){
     const m = document.getElementById("modalDatesMsg");
     m.textContent = `${futureField.label} can't be in the future, it logs something that already happened.`;
+    m.style.color = "var(--critical)";
+    return;
+  }
+  const waivedCheckbox = document.getElementById("intakeWaivedCheckbox");
+  if(waivedCheckbox && waivedCheckbox.checked && !document.getElementById("intakeWaivedReasonInput").value.trim()){
+    const m = document.getElementById("modalDatesMsg");
+    m.textContent = "Explain why the intake meeting isn't needed before saving.";
     m.style.color = "var(--critical)";
     return;
   }
