@@ -5136,25 +5136,42 @@ async function getGraphToken(){
   }
 }
 
+// Serializa TODAS las escrituras a Graph (POST/PATCH/DELETE), una a la vez — encontrado
+// 2026-09-05: aceptar varias asignaciones seguidas (u otra combinacion de acciones que
+// disparan escrituras casi al mismo tiempo, ej. clic en 3 botones "Accept" distintos en el
+// banner de pendientes) podia perder una escritura en silencio, sin tirar ningun error, cuando
+// dos peticiones de escritura al MISMO libro se cruzaban (caso real: "Recruiter Accepted Date"
+// quedo vacio en el Excel real para 2 de 3 reqs aceptadas casi al mismo tiempo, aunque la app
+// nunca mostro un error para esas). Las lecturas (GET) no pasan por esta cola, solo lo que
+// modifica el archivo — encolarlas tambien no aportaria nada y solo haria todo mas lento.
+let graphWriteQueue = Promise.resolve();
+function queueIfWrite(method, run){
+  if(!method || method === "GET") return run();
+  const result = graphWriteQueue.then(run, run);
+  graphWriteQueue = result.then(()=>{}, ()=>{});
+  return result;
+}
 async function graphFetch(path, options = {}){
-  const token = await getGraphToken();
-  const res = await fetch("https://graph.microsoft.com/v1.0" + path, {
-    ...options,
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+  return queueIfWrite(options.method, async () => {
+    const token = await getGraphToken();
+    const res = await fetch("https://graph.microsoft.com/v1.0" + path, {
+      ...options,
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+    if(!res.ok){
+      const body = await res.text();
+      throw new Error(`Graph API error (${res.status}): ${body.slice(0,300)}`);
+    }
+    // /me/sendMail (y otros) responden 202 Accepted con el body vacio, no 204 — res.json() sobre
+    // un body vacio tira un SyntaxError, lo que hacia ver como "fallido" un correo que Graph ya
+    // habia aceptado y enviado de verdad. Leer como texto primero evita ese falso negativo.
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
   });
-  if(!res.ok){
-    const body = await res.text();
-    throw new Error(`Graph API error (${res.status}): ${body.slice(0,300)}`);
-  }
-  // /me/sendMail (y otros) responden 202 Accepted con el body vacio, no 204 — res.json() sobre
-  // un body vacio tira un SyntaxError, lo que hacia ver como "fallido" un correo que Graph ya
-  // habia aceptado y enviado de verdad. Leer como texto primero evita ese falso negativo.
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
 }
 
 function filePathSegment(){
