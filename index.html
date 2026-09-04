@@ -4064,13 +4064,16 @@ document.addEventListener("click", (e)=>{
 // solo por esa fecha.
 // Regla no negociable del Playbook/Master Prompt: el sourcing (y todo lo que viene despues) no
 // puede arrancar hasta que el intake meeting realmente paso — ni siquiera si el rol "parece
-// obvio". Estos son los statuses que representan trabajo activo con candidatos.
+// obvio". Estos son los statuses que representan trabajo activo con candidatos. Un intake
+// legitimamente waived (ver p.intakeWaivedReason, "No Meeting Needed? Explain Why") cuenta
+// igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
+// empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
 const REQUIRES_INTAKE_HELD = ["Sourcing", "Screening", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
-  if(REQUIRES_INTAKE_HELD.includes(newStatus) && !p.intake){
-    alert(`Can't move to "${newStatus}" yet — there's no Intake Meeting date logged. Sourcing (and everything after it) only starts once the intake meeting has actually happened, per policy.`);
+  if(REQUIRES_INTAKE_HELD.includes(newStatus) && !p.intake && !p.intakeWaivedReason){
+    alert(`Can't move to "${newStatus}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
     return;
   }
   const dateField = STATUS_DATE_FIELD[newStatus];
