@@ -3485,12 +3485,13 @@ function pivotSlaFactHtml(p){
   }
   return `<div><div class="fact-label">Pivot SLA</div>${inner}</div>`;
 }
-function timelineFieldHtml(label, id, value, locked, unlockHint, capToday){
+function timelineFieldHtml(label, id, value, locked, unlockHint, capToday, extraHtml){
   const max = capToday ? ` max="${localTodayStr()}"` : "";
   return `
     <div>
       <div class="fact-label">${escapeHtml(label)}${locked ? ` <span class="tl-lock" title="${escapeHtml(unlockHint)}">&#128274;</span>` : ""}</div>
       <input type="date" class="fact-date-input" id="${id}" value="${escapeHtml(value)}"${max} ${locked ? `disabled title="${escapeHtml(unlockHint)}"` : ""}>
+      ${extraHtml || ""}
     </div>`;
 }
 // Actividad de la posicion actualmente seleccionada en Tracking, mostrada en el panel de la
@@ -3644,6 +3645,19 @@ function renderDetailModal(){
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
   if(p.finalComp) outcomeFacts.push({label:"Final Compensation", value:escapeHtml(p.finalComp)});
 
+  // Intake Waived vive junto al campo de Intake Meeting Date (no solo en la tarjeta de
+  // Requisition Completion, mas abajo) porque es justo ahi donde tiene sentido para quien esta
+  // llenando fechas: si esta req nunca va a tener su propia intake meeting, esta es la
+  // alternativa obvia al lado del campo vacio, no algo que haya que ir a buscar en otra
+  // seccion. Solo aplica al flujo normal (Handoff ya tiene su propio mecanismo de confirmacion
+  // de contexto, ver stepHandoff mas abajo).
+  const intakeWaiveStepForTimeline = computeCompletion(p).step2;
+  const intakeWaiveHtml = (isView || p.handoffFrom) ? "" :
+    intakeWaiveStepForTimeline.waived
+      ? `<div class="panel-sub" style="margin:4px 0 0; font-size:11px;">Waived: ${escapeHtml(p.intakeWaivedReason)} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
+      : intakeWaiveStepForTimeline.status !== "done"
+        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">No Meeting Needed? Explain Why</button>`
+        : "";
   const timelineHtml = isView
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
@@ -3657,7 +3671,7 @@ function renderDetailModal(){
     <div class="facts-grid">
       ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "", true)}
       ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true)}
-      ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true)}
+      ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true, intakeWaiveHtml)}
       ${(p.batches && p.batches.length)
         ? timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting Date first.", true)
         : `<div>
@@ -3774,6 +3788,23 @@ function renderDetailModal(){
         },
       });
     });
+    if(document.getElementById("editIntakeWaivedBtn")){
+      document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=>{
+        openEditFieldModal({
+          title: "Waive Intake Meeting",
+          label: "Why wasn't a separate intake meeting needed?",
+          placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
+          value: p.intakeWaivedReason,
+          onSave: async (newVal)=>{
+            p.intakeWaivedReason = newVal;
+            if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
+            renderDetailModal();
+            renderPositions();
+            renderTracking();
+          },
+        });
+      });
+    }
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit Spott Job URL",
@@ -3852,17 +3883,8 @@ function renderDetailModal(){
     // Si la req llego por Handoff, la segunda tarjeta pasa de "Intake Meeting Held" a "Handoff
     // Context Confirmed" — el reclutador que recibe no vuelve a sostener el intake, solo confirma
     // que tiene visibilidad real via el checklist de openAcceptHandoffModal().
-    // Intake Waived: cuando esta req nunca tuvo (ni va a tener) su propia intake meeting con una
-    // razon valida (ej. headcount adicional del mismo rol, ya cubierto por el intake de una req
-    // hermana). Solo se ofrece en el flujo normal (no en el de Handoff, que ya tiene su propio
-    // mecanismo de confirmacion de contexto). El link cambia segun el estado: invita a explicar
-    // si todavia no hay nada, o deja editar/quitar la razon si ya se marco.
-    const intakeAction = isView || p.handoffFrom ? "" :
-      c.step2.waived
-        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-left:6px;">Edit</button>`
-        : c.step2.status !== "done"
-          ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-left:6px;">No Meeting Needed? Explain Why</button>`
-          : "";
+    // El boton para marcar Intake Waived vive junto al campo de Intake Meeting Date en Timeline
+    // (mas arriba), no aqui — esta tarjeta solo muestra el resultado (chip + razon), no la accion.
     const completionCards = [
       {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
       p.handoffFrom
@@ -3872,32 +3894,14 @@ function renderDetailModal(){
         : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
             note: c.step2.waived ? `Waived: ${escapeHtml(p.intakeWaivedReason)}`
               : c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
-              : c.step2.status==="done" ? `Held on ${p.intake}.` : null,
-            actionHtml: intakeAction},
+              : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
     ];
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
         <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}" title="${TAG_EXPLANATIONS[cc.tag] || ""}">${cc.tag}</span></div>
         ${cc.chip}
-        ${cc.note || cc.actionHtml ? `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${cc.note ? escapeHtml(cc.note) : ""}${cc.actionHtml || ""}</div>` : ""}
+        ${cc.note ? `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>` : ""}
       </div>`).join("");
-    if(document.getElementById("editIntakeWaivedBtn")){
-      document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=>{
-        openEditFieldModal({
-          title: "Waive Intake Meeting",
-          label: "Why wasn't a separate intake meeting needed?",
-          placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
-          value: p.intakeWaivedReason,
-          onSave: async (newVal)=>{
-            p.intakeWaivedReason = newVal;
-            if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
-            renderDetailModal();
-            renderPositions();
-            renderTracking();
-          },
-        });
-      });
-    }
     const alerts = [];
     if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
     if(p.handoffFrom){
