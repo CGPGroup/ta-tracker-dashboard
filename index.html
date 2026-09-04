@@ -2257,7 +2257,12 @@ function computeCompletion(p){
 
   let step1 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.acceptRequest};
   if(kickoff){
-    const elapsed = bizDaysBetween(kickoff, requested || today);
+    // Si el intake quedo waived, nunca iba a existir un "Intake Requested Date" real — pedirlo
+    // no aplicaba. En ese caso el paso se completa con solo aceptar la asignacion
+    // (recruiterAcceptedDate), no con requested; si ni eso esta puesto, sigue contando con
+    // "today" igual que siempre, para que de verdad se marque overdue si nunca se acepto.
+    const step1Done = requested || (p.intakeWaivedReason ? parseD(p.recruiterAcceptedDate) : null);
+    const elapsed = bizDaysBetween(kickoff, step1Done || today);
     step1 = {status: elapsed<=COMPLETION_TARGETS.acceptRequest ? "within" : "out", elapsed, target:COMPLETION_TARGETS.acceptRequest};
   }
 
