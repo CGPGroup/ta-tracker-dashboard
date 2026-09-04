@@ -4406,6 +4406,12 @@ document.getElementById("reassignSave").addEventListener("click", async ()=>{
   const skipped = positions.length - toReassign.length;
   const today = localTodayStr();
   let saveError = null;
+  // Bloquea el boton mientras se guarda — mismo motivo que en Add Positions: sin esto, un doble
+  // clic dispara este ciclo dos veces en paralelo, duplicando el handoff/historial de cada
+  // posicion seleccionada.
+  const saveBtn = document.getElementById("reassignSave");
+  saveBtn.disabled = true;
+  try {
   for(let i=0; i<toReassign.length; i++){
     const p = toReassign[i];
     const oldRecruiter = p.recruiter;
@@ -4433,6 +4439,9 @@ document.getElementById("reassignSave").addEventListener("click", async ()=>{
         break;
       }
     }
+  }
+  } finally {
+    saveBtn.disabled = false;
   }
   renderDetailModal();
   renderPositions();
@@ -5941,6 +5950,12 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     msg.style.color = "var(--critical)";
     return;
   }
+  // Bloquea el boton mientras se guarda — sin esto, un doble clic (impaciencia, o el primer
+  // clic tardando en dar feedback visual) dispara el handler completo dos veces en paralelo,
+  // duplicando cada llamada a Graph. Encontrado 2026-09-05: 3 headcounts reales terminaron con
+  // su guidance de "Next Step" triplicada en HistorialTable por exactamente esto.
+  const submitBtn = document.getElementById("createPositionBtn");
+  submitBtn.disabled = true;
   try {
     // Secuencial, no en paralelo: graphAppendPosition() resuelve el indice de la fila recien
     // creada para pegarle las formulas de SLA, y llamadas concurrentes podrian pisarse el
@@ -5975,6 +5990,8 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     console.error(err);
     msg.textContent = "Could not save: " + err.message;
     msg.style.color = "var(--critical)";
+  } finally {
+    submitBtn.disabled = false;
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
