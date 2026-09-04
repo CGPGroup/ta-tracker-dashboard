@@ -3711,6 +3711,18 @@ function renderDetailModal(){
   // Reassign solo en modo edicion (Tracking) — es una accion de gestion, no algo que un
   // viewer de solo lectura (drill-down desde Dashboard/Positions) deba poder disparar.
   positionFacts.push({label:"Recruiter", value: escapeHtml(p.recruiter)});
+  // Antes esto no se mostraba en NINGUN lado del modal — la unica señal de que una req estaba
+  // aceptada era indirecta (la ausencia del banner de pendientes o del badge "Pending Accept"
+  // en posLabel). Eso genero confusion real (RD-020: Nicolas no tenia forma de confirmar a
+  // simple vista que si la habia aceptado). Visible en los dos modos, nunca editable aqui — ver
+  // la regla contra backdatear este campo (riesgo de manipulacion de KPI).
+  positionFacts.push(p.handoffFrom
+    ? {label:"Handoff Context", value: p.handoffAcceptedDate
+        ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Confirmed ${escapeHtml(p.handoffAcceptedDate)}</span>`
+        : `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Not confirmed yet</span>`}
+    : {label:"Accepted", value: p.recruiterAcceptedDate
+        ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>${escapeHtml(p.recruiterAcceptedDate)}</span>`
+        : `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Not accepted yet</span>`});
   if(isView){
     positionFacts.push({label:"Status", value:statusChip(p.status)});
     positionFacts.push({label:"Location", value:locationOnly(p)});
