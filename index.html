@@ -1120,7 +1120,7 @@
                   <thead><tr>
                     <th id="trackingSelectAllHeader" style="display:none;"><input type="checkbox" id="trackingSelectAllCheckbox"></th>
                     <th>Position</th><th>Hiring Manager</th><th>Location</th><th>Arrangement</th><th>Status</th>
-                    <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Update</th>
+                    <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th>
                   </tr></thead>
                   <tbody></tbody>
                 </table>
@@ -3353,14 +3353,11 @@ function renderTracking(){
   trackingSelectedIds.forEach(id=>{ if(!validTrackingIds.has(id)) trackingSelectedIds.delete(id); });
   document.querySelector("#trackingTable tbody").innerHTML = rows.map(p=>{
     const s = computeSla(p);
-    const t = buildTimeline(p);
-    const last = t[t.length-1];
     return `<tr class="clickable" data-id="${escapeHtml(p.id)}">
       ${bulkOn ? `<td><input type="checkbox" class="tracking-row-check" data-id="${escapeHtml(p.id)}" ${trackingSelectedIds.has(p.id)?"checked":""}></td>` : ""}
       <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
-      <td style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${last ? escapeHtml(last.text) : ''}">${last ? escapeHtml(last.text) : '-'}</td>
     </tr>`;
   }).join("");
   document.querySelectorAll("#trackingTable tbody tr.clickable").forEach(tr=>{
@@ -3645,20 +3642,18 @@ function renderDetailModal(){
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
   if(p.finalComp) outcomeFacts.push({label:"Final Compensation", value:escapeHtml(p.finalComp)});
 
-  // Intake Waived vive como su propia celda ENTRE Intake Requested Date e Intake Meeting Date
-  // (no como boton suelto en Requisition Completion, mas abajo) — ahi es justo donde tiene
-  // sentido mientras se llenan fechas: es la alternativa directa a dejar Intake Meeting Date
-  // vacio. Un checkbox simple, no un modal aparte — la razon se guarda junto con el resto del
-  // Timeline, con el mismo boton "Save Dates". Solo aplica al flujo normal (Handoff ya tiene su
-  // propio mecanismo de confirmacion de contexto, ver stepHandoff mas abajo).
-  const intakeWaivedCellHtml = (isView || p.handoffFrom) ? "" : `
-    <div>
-      <div class="fact-label">Intake Waived</div>
-      <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; margin-top:9px; cursor:pointer;">
-        <input type="checkbox" id="intakeWaivedCheckbox" ${p.intakeWaivedReason ? "checked" : ""}> No meeting needed
-      </label>
-      <input type="text" class="fact-date-input" id="intakeWaivedReasonInput" placeholder="Why?" value="${escapeHtml(p.intakeWaivedReason || "")}" style="margin-top:6px;${p.intakeWaivedReason ? "" : " display:none;"}">
-    </div>`;
+  // Intake Waived vive DENTRO de la celda de Intake Requested Date (debajo de su input), no
+  // como celda propia aparte ni debajo de Intake Meeting Date — ahi es donde tiene sentido:
+  // justo despues del paso que normalmente le seguiria una intake meeting, ofrece la alternativa
+  // de decir que esta no va a tener una propia. Un checkbox simple, no un modal aparte — la
+  // razon se guarda junto con el resto del Timeline, con el mismo boton "Save Dates". Solo
+  // aplica al flujo normal (Handoff ya tiene su propio mecanismo de confirmacion de contexto,
+  // ver stepHandoff mas abajo).
+  const intakeWaivedExtraHtml = (isView || p.handoffFrom) ? "" : `
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; margin-top:8px; cursor:pointer;">
+      <input type="checkbox" id="intakeWaivedCheckbox" ${p.intakeWaivedReason ? "checked" : ""}> No meeting needed
+    </label>
+    <input type="text" class="fact-date-input" id="intakeWaivedReasonInput" placeholder="Why?" value="${escapeHtml(p.intakeWaivedReason || "")}" style="margin-top:6px;${p.intakeWaivedReason ? "" : " display:none;"}">`;
   const timelineHtml = isView
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
@@ -3671,8 +3666,7 @@ function renderDetailModal(){
     : `<div class="modal-section-title">Timeline</div>
     <div class="facts-grid">
       ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "", true)}
-      ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true)}
-      ${intakeWaivedCellHtml}
+      ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true, intakeWaivedExtraHtml)}
       ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true)}
       ${(p.batches && p.batches.length)
         ? timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting Date first.", true)
