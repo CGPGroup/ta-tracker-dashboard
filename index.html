@@ -3790,15 +3790,38 @@ function renderDetailModal(){
       document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=>{
         openEditFieldModal({
           title: "Waive Intake Meeting",
-          label: "Why wasn't a separate intake meeting needed?",
+          // Si esta req pertenece a un Headcount Group, la misma razon aplica a sus hermanas
+          // automaticamente al guardar (ver onSave abajo) — se avisa aqui mismo, antes de
+          // escribir, para que no sea una sorpresa cuantas reqs va a afectar.
+          label: (()=>{
+            const n = p.headcountGroup
+              ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.intake && !x.handoffFrom).length
+              : 0;
+            return n
+              ? `Why wasn't a separate intake meeting needed? (also applies to ${n} other headcount${n===1?"":"s"} in "${p.headcountGroup}")`
+              : "Why wasn't a separate intake meeting needed?";
+          })(),
           placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
           value: p.intakeWaivedReason,
           onSave: async (newVal)=>{
             p.intakeWaivedReason = newVal;
-            if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
+            // Mismo criterio que la label de arriba: se excluyen hermanas que ya tienen su
+            // propia intake meeting real sostenida (no la necesitan) y las que llegaron por
+            // Handoff (ese flujo tiene su propio mecanismo de confirmacion de contexto).
+            const siblings = p.headcountGroup
+              ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.intake && !x.handoffFrom)
+              : [];
+            siblings.forEach(s=> s.intakeWaivedReason = newVal);
+            if(isConnected()){
+              await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
+              for(const s of siblings){
+                await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Reason", newVal || "");
+              }
+            }
             renderDetailModal();
             renderPositions();
             renderTracking();
+            renderKpis();
           },
         });
       });
