@@ -2316,7 +2316,10 @@ function computeCompletion(p){
 function completionFlags(p){
   const c = computeCompletion(p);
   const flags = [];
-  if(c.step1.status==="out") flags.push(`🚩 ${p.recruiterAcceptedDate ? "Request Intake Meeting" : "Accept Requisition & Request Intake"}: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
+  // Igual que en la tarjeta de Requisition Completion: una vez la req paso por Handoff, la
+  // aceptacion ORIGINAL (step1) ya no es lo que hay que vigilar — stepHandoff la reemplaza por
+  // completo, no se muestran los dos.
+  if(!p.handoffFrom && c.step1.status==="out") flags.push(`🚩 ${p.recruiterAcceptedDate ? "Request Intake Meeting" : "Accept Requisition & Request Intake"}: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
   if(p.handoffFrom){
     if(c.stepHandoff.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Handoff context hasn't been confirmed, ${c.stepHandoff.elapsed} business days since the handoff (target ${c.stepHandoff.target})`);
   } else {
@@ -3916,8 +3919,13 @@ function renderDetailModal(){
     // que tiene visibilidad real via el checklist de openAcceptHandoffModal().
     // El boton para marcar Intake Waived vive junto al campo de Intake Meeting Date en Timeline
     // (mas arriba), no aqui — esta tarjeta solo muestra el resultado (chip + razon), no la accion.
+    // "Accept Requisition & Request Intake" mide la aceptacion ORIGINAL del recruiter que recibio
+    // el Kickoff — una vez la req paso por Handoff, ese hecho historico ya no es lo que hay que
+    // vigilar (y seguiria marcado "overdue" para siempre si se cargo tarde, sin que sea culpa de
+    // nadie actual). Se reemplaza por completo con "Handoff Context Confirmed", mismo criterio
+    // que ya aplica para step2/stepHandoff — no se muestran los dos a la vez.
     const completionCards = [
-      {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
+      p.handoffFrom ? null : {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
       p.handoffFrom
         ? {label:"Handoff Context Confirmed", tag:"Follow-Up Only", chip: followUpChip(c.stepHandoff),
             note: c.stepHandoff.status==="waiting" ? `Handed off from ${escapeHtml(p.handoffFrom)}, ${ESCALATION_CONTACT} tracks that context gets confirmed quickly.`
@@ -3926,7 +3934,7 @@ function renderDetailModal(){
             note: c.step2.waived ? p.intakeWaivedReason
               : c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
               : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
-    ];
+    ].filter(Boolean);
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
         <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}" title="${TAG_EXPLANATIONS[cc.tag] || ""}">${cc.tag}</span></div>
@@ -5895,7 +5903,7 @@ applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "li
 // Cuando la data real (Graph o el proxy publico) esta cacheada/es rapida, trysilentConnect()
 // puede resolver en unos pocos cientos de ms, muy rapido para realmente ver la pantalla de
 // carga. Se fuerza un minimo de tiempo visible para que siempre se alcance a leer/ver bien.
-const APP_LOADING_MIN_MS = 2500;
+const APP_LOADING_MIN_MS = 2000;
 const appLoadingStartedAt = Date.now();
 function hideAppLoadingOverlay(){
   const el = document.getElementById("appLoadingOverlay");
