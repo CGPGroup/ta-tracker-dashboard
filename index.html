@@ -1055,6 +1055,7 @@
             <span id="positionsBulkCount"></span>
             <div style="display:flex; gap:8px;">
               <button class="btn ghost small" type="button" id="positionsBulkClearBtn">Clear Selection</button>
+              <button class="link-danger" type="button" id="positionsBulkDeleteBtn" style="border:1px solid var(--critical); border-radius:8px; padding:8px 14px;">Delete Selected</button>
               <button class="btn primary small" type="button" id="positionsBulkReassignBtn">Reassign / Handoff</button>
             </div>
           </div>
@@ -3141,6 +3142,39 @@ document.getElementById("positionsBulkClearBtn").addEventListener("click", ()=>{
 document.getElementById("positionsBulkReassignBtn").addEventListener("click", ()=>{
   const selected = POSITIONS.filter(p=>positionsSelectedIds.has(p.id));
   if(selected.length) openReassignModal(selected);
+});
+// Borrar en lote reusa graphDeletePosition() tal cual (resuelve el indice de fila EN VIVO por
+// cada llamada, ver resolveRowIndex()) — por eso es seguro borrar varias en un ciclo secuencial:
+// cada borrado corre las filas de abajo hacia arriba, pero la siguiente llamada siempre vuelve
+// a resolver su propio indice desde cero, nunca confia en uno viejo cacheado.
+document.getElementById("positionsBulkDeleteBtn").addEventListener("click", async ()=>{
+  const selected = POSITIONS.filter(p=>positionsSelectedIds.has(p.id));
+  if(!selected.length) return;
+  const sure = confirm(`Delete ${selected.length} position${selected.length===1?"":"s"} (${selected.map(p=>p.id).join(", ")})? This removes them completely from the tracker and the shared file. This can't be undone from here.`);
+  if(!sure) return;
+  const btn = document.getElementById("positionsBulkDeleteBtn");
+  const bulkCount = document.getElementById("positionsBulkCount");
+  btn.disabled = true;
+  try {
+    for(let i=0; i<selected.length; i++){
+      const p = selected[i];
+      if(selected.length > 1) bulkCount.textContent = `Deleting ${i+1} of ${selected.length} (${p.id})…`;
+      if(isConnected()){
+        await graphDeletePosition(p.id);
+      } else {
+        POSITIONS = POSITIONS.filter(x=>x.id!==p.id);
+      }
+    }
+    positionsSelectedIds.clear();
+    if(isConnected()) await loadFromGraph();
+    else renderAll();
+  } catch(err){
+    console.error(err);
+    alert("Could not delete all selected positions.\n\n"+err.message);
+    renderPositions();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 /* ============================================================
