@@ -579,6 +579,7 @@
 
   .pos-title { font-weight: 600; }
   .pos-code { color: var(--text-muted); font-weight: 600; font-size: 11.5px; margin-left: 5px; white-space: nowrap; }
+  .pos-pending-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: rgba(var(--warning-rgb),0.16); color: var(--warning); white-space: nowrap; }
   td.cell-position { white-space: normal; min-width: 220px; }
 
   .status-chip {
@@ -2428,8 +2429,17 @@ function escapeHtml(str){
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+// Se agrega el badge de "pendiente por aceptar" aqui, un solo lugar, porque posLabel() ya se usa
+// en TODAS las listas (Positions, Tracking, Needs Attention, quick lists) — antes la unica señal
+// de que una req seguia sin aceptarse era el banner de arriba (facil de perder de vista fila por
+// fila), lo que llevo justo a la confusion real que motivo esto: Nicolas viendo RD-020 en
+// Tracking y asumiendo que "poder verla y trabajarla" significaba que ya estaba aceptada.
 function posLabel(p){
-  return `<span class="pos-title">${escapeHtml(p.title)}</span><span class="pos-code">${escapeHtml(p.id)}</span>`;
+  const notYetAccepted = (p.handoffFrom && !p.handoffAcceptedDate) || (!p.handoffFrom && !p.recruiterAcceptedDate);
+  const pendingBadge = notYetAccepted
+    ? `<span class="pos-pending-badge" title="${p.handoffFrom ? "Handoff context not confirmed yet" : "Not accepted yet"} — you can open it to view, but editing is locked until then.">${p.handoffFrom ? "Handoff Pending" : "Pending Accept"}</span>`
+    : "";
+  return `<span class="pos-title">${escapeHtml(p.title)}</span><span class="pos-code">${escapeHtml(p.id)}</span>${pendingBadge}`;
 }
 // Campos como Spott Job ID venian historicamente como un ID crudo (no un link), pero de aqui
 // en adelante deberian guardar la URL completa (pegada tal cual desde la barra de direcciones,
@@ -3600,7 +3610,19 @@ let activeDetailFromDashboard = false;
 
 function openDetailModal(id, mode, allowDelete, fromDashboard){
   activeDetailId = id;
-  activeDetailMode = mode || "edit";
+  // Sin aceptar la asignacion (o, si vino por Handoff, sin confirmar el contexto), se puede VER
+  // la req — hace falta para poder decidir si aceptarla — pero no editar nada. Accept vive en el
+  // banner de pendientes (Dashboard/Tracking), no adentro de este modal, asi que esto nunca
+  // bloquea el camino real para aceptar. Regla explicita de Nicolas: "si el reclutador no
+  // acepta el req, no deberia poder... editar nada" — se fuerza aqui, un solo punto, en vez de
+  // agregar el check en cada uno de los ~10 botones de guardado del modal, reusando el mismo
+  // "isView" que ya esconde/deshabilita todos ellos (ver renderDetailModal()). No afecta
+  // Delete (activeDetailAllowDelete es independiente) ni Reassign/Handoff (viven fuera del
+  // modal, en la barra de seleccion de Positions/Tracking) — un admin sigue pudiendo reasignar
+  // o borrar una req que nunca se acepto.
+  const p = POSITIONS.find(x=>x.id===id);
+  const notYetAccepted = p && ((p.handoffFrom && !p.handoffAcceptedDate) || (!p.handoffFrom && !p.recruiterAcceptedDate));
+  activeDetailMode = notYetAccepted ? "view" : (mode || "edit");
   activeDetailAllowDelete = allowDelete || false;
   activeDetailFromDashboard = fromDashboard || false;
   renderDetailModal();
