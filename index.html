@@ -1780,7 +1780,7 @@ const STATUS_DATE_FIELD = {
 const STATUS_GUIDANCE = {
   "Kickoff": "Send the Kickoff email to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting) and confirm you've accepted it. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
   "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or send written answers instead if a live call isn't possible). Once they confirm, move the status to Intake Pending and log the date — sourcing still can't start until the intake actually happens.",
-  "Intake Pending": "Intake meeting date logged. Use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone. Once the meeting has actually taken place, move status to Sourcing — the first batch is due within 7-9 business days from today.",
+  "Intake Pending": "Intake meeting date logged. Use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone. Once the meeting has actually taken place, move status to Sourcing — the first batch is due within 7-9 business days of that meeting, not from today.",
   "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Curate a batch of 3-5 candidates, never more, and get it to the hiring manager within 7-9 business days of the intake meeting.",
   "Screening": "Run Screening Interviews with your sourced candidates before submitting anyone formally. Only candidates you'd genuinely stand behind should move forward — leave your evaluation as a comment on each profile once you're ready to submit them.",
   "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch.",
@@ -4154,6 +4154,22 @@ const REQUIRES_INTAKE_HELD = ["Sourcing", "Screening", "Hiring Manager Interview
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
+  // No se puede avanzar el pipeline sin antes aceptar la asignacion (o, si vino por Handoff, sin
+  // confirmar el contexto) — sin este bloqueo era posible saltar directo a Sourcing (u otro
+  // status downstream) sin haber aceptado nunca, dejando el KPI de Accept Requisition sin ningun
+  // registro real. Caso real: RD-020 paso a Sourcing sin "Accepted the assignment" en Activity
+  // ni Recruiter Accepted Date en el Excel, porque el intake waived ya dejaba pasar el gate de
+  // abajo sin exigir la aceptacion.
+  if(newStatus !== "Kickoff"){
+    if(p.handoffFrom && !p.handoffAcceptedDate){
+      alert(`Can't move to "${newStatus}" yet — the handoff context hasn't been confirmed. Accept the handoff first from the pending-assignment banner in Dashboard or Tracking.`);
+      return;
+    }
+    if(!p.handoffFrom && !p.recruiterAcceptedDate){
+      alert(`Can't move to "${newStatus}" yet — this requisition hasn't been accepted. Accept it first from the pending-assignment banner in Dashboard or Tracking.`);
+      return;
+    }
+  }
   if(REQUIRES_INTAKE_HELD.includes(newStatus) && !p.intake && !p.intakeWaivedReason){
     alert(`Can't move to "${newStatus}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
     return;
@@ -4699,6 +4715,26 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     : `Status changed from ${oldStatus} to ${newStatus}.`;
   const today = localTodayStr();
   p.extra = p.extra || [];
+  // Idempotencia: si el ultimo evento REAL ya logueado (ignorando "guidance", que siempre sigue
+  // a uno de "status") es este MISMO cambio, mismo texto, mismo dia, no lo repitas. Caso real
+  // 2026-09-04 (RD-020): las lecturas (auto-refresh de 2 min) no esperan la cola de escrituras
+  // (ver graphFetch/queueIfWrite), asi que una lectura podia traer de vuelta el status viejo
+  // antes de que el guardado anterior se reflejara — en pantalla parecia que el cambio no se
+  // habia guardado, y al reclutador dandole Save otra vez al mismo status terminaba duplicando
+  // tanto la entrada de status como la de guidance.
+  const lastReal = [...p.extra].reverse().find(e=>e.type!=="guidance");
+  if(lastReal && lastReal.type==="status" && lastReal.text===remarkText && lastReal.date===today){
+    p.status = newStatus;
+    if(dateField) p[dateField.key] = dateVal;
+    pendingStatusChange = null;
+    renderDetailModal();
+    renderPositions();
+    renderTracking();
+    if(document.getElementById("editStatusModal").classList.contains("open")){
+      setTimeout(()=>{ document.getElementById("editStatusModal").classList.remove("open"); }, 300);
+    }
+    return;
+  }
   p.extra.push({date: today, type:"status", author:"You", text:remarkText});
   const guidanceText = STATUS_GUIDANCE[newStatus];
   if(guidanceText) p.extra.push({date: today, type:"guidance", text:guidanceText});
