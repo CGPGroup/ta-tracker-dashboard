@@ -3528,7 +3528,11 @@ function buildTimeline(p){
   // hecho derivado de que una fecha ya paso (a diferencia de "Intake meeting held.", que si es
   // un milestone real) — mismo texto que el action real que deberia haber quedado, para que se
   // lea identico a como habria quedado si esa escritura nunca se hubiera perdido.
-  if(p.recruiterAcceptedDate && !hasAcceptedAction) entries.push({date:p.recruiterAcceptedDate, type:"action", author:p.recruiter, text:"Accepted the assignment."});
+  // "You" literal, no p.recruiter — asi es como TODO action/status/manual real queda grabado en
+  // el Excel (ver graphAppendHistorial(), siempre pasa "You" sin importar quien esta conectado),
+  // no el nombre de quien sea el recruiter de la posicion. Copiar el nombre real aqui rompia
+  // justo la consistencia que este fallback existe para mantener.
+  if(p.recruiterAcceptedDate && !hasAcceptedAction) entries.push({date:p.recruiterAcceptedDate, type:"action", author:"You", text:"Accepted the assignment."});
   if(p.intakeRequestedDate) entries.push({date:p.intakeRequestedDate, type:"auto", text:"Requisition accepted, intake meeting requested."});
   if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
   if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
