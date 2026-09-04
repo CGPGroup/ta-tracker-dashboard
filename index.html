@@ -1965,7 +1965,12 @@ function renderPendingAssignments(){
 }
 async function acceptAssignment(positionId){
   const p = POSITIONS.find(x=>x.id===positionId);
-  if(!p) return;
+  // Si ya tiene Recruiter Accepted Date, ya se acepto — sin este guard, un doble clic (o un
+  // auto-refresh de POSITIONS que llega ANTES de que el guardado anterior aterrice en el
+  // servidor, haciendo que el banner de "pendiente" reaparezca) duplicaba "Accepted the
+  // assignment" en el historial. Caso real 2026-09-05: RD-018/RD-019 quedaron con esa linea
+  // repetida 2 veces cada una.
+  if(!p || p.recruiterAcceptedDate) return;
   const today = localTodayStr();
   p.recruiterAcceptedDate = today;
   // "action", no "auto" ni "manual" — esto no se desprende solo de una fecha (eso seria "auto",
@@ -5767,6 +5772,27 @@ async function graphDeletePosition(positionId){
   await graphFetch(`${await workbookBase()}/tables('PositionsTable')/rows/itemAt(index=${rowIndex})`, {
     method: "DELETE",
   });
+  // Sin esto, el historial y los batches de esta posicion quedaban huerfanos para siempre —
+  // si alguien despues crea una req nueva reusando el mismo Job Code (bastante comun: el mismo
+  // codigo de Irth que se habia borrado por error), se "re-enganchaba" a comentarios/batches
+  // viejos que ya no aplicaban. Encontrado 2026-09-05 con un caso real (3 headcounts borradas y
+  // vueltas a crear, el "Next Step" seguia duplicado porque nunca se habia limpiado esto).
+  await graphDeleteRowsForPosition("HistorialTable", positionId);
+  await graphDeleteRowsForPosition("BatchesTable", positionId);
+}
+// Borra todas las filas de una tabla cuya primera columna (Position ID) coincida con positionId
+// — de atras hacia adelante, para que los indices de las filas que faltan por borrar nunca se
+// corran a mitad de camino.
+async function graphDeleteRowsForPosition(tableName, positionId){
+  const resp = await graphFetch(`${await workbookBase()}/tables('${tableName}')/rows?$select=values`);
+  const rows = resp.value || [];
+  for(let i = rows.length - 1; i >= 0; i--){
+    if(rows[i].values[0][0] === positionId){
+      await graphFetch(`${await workbookBase()}/tables('${tableName}')/rows/itemAt(index=${i})`, {
+        method: "DELETE",
+      });
+    }
+  }
 }
 
 // Borra todas las filas de una tabla, de la ultima a la primera: borrando de atras hacia
