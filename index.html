@@ -2288,6 +2288,33 @@ function computeCompletion(p){
     step1 = {status: elapsed<=COMPLETION_TARGETS.acceptRequest ? "within" : "out", elapsed, target:COMPLETION_TARGETS.acceptRequest};
   }
 
+  // stepAccept / stepIntakeRequest: la misma ventana de 1 dia habil de step1 arriba, pero
+  // separada en las dos acciones reales que la componen — aceptar la asignacion
+  // (recruiterAcceptedDate, via el boton "Accept" del banner) y pedir el intake meeting (Intake
+  // Requested Date, campo manual en Timeline) son dos clics distintos que pueden pasar en
+  // momentos distintos. step1 arriba se deja intacto (sigue siendo lo que usan
+  // completionFlags/Needs Attention/el alert rojo del modal, un solo "miss" fusionado); estos
+  // dos son solo para mostrar cada chip por separado en la tarjeta de Requisition Completion
+  // (ver completionCards mas abajo) — Nicolas señalo que fusionarlos en un solo numero no deja
+  // ver cual de las dos cosas realmente esta atrasada.
+  let stepAccept = {status:"none", elapsed:null, target:COMPLETION_TARGETS.acceptRequest};
+  if(kickoff){
+    const acceptedD = parseD(p.recruiterAcceptedDate);
+    const elapsed = bizDaysBetween(kickoff, acceptedD || today);
+    stepAccept = {status: elapsed<=COMPLETION_TARGETS.acceptRequest ? "within" : "out", elapsed, target:COMPLETION_TARGETS.acceptRequest};
+  }
+  // Waived: igual que step2 mas abajo, nunca iba a pedirse un intake propio — se marca "done" +
+  // waived, sin fingir una metrica de dias que nunca existio.
+  let stepIntakeRequest = {status:"none", elapsed:null, target:COMPLETION_TARGETS.acceptRequest, waived:false};
+  if(kickoff){
+    if(p.intakeWaivedReason){
+      stepIntakeRequest = {status:"done", elapsed:null, target:COMPLETION_TARGETS.acceptRequest, waived:true};
+    } else {
+      const elapsed = bizDaysBetween(kickoff, requested || today);
+      stepIntakeRequest = {status: elapsed<=COMPLETION_TARGETS.acceptRequest ? "within" : "out", elapsed, target:COMPLETION_TARGETS.acceptRequest, waived:false};
+    }
+  }
+
   // Antes esto eran dos pasos (HM responde con fecha / reunion realmente sucede) — fusionados
   // en uno solo porque en la practica son el mismo evento (ver COMPLETION_TARGETS arriba).
   let step2 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.intakeHeld, overdue:false, waived:false};
@@ -2331,7 +2358,7 @@ function computeCompletion(p){
     step3 = {status: calibrationHeld ? "done" : (elapsed>COMPLETION_TARGETS.calibrationCallHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.calibrationCallHeld, overdue: !calibrationHeld && elapsed>COMPLETION_TARGETS.calibrationCallHeld};
   }
 
-  return {step1, step2, step3, stepHandoff};
+  return {step1, stepAccept, stepIntakeRequest, step2, step3, stepHandoff};
 }
 // Texto tipo slaFlags() pero para el checklist de arriba: solo aparece algo si hay una falla
 // real del reclutador (step1 out) o un recordatorio de seguimiento pendiente (step2/step3).
@@ -3927,34 +3954,44 @@ function renderDetailModal(){
   document.getElementById("modalCompletionTitle").style.display = completionVisible ? "" : "none";
   if(completionVisible){
     const c = computeCompletion(p);
-    const step1Chip = c.step1.status==="none" ? `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`
-      : `<span class="sla-chip ${c.step1.status==="within"?"within":"out"}"><span class="dot" style="background:${STATUS_META[c.step1.status==="within"?"within":"out"].color}"></span>${c.step1.elapsed}d/${c.step1.target}d</span>`;
+    // Chip "Recruiter Owned" de 2 estados (within/out) para stepAccept/stepIntakeRequest — igual
+    // que el viejo step1Chip, pero ahora reutilizable para las dos tarjetas separadas. waivedLabel
+    // opcional: si se pasa Y s.waived es true, se muestra ese texto en vez de la metrica de dias
+    // (ver stepIntakeRequest arriba en computeCompletion, que nunca tuvo nada que medir).
+    const recruiterChip = (s, waivedLabel)=> (waivedLabel && s.waived) ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>${waivedLabel}</span>`
+      : s.status==="none" ? `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`
+      : `<span class="sla-chip ${s.status==="within"?"within":"out"}"><span class="dot" style="background:${STATUS_META[s.status==="within"?"within":"out"].color}"></span>${s.elapsed}d/${s.target}d</span>`;
     // Waived se muestra aparte, antes que nada: "Done · 12d/3d" sugiere que la reunion si paso y
     // tardo 12 dias en pasar — datos que no son reales cuando en realidad se decidio no
     // sostenerla. Un chip "Waived" solo, sin metrica de dias al lado, es honesto sobre que no
-    // hubo nada que medir.
-    const followUpChip = (s)=> s.waived ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Waived</span>`
+    // hubo nada que medir. waivedLabel opcional (default "Waived") — con dos tarjetas distintas
+    // pudiendo mostrar un chip waived a la vez (Request Intake Meeting + Intake Meeting Held),
+    // cada una pasa su propio texto ("Intake Meeting Waived" en las dos) para que quede claro que
+    // es el MISMO waiver, no dos cosas distintas.
+    const followUpChip = (s, waivedLabel="Waived")=> s.waived ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>${waivedLabel}</span>`
       : s.status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done &middot; ${s.elapsed}d/${s.target}d</span>`
       : s.status==="overdue" ? `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Overdue &middot; ${s.elapsed}d/${s.target}d</span>`
       : s.status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting &middot; ${s.elapsed}d/${s.target}d</span>`
       : `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`;
-    // Si la req llego por Handoff, la segunda tarjeta pasa de "Intake Meeting Held" a "Handoff
-    // Context Confirmed" — el reclutador que recibe no vuelve a sostener el intake, solo confirma
-    // que tiene visibilidad real via el checklist de openAcceptHandoffModal().
+    // Si la req llego por Handoff, las 2 tarjetas de arriba (Accept Requisition/Request Intake
+    // Meeting) desaparecen del todo y se reemplazan por "Handoff Context Confirmed" — el
+    // reclutador que recibe no vuelve a sostener el intake, solo confirma que tiene visibilidad
+    // real via el checklist de openAcceptHandoffModal().
     // El boton para marcar Intake Waived vive junto al campo de Intake Meeting Date en Timeline
     // (mas arriba), no aqui — esta tarjeta solo muestra el resultado (chip + razon), no la accion.
-    // "Accept Requisition & Request Intake" mide la aceptacion ORIGINAL del recruiter que recibio
-    // el Kickoff — una vez la req paso por Handoff, ese hecho historico ya no es lo que hay que
-    // vigilar (y seguiria marcado "overdue" para siempre si se cargo tarde, sin que sea culpa de
-    // nadie actual). Se reemplaza por completo con "Handoff Context Confirmed", mismo criterio
-    // que ya aplica para step2/stepHandoff — no se muestran los dos a la vez.
+    // Accept Requisition mide la aceptacion ORIGINAL del recruiter que recibio el Kickoff — una
+    // vez la req paso por Handoff, ese hecho historico ya no es lo que hay que vigilar (y seguiria
+    // marcado "overdue" para siempre si se cargo tarde, sin que sea culpa de nadie actual). Se
+    // reemplaza por completo con "Handoff Context Confirmed", mismo criterio que ya aplica para
+    // step2/stepHandoff — no se muestran los dos a la vez.
     const completionCards = [
-      p.handoffFrom ? null : {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chip: step1Chip, note: null},
+      p.handoffFrom ? null : {label:"Accept Requisition", tag:"Recruiter Owned", chip: recruiterChip(c.stepAccept), note: null},
+      p.handoffFrom ? null : {label:"Request Intake Meeting", tag:"Recruiter Owned", chip: recruiterChip(c.stepIntakeRequest, "Intake Meeting Waived"), note: null},
       p.handoffFrom
         ? {label:"Handoff Context Confirmed", tag:"Follow-Up Only", chip: followUpChip(c.stepHandoff),
             note: c.stepHandoff.status==="waiting" ? `Handed off from ${escapeHtml(p.handoffFrom)}, ${ESCALATION_CONTACT} tracks that context gets confirmed quickly.`
               : c.stepHandoff.status==="done" ? `Confirmed on ${p.handoffAcceptedDate}.` : null}
-        : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
+        : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2, "Intake Meeting Waived"),
             note: c.step2.waived ? p.intakeWaivedReason
               : c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
               : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
@@ -3966,7 +4003,9 @@ function renderDetailModal(){
         ${cc.note ? `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>` : ""}
       </div>`).join("");
     const alerts = [];
-    if(c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
+    // Igual que completionCards/completionFlags: una vez la req paso por Handoff, step1 (la
+    // aceptacion ORIGINAL) ya no es lo que hay que vigilar, stepHandoff lo reemplaza por completo.
+    if(!p.handoffFrom && c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
     if(p.handoffFrom){
       if(c.stepHandoff.overdue) alerts.push({tier:"tier-red", text:`Handoff context hasn't been confirmed yet, ${c.stepHandoff.elapsed} business days since the handoff (target ${c.stepHandoff.target}). Please escalate to ${ESCALATION_CONTACT}.`});
     } else {
