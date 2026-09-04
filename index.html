@@ -3645,15 +3645,17 @@ function renderDetailModal(){
   // Intake Waived vive DENTRO de la celda de Intake Requested Date (debajo de su input), no
   // como celda propia aparte ni debajo de Intake Meeting Date — ahi es donde tiene sentido:
   // justo despues del paso que normalmente le seguiria una intake meeting, ofrece la alternativa
-  // de decir que esta no va a tener una propia. Un checkbox simple, no un modal aparte — la
-  // razon se guarda junto con el resto del Timeline, con el mismo boton "Save Dates". Solo
-  // aplica al flujo normal (Handoff ya tiene su propio mecanismo de confirmacion de contexto,
-  // ver stepHandoff mas abajo).
-  const intakeWaivedExtraHtml = (isView || p.handoffFrom) ? "" : `
-    <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; margin-top:8px; cursor:pointer;">
-      <input type="checkbox" id="intakeWaivedCheckbox" ${p.intakeWaivedReason ? "checked" : ""}> No meeting needed
-    </label>
-    <input type="text" class="fact-date-input" id="intakeWaivedReasonInput" placeholder="Why?" value="${escapeHtml(p.intakeWaivedReason || "")}" style="margin-top:6px;${p.intakeWaivedReason ? "" : " display:none;"}">`;
+  // de decir que esta no va a tener una propia. Boton + modal de un solo campo (no un checkbox
+  // inline) — el link cambia segun el estado: invita a explicar si todavia no hay nada, o deja
+  // editar la razon si ya se marco. Solo aplica al flujo normal (Handoff ya tiene su propio
+  // mecanismo de confirmacion de contexto, ver stepHandoff mas abajo).
+  const intakeWaiveStepForTimeline = computeCompletion(p).step2;
+  const intakeWaivedExtraHtml = (isView || p.handoffFrom) ? "" :
+    intakeWaiveStepForTimeline.waived
+      ? `<div class="panel-sub" style="margin:4px 0 0; font-size:11px;">Waived: ${escapeHtml(p.intakeWaivedReason)} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
+      : intakeWaiveStepForTimeline.status !== "done"
+        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">Intake Meeting Not Needed? Explain Why</button>`
+        : "";
   const timelineHtml = isView
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
@@ -3784,16 +3786,21 @@ function renderDetailModal(){
         },
       });
     });
-    if(document.getElementById("intakeWaivedCheckbox")){
-      document.getElementById("intakeWaivedCheckbox").addEventListener("change", (e)=>{
-        const reasonInput = document.getElementById("intakeWaivedReasonInput");
-        if(e.target.checked){
-          reasonInput.style.display = "";
-          reasonInput.focus();
-        } else {
-          reasonInput.style.display = "none";
-          reasonInput.value = "";
-        }
+    if(document.getElementById("editIntakeWaivedBtn")){
+      document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=>{
+        openEditFieldModal({
+          title: "Waive Intake Meeting",
+          label: "Why wasn't a separate intake meeting needed?",
+          placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
+          value: p.intakeWaivedReason,
+          onSave: async (newVal)=>{
+            p.intakeWaivedReason = newVal;
+            if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
+            renderDetailModal();
+            renderPositions();
+            renderTracking();
+          },
+        });
       });
     }
     document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
@@ -3944,7 +3951,6 @@ async function saveModalDates(){
   const fields = [
     {key:"kickoff", inputId:"editKickoff", col:"AA", label:"Kickoff Date", capToday:true},
     {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN", label:"Intake Requested Date", capToday:true},
-    {key:"intakeWaivedReason", inputId:"intakeWaivedReasonInput", col:"BA", label:"Intake Waived Reason"},
     {key:"intake", inputId:"editIntake", col:"H", label:"Intake Meeting Date", capToday:true},
     {key:"submit", inputId:"editSubmit", col:"I", label:"Submission Date", capToday:true},
     {key:"fill", inputId:"editFill", col:"J"},
@@ -3957,13 +3963,6 @@ async function saveModalDates(){
   if(futureField){
     const m = document.getElementById("modalDatesMsg");
     m.textContent = `${futureField.label} can't be in the future, it logs something that already happened.`;
-    m.style.color = "var(--critical)";
-    return;
-  }
-  const waivedCheckbox = document.getElementById("intakeWaivedCheckbox");
-  if(waivedCheckbox && waivedCheckbox.checked && !document.getElementById("intakeWaivedReasonInput").value.trim()){
-    const m = document.getElementById("modalDatesMsg");
-    m.textContent = "Explain why the intake meeting isn't needed before saving.";
     m.style.color = "var(--critical)";
     return;
   }
@@ -4831,13 +4830,16 @@ function activateView(view){
   // en el HTML) — solo se ve mientras estas en cualquiera de las 2.
   document.getElementById("dashTabs").style.display = (view === "dashboard" || view === "tracking") ? "" : "none";
   // pendingAssignmentZone y dashboardAttentionZone tambien viven fuera de view-dashboard (mismo
-  // motivo que dashTabs), pero a diferencia de la fila de tabs, estos SI son exclusivos de
-  // Dashboard — Tracking ya trae su propio panel "Needs Attention" (renderNeedsAttention()), y
-  // Positions/SSOT/Guide nunca los necesitaron. Sin este toggle se quedaban visibles en TODAS
-  // las vistas, empujando el contenido real hacia abajo — ese corrimiento (no un bug real en
-  // Log Batch) era la causa de que los clics fallaran.
+  // motivo que dashTabs). dashboardAttentionZone SI es exclusivo de Dashboard — Tracking ya
+  // trae su propio panel "Needs Attention" (renderNeedsAttention()). pendingAssignmentZone en
+  // cambio (el banner de "Accept" para asignaciones/handoffs nuevos) tambien se muestra en
+  // Tracking — Nicolas señalo que aceptar una asignacion es justo algo que se hace desde ahi,
+  // no solo desde Dashboard. Positions/SSOT/Guide nunca necesitaron ninguno de los dos. Sin
+  // este toggle se quedaban visibles en TODAS las vistas, empujando el contenido real hacia
+  // abajo — ese corrimiento (no un bug real en Log Batch) era la causa de que los clics fallaran.
   const dashboardOnly = view === "dashboard" ? "" : "none";
-  document.getElementById("pendingAssignmentZone").style.display = dashboardOnly;
+  const dashboardOrTracking = (view === "dashboard" || view === "tracking") ? "" : "none";
+  document.getElementById("pendingAssignmentZone").style.display = dashboardOrTracking;
   document.getElementById("dashboardAttentionZone").style.display = dashboardOnly;
   // Si llegaste a Tracking sin pasar por el click del tab (ej. el auto-entry al conectar, o
   // "Edit In Tracking" desde Positions), el tab de Tracking igual tiene que verse resaltado.
