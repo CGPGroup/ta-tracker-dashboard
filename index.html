@@ -2005,13 +2005,13 @@ async function acceptAssignment(positionId){
   // reclutador SI hizo (aceptar la asignacion), asi que lleva su propio tag.
   const remarkText = "Accepted the assignment.";
   p.extra = p.extra || [];
-  p.extra.push({date: today, type:"action", author:"You", text:remarkText});
+  p.extra.push({date: today, type:"action", author:currentAuthorName(), text:remarkText});
   acceptedConfirmations.push({id:p.id, title:posLabel(p)});
   renderPendingAssignments();
   if(isConnected()){
     try {
       await graphUpdatePositionFieldByHeader(p.id, "Recruiter Accepted Date", today);
-      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
     } catch(err){
       console.error(err);
       alert("Could not save your acceptance. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
@@ -2143,6 +2143,21 @@ const ADMIN_EMAIL = "nicolas.patarroyo.ramirez@cgpgroupus.com";
 // cargar la pagina, antes de que el bloque de MSAL se ejecute.
 let graphAccount = null;
 let MY_RECRUITER_NAME = null; // se llena al conectar, si tu correo coincide con un reclutador
+// Antes cada accion se grababa en History con author LITERAL "You", sin importar quien
+// estuviera conectado — inofensivo con un solo reclutador, pero enganoso en cuanto hay mas de
+// uno viendo el mismo Activity (un admin viendo el historial de David veria "You" para algo
+// que David hizo, no el). currentAuthorName() graba el nombre real de quien esta conectado en
+// el momento de escribir; displayAuthorName() decide "You" vs el nombre real al MOSTRARLO,
+// comparando contra quien esta viendo en ESE momento — cada quien ve "You" solo en lo que el
+// mismo hizo, el nombre real de cualquier otro. Sin conexion (pruebas locales) sigue cayendo en
+// "You" como placeholder, igual que el resto de la app trata "sin conexion" como caso local.
+function currentAuthorName(){
+  return MY_RECRUITER_NAME || "You";
+}
+function displayAuthorName(author){
+  if(!author) return author;
+  return author === MY_RECRUITER_NAME ? "You" : author;
+}
 let LOCATIONS = ["Canada","Australia","United States"];
 const CLIENT = "Irth Solutions";
 
@@ -3297,7 +3312,7 @@ function renderTrackingActivity(){
     <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; margin:2px 0;" : ""}">
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
-      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
+      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity in the last 7 days.</li>`;
   // Contador visible aunque el <details> este cerrado, para no tener que abrirlo solo para
   // saber si vale la pena (y para que mucha actividad no obligue a colapsar el resto de la
@@ -3527,12 +3542,13 @@ function buildTimeline(p){
   // type "action" (no "auto"/Milestone) a proposito: aceptar es algo que alguien HIZO, no un
   // hecho derivado de que una fecha ya paso (a diferencia de "Intake meeting held.", que si es
   // un milestone real) — mismo texto que el action real que deberia haber quedado, para que se
-  // lea identico a como habria quedado si esa escritura nunca se hubiera perdido.
-  // "You" literal, no p.recruiter — asi es como TODO action/status/manual real queda grabado en
-  // el Excel (ver graphAppendHistorial(), siempre pasa "You" sin importar quien esta conectado),
-  // no el nombre de quien sea el recruiter de la posicion. Copiar el nombre real aqui rompia
-  // justo la consistencia que este fallback existe para mantener.
-  if(p.recruiterAcceptedDate && !hasAcceptedAction) entries.push({date:p.recruiterAcceptedDate, type:"action", author:"You", text:"Accepted the assignment."});
+  // lea identico a como habria quedado si esa escritura nunca se hubiera perdido. Author es
+  // p.recruiter (quien de verdad acepto esta req), no currentAuthorName() — esto reconstruye
+  // un evento PASADO, no una escritura que esta pasando ahora mismo, asi que el autor real es
+  // quien sea el recruiter, sin importar quien este viendolo hoy. displayAuthorName() en
+  // timelineListHtml() ya se encarga de mostrarlo como "You" si el que esta viendo ahora
+  // resulta ser esa misma persona, o el nombre real si es otro.
+  if(p.recruiterAcceptedDate && !hasAcceptedAction) entries.push({date:p.recruiterAcceptedDate, type:"action", author:p.recruiter, text:"Accepted the assignment."});
   if(p.intakeRequestedDate) entries.push({date:p.intakeRequestedDate, type:"auto", text:"Requisition accepted, intake meeting requested."});
   if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
   if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
@@ -3553,7 +3569,7 @@ function timelineListHtml(timeline, emptyText){
     <li>
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
-      <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(e.author)})</span>`:""}</span>
+      <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">${emptyText || "No activity logged yet."}</li>`;
 }
 // Igual que buildTimeline() pero solo las notas de texto libre (type "manual") — se muestra en
@@ -4438,14 +4454,14 @@ async function markPivotApproval(p, who){
   if(btn) btn.disabled = true;
   if(who === "lead") p.pivotApprovedByLeadDate = today; else p.pivotConfirmedByImmyDate = today;
   p.extra = p.extra || [];
-  p.extra.push({date: today, type:"action", author:"You", text});
+  p.extra.push({date: today, type:"action", author:currentAuthorName(), text});
   renderDetailModal();
   if(isConnected()){
     msg.textContent = "Saving…";
     msg.style.color = "var(--text-muted)";
     try {
       await graphUpdatePositionFieldByHeader(p.id, header, today);
-      await graphAppendHistorial(p.id, p.title, text, "You", "action");
+      await graphAppendHistorial(p.id, p.title, text, currentAuthorName(), "action");
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
     } catch(err){
@@ -4584,7 +4600,7 @@ document.getElementById("pivotRequestSave").addEventListener("click", async ()=>
   p.pivotRequestedDate = today;
   p.extra = p.extra || [];
   const remarkText = `Requested Pivot SLA: ${text}`;
-  p.extra.push({date: today, type:"action", author:"You", text: remarkText});
+  p.extra.push({date: today, type:"action", author:currentAuthorName(), text: remarkText});
   renderDetailModal();
   if(isConnected()){
     msg.textContent = "Saving…";
@@ -4592,7 +4608,7 @@ document.getElementById("pivotRequestSave").addEventListener("click", async ()=>
     try {
       await graphUpdatePositionFieldByHeader(p.id, "Pivot Justification", text);
       await graphUpdatePositionFieldByHeader(p.id, "Pivot Requested Date", today);
-      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
       msg.textContent = "Requested. Waiting on approval from Nicolás and Immy Nader.";
       msg.style.color = "var(--good)";
     } catch(err){
@@ -4631,14 +4647,14 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
   p.calibrationCallDate = date;
   const remarkText = `Calibration call held with the hiring manager on ${date}.`;
   p.extra = p.extra || [];
-  p.extra.push({date, type:"action", author:"You", text: remarkText});
+  p.extra.push({date, type:"action", author:currentAuthorName(), text: remarkText});
   renderDetailModal();
   if(isConnected()){
     msg.textContent = "Saving…";
     msg.style.color = "var(--text-muted)";
     try {
       await graphUpdatePositionFieldByHeader(p.id, "Calibration Call Date", date);
-      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
     } catch(err){
@@ -4717,7 +4733,7 @@ document.getElementById("reassignSave").addEventListener("click", async ()=>{
     p.handoffAcceptedDate = null;
     const remarkText = `Handed off from ${oldRecruiter} to ${newRecruiter}.`;
     p.extra = p.extra || [];
-    p.extra.push({date: today, type:"action", author:"You", text: remarkText});
+    p.extra.push({date: today, type:"action", author:currentAuthorName(), text: remarkText});
     if(toReassign.length > 1){
       msg.textContent = `Reassigning ${i+1} of ${toReassign.length} (${p.id})…`;
       msg.style.color = "var(--text-muted)";
@@ -4728,7 +4744,7 @@ document.getElementById("reassignSave").addEventListener("click", async ()=>{
         await graphUpdatePositionFieldByHeader(p.id, "Handoff From", oldRecruiter);
         await graphUpdatePositionFieldByHeader(p.id, "Handoff Date", today);
         await graphUpdatePositionFieldByHeader(p.id, "Handoff Accepted Date", "");
-        await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+        await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
       } catch(err){
         console.error(err);
         saveError = err;
@@ -4803,7 +4819,7 @@ document.getElementById("acceptHandoffSave").addEventListener("click", async ()=
   p.handoffAcceptedDate = today;
   const remarkText = `Accepted handoff from ${p.handoffFrom}: ${checkedLabels.join(", ")}.`;
   p.extra = p.extra || [];
-  p.extra.push({date: today, type:"action", author:"You", text: remarkText});
+  p.extra.push({date: today, type:"action", author:currentAuthorName(), text: remarkText});
   renderPendingAssignments();
   renderDetailModal();
   renderPositions();
@@ -4813,7 +4829,7 @@ document.getElementById("acceptHandoffSave").addEventListener("click", async ()=
     msg.style.color = "var(--text-muted)";
     try {
       await graphUpdatePositionFieldByHeader(p.id, "Handoff Accepted Date", today);
-      await graphAppendHistorial(p.id, p.title, remarkText, "You", "action");
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
       msg.textContent = "Handoff accepted.";
       msg.style.color = "var(--good)";
     } catch(err){
@@ -4861,7 +4877,7 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     }
     return;
   }
-  p.extra.push({date: today, type:"status", author:"You", text:remarkText});
+  p.extra.push({date: today, type:"status", author:currentAuthorName(), text:remarkText});
   const guidanceText = STATUS_GUIDANCE[newStatus];
   if(guidanceText) p.extra.push({date: today, type:"guidance", text:guidanceText});
   p.status = newStatus;
@@ -4883,7 +4899,7 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     try {
       await graphUpdatePositionField(p.id, "G", newStatus);
       if(dateField) await graphUpdatePositionField(p.id, dateField.col, dateVal);
-      await graphAppendHistorial(p.id, p.title, remarkText, "You", "status");
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
       if(guidanceText) await graphAppendHistorial(p.id, p.title, guidanceText, "System", "guidance");
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
@@ -4907,7 +4923,7 @@ async function saveModalRemark(){
   const text = document.getElementById("modalRemarkText").value.trim();
   if(!text) return;
   p.extra = p.extra || [];
-  p.extra.push({date: localTodayStr(), type:"manual", author:"You", text});
+  p.extra.push({date: localTodayStr(), type:"manual", author:currentAuthorName(), text});
   p.lastRemark = text;
   renderDetailModal();
   renderTracking();
@@ -4916,7 +4932,7 @@ async function saveModalRemark(){
   if(isConnected()){
     try {
       await graphUpdatePositionField(p.id, "X", text);
-      await graphAppendHistorial(p.id, p.title, text, "You");
+      await graphAppendHistorial(p.id, p.title, text, currentAuthorName());
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
     } catch(err){
