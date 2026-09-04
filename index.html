@@ -3902,7 +3902,12 @@ function renderDetailModal(){
     const c = computeCompletion(p);
     const step1Chip = c.step1.status==="none" ? `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`
       : `<span class="sla-chip ${c.step1.status==="within"?"within":"out"}"><span class="dot" style="background:${STATUS_META[c.step1.status==="within"?"within":"out"].color}"></span>${c.step1.elapsed}d/${c.step1.target}d</span>`;
-    const followUpChip = (s)=> s.status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done &middot; ${s.elapsed}d/${s.target}d</span>`
+    // Waived se muestra aparte, antes que nada: "Done · 12d/3d" sugiere que la reunion si paso y
+    // tardo 12 dias en pasar — datos que no son reales cuando en realidad se decidio no
+    // sostenerla. Un chip "Waived" solo, sin metrica de dias al lado, es honesto sobre que no
+    // hubo nada que medir.
+    const followUpChip = (s)=> s.waived ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Waived</span>`
+      : s.status==="done" ? `<span class="sla-chip within"><span class="dot" style="background:${STATUS_META.within.color}"></span>Done &middot; ${s.elapsed}d/${s.target}d</span>`
       : s.status==="overdue" ? `<span class="sla-chip out"><span class="dot" style="background:${STATUS_META.out.color}"></span>Overdue &middot; ${s.elapsed}d/${s.target}d</span>`
       : s.status==="waiting" ? `<span class="sla-chip risk"><span class="dot" style="background:${STATUS_META.risk.color}"></span>Waiting &middot; ${s.elapsed}d/${s.target}d</span>`
       : `<span class="sla-chip none"><span class="dot" style="background:${STATUS_META.none.color}"></span>-</span>`;
@@ -3918,7 +3923,7 @@ function renderDetailModal(){
             note: c.stepHandoff.status==="waiting" ? `Handed off from ${escapeHtml(p.handoffFrom)}, ${ESCALATION_CONTACT} tracks that context gets confirmed quickly.`
               : c.stepHandoff.status==="done" ? `Confirmed on ${p.handoffAcceptedDate}.` : null}
         : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
-            note: c.step2.waived ? `Waived: ${escapeHtml(p.intakeWaivedReason)}`
+            note: c.step2.waived ? p.intakeWaivedReason
               : c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
               : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
     ];
