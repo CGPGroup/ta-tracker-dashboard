@@ -484,6 +484,7 @@
     background-size: cover; background-position: center;
   }
   .workload-name { font-size: 11px; font-weight: 600; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
+  .workload-title { font-size: 10px; color: var(--text-muted); margin-top: -3px; white-space: normal; word-break: break-word; max-width: 100%; }
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
   .workload-count { font-size: 10.5px; color: var(--text-muted); }
@@ -890,10 +891,6 @@
       </div>
 
       <div id="pendingAssignmentZone"></div>
-      <!-- De vuelta a como quedo establecido antes: un banner visible sin importar cual de los
-           4 dash-tab-panels este activo (Overview/SLA/Pipeline/Offers), no algo exclusivo de
-           Overview — mismo tratamiento que pendingAssignmentZone justo arriba. -->
-      <div id="dashboardAttentionZone"></div>
 
       <!-- Vive FUERA de view-dashboard/view-tracking (los 2 son secciones .view separadas,
            mutuamente excluyentes) para que la fila de tabs siga visible sin importar cual de
@@ -955,6 +952,17 @@
                 <h3>Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></h3>
                 <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
                 <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
+              </div>
+              <!-- Antes un alert-banner de ancho completo encima de los dash-tabs, visible sin
+                   importar en cual tab estuvieras — Nicolas señalo que eso "spameaba" el Team
+                   Dashboard con un banner grande arriba, cuando ya hay espacio libre en el grid
+                   (debajo de Submitted Vs Expected en Team; debajo de Recent Activity en tu
+                   propio workspace). Movido adentro de Overview como una tarjeta mas, mismo
+                   patron visual que el panel "Needs Attention" de Tracking. -->
+              <div class="panel" id="panelDashboardAttention">
+                <h3>Needs Attention <span class="panel-details-count" id="dashboardAttentionCount"></span></h3>
+                <div class="panel-sub">Out of SLA or at risk, or falling behind on Kickoff/Intake follow-up, most urgent first.</div>
+                <div id="dashboardAttentionZone"></div>
               </div>
             </div>
           </div>
@@ -1839,6 +1847,13 @@ function trackingCanEdit(){
 // Cuando activeDashboardScope tiene un nombre, el Dashboard (KPIs, graficas, SLA) se calcula
 // solo con las posiciones de ese reclutador en vez del libro completo. null = vista de equipo.
 let activeDashboardScope = null;
+// true cuando estas mirando el Dashboard de OTRO reclutador en modo solo-lectura (llegaste ahi
+// haciendo clic en su tarjeta en Team, no entrando a tu propio Workspace) — ver
+// viewRecruiterDashboard(). trackingCanEdit() ya bloqueaba la edicion en este caso de todas
+// formas (compara MY_RECRUITER_NAME contra activeDashboardScope), esta bandera solo se usa para
+// esconder el tab de Tracking, que es una herramienta de trabajo, no algo que tenga sentido
+// mirar de otra persona.
+let activeDashboardReadOnly = false;
 // Solo la PRIMERA vez que tu correo resuelve a un reclutador en esta pestaña — sin este guard,
 // el auto-refresh de cada 2 minutos (que tambien pasa por loadFromGraph) te sacaria de Team
 // Workspace o de Positions/Tracking cada vez que recarga, aunque hayas navegado a otro lado.
@@ -1991,9 +2006,11 @@ async function acceptAssignment(positionId){
     }
   }
 }
-// Tracking solo existe dentro del perfil de un reclutador (nunca en la vista de equipo), asi
-// que el tab entero se oculta sin scope.
-function setDashboardScope(name){
+// Tracking solo existe dentro del perfil de un reclutador (nunca en la vista de equipo, ni
+// mirando el Dashboard de otro reclutador en modo solo-lectura), asi que el tab entero se
+// oculta sin scope propio.
+function setDashboardScope(name, opts){
+  const readOnly = !!(opts && opts.readOnly);
   // Un reclutador conectado que no es admin puede ver a TODO el equipo (Team Workspace, sus
   // KPIs) sin restriccion — de eso se trata Team. Lo unico que no puede
   // es ENTRAR al workspace personal de otro reclutador (su perfil individual, editable, con
@@ -2001,10 +2018,15 @@ function setDashboardScope(name){
   // callers, en vez de tener que acordarse de blindar cada boton por separado. Si necesita ver
   // requisitions de otro reclutador por alguna razon, para eso existe Positions (sin bloquear,
   // ver renderPositions()) — nunca entrando a su workspace. isAdmin() ya trata "sin conexion"
-  // como admin (pruebas locales / gente viendo el link publico sin loguearse).
-  if(!isAdmin() && MY_RECRUITER_NAME && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
+  // como admin (pruebas locales / gente viendo el link publico sin loguearse). El modo readOnly
+  // (viewRecruiterDashboard, desde las tarjetas de Active Workload By Recruiter) es la
+  // excepcion: ahi SI se permite entrar al nombre de otro reclutador para cualquiera, porque no
+  // es su Workspace — es su Dashboard, solo lectura (trackingCanEdit() ya bloquea cualquier
+  // edicion real comparando MY_RECRUITER_NAME contra activeDashboardScope).
+  if(!readOnly && !isAdmin() && MY_RECRUITER_NAME && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
   activeDashboardScope = name;
-  document.getElementById("dashTabTracking").style.display = name ? "" : "none";
+  activeDashboardReadOnly = readOnly && name !== MY_RECRUITER_NAME;
+  document.getElementById("dashTabTracking").style.display = (name && !activeDashboardReadOnly) ? "" : "none";
   // Pipeline (funnel de status + Position By Location/Work Arrangement) es una vista de equipo
   // — no le sirve de nada a un solo reclutador viendo unicamente sus propias posiciones. Si
   // estabas parado ahi cuando entras a tu workspace, te caes a Overview (que si existe siempre).
@@ -2032,7 +2054,10 @@ function setDashboardScope(name){
   // de un reclutador — en Team Workspace no hay un dueño individual que mostrar.
   document.getElementById("sidebarProfile").style.display = name ? "" : "none";
   document.getElementById("navWorkspaceTeamBtn").classList.toggle("active", !name);
-  document.getElementById("navWorkspaceMineBtn").classList.toggle("active", !!name);
+  // Mirando el Dashboard de otro reclutador (readOnly) no es ni "Team" ni "My Workspace" — no
+  // resalta ninguno de los dos botones, para no dar a entender que estas parado en tu propio
+  // perfil cuando no lo estas.
+  document.getElementById("navWorkspaceMineBtn").classList.toggle("active", !!name && name === MY_RECRUITER_NAME);
   // A diferencia de la version anterior, esta funcion YA NO decide a que vista saltas — los 3
   // callers (el switcher Team/My Workspace, el auto-entry al conectar, y "Edit In Tracking" en
   // Positions) ya llaman activateView() ellos mismos con la vista que corresponda. Elegir Team/
@@ -2051,22 +2076,18 @@ function setDashboardScope(name){
   main.style.transition = "";
   main.style.opacity = "1";
 }
-// Needs Attention arriba de los tabs del Dashboard: un solo alert-banner con las filas adentro
-// (mismo patron que pendingAssignmentZone justo debajo), no una lista en un panel lateral que
-// ya no existe. Mismos datos/componente que el panel "Needs Attention" de Tracking
-// (buildAttentionRows + attentionRowsHtml), asi que las banderas se ven identicas en los dos
-// lugares. Corre en Team Workspace y en tu propio workspace por igual (dashboardPositions() ya
-// resuelve el scope correcto en los dos casos).
+// Tarjeta "Needs Attention" dentro de Overview (ver panelDashboardAttention en el HTML) — mismo
+// patron y mismos datos/componente que el panel "Needs Attention" de Tracking (buildAttentionRows
+// + attentionRowsHtml), asi que las banderas se ven identicas en los dos lugares. Corre en Team
+// Workspace y en tu propio workspace por igual (dashboardPositions() ya resuelve el scope
+// correcto en los dos casos).
 function renderDashboardAttentionBanner(){
   const {slaRows, completionRows} = buildAttentionRows(dashboardPositions());
   const zone = document.getElementById("dashboardAttentionZone");
   const total = slaRows.length + completionRows.length;
-  if(!total){ zone.innerHTML = ""; return; }
-  zone.innerHTML = `
-    <div class="alert-banner tier-red" style="flex-direction:column; align-items:stretch;">
-      <div><b>${total} position${total===1?"":"s"} need${total===1?"s":""} attention</b> — out of SLA or at risk, or falling behind on Kickoff/Intake follow-up.</div>
-      ${attentionRowsHtml(slaRows, completionRows)}
-    </div>`;
+  document.getElementById("dashboardAttentionCount").textContent = total ? `(${total})` : "(none)";
+  zone.innerHTML = total ? attentionRowsHtml(slaRows, completionRows)
+    : `<div class="panel-sub" style="margin:0;">Nothing urgent right now. Every active position is within SLA, on track with Requisition Completion, or hasn't started its clock yet.</div>`;
   zone.querySelectorAll(".pending-offer-row").forEach(row=>{
     row.addEventListener("click", ()=> openDetailModal(row.dataset.id, trackingCanEdit() ? "edit" : "view"));
   });
@@ -2665,22 +2686,24 @@ function renderReclutadorChart(){
   }).sort((a,b)=>b.value-a.value);
   document.getElementById("chartReclutador").innerHTML = rows.map(r=>{
     const photo = RECRUITER_PHOTOS[r.label];
+    const jobTitle = RECRUITER_TITLES[r.label] || "";
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
     const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
     return `
-    <div class="workload-card clickable-stat" data-label="${escapeHtml(r.label)}" title="${r.count} requisition${r.count===1?"":"s"} assigned, weighted by stage effort">
+    <div class="workload-card clickable-stat" data-label="${escapeHtml(r.label)}" title="Open ${escapeHtml(r.label)}'s dashboard">
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
       <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
+      ${jobTitle ? `<div class="workload-title">${escapeHtml(jobTitle)}</div>` : ""}
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${workloadColor(r.value)};"></div></div>
       <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
     </div>`;
   }).join("");
+  // Clic en una tarjeta te lleva al Dashboard de ESE reclutador (solo lectura) — no a su
+  // Workspace. Workspace es la herramienta de trabajo del reclutador (edicion + Tracking);
+  // Dashboard es solo sus KPIs/metricas, que cualquiera puede mirar (igual que Positions ya
+  // esta abierto a todos). Ver viewRecruiterDashboard().
   document.querySelectorAll("#chartReclutador .workload-card").forEach(el=>{
-    el.addEventListener("click", ()=>{
-      const label = el.dataset.label;
-      const matches = active.filter(p=>p.recruiter===label);
-      openQuickList(label, `${matches.length} active position${matches.length===1?"":"s"}`, matches);
-    });
+    el.addEventListener("click", ()=> viewRecruiterDashboard(el.dataset.label));
   });
 }
 
@@ -4873,18 +4896,14 @@ function activateView(view){
   // secciones .view para no desaparecer al saltar entre Dashboard y Tracking (ver el comentario
   // en el HTML) — solo se ve mientras estas en cualquiera de las 2.
   document.getElementById("dashTabs").style.display = (view === "dashboard" || view === "tracking") ? "" : "none";
-  // pendingAssignmentZone y dashboardAttentionZone tambien viven fuera de view-dashboard (mismo
-  // motivo que dashTabs). dashboardAttentionZone SI es exclusivo de Dashboard — Tracking ya
-  // trae su propio panel "Needs Attention" (renderNeedsAttention()). pendingAssignmentZone en
-  // cambio (el banner de "Accept" para asignaciones/handoffs nuevos) tambien se muestra en
-  // Tracking — Nicolas señalo que aceptar una asignacion es justo algo que se hace desde ahi,
-  // no solo desde Dashboard. Positions/SSOT/Guide nunca necesitaron ninguno de los dos. Sin
-  // este toggle se quedaban visibles en TODAS las vistas, empujando el contenido real hacia
-  // abajo — ese corrimiento (no un bug real en Log Batch) era la causa de que los clics fallaran.
-  const dashboardOnly = view === "dashboard" ? "" : "none";
+  // pendingAssignmentZone vive fuera de view-dashboard/view-tracking (mismo motivo que
+  // dashTabs) y se muestra en las dos — el banner de "Accept" para asignaciones/handoffs nuevos
+  // tambien se usa desde Tracking (Nicolas señalo que aceptar una asignacion es justo algo que
+  // se hace desde ahi). dashboardAttentionZone ya NO vive aca afuera — ahora es una tarjeta mas
+  // dentro del tab Overview (ver panelDashboardAttention en el HTML), asi que su visibilidad la
+  // maneja el toggle normal de dash-tab-panel/view, sin necesitar este toggle aparte.
   const dashboardOrTracking = (view === "dashboard" || view === "tracking") ? "" : "none";
   document.getElementById("pendingAssignmentZone").style.display = dashboardOrTracking;
-  document.getElementById("dashboardAttentionZone").style.display = dashboardOnly;
   // Si llegaste a Tracking sin pasar por el click del tab (ej. el auto-entry al conectar, o
   // "Edit In Tracking" desde Positions), el tab de Tracking igual tiene que verse resaltado.
   if(view === "tracking"){
@@ -4901,7 +4920,10 @@ function activateView(view){
   // Positions/Tracking/etc. nunca vuelven a aparecer en el titulo — son secciones DENTRO de
   // ese workspace, asi que su nombre + descripcion viven en el subtitulo de abajo.
   const who = activeDashboardScope || "Talent Acquisition Team";
-  document.getElementById("topbarTitle").innerHTML = `<span class="topbar-eyebrow">Workspace</span>${escapeHtml(who)}`;
+  // Mirando el Dashboard de OTRO reclutador (readOnly) no es tu Workspace ni el suyo — el
+  // eyebrow lo deja explicito en vez de decir "Workspace" para algo que no lo es.
+  const eyebrow = activeDashboardReadOnly ? "Dashboard" : "Workspace";
+  document.getElementById("topbarTitle").innerHTML = `<span class="topbar-eyebrow">${eyebrow}</span>${escapeHtml(who)}`;
   // Positions es la unica vista cuya descripcion cambia de verdad segun donde estes parado, y
   // se lee del valor real del select de Recruiter (no de activeDashboardScope) porque ese
   // filtro se puede apuntar a cualquier reclutador sin salir del workspace en el que estas
@@ -4939,8 +4961,8 @@ document.querySelectorAll(".nav-item[data-view]").forEach(btn=>{
 });
 // Elegir Team/My Workspace siempre te deja viendo Dashboard (nunca salta a Tracking) — solo
 // cambia el scope de datos que el Dashboard muestra.
-function goToDashboard(name){
-  setDashboardScope(name);
+function goToDashboard(name, opts){
+  setDashboardScope(name, opts);
   // Por si el tab de Tracking se habia quedado marcado activo de una visita anterior — elegir
   // Team/My Workspace desde el switcher siempre te deja viendo el ultimo dash-tab-panel real
   // (Overview u otro), nunca a Tracking con su boton sin resaltar.
@@ -4949,6 +4971,14 @@ function goToDashboard(name){
 }
 document.getElementById("navWorkspaceTeamBtn").addEventListener("click", ()=> goToDashboard(null));
 document.getElementById("navWorkspaceMineBtn").addEventListener("click", ()=> goToDashboard(MY_RECRUITER_NAME));
+// Clic en una tarjeta de "Active Workload By Recruiter" (Team) — ver renderReclutadorChart().
+// A diferencia de "My Workspace", esto SI puede apuntar al nombre de otro reclutador: es su
+// Dashboard (KPIs/metricas), no su Workspace (edicion + Tracking, protegido en
+// setDashboardScope). Si le das a tu propia tarjeta, esto termina siendo identico a "My
+// Workspace".
+function viewRecruiterDashboard(name){
+  goToDashboard(name, {readOnly:true});
+}
 // "Workspace" es su propio acordeon: un boolean simple, independiente de en que vista estes
 // parado (antes su visibilidad dependia de que Dashboard fuera la vista activa, lo cual no se
 // sentia como un desplegable real — se colapsaba solo al navegar a otro lado).
