@@ -3514,6 +3514,17 @@ function buildTimeline(p){
   // mezclado dentro del texto de guidance de "Kickoff", lo cual generaba un orden confuso
   // entre "Accepted the assignment" y el guidance en el mismo dia.
   if(p.kickoff) entries.push({date:p.kickoff, type:"auto", text:`Requisition assigned, waiting on ${p.recruiter || "the recruiter"} to accept.`});
+  // recruiterAcceptedDate normalmente ya queda reflejado por la accion real ("Accepted the
+  // assignment.", logueada por acceptAssignment()) — pero si esa escritura se perdio en el
+  // camino (misma condicion de carrera que ya se arreglo con la cola de escrituras, pero para
+  // datos de ANTES de ese fix — caso real: RD-020, aceptada el 2026-09-03 pero sin ese log) o
+  // si el intake quedo waived (nunca hubo Intake Requested Date, el UNICO otro lugar donde
+  // "accepted" se mencionaba), Activity se quedaba sin ningun rastro de que si se acepto. Este
+  // fallback solo aparece si no hay ya una entrada real de "Accepted the assignment." —
+  // nunca duplica el caso sano.
+  const hasAcceptedAction = (p.extra||[]).some(e=>e.type==="action" && e.text==="Accepted the assignment.")
+    || (p.remarksHistory||[]).some(e=>e.type==="action" && e.text==="Accepted the assignment.");
+  if(p.recruiterAcceptedDate && !hasAcceptedAction) entries.push({date:p.recruiterAcceptedDate, type:"auto", text:"Requisition accepted."});
   if(p.intakeRequestedDate) entries.push({date:p.intakeRequestedDate, type:"auto", text:"Requisition accepted, intake meeting requested."});
   if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
   if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
