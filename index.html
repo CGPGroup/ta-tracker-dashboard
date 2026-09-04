@@ -3524,7 +3524,11 @@ function buildTimeline(p){
   // nunca duplica el caso sano.
   const hasAcceptedAction = (p.extra||[]).some(e=>e.type==="action" && e.text==="Accepted the assignment.")
     || (p.remarksHistory||[]).some(e=>e.type==="action" && e.text==="Accepted the assignment.");
-  if(p.recruiterAcceptedDate && !hasAcceptedAction) entries.push({date:p.recruiterAcceptedDate, type:"auto", text:"Requisition accepted."});
+  // type "action" (no "auto"/Milestone) a proposito: aceptar es algo que alguien HIZO, no un
+  // hecho derivado de que una fecha ya paso (a diferencia de "Intake meeting held.", que si es
+  // un milestone real) — mismo texto que el action real que deberia haber quedado, para que se
+  // lea identico a como habria quedado si esa escritura nunca se hubiera perdido.
+  if(p.recruiterAcceptedDate && !hasAcceptedAction) entries.push({date:p.recruiterAcceptedDate, type:"action", author:p.recruiter, text:"Accepted the assignment."});
   if(p.intakeRequestedDate) entries.push({date:p.intakeRequestedDate, type:"auto", text:"Requisition accepted, intake meeting requested."});
   if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
   if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
