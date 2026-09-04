@@ -290,7 +290,7 @@
      centrado abajo. La leyenda que renderDonut agrega siempre se oculta aqui porque el valor ya
      esta en el centro del anillo, repetirlo abajo era ruido. */
   .panel-ring .donut-wrap { justify-content: center; padding-top: 6px; }
-  #statRingActive .donut-legend, #statRingSubmitted .donut-legend { display: none; }
+  #statRingActive .donut-legend { display: none; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -718,6 +718,10 @@
   .quick-list-row:last-child { border-bottom: none; }
   .quick-list-row:hover .pos-title { color: var(--brand); }
   .sla-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+  /* Requisition Completion nunca tiene mas de 2 tarjetas (Accept & Request Intake / Intake
+     Meeting Held, o solo Handoff Context Confirmed) — reusar el grid de 3 columnas de SLA
+     dejaba una columna vacia y desbalanceada. */
+  #modalCompletionGrid { grid-template-columns: repeat(2, 1fr); }
   .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
   .sla-card .sla-name { font-size: 10.5px; font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   /* Una tarjeta, 2 chips adentro (ej. Accept Requisition & Request Intake) — cada fila es su
@@ -2882,7 +2886,9 @@ function renderCompletionChart(){
     renderDonut("chartCompletion", [{label:"No assigned requisitions", value:1, realValue:0}], ["var(--grid)"], null, 100, {value:"-", label:"No Data"});
     return;
   }
-  const lateIds = new Set(assigned.filter(p=>computeCompletion(p).step1.status==="out").map(p=>p.id));
+  // Igual que completionCards/completionFlags/modalCompletionAlert: una vez la req paso por
+  // Handoff, step1 (la aceptacion ORIGINAL) ya no es lo que hay que contar como miss aqui.
+  const lateIds = new Set(assigned.filter(p=>!p.handoffFrom && computeCompletion(p).step1.status==="out").map(p=>p.id));
   const late = lateIds.size;
   const onTime = assigned.length - late;
   const rate = Math.round((onTime / assigned.length) * 100);
@@ -3325,12 +3331,21 @@ function attentionRowsHtml(slaRows, completionRows){
   const completionHtml = completionRows.map(p=>{
     const c = computeCompletion(p);
     const pivotPending = p.pivotRequestedDate && !isSlaExceptionApproved(p);
-    const cls = (c.step1.status==="out" || c.step2.overdue || c.step3.overdue) ? "out" : "risk";
+    // Igual que completionFlags(): una vez la req paso por Handoff, step1/step2 (la aceptacion y
+    // el intake ORIGINALES) ya no son lo que hay que vigilar aqui — stepHandoff los reemplaza
+    // por completo. Sin esta rama, una req con handoff cuyo step1 historico quedo "out" mostraba
+    // "Not Accepted"/"Intake Not Requested" en el chip, contradiciendo el propio texto de abajo
+    // (que ya usa completionFlags(), correctamente consciente del handoff).
+    const cls = p.handoffFrom
+      ? ((c.stepHandoff.overdue || c.step3.overdue) ? "out" : "risk")
+      : ((c.step1.status==="out" || c.step2.overdue || c.step3.overdue) ? "out" : "risk");
     // step1 mide "intake pedido", no "aceptado" (esos son dos campos distintos, ver
     // p.recruiterAcceptedDate vs p.intakeRequestedDate) — el label tiene que distinguir "nunca
     // acepto nada" de "ya acepto pero todavia no pide el intake", si no dice "Not
     // Accepted/Requested" incluso cuando SI esta aceptada, que es enganoso.
-    const label = c.step1.status==="out" ? (p.recruiterAcceptedDate ? "Intake Not Requested" : "Not Accepted") : (c.step2.overdue || c.step3.overdue ? "Escalate" : (pivotPending ? "Pivot Pending" : "Overdue"));
+    const label = p.handoffFrom
+      ? ((c.stepHandoff.overdue || c.step3.overdue) ? "Escalate" : (pivotPending ? "Pivot Pending" : "Overdue"))
+      : (c.step1.status==="out" ? (p.recruiterAcceptedDate ? "Intake Not Requested" : "Not Accepted") : (c.step2.overdue || c.step3.overdue ? "Escalate" : (pivotPending ? "Pivot Pending" : "Overdue")));
     return `
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
@@ -4076,6 +4091,34 @@ async function saveModalDates(){
     m.style.color = "var(--critical)";
     return;
   }
+  // Estos campos siguen el orden real del proceso (Kickoff -> Intake Requested -> Intake
+  // Meeting -> Submission -> Fill -> Hire) — una fecha fuera de ese orden (ej. Hire antes que
+  // Submission) nunca es correcta y termina como un conteo de dias negativo en algun lado
+  // (TTF/TTH, Requisition Completion) sin que quede claro por que se ve mal. Se compara contra
+  // el ultimo campo lleno visto hasta ahora, no solo el vecino inmediato, para agarrar tambien
+  // un salto de mas de un paso (ej. Fill antes que Kickoff con Submit vacio).
+  const PIPELINE_ORDER = [
+    {key:"kickoff", label:"Kickoff Date"},
+    {key:"intakeRequestedDate", label:"Intake Requested Date"},
+    {key:"intake", label:"Intake Meeting Date"},
+    {key:"submit", label:"Submission Date"},
+    {key:"fill", label:"Fill Date"},
+    {key:"hire", label:"Hire Date"},
+  ];
+  const rawByKey = {};
+  fields.forEach(f=>{ const raw = document.getElementById(f.inputId).value; if(raw) rawByKey[f.key] = raw; });
+  let lastSet = null;
+  for(const of of PIPELINE_ORDER){
+    const val = rawByKey[of.key];
+    if(!val) continue;
+    if(lastSet && val < lastSet.value){
+      const m = document.getElementById("modalDatesMsg");
+      m.textContent = `${of.label} (${val}) can't be before ${lastSet.label} (${lastSet.value}) — check the order of these dates.`;
+      m.style.color = "var(--critical)";
+      return;
+    }
+    lastSet = {label: of.label, value: val};
+  }
   const changed = [];
   fields.forEach(f=>{
     const raw = document.getElementById(f.inputId).value;
@@ -4334,6 +4377,12 @@ async function markPivotApproval(p, who){
   const msg = document.getElementById("logBatchMsg");
   const header = who === "lead" ? "Pivot Approved By Lead Date" : "Pivot Confirmed By Immy Date";
   const text = who === "lead" ? "Pivot SLA approved by CGP TA (Nicolás Patarroyo, Lead Talent Partner)." : "Pivot SLA confirmed by Irth TA (Immy Nader).";
+  // Este boton vive en el modal aparte de Log Batch (no en el detail modal, que se re-renderiza
+  // arriba pero no toca esto) y solo se reemplaza por el chip hasta el renderPivotPendingState()
+  // del final — sin deshabilitarlo aqui, un doble clic disparaba esta funcion dos veces,
+  // duplicando la entrada de historial "Pivot SLA approved/confirmed...".
+  const btn = document.getElementById(who === "lead" ? "pivotApproveLeadBtn" : "pivotConfirmImmyBtn");
+  if(btn) btn.disabled = true;
   if(who === "lead") p.pivotApprovedByLeadDate = today; else p.pivotConfirmedByImmyDate = today;
   p.extra = p.extra || [];
   p.extra.push({date: today, type:"action", author:"You", text});
@@ -4428,6 +4477,11 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     const proceed = confirm(`Batches should be 3-5 candidates, prioritizing quality over quantity — you entered ${countNum}. Log it anyway?`);
     if(!proceed) return;
   }
+  // Sin bloquear el boton, un doble clic (o un reintento antes de que "Saved." aparezca)
+  // duplicaba el batch entero — mismo patron ya aplicado en reassignSave/Add Position.
+  const saveBtn = document.getElementById("logBatchSave");
+  saveBtn.disabled = true;
+  try {
   p.batches = p.batches || [];
   p.batches.push({ date, type, count: count || null });
   // El primer batch fija Submission Date automaticamente, ese campo queda bloqueado en Timeline
@@ -4452,6 +4506,9 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
     msg.style.color = "var(--warning)";
   }
+  } finally {
+    saveBtn.disabled = false;
+  }
   setTimeout(closeLogBatchModal, 900);
 });
 document.getElementById("pivotRequestSave").addEventListener("click", async ()=>{
@@ -4465,6 +4522,11 @@ document.getElementById("pivotRequestSave").addEventListener("click", async ()=>
     return;
   }
   const today = localTodayStr();
+  // Mismo motivo que en logBatchSave: sin bloquear el boton, un doble clic duplicaba la entrada
+  // de historial "Requested Pivot SLA: ...".
+  const reqBtn = document.getElementById("pivotRequestSave");
+  reqBtn.disabled = true;
+  try {
   p.pivotJustification = text;
   p.pivotRequestedDate = today;
   p.extra = p.extra || [];
@@ -4494,6 +4556,9 @@ document.getElementById("pivotRequestSave").addEventListener("click", async ()=>
   document.getElementById("pivotPendingState").style.display = "";
   document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
   renderPivotPendingState(p);
+  } finally {
+    reqBtn.disabled = false;
+  }
 });
 document.getElementById("calibrationCallSave").addEventListener("click", async ()=>{
   const p = POSITIONS.find(x=>x.id===activeDetailId);
@@ -4505,6 +4570,11 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
     msg.style.color = "var(--critical)";
     return;
   }
+  // Mismo motivo que en logBatchSave/pivotRequestSave: sin bloquear el boton, un doble clic
+  // duplicaba la entrada de historial "Calibration call held...".
+  const calBtn = document.getElementById("calibrationCallSave");
+  calBtn.disabled = true;
+  try {
   p.calibrationCallDate = date;
   const remarkText = `Calibration call held with the hiring manager on ${date}.`;
   p.extra = p.extra || [];
@@ -4529,6 +4599,9 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
     msg.style.color = "var(--warning)";
   }
   renderPivotPendingState(p);
+  } finally {
+    calBtn.disabled = false;
+  }
 });
 
 // ======================= REASSIGN / HANDOFF =======================
@@ -6267,6 +6340,11 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   }
   msg.textContent = "Saving…";
   msg.style.color = "var(--text-muted)";
+  // Sin bloquear el boton, un doble clic (o un reintento antes de que "Saving..." cambiara)
+  // duplicaba la fila del reclutador Y, si "share" estaba marcado, mandaba 2 invitaciones de
+  // OneDrive + 2 correos con el link del tracker a la misma persona.
+  const createBtn = document.getElementById("createRecruiterBtn");
+  createBtn.disabled = true;
   try {
     await graphAppendRecruiter(name, email, photoUrl, jobTitle);
     let shareNote = "";
@@ -6302,6 +6380,8 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
     console.error(err);
     msg.textContent = "Could not save: " + err.message;
     msg.style.color = "var(--critical)";
+  } finally {
+    createBtn.disabled = false;
   }
 });
 document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
@@ -6411,6 +6491,12 @@ document.getElementById("editFieldModalSave").addEventListener("click", async ()
   }
   msg.textContent = "Saving…";
   msg.style.color = "var(--text-muted)";
+  // Modal generico compartido por muchos campos (Intake Waived reason, Careers Page URL, Spott
+  // URL, LinkedIn Recruiter URL, etc.) — un doble clic sin este bloqueo arriesgaba una escritura
+  // o un historial duplicado segun lo que haga el onSave() de turno. Un solo guard aqui protege
+  // a todos los que lo usan.
+  const saveBtn = document.getElementById("editFieldModalSave");
+  saveBtn.disabled = true;
   try {
     await editFieldModalCtx.onSave(newVal);
     if(isConnected()){
@@ -6425,6 +6511,8 @@ document.getElementById("editFieldModalSave").addEventListener("click", async ()
     console.error(err);
     msg.textContent = "Could not save: " + err.message;
     msg.style.color = "var(--critical)";
+  } finally {
+    saveBtn.disabled = false;
   }
 });
 
@@ -6459,6 +6547,12 @@ document.getElementById("saveRecruiterBtn").addEventListener("click", async () =
   }
   msg.textContent = "Saving…";
   msg.style.color = "var(--text-muted)";
+  // RECRUITER_EMAILS/PHOTOS/TITLES solo se refrescan al final via loadFromGraph() (async), asi
+  // que un doble clic antes de que eso resuelva veria el mismo "changes" pendiente otra vez y
+  // repetiria las escrituras (inofensivo por si mismo — vuelve a escribir el mismo valor — pero
+  // gasta llamadas a Graph sin necesidad). Mismo guard que en el resto de botones de guardado.
+  const saveBtn = document.getElementById("saveRecruiterBtn");
+  saveBtn.disabled = true;
   try {
     for(const c of changes){
       await graphUpdateRecruiterField(name, c.col, c.value);
@@ -6471,6 +6565,8 @@ document.getElementById("saveRecruiterBtn").addEventListener("click", async () =
     console.error(err);
     msg.textContent = "Could not save: " + err.message;
     msg.style.color = "var(--critical)";
+  } finally {
+    saveBtn.disabled = false;
   }
 });
 
@@ -6490,6 +6586,10 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
   }
   msg.textContent = "Sharing…";
   msg.style.color = "var(--text-muted)";
+  // Sin bloquear el boton, un doble clic mandaba 2 invitaciones de OneDrive + 2 correos con el
+  // link del tracker a la misma persona.
+  const shareBtn = document.getElementById("shareAccessBtn");
+  shareBtn.disabled = true;
   try {
     await graphShareFile(email, role, TRACKER_URL);
     msg.textContent = `Shared with ${email}.`;
@@ -6510,6 +6610,8 @@ document.getElementById("shareAccessBtn").addEventListener("click", async () => 
     console.error(err);
     msg.textContent = "Could not share: " + err.message;
     msg.style.color = "var(--critical)";
+  } finally {
+    shareBtn.disabled = false;
   }
 });
 
