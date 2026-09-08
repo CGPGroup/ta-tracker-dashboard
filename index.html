@@ -5381,7 +5381,19 @@ const EXCEL_FILE_PATH = "/TA Tracker/TA_Tracker.xlsx";
 const KNOWN_DRIVE_ID = "b!Ti2dpiOiikGfvFaU8IVTQnQmxIZHd6ZEm68dbA2gpYil8P5VIx9MQLpQniWdrjOR";
 const KNOWN_ITEM_ID = "01RR5JXAZUEXECVESYIZC33KOTTYXL5KEC";
 const TRACKER_URL = "https://cgpgroup.github.io/ta-tracker-dashboard/";
-const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite", "Mail.Send"];
+// "Mail.Send" es un permiso mucho mas sensible que "leer/escribir archivos a los que tienes
+// acceso" (mandar correo A NOMBRE de la persona) — pedirlo de una junto con Files.ReadWrite
+// desde el login de CUALQUIER reclutador (incluido uno que nunca usa esa funcion, ej. David)
+// subia la barra de consentimiento para todos sin necesidad real: solo Nicolas, desde SSOT
+// Management, manda estos correos (compartir archivo + invitar). Caso real 2026-09-08: David
+// nunca vio ninguna pantalla de aceptar permisos y sus llamadas a Graph fallaban con 403
+// "accessDenied" en las operaciones de datos, aunque el archivo si estaba bien compartido con
+// el ("Puede editar" confirmado directo en OneDrive) — consistente con que el consentimiento
+// combinado nunca se completo bien para su cuenta. Se separa Mail.Send a su propio scope,
+// pedido solo en el momento en que de verdad se necesita (consentimiento incremental, ver
+// getMailToken()) — un reclutador normal como David nunca tiene que verlo ni aprobarlo.
+const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite"];
+const MAIL_SCOPES = ["Mail.Send"];
 
 const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
 let msalReady = msalInstance.initialize();
@@ -5439,6 +5451,22 @@ async function getGraphToken(){
   } catch(err){
     await msalInstance.acquireTokenRedirect({ scopes: GRAPH_SCOPES });
     throw new Error("Refreshing your session, please try again in a moment.");
+  }
+}
+// Token aparte para Mail.Send (ver la nota junto a MAIL_SCOPES arriba) — consentimiento
+// incremental: la primera vez que alguien realmente manda uno de estos correos (Nicolas, desde
+// SSOT Management), MSAL puede necesitar mostrar un popup de "aceptar este permiso" puntual
+// para ese scope nada mas, en vez de haberlo exigido desde el login inicial de todos. Un popup
+// (no redirect) para no perder el estado del formulario de SSOT Management a medio llenar.
+async function getMailToken(){
+  await msalReady;
+  if(!graphAccount) throw new Error("Not signed in.");
+  try {
+    const result = await msalInstance.acquireTokenSilent({ scopes: MAIL_SCOPES, account: graphAccount });
+    return result.accessToken;
+  } catch(err){
+    const result = await msalInstance.acquireTokenPopup({ scopes: MAIL_SCOPES });
+    return result.accessToken;
   }
 }
 
@@ -5602,8 +5630,16 @@ async function graphSendTrackerLinkEmail(email, siteUrl, name){
     actually powers the tracker.</p>
     <p>If you only need to view it, no login is required. If you need to make changes, connect
     with Microsoft 365 using the button at the top.</p>`;
-  await graphFetch("/me/sendMail", {
+  // No pasa por graphFetch()/getGraphToken() (esas usan GRAPH_SCOPES, que ya NO incluye
+  // Mail.Send) — este pide su propio token con MAIL_SCOPES, y tampoco necesita la cola de
+  // escrituras (no toca el Excel compartido, no hay nada que serializar contra otra escritura).
+  const token = await getMailToken();
+  const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
     method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       message: {
         subject: "Access To The Irth Talent Acquisition Tracker",
@@ -5613,6 +5649,10 @@ async function graphSendTrackerLinkEmail(email, siteUrl, name){
       saveToSentItems: true,
     }),
   });
+  if(!res.ok){
+    const body = await res.text();
+    throw new Error(`Graph API error (${res.status}): ${body.slice(0,300)}`);
+  }
 }
 
 async function connectM365(){
