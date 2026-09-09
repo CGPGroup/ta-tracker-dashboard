@@ -5356,11 +5356,19 @@ renderAll();
 const MSAL_CONFIG = {
   auth: {
     clientId: "218de17a-fdce-4e90-a75f-65d09250ba9e",
-    // "/organizations" en vez del tenant especifico de CGP: deja entrar cuentas de trabajo/
-    // escuela de CUALQUIER organizacion (ej. Irth), no solo CGP. Requiere que el App
-    // Registration en Azure tambien este puesto en "Accounts in any organizational directory"
-    // (ver instrucciones a Nicolas), si no, MSAL tira error de configuracion al cargar.
-    authority: "https://login.microsoftonline.com/organizations",
+    // Tenant especifico de CGP (no "/organizations") — revertido 2026-09-09. El intento de
+    // login multi-tenant (para que gente de Irth pudiera conectarse) se abandono hace tiempo
+    // (ver [[reference-ta-tracker-systems]]), pero esta parte nunca se revirtio. Sospecha real:
+    // que la app siguiera marcada como multi-tenant en Azure (mas riesgo a ojos de Azure AD,
+    // "acceso a cualquier organizacion") pudo ser justo lo que hizo que el consentimiento de
+    // David (mismo tenant, pero un usuario nuevo) exigiera aprobacion de admin, aunque el de
+    // Nicolas (el dueño de la app) ya hubiera pasado antes de este cambio. Este cambio de codigo
+    // por si solo es seguro de desplegar ya (una app multi-tenant en Azure igual acepta que el
+    // cliente pida su propio tenant especifico, no rompe nada) — pero para que de verdad
+    // resuelva el bloqueo de consentimiento, Nicolas TAMBIEN necesita revertir el App
+    // Registration en Azure a "Accounts in this organizational directory only" (ver
+    // instrucciones), que es lo que realmente cambia como Azure AD evalua el consentimiento.
+    authority: "https://login.microsoftonline.com/242ae368-a0e0-411f-9c46-cf0c4f7fa575",
     redirectUri: "https://cgpgroup.github.io/ta-tracker-dashboard/",
   },
   cache: { cacheLocation: "sessionStorage" },
