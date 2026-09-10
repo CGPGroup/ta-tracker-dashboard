@@ -1760,8 +1760,8 @@
   <div class="modal-card" style="max-width:420px;">
     <div class="modal-head">
       <div>
-        <h2 style="margin:0; font-size:16px;">Iniciar Sesión Como Reclutador</h2>
-        <div class="modal-sub">Sin necesidad de conectarte con Microsoft 365 — solo tu nombre y tu PIN.</div>
+        <h2 id="pinLoginTitle" style="margin:0; font-size:16px;">¿Cómo Vas A Usar El Tracker?</h2>
+        <div class="modal-sub" id="pinLoginSub">Elige una opción para continuar.</div>
       </div>
       <button class="modal-close" id="pinLoginClose" type="button">&times;</button>
     </div>
@@ -1770,9 +1770,13 @@
       <div class="form-field full"><label>PIN</label><input type="password" id="pinLoginInput" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
     </div>
     <div class="form-actions">
-      <button class="btn primary" type="button" id="pinLoginSave">Entrar</button>
+      <button class="btn primary" type="button" id="pinLoginSave">Entrar Como Reclutador</button>
     </div>
     <div class="panel-sub" id="pinLoginMsg" style="margin-top:8px;"></div>
+    <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:10px; align-items:center;">
+      <button class="btn ghost small" type="button" id="pinLoginVisitorBtn" style="width:100%;">Solo Quiero Ver (Sin Iniciar Sesión)</button>
+      <button type="button" class="fact-edit-link" id="pinLoginAdminLink">¿Eres administrador? Conéctate con Microsoft 365</button>
+    </div>
   </div>
 </div>
 
@@ -5418,7 +5422,10 @@ const MSAL_CONFIG = {
     authority: "https://login.microsoftonline.com/242ae368-a0e0-411f-9c46-cf0c4f7fa575",
     redirectUri: "https://cgpgroup.github.io/ta-tracker-dashboard/",
   },
-  cache: { cacheLocation: "sessionStorage" },
+  // localStorage (no sessionStorage): antes cerrar la pestaña y abrir una nueva forzaba
+  // volver a loguearse, porque sessionStorage se borra al cerrar la pestaña que la creo —
+  // localStorage sobrevive entre pestañas y entre reinicios del navegador.
+  cache: { cacheLocation: "localStorage" },
 };
 // Ruta del archivo dentro de "mi OneDrive" (root). Si mas adelante se mueve a un
 // sitio de SharePoint compartido, esta es la unica seccion que hay que cambiar.
@@ -5759,10 +5766,11 @@ async function connectM365(){
 }
 
 async function trysilentConnect(){
-  // Si ya habia una sesion de PIN guardada de antes (sessionStorage), restaurarla YA, sin
-  // esperar nada de MSAL — quien entra por PIN nunca se conecta con Microsoft, no tiene
-  // sentido que un refresh de pagina lo mande de vuelta al login.
-  const savedPin = sessionStorage.getItem("pinModeSession");
+  // Si ya habia una sesion de PIN guardada de antes (localStorage — sobrevive entre pestañas,
+  // a diferencia de sessionStorage), restaurarla YA, sin esperar nada de MSAL — quien entra
+  // por PIN nunca se conecta con Microsoft, no tiene sentido que abrir una pestaña nueva lo
+  // mande de vuelta al login.
+  const savedPin = localStorage.getItem("pinModeSession");
   if(savedPin){
     try {
       const saved = JSON.parse(savedPin);
@@ -5780,7 +5788,7 @@ async function trysilentConnect(){
       return;
     } catch(err){
       console.error("Could not restore the saved PIN session:", err);
-      sessionStorage.removeItem("pinModeSession");
+      localStorage.removeItem("pinModeSession");
       pinModeActive = false; MY_RECRUITER_NAME = null; pinModeCode = null;
     }
   }
@@ -5815,9 +5823,11 @@ async function trysilentConnect(){
   }
   const accounts = msalInstance.getAllAccounts();
   if(accounts.length === 0){
-    // Nadie logueado en este navegador: en vez de dejar la data de ejemplo quemada, intenta
-    // el proxy publico de solo lectura (ver PUBLIC_READ_URL) para gente que solo necesita ver.
+    // Nadie logueado en este navegador y ninguna sesion de PIN guardada: carga la data publica
+    // de fondo (para que quien elija "Solo quiero ver" ya tenga todo listo) y pregunta que tipo
+    // de usuario es, en vez de dejarlo parado en el Team Dashboard sin explicarle nada.
     await tryLoadPublicSnapshotAndRender();
+    openPinLoginModal();
     return;
   }
   graphAccount = accounts[0];
@@ -6328,6 +6338,15 @@ document.getElementById("pinLoginClose").addEventListener("click", closePinLogin
 document.getElementById("pinLoginModal").addEventListener("click", (e)=>{
   if(e.target.id === "pinLoginModal") closePinLoginModal();
 });
+// Cerrar esta pantalla de cualquier forma (X, clic afuera, o este boton) siempre significa lo
+// mismo: continuar como visitante de solo lectura — el Team Dashboard ya esta renderizado
+// detras (tryLoadPublicSnapshotAndRender() ya corrio antes de mostrar esta pantalla la primera
+// vez), asi que no hace falta nada mas.
+document.getElementById("pinLoginVisitorBtn").addEventListener("click", closePinLoginModal);
+document.getElementById("pinLoginAdminLink").addEventListener("click", ()=>{
+  closePinLoginModal();
+  connectM365();
+});
 document.getElementById("pinLoginSave").addEventListener("click", async ()=>{
   const msg = document.getElementById("pinLoginMsg");
   const name = document.getElementById("pinLoginSelect").value;
@@ -6355,7 +6374,7 @@ document.getElementById("pinLoginSave").addEventListener("click", async ()=>{
     pinModeActive = true;
     MY_RECRUITER_NAME = name;
     pinModeCode = code;
-    sessionStorage.setItem("pinModeSession", JSON.stringify({name, code}));
+    localStorage.setItem("pinModeSession", JSON.stringify({name, code}));
     await tryLoadPublicSnapshot();
     renderAll();
     setConnectionUi(true, `Connected as ${name} (PIN)`);
