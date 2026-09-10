@@ -223,6 +223,8 @@
   .signin-brand-logo { height: auto; width: auto; display: block; }
   .signin-brand-logo.cgp { height: 38px; }
   .signin-brand-logo.keystone { height: 18px; }
+  .signin-brand-logo.irth { height: 32px; }
+  .signin-brand-plus { font-size: 18px; font-weight: 600; color: #a8a29e; }
   .signin-brand-title { font-size: 23px; font-weight: 700; color: #f5f5f4; margin-bottom: 12px; line-height: 1.3; }
   .signin-brand-sub { font-size: 13.5px; color: #b3a89c; line-height: 1.6; }
   .signin-form-panel {
@@ -233,17 +235,27 @@
   .signin-card-logos { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
   .signin-card-logo { height: 30px; width: auto; display: block; }
   .signin-card h1 { font-size: 19px; margin: 0 0 4px; color: var(--text-primary); }
-  .signin-divider {
-    display: flex; align-items: center; gap: 10px; margin: 18px 0;
-    color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
+  /* Un solo "card" con varios pasos superpuestos (ver showGateStep()) en vez de varios modales
+     separados — mas facil de mantener el ancho/padding consistente entre pasos, y de animar
+     entre ellos si algun dia hace falta. */
+  .signin-step { display: none; }
+  .signin-step.active { display: block; }
+  .signin-choice-btn {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    width: 100%; text-align: left; padding: 14px 18px; margin-top: 10px; border-radius: 12px;
   }
-  .signin-divider::before, .signin-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-  .signin-ms-btn {
-    width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
-    padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2);
-    color: var(--text-primary); font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 10px;
+  .signin-choice-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .signin-choice-sub { font-size: 11.5px; font-weight: 500; opacity: 0.82; }
+  .signin-disclosure {
+    font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin: 14px 0 16px;
   }
-  .signin-ms-btn:hover { border-color: var(--brand); }
+  .signin-back-link {
+    background: none; border: none; cursor: pointer; padding: 0; margin-top: 14px;
+    font-size: 12px; font-weight: 600; color: var(--text-muted);
+  }
+  .signin-back-link:hover { color: var(--text-primary); }
   @media (min-width: 860px) {
     .signin-brand-panel { display: flex; }
     .signin-card-logos { display: none; }
@@ -682,7 +694,7 @@
   .btn {
     /* Pill completo en vez de rounded-rect: asi son los botones tanto en cgpgroup.com como en
        gokeystone.ai (incluyendo el mismo detalle de flecha circular en los CTAs principales,
-       ver #connectBtn/.scope-banner-actions mas abajo). */
+       ver .scope-banner-actions mas abajo). */
     font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 20px;
     border-radius: 999px; border: none; cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
@@ -927,7 +939,7 @@
       </div>
       <div class="sidebar-tagline">The Team's Single Source Of Truth</div>
       You're seeing live data already.<br>
-      Connect Microsoft 365 above only if you need to make changes.
+      Sign in from the welcome screen if you need to make changes.
     </div>
   </aside>
 
@@ -942,14 +954,12 @@
           <span class="theme-toggle-knob" id="themeToggleKnob"></span>
         </button>
         <span class="pill" id="connectionPill">Not connected</span>
-        <button class="btn ghost small" id="pinLoginBtn" type="button">I'm a Recruiter (No Microsoft 365)</button>
-        <button class="btn primary small" id="connectBtn" type="button">Connect Microsoft 365</button>
       </div>
     </div>
 
     <div class="content">
       <div class="alert-banner tier-yellow" id="demoBanner">
-        This view is showing sample data. Click "Connect Microsoft 365" above and sign in with your work account to load the real shared data and enable saving.
+        This view is showing sample data until real data finishes loading.
       </div>
 
       <div id="pendingAssignmentZone"></div>
@@ -1803,16 +1813,21 @@
 </div>
 
 <!-- ======================= SIGN-IN SCREEN (no Microsoft 365 required) ======================= -->
-<!-- Shown right after the loading splash for anyone who isn't already signed in. Nicolas keeps
-     using his real Microsoft login (Connect Microsoft 365 / the admin option below) with no
-     change at all. See pinModeActive/workerRecruiterWrite() and the big comment next to
-     "let pinModeActive" in the <script>. -->
+<!-- Landing page shown before anything else, for anyone who isn't already signed in — replaces
+     the old topbar "Connect Microsoft 365"/"I'm a Recruiter" buttons entirely (removed, see the
+     topbar comment). A little step machine inside one card (see .signin-step/showGateStep()):
+     main choice -> Public Access disclosure, or Internal Access -> Recruiter (PIN) / Admin
+     (Microsoft 365). Nicolas keeps using his real Microsoft login (the Administrator option)
+     with no change to how that login itself works. See pinModeActive/workerRecruiterWrite() and
+     the big comment next to "let pinModeActive" in the <script>. -->
 <div class="signin-overlay" id="pinLoginModal">
   <div class="signin-brand-panel">
     <div class="signin-brand-content">
       <div class="signin-brand-logos">
         <img src="logos/cgp-group.svg" alt="CGP Group" class="signin-brand-logo cgp" id="signinCgpLogo">
         <img src="logos/keystone-ai.svg" alt="KeyStone AI" class="signin-brand-logo keystone" id="signinKeystoneLogo">
+        <span class="signin-brand-plus">+</span>
+        <img src="logos/irth-solutions.png" alt="Irth Solutions" class="signin-brand-logo irth">
       </div>
       <div class="signin-brand-title">Talent Acquisition Tracker</div>
       <div class="signin-brand-sub">Real-time visibility into every requisition, from intake to offer, shared across the whole recruiting team.</div>
@@ -1824,27 +1839,77 @@
         <img src="logos/cgp-group.svg" alt="CGP Group" class="signin-card-logo" id="signinCardCgpLogo">
         <img src="logos/keystone-ai.svg" alt="KeyStone AI" class="signin-card-logo" id="signinCardKeystoneLogo">
       </div>
-      <h1 id="pinLoginTitle">How will you use the tracker?</h1>
-      <div class="modal-sub" id="pinLoginSub">Choose an option to continue.</div>
-      <div class="form-grid">
-        <div class="form-field full"><label>Recruiter</label><select id="pinLoginSelect"></select></div>
-        <div class="form-field full"><label>PIN</label><input type="password" id="pinLoginInput" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
+
+      <div class="signin-step active" id="signinStepMain">
+        <h1>How will you access the tracker?</h1>
+        <div class="modal-sub">Choose an option to continue.</div>
+        <button class="btn primary signin-choice-btn" type="button" id="signinPublicBtn">
+          <span class="signin-choice-title">Public Access</span>
+          <span class="signin-choice-sub">View live data as a stakeholder — no sign-in required</span>
+        </button>
+        <button class="btn ghost signin-choice-btn" type="button" id="signinInternalBtn">
+          <span class="signin-choice-title">Internal Access</span>
+          <span class="signin-choice-sub">Sign in as a recruiter or an admin to make changes</span>
+        </button>
       </div>
-      <div class="form-actions">
-        <button class="btn primary" type="button" id="pinLoginSave" style="width:100%;">Sign In as Recruiter</button>
+
+      <div class="signin-step" id="signinStepPublic">
+        <h1>Public Access</h1>
+        <div class="modal-sub">Please read before continuing.</div>
+        <div class="signin-disclosure">
+          You're about to view a live, read-only snapshot of this team's recruiting pipeline —
+          open requisitions, stages, and SLA status. This access exists so stakeholders (hiring
+          managers, leadership, partner teams) can check status without asking a recruiter
+          directly. No sign-in is required, and nothing here can be changed from this view.
+          This data is internal and confidential — please don't share it outside CGP Group and
+          Irth Solutions.
+        </div>
+        <button class="btn primary" type="button" id="signinPublicAgreeBtn" style="width:100%;">I Agree, Continue</button>
+        <button class="btn ghost" type="button" id="signinPublicDisagreeBtn" style="width:100%; margin-top:8px;">I Don't Agree</button>
       </div>
-      <div class="panel-sub" id="pinLoginMsg" style="margin-top:8px;"></div>
-      <div class="signin-divider"><span>or</span></div>
-      <button class="btn ghost" type="button" id="pinLoginVisitorBtn" style="width:100%;">Just Viewing (No Sign-In)</button>
-      <button type="button" class="signin-ms-btn" id="pinLoginAdminLink">
-        <svg width="16" height="16" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-          <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-          <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-          <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-        </svg>
-        Admin? Sign in with Microsoft 365
-      </button>
+
+      <div class="signin-step" id="signinStepInternal">
+        <h1>Internal Access</h1>
+        <div class="modal-sub">Are you a recruiter or an admin?</div>
+        <button class="btn primary signin-choice-btn" type="button" id="signinRecruiterBtn">
+          <span class="signin-choice-title">Recruiter</span>
+          <span class="signin-choice-sub">Sign in with the PIN you were given</span>
+        </button>
+        <button class="btn ghost signin-choice-btn" type="button" id="signinAdminBtn">
+          <span class="signin-choice-title">
+            <svg width="15" height="15" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+              <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+              <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+              <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+            </svg>
+            Administrator
+          </span>
+          <span class="signin-choice-sub">Sign in with Microsoft 365</span>
+        </button>
+        <button type="button" class="signin-back-link" id="signinInternalBackBtn">&larr; Back</button>
+      </div>
+
+      <div class="signin-step" id="signinStepPin">
+        <h1>Recruiter Sign-In</h1>
+        <div class="modal-sub">Enter the PIN you were given.</div>
+        <div class="form-grid">
+          <div class="form-field full"><label>PIN</label><input type="password" id="pinLoginInput" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" type="button" id="pinLoginSave" style="width:100%;">Continue</button>
+        </div>
+        <div class="panel-sub" id="pinLoginMsg" style="margin-top:8px;"></div>
+        <button type="button" class="signin-back-link" id="signinPinBackBtn">&larr; Back</button>
+      </div>
+
+      <div class="signin-step" id="signinStepConfirm">
+        <h1>Confirm It's You</h1>
+        <div class="modal-sub" id="signinConfirmSub"></div>
+        <button class="btn primary" type="button" id="signinConfirmYesBtn" style="width:100%;">Yes, Sign Me In</button>
+        <button class="btn ghost" type="button" id="signinConfirmNoBtn" style="width:100%; margin-top:8px;">No, That's Not Me</button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -5551,8 +5616,6 @@ function startAutoRefresh(){
 }
 function setConnectionUi(connected, label){
   const pill = document.getElementById("connectionPill");
-  const btn = document.getElementById("connectBtn");
-  const pinBtn = document.getElementById("pinLoginBtn");
   const banner = document.getElementById("demoBanner");
   const modalNote = document.getElementById("modalNote");
   if(connected){
@@ -5560,11 +5623,6 @@ function setConnectionUi(connected, label){
     pill.classList.remove("demo");
     pill.style.background = "var(--brand-wash)";
     pill.style.color = "var(--brand-dark)";
-    // Ya no hay boton manual "Reload Data": el auto-refresh (startAutoRefresh(), cada 2 min)
-    // se encarga de traer cambios de otros recruiters/pestañas, sin que Nicolas tenga que
-    // acordarse de darle click. Los botones solo hacen falta para el login inicial.
-    btn.style.display = "none";
-    pinBtn.style.display = "none";
     banner.style.display = "none";
     modalNote.textContent = pinModeActive
       ? `Connected as ${MY_RECRUITER_NAME}. Changes here are saved straight to the shared file.`
@@ -5574,11 +5632,8 @@ function setConnectionUi(connected, label){
     startAutoRefresh();
   } else {
     pill.textContent = "Not connected";
-    btn.textContent = "Connect Microsoft 365";
-    btn.style.display = "";
-    pinBtn.style.display = "";
     banner.style.display = "";
-    modalNote.textContent = 'Not connected to Microsoft 365, updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the shared file.';
+    modalNote.textContent = "Not connected to Microsoft 365, updates here only stay in this browser tab. Sign in from the welcome screen to save changes to the shared file.";
     modalNote.classList.remove("tier-good");
     modalNote.classList.add("tier-yellow");
   }
@@ -5770,8 +5825,8 @@ async function graphSendTrackerLinkEmail(email, siteUrl, name){
     <p><a href="${siteUrl}">Open The Tracker &rarr;</a></p>
     <p>You'll also get a separate email inviting you to the shared file itself, that's what
     actually powers the tracker.</p>
-    <p>If you only need to view it, no login is required. If you need to make changes, connect
-    with Microsoft 365 using the button at the top.</p>`;
+    <p>If you only need to view it, no login is required. If you need to make changes, choose
+    "Internal Access" on the welcome screen when you open the link.</p>`;
   // No pasa por graphFetch()/getGraphToken() (esas usan GRAPH_SCOPES, que ya NO incluye
   // Mail.Send) — este pide su propio token con MAIL_SCOPES, y tampoco necesita la cola de
   // escrituras (no toca el Excel compartido, no hay nada que serializar contra otra escritura).
@@ -5798,8 +5853,6 @@ async function graphSendTrackerLinkEmail(email, siteUrl, name){
 }
 
 async function connectM365(){
-  const btn = document.getElementById("connectBtn");
-  btn.disabled = true;
   try {
     // Si msalInstance.initialize() nunca resuelve (bloqueado por un ad blocker/extension, un
     // filtro de red corporativo, o cookies de terceros deshabilitadas), sin este timeout el
@@ -5829,8 +5882,6 @@ async function connectM365(){
     console.error(err);
     alert("Could not connect to Microsoft 365.\n\n" + err.message);
     setConnectionUi(false);
-  } finally {
-    btn.disabled = false;
   }
 }
 
@@ -6113,8 +6164,11 @@ async function loadFromGraph(){
   renderAll();
   // Aterrizas directo en TU workspace, en Tracking, en vez de Team Dashboard — Team Workspace
   // sigue a un clic bajo Dashboard en el nav, para el que lo necesite, pero ya no es lo primero
-  // que ves si tu correo es de un reclutador conocido.
-  if(myRecruiterName && !didAutoEnterWorkspace){
+  // que ves si tu correo es de un reclutador conocido. Excepcion: Nicolas (el admin) SI aterriza
+  // en Team Dashboard al conectarse por Microsoft 365 — pedido explicito 2026-09-16, ya que el
+  // gate de "Administrator" es su entrada normal ahora, no la de un reclutador viendo sus propias
+  // reqs. Sigue pudiendo entrar a su propio workspace a mano (My Workspace en el nav).
+  if(myRecruiterName && !didAutoEnterWorkspace && !isAdmin()){
     didAutoEnterWorkspace = true;
     setDashboardScope(myRecruiterName);
     activateView("tracking");
@@ -6149,10 +6203,13 @@ async function tryLoadPublicSnapshot(){
     return false;
   }
 }
-// Unico punto de red para el modo PIN — ver pinModeActive mas arriba y el endpoint
-// POST /recruiter-write en ta-tracker-public-read-worker.js. action es uno de "verifyPin",
-// "updateField", "appendHistorial", "appendBatch"; params son los campos propios de esa accion
-// (ver el comentario grande al inicio del Worker para el detalle exacto de cada una).
+// Punto de red para las escrituras del modo PIN (ya con el login confirmado) — ver
+// pinModeActive mas arriba y el endpoint POST /recruiter-write en
+// ta-tracker-public-read-worker.js. action es uno de "updateField", "appendHistorial",
+// "appendBatch"; params son los campos propios de esa accion (ver el comentario grande al
+// inicio del Worker para el detalle exacto de cada una). La cuarta accion del endpoint,
+// "identifyPin" (el paso de login en si, antes de saber el nombre), no pasa por aqui — se
+// llama directo desde el sign-in screen, ver el listener de "pinLoginSave".
 async function workerRecruiterWrite(action, params){
   const res = await fetch(`${PUBLIC_READ_URL}/recruiter-write`, {
     method: "POST",
@@ -6169,7 +6226,7 @@ async function tryLoadPublicSnapshotAndRender(){
   if(ok){
     renderAll();
     document.getElementById("demoBanner").innerHTML =
-      "Showing live data (read-only). Only recruiters connecting with Microsoft 365 above can make changes.";
+      "Showing live data (read-only) — only signed-in recruiters and admins can make changes here.";
   }
 }
 
@@ -6389,12 +6446,20 @@ async function graphClearTable(tableName){
   }
 }
 
-document.getElementById("connectBtn").addEventListener("click", connectM365);
-
 // ======================= SIGN-IN SCREEN (no Microsoft 365 required) =======================
+// Un solo "step machine" dentro de una tarjeta (ver los <div class="signin-step"> en el HTML
+// y showGateStep()) en vez de varios modales separados:
+//   main -> Public Access (disclosure, I Agree/I Don't Agree)
+//   main -> Internal Access -> Recruiter (PIN) -> Confirm ("Are you trying to log in as X?")
+//   main -> Internal Access -> Administrator (dispara connectM365() directo, sin paso propio)
+// Reemplaza los viejos botones del topbar ("Connect Microsoft 365"/"I'm a Recruiter") — ya no
+// existen ahi, este gate es la unica puerta de entrada.
+function showGateStep(step){
+  document.querySelectorAll("#pinLoginModal .signin-step").forEach(el => el.classList.remove("active"));
+  document.getElementById(step).classList.add("active");
+}
 function openPinLoginModal(){
-  const sel = document.getElementById("pinLoginSelect");
-  sel.innerHTML = RECRUITERS.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+  showGateStep("signinStepMain");
   document.getElementById("pinLoginInput").value = "";
   document.getElementById("pinLoginMsg").textContent = "";
   document.getElementById("pinLoginModal").classList.add("open");
@@ -6402,22 +6467,51 @@ function openPinLoginModal(){
 function closePinLoginModal(){
   document.getElementById("pinLoginModal").classList.remove("open");
 }
-document.getElementById("pinLoginBtn").addEventListener("click", openPinLoginModal);
-// This is a full-page screen (no backdrop to click outside of), so "Just Viewing" is the only
-// way to dismiss it — same as before, it just continues as a read-only visitor: the Team
-// Dashboard is already rendered behind it (tryLoadPublicSnapshotAndRender() already ran before
-// this screen is shown the first time), so nothing else needs to happen.
-document.getElementById("pinLoginVisitorBtn").addEventListener("click", closePinLoginModal);
-document.getElementById("pinLoginAdminLink").addEventListener("click", ()=>{
-  closePinLoginModal();
-  connectM365();
+// Reusa el mismo spinner de la pantalla de carga inicial para la transicion de "elegiste una
+// opcion del gate" -> "estas en el tracker", pedida explicitamente 2026-09-16 — ninguna de las
+// 3 opciones realmente necesita esperar nada (los datos ya estan listos o llegan rapido), es
+// solo continuidad visual: se ve igual de intencional que la primera carga de la pagina, en vez
+// de un salto seco. work() corre CON el spinner ya visible y el gate se cierra antes de volver a
+// esconderlo, para que nunca se alcance a ver un frame del tracker de fondo a medio-transicionar.
+async function transitionIntoTracker(work){
+  const overlay = document.getElementById("appLoadingOverlay");
+  const startedAt = Date.now();
+  overlay.classList.remove("hidden");
+  try {
+    if(work) await work();
+  } finally {
+    closePinLoginModal();
+    const wait = Math.max(0, 500 - (Date.now() - startedAt));
+    setTimeout(()=> overlay.classList.add("hidden"), wait);
+  }
+}
+
+document.getElementById("signinPublicBtn").addEventListener("click", ()=> showGateStep("signinStepPublic"));
+document.getElementById("signinInternalBtn").addEventListener("click", ()=> showGateStep("signinStepInternal"));
+document.getElementById("signinInternalBackBtn").addEventListener("click", ()=> showGateStep("signinStepMain"));
+document.getElementById("signinPublicDisagreeBtn").addEventListener("click", ()=> showGateStep("signinStepMain"));
+// Data publica de solo lectura ya se cargo de fondo antes de mostrar el gate (ver
+// tryLoadPublicSnapshotAndRender() en trysilentConnect()) — no hace falta ningun trabajo aqui,
+// solo la transicion visual.
+document.getElementById("signinPublicAgreeBtn").addEventListener("click", ()=> transitionIntoTracker());
+document.getElementById("signinAdminBtn").addEventListener("click", ()=> transitionIntoTracker(connectM365));
+
+document.getElementById("signinRecruiterBtn").addEventListener("click", ()=>{
+  document.getElementById("pinLoginInput").value = "";
+  document.getElementById("pinLoginMsg").textContent = "";
+  showGateStep("signinStepPin");
 });
+document.getElementById("signinPinBackBtn").addEventListener("click", ()=> showGateStep("signinStepInternal"));
+
+// Guarda el resultado de identifyPin() entre el paso "pin" (solo se pide el PIN) y el paso
+// "confirm" (banner "Are you trying to log in as X?") — ver el comentario grande junto a
+// "let pinModeActive" para por que el sign-in ya no pide el nombre primero.
+let pendingPinIdentity = null;
 document.getElementById("pinLoginSave").addEventListener("click", async ()=>{
   const msg = document.getElementById("pinLoginMsg");
-  const name = document.getElementById("pinLoginSelect").value;
   const code = document.getElementById("pinLoginInput").value.trim();
-  if(!name || !code){
-    msg.textContent = "Select your name and enter your PIN.";
+  if(!code){
+    msg.textContent = "Enter your PIN.";
     msg.style.color = "var(--critical)";
     return;
   }
@@ -6426,33 +6520,47 @@ document.getElementById("pinLoginSave").addEventListener("click", async ()=>{
   msg.textContent = "Verifying…";
   msg.style.color = "var(--text-muted)";
   try {
-    // workerRecruiterWrite() is not used here on purpose — there's nothing to save into
-    // pinModeCode/MY_RECRUITER_NAME yet, that's exactly what this call is confirming.
     const res = await fetch(`${PUBLIC_READ_URL}/recruiter-write`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recruiterName: name, pin: code, action: "verifyPin" }),
+      body: JSON.stringify({ pin: code, action: "identifyPin" }),
     });
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
     if(!res.ok) throw new Error((data && data.error) || `Could not verify (${res.status})`);
-    pinModeActive = true;
-    MY_RECRUITER_NAME = name;
-    pinModeCode = code;
-    localStorage.setItem("pinModeSession", JSON.stringify({name, code}));
-    await tryLoadPublicSnapshot();
-    renderAll();
-    setConnectionUi(true, `Connected as ${name} (PIN)`);
-    setDashboardScope(name);
-    activateView("tracking");
-    closePinLoginModal();
+    pendingPinIdentity = { recruiterName: data.recruiterName, email: data.email, pin: code };
+    document.getElementById("signinConfirmSub").innerHTML = data.email
+      ? `Are you trying to sign in as <b>${escapeHtml(data.recruiterName)}</b> (${escapeHtml(data.email)})?`
+      : `Are you trying to sign in as <b>${escapeHtml(data.recruiterName)}</b>?`;
+    msg.textContent = "";
+    showGateStep("signinStepConfirm");
   } catch(err){
     console.error(err);
-    msg.textContent = "Incorrect PIN, or recruiter not found.";
+    msg.textContent = "PIN not recognized.";
     msg.style.color = "var(--critical)";
   } finally {
     btn.disabled = false;
   }
+});
+document.getElementById("signinConfirmNoBtn").addEventListener("click", ()=>{
+  pendingPinIdentity = null;
+  document.getElementById("pinLoginInput").value = "";
+  showGateStep("signinStepPin");
+});
+document.getElementById("signinConfirmYesBtn").addEventListener("click", ()=>{
+  if(!pendingPinIdentity) return;
+  const { recruiterName, pin } = pendingPinIdentity;
+  transitionIntoTracker(async ()=>{
+    pinModeActive = true;
+    MY_RECRUITER_NAME = recruiterName;
+    pinModeCode = pin;
+    localStorage.setItem("pinModeSession", JSON.stringify({name: recruiterName, code: pin}));
+    await tryLoadPublicSnapshot();
+    renderAll();
+    setConnectionUi(true, `Connected as ${recruiterName} (PIN)`);
+    setDashboardScope(recruiterName);
+    activateView("tracking");
+  });
 });
 
 setConnectionUi(false);
