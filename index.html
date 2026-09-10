@@ -892,6 +892,7 @@
           <span class="theme-toggle-knob" id="themeToggleKnob"></span>
         </button>
         <span class="pill" id="connectionPill">Not connected</span>
+        <button class="btn ghost small" id="pinLoginBtn" type="button">Soy Reclutador (Sin Microsoft 365)</button>
         <button class="btn primary small" id="connectBtn" type="button">Connect Microsoft 365</button>
       </div>
     </div>
@@ -1219,6 +1220,7 @@
               <div class="form-field full"><label>Full Name</label><input type="text" id="newRecName" placeholder="e.g. John Smith"></div>
               <div class="form-field full"><label>Email</label><input type="email" id="newRecEmail" placeholder="john.smith@company.com"></div>
               <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="newRecTitle" placeholder="e.g. Talent Partner"></div>
+              <div class="form-field full"><label>PIN (Para Entrar Sin Microsoft 365)</label><input type="text" inputmode="numeric" id="newRecPin" placeholder="e.g. 4821"></div>
               <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="newRecPhoto" placeholder="Leave blank to use initials instead"></div>
               <div class="form-field full">
                 <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
@@ -1657,6 +1659,7 @@
       <div class="form-field full"><label>Recruiter</label><select id="editRecSelect"></select></div>
       <div class="form-field full"><label>Email</label><input type="email" id="editRecEmail" placeholder="john.smith@company.com"></div>
       <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="editRecTitle" placeholder="e.g. Talent Partner"></div>
+      <div class="form-field full"><label>PIN (Para Entrar Sin Microsoft 365)</label><input type="text" inputmode="numeric" id="editRecPin" placeholder="e.g. 4821"></div>
       <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="editRecPhoto" placeholder="Leave blank to use initials instead"></div>
     </div>
     <div class="form-actions">
@@ -1746,6 +1749,30 @@
       <button class="btn primary" type="button" id="editFieldModalSave">Save</button>
     </div>
     <div class="panel-sub" id="editFieldModalMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- ======================= PIN LOGIN MODAL (sin Microsoft 365) ======================= -->
+<!-- Para cualquier reclutador menos Nicolas, que sigue usando su login real de Microsoft
+     (Connect Microsoft 365) sin ningun cambio. Ver pinModeActive/workerRecruiterWrite() y el
+     comentario grande junto a "let pinModeActive" en el <script>. -->
+<div class="modal-overlay" id="pinLoginModal">
+  <div class="modal-card" style="max-width:420px;">
+    <div class="modal-head">
+      <div>
+        <h2 style="margin:0; font-size:16px;">Iniciar Sesión Como Reclutador</h2>
+        <div class="modal-sub">Sin necesidad de conectarte con Microsoft 365 — solo tu nombre y tu PIN.</div>
+      </div>
+      <button class="modal-close" id="pinLoginClose" type="button">&times;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field full"><label>Reclutador</label><select id="pinLoginSelect"></select></div>
+      <div class="form-field full"><label>PIN</label><input type="password" id="pinLoginInput" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="pinLoginSave">Entrar</button>
+    </div>
+    <div class="panel-sub" id="pinLoginMsg" style="margin-top:8px;"></div>
   </div>
 </div>
 
@@ -1845,6 +1872,10 @@ function updateStatusDateUI(prefix, status, prefillValue){
 // Sin conexion (pruebas locales, o la app recien cargo) se trata como admin: no hay una
 // identidad real que comprobar todavia, y bloquear tu propio uso local no aporta nada.
 function isAdmin(){
+  // Un login por PIN es una sesion real (aunque debil), no "nadie conectado, esto es prueba
+  // local" — sin este chequeo, el fallback de abajo (!email -> admin) trataria a CUALQUIER
+  // reclutador por PIN como admin, exponiendo Delete/Reset All Data/SSOT Management.
+  if(pinModeActive) return false;
   const email = (graphAccount && graphAccount.username || "").toLowerCase();
   return !email || email === ADMIN_EMAIL;
 }
@@ -2135,6 +2166,10 @@ let RECRUITERS = ["Nicolás Patarroyo"];
 let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
 let RECRUITER_TITLES = {}; // nombre -> cargo (opcional, se muestra en la tarjeta de Team)
 let RECRUITER_EMAILS = {}; // nombre -> email, para poder precargar el formulario de Edit Recruiter
+// nombre -> PIN, solo se llena desde la sesion MSAL real de Nicolas (loadFromGraph()) para el
+// formulario de Edit Recruiter — el proxy publico de solo lectura la quita antes de responder
+// (ver el Worker), asi que nunca llega a estar disponible fuera de esa sesion.
+let RECRUITER_PINS = {};
 // Unico admin del tracker por ahora (Nicolas): solo esta cuenta puede eliminar requisitions
 // desde Positions. Es una barrera de interfaz, no seguridad real (ver isAdmin()).
 const ADMIN_EMAIL = "nicolas.patarroyo.ramirez@cgpgroupus.com";
@@ -2142,6 +2177,17 @@ const ADMIN_EMAIL = "nicolas.patarroyo.ramirez@cgpgroupus.com";
 // isConnected()/isAdmin()/trackingCanEdit() ya lo necesitan desde el primer renderAll() al
 // cargar la pagina, antes de que el bloque de MSAL se ejecute.
 let graphAccount = null;
+// Segunda forma de "estar conectado", sin pasar por Microsoft 365 para nada — creada
+// 2026-09-10 porque el login real de Microsoft nunca funciono para un reclutador nuevo (David),
+// pese a agotar cada causa diagnosticable (cuenta correcta, archivo bien compartido, scopes,
+// clasificacion multi-tenant). En vez de seguir peleando con eso, cada reclutador (menos
+// Nicolas, que sigue con su login real de siempre) entra con su nombre + un PIN propio; las
+// escrituras pasan por el Worker publico (mismo que ya usaba la vista de solo lectura), que
+// las hace usando la credencial de Nicolas por detras — ver workerRecruiterWrite() y el PIN
+// branch dentro de graphUpdatePositionField()/graphUpdatePositionFieldByHeader()/
+// graphAppendHistorial()/graphAppendBatch() mas abajo.
+let pinModeActive = false;
+let pinModeCode = null;
 let MY_RECRUITER_NAME = null; // se llena al conectar, si tu correo coincide con un reclutador
 // Antes cada accion se grababa en History con author LITERAL "You", sin importar quien
 // estuviera conectado — inofensivo con un solo reclutador, pero enganoso en cuanto hay mas de
@@ -5320,6 +5366,7 @@ function updateNewPosCapacityHint(){
 function prefillEditRecruiterFields(name){
   document.getElementById("editRecEmail").value = RECRUITER_EMAILS[name] || "";
   document.getElementById("editRecTitle").value = RECRUITER_TITLES[name] || "";
+  document.getElementById("editRecPin").value = RECRUITER_PINS[name] || "";
   document.getElementById("editRecPhoto").value = RECRUITER_PHOTOS[name] || "";
 }
 function renderEditRecruiterSelect(){
@@ -5406,7 +5453,7 @@ const MAIL_SCOPES = ["Mail.Send"];
 const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
 let msalReady = msalInstance.initialize();
 
-function isConnected(){ return !!graphAccount; }
+function isConnected(){ return !!graphAccount || pinModeActive; }
 
 let autoRefreshTimer = null;
 // Reemplaza el boton manual de "Reload Data": mientras haya sesion de Microsoft 365, refresca
@@ -5417,12 +5464,19 @@ function startAutoRefresh(){
   if(autoRefreshTimer) return;
   autoRefreshTimer = setInterval(async ()=>{
     if(!isConnected()) return;
-    try { await loadFromGraph(); } catch(err){ console.error("Auto-refresh failed:", err); }
+    // En modo PIN no hay token propio de Graph — loadFromGraph() tronaria ("Not signed in.")
+    // cada 2 minutos. El proxy publico de solo lectura ya trae los mismos datos sin necesitar
+    // ninguna sesion.
+    try {
+      if(pinModeActive){ if(await tryLoadPublicSnapshot()) renderAll(); }
+      else await loadFromGraph();
+    } catch(err){ console.error("Auto-refresh failed:", err); }
   }, 120000);
 }
 function setConnectionUi(connected, label){
   const pill = document.getElementById("connectionPill");
   const btn = document.getElementById("connectBtn");
+  const pinBtn = document.getElementById("pinLoginBtn");
   const banner = document.getElementById("demoBanner");
   const modalNote = document.getElementById("modalNote");
   if(connected){
@@ -5432,10 +5486,13 @@ function setConnectionUi(connected, label){
     pill.style.color = "var(--brand-dark)";
     // Ya no hay boton manual "Reload Data": el auto-refresh (startAutoRefresh(), cada 2 min)
     // se encarga de traer cambios de otros recruiters/pestañas, sin que Nicolas tenga que
-    // acordarse de darle click. El boton solo hace falta para el login inicial.
+    // acordarse de darle click. Los botones solo hacen falta para el login inicial.
     btn.style.display = "none";
+    pinBtn.style.display = "none";
     banner.style.display = "none";
-    modalNote.textContent = "Connected to Microsoft 365, changes here are saved straight to the shared file.";
+    modalNote.textContent = pinModeActive
+      ? `Conectado como ${MY_RECRUITER_NAME}. Los cambios aqui se guardan al archivo compartido.`
+      : "Connected to Microsoft 365, changes here are saved straight to the shared file.";
     modalNote.classList.remove("tier-yellow");
     modalNote.classList.add("tier-good");
     startAutoRefresh();
@@ -5443,6 +5500,7 @@ function setConnectionUi(connected, label){
     pill.textContent = "Not connected";
     btn.textContent = "Connect Microsoft 365";
     btn.style.display = "";
+    pinBtn.style.display = "";
     banner.style.display = "";
     modalNote.textContent = 'Not connected to Microsoft 365, updates here only stay in this browser tab. Click "Connect Microsoft 365" at the top to save changes to the shared file.';
     modalNote.classList.remove("tier-good");
@@ -5701,6 +5759,31 @@ async function connectM365(){
 }
 
 async function trysilentConnect(){
+  // Si ya habia una sesion de PIN guardada de antes (sessionStorage), restaurarla YA, sin
+  // esperar nada de MSAL — quien entra por PIN nunca se conecta con Microsoft, no tiene
+  // sentido que un refresh de pagina lo mande de vuelta al login.
+  const savedPin = sessionStorage.getItem("pinModeSession");
+  if(savedPin){
+    try {
+      const saved = JSON.parse(savedPin);
+      pinModeActive = true;
+      MY_RECRUITER_NAME = saved.name;
+      pinModeCode = saved.code;
+      await tryLoadPublicSnapshot();
+      renderAll();
+      setConnectionUi(true, `Connected as ${saved.name} (PIN)`);
+      if(!didAutoEnterWorkspace){
+        didAutoEnterWorkspace = true;
+        setDashboardScope(saved.name);
+        activateView("tracking");
+      }
+      return;
+    } catch(err){
+      console.error("Could not restore the saved PIN session:", err);
+      sessionStorage.removeItem("pinModeSession");
+      pinModeActive = false; MY_RECRUITER_NAME = null; pinModeCode = null;
+    }
+  }
   // Mismo timeout que connectM365(): si msalReady nunca resuelve, sin esto el arranque se
   // queda colgado ANTES de siquiera intentar el proxy publico de solo lectura — quien abre el
   // link por primera vez veria la pantalla de carga (con su propio failsafe de 12s) pero
@@ -5890,13 +5973,17 @@ function mergeBatches(positions, batchHeaders, batchRows){
 // piezas que el resto de la app necesita.
 function parseRecruitersTable(recRows){
   const newRecruiters = recRows.map(row => row[0]).filter(Boolean);
-  const newPhotos = {}, newTitles = {}, newEmails = {};
+  const newPhotos = {}, newTitles = {}, newEmails = {}, newPins = {};
   recRows.forEach(row => {
     if(row[0] && row[1]) newEmails[row[0]] = row[1];
     if(row[0] && row[3]) newPhotos[row[0]] = row[3];
     if(row[0] && row[4]) newTitles[row[0]] = row[4];
+    // Columna 5 (PIN) — solo llega poblada desde loadFromGraph() (sesion MSAL real de Nicolas);
+    // el proxy publico de solo lectura la quita antes de mandar la respuesta (ver el Worker),
+    // asi que aqui simplemente no aparece cuando esta funcion se llama con esos datos.
+    if(row[0] && row[5]) newPins[row[0]] = row[5];
   });
-  return { newRecruiters, newPhotos, newTitles, newEmails };
+  return { newRecruiters, newPhotos, newTitles, newEmails, newPins };
 }
 
 async function loadFromGraph(){
@@ -5926,11 +6013,12 @@ async function loadFromGraph(){
   try {
     const recResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
     const recRows = recResp.value.map(r => r.values[0]);
-    const { newRecruiters, newPhotos, newTitles, newEmails } = parseRecruitersTable(recRows);
+    const { newRecruiters, newPhotos, newTitles, newEmails, newPins } = parseRecruitersTable(recRows);
     RECRUITERS = newRecruiters;
     RECRUITER_PHOTOS = newPhotos;
     RECRUITER_TITLES = newTitles;
     RECRUITER_EMAILS = newEmails;
+    RECRUITER_PINS = newPins;
     // Si el correo con el que iniciaste sesion coincide con el de un reclutador en esa
     // hoja, usamos su nombre para filtrar Tracking automaticamente por defecto.
     const myEmail = (graphAccount && graphAccount.username || "").toLowerCase();
@@ -5982,6 +6070,21 @@ async function tryLoadPublicSnapshot(){
     return false;
   }
 }
+// Unico punto de red para el modo PIN — ver pinModeActive mas arriba y el endpoint
+// POST /recruiter-write en ta-tracker-public-read-worker.js. action es uno de "verifyPin",
+// "updateField", "appendHistorial", "appendBatch"; params son los campos propios de esa accion
+// (ver el comentario grande al inicio del Worker para el detalle exacto de cada una).
+async function workerRecruiterWrite(action, params){
+  const res = await fetch(`${PUBLIC_READ_URL}/recruiter-write`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recruiterName: MY_RECRUITER_NAME, pin: pinModeCode, action, ...params }),
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if(!res.ok) throw new Error((data && data.error) || `Worker error (${res.status})`);
+  return data;
+}
 async function tryLoadPublicSnapshotAndRender(){
   const ok = await tryLoadPublicSnapshot();
   if(ok){
@@ -6010,6 +6113,7 @@ async function resolveRowIndex(positionId){
 }
 
 async function graphUpdatePositionField(positionId, columnLetter, value){
+  if(pinModeActive) return workerRecruiterWrite("updateField", {positionId, columnLetter, value});
   const rowIndex = await resolveRowIndex(positionId);
   if(rowIndex === undefined) throw new Error("This position no longer exists in the shared file (someone may have deleted it). Reload the data before trying again.");
   // PATCH directo sobre la celda (fuera de la Tabla, usando range del worksheet) es mas
@@ -6037,6 +6141,9 @@ function excelColumnLetter(index){
 // en el archivo real de Nicolas no vale la pena asumir de antemano — solo hace falta que el
 // encabezado en Excel diga exactamente ese texto, sin importar en que columna quede.
 async function graphUpdatePositionFieldByHeader(positionId, headerName, value){
+  // En modo PIN el Worker resuelve el header a columna el mismo, del lado del servidor — no
+  // hay token propio aqui para leer headerRowRange directamente.
+  if(pinModeActive) return workerRecruiterWrite("updateField", {positionId, header: headerName, value});
   const headerResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/headerRowRange`);
   const headers = (headerResp.values && headerResp.values[0]) || [];
   const i = headers.indexOf(headerName);
@@ -6086,6 +6193,10 @@ async function graphUpdateRecruiterField(name, columnLetter, value){
 // mergeLatestRemarks()/buildTimeline()).
 async function graphAppendHistorial(positionId, positionTitle, remark, author, type){
   const today = localTodayStr();
+  // author se ignora del lado del Worker en modo PIN (siempre usa el nombre ya verificado por
+  // PIN, nunca lo que mande el cliente) — se sigue pasando aqui solo por si el llamador lo usa
+  // para otra cosa, no porque el Worker lo necesite.
+  if(pinModeActive) return workerRecruiterWrite("appendHistorial", {positionId, positionTitle, text: remark, type: type || "manual", date: today});
   await graphFetch(`${await workbookBase()}/tables('HistorialTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
@@ -6096,6 +6207,7 @@ async function graphAppendHistorial(positionId, positionTitle, remark, author, t
 // BatchesTable: Position ID | Date | Batch Type | Candidate Count. Tabla separada (no
 // HistorialTable) porque un batch es informacion estructurada, no un remark de texto libre.
 async function graphAppendBatch(positionId, date, batchType, candidateCount){
+  if(pinModeActive) return workerRecruiterWrite("appendBatch", {positionId, date, batchType, candidateCount});
   await graphFetch(`${await workbookBase()}/tables('BatchesTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
@@ -6142,15 +6254,15 @@ async function graphAppendPosition(row){
   });
 }
 
-async function graphAppendRecruiter(name, email, photoUrl, jobTitle){
+async function graphAppendRecruiter(name, email, photoUrl, jobTitle, pin){
   // Graph exige que el array de valores tenga EXACTAMENTE el mismo numero de columnas que la
   // Tabla real en Excel, o tira "InvalidArgument" (dimensions do not match). Si alguna columna
-  // reciente (ej. Job Title) todavia no se agrego a mano en el Excel real, la tabla ahi tiene
-  // menos columnas de las que este objeto conoce, asi que se recorta el row al tamano real en
-  // vez de asumir que las 5 columnas siempre existen.
+  // reciente (ej. Job Title, o PIN) todavia no se agrego a mano en el Excel real, la tabla ahi
+  // tiene menos columnas de las que este objeto conoce, asi que se recorta el row al tamano
+  // real en vez de asumir que las 6 columnas siempre existen.
   const headerResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/headerRowRange`);
   const colCount = (headerResp.values[0] || []).length || 5;
-  const row = [name, email || "", "Yes", photoUrl || "", jobTitle || ""].slice(0, colCount);
+  const row = [name, email || "", "Yes", photoUrl || "", jobTitle || "", pin || ""].slice(0, colCount);
   await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({ values: [row] }),
@@ -6199,6 +6311,66 @@ async function graphClearTable(tableName){
 }
 
 document.getElementById("connectBtn").addEventListener("click", connectM365);
+
+// ======================= PIN LOGIN (sin Microsoft 365) =======================
+function openPinLoginModal(){
+  const sel = document.getElementById("pinLoginSelect");
+  sel.innerHTML = RECRUITERS.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+  document.getElementById("pinLoginInput").value = "";
+  document.getElementById("pinLoginMsg").textContent = "";
+  document.getElementById("pinLoginModal").classList.add("open");
+}
+function closePinLoginModal(){
+  document.getElementById("pinLoginModal").classList.remove("open");
+}
+document.getElementById("pinLoginBtn").addEventListener("click", openPinLoginModal);
+document.getElementById("pinLoginClose").addEventListener("click", closePinLoginModal);
+document.getElementById("pinLoginModal").addEventListener("click", (e)=>{
+  if(e.target.id === "pinLoginModal") closePinLoginModal();
+});
+document.getElementById("pinLoginSave").addEventListener("click", async ()=>{
+  const msg = document.getElementById("pinLoginMsg");
+  const name = document.getElementById("pinLoginSelect").value;
+  const code = document.getElementById("pinLoginInput").value.trim();
+  if(!name || !code){
+    msg.textContent = "Selecciona tu nombre y escribe tu PIN.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const btn = document.getElementById("pinLoginSave");
+  btn.disabled = true;
+  msg.textContent = "Verificando…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    // No se usa workerRecruiterWrite() aqui a proposito — todavia no hay nada que guardar en
+    // pinModeCode/MY_RECRUITER_NAME, es justo lo que este mismo llamado va a confirmar.
+    const res = await fetch(`${PUBLIC_READ_URL}/recruiter-write`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recruiterName: name, pin: code, action: "verifyPin" }),
+    });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if(!res.ok) throw new Error((data && data.error) || `No se pudo verificar (${res.status})`);
+    pinModeActive = true;
+    MY_RECRUITER_NAME = name;
+    pinModeCode = code;
+    sessionStorage.setItem("pinModeSession", JSON.stringify({name, code}));
+    await tryLoadPublicSnapshot();
+    renderAll();
+    setConnectionUi(true, `Connected as ${name} (PIN)`);
+    setDashboardScope(name);
+    activateView("tracking");
+    closePinLoginModal();
+  } catch(err){
+    console.error(err);
+    msg.textContent = "PIN incorrecto o reclutador no encontrado.";
+    msg.style.color = "var(--critical)";
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 setConnectionUi(false);
 
 const THEME_ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
@@ -6460,6 +6632,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   const name = document.getElementById("newRecName").value.trim();
   const email = document.getElementById("newRecEmail").value.trim();
   const jobTitle = document.getElementById("newRecTitle").value.trim();
+  const pin = document.getElementById("newRecPin").value.trim();
   const photoUrl = document.getElementById("newRecPhoto").value.trim();
   const shouldShare = document.getElementById("newRecShare").checked;
   const shareRole = document.getElementById("newRecShareRole").value;
@@ -6486,7 +6659,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   const createBtn = document.getElementById("createRecruiterBtn");
   createBtn.disabled = true;
   try {
-    await graphAppendRecruiter(name, email, photoUrl, jobTitle);
+    await graphAppendRecruiter(name, email, photoUrl, jobTitle, pin);
     let shareNote = "";
     if(shouldShare){
       try {
@@ -6525,7 +6698,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   }
 });
 document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
-  ["newRecName","newRecEmail","newRecTitle","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
+  ["newRecName","newRecEmail","newRecTitle","newRecPin","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("newRecShare").checked = true;
   document.getElementById("createRecruiterMsg").textContent = "";
 });
@@ -6670,6 +6843,7 @@ document.getElementById("saveRecruiterBtn").addEventListener("click", async () =
   }
   const email = document.getElementById("editRecEmail").value.trim();
   const title = document.getElementById("editRecTitle").value.trim();
+  const pin = document.getElementById("editRecPin").value.trim();
   const photo = document.getElementById("editRecPhoto").value.trim();
   if(!isConnected()){
     msg.textContent = "Connect to Microsoft 365 first (button at the top) to save this.";
@@ -6680,6 +6854,7 @@ document.getElementById("saveRecruiterBtn").addEventListener("click", async () =
   if(email !== (RECRUITER_EMAILS[name] || "")) changes.push({col:"B", value: email});
   if(photo !== (RECRUITER_PHOTOS[name] || "")) changes.push({col:"D", value: photo});
   if(title !== (RECRUITER_TITLES[name] || "")) changes.push({col:"E", value: title});
+  if(pin !== (RECRUITER_PINS[name] || "")) changes.push({col:"F", value: pin});
   if(!changes.length){
     msg.textContent = "No changes to save.";
     msg.style.color = "var(--text-muted)";
