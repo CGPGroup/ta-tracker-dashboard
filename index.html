@@ -199,6 +199,56 @@
   @keyframes app-loading-spin { to { transform: rotate(360deg); } }
   .app-loading-sub { font-size: 12px; color: var(--text-muted); }
 
+  /* ---------- Sign-in screen: shown right after the loading splash so the first-ever visitor
+     (or anyone in a new browser/tab) picks a path before landing on the Team dashboard. Same
+     show/hide mechanism as .modal-overlay (an "open" class toggling opacity/visibility so
+     display can stay flex and the fade can transition), but full-page instead of a small
+     centered card — see openPinLoginModal()/closePinLoginModal(). ---------- */
+  .signin-overlay {
+    display: flex; position: fixed; inset: 0; z-index: 60;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+  }
+  .signin-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
+  .signin-brand-panel {
+    /* Fondo oscuro fijo a proposito, sin importar el tema (ver el comentario grande junto a
+       "El panel de marca del sign-in screen" en applyTheme()) — por eso no usa var(--page)/
+       var(--surface-1), que si cambian con el tema. */
+    display: none; flex: 1 1 42%; min-width: 300px; align-items: center; justify-content: center;
+    padding: 48px; background: linear-gradient(160deg, #241f1b, #17130f);
+    border-right: 1px solid var(--border);
+  }
+  .signin-brand-content { max-width: 360px; }
+  .signin-brand-logos { display: flex; align-items: center; gap: 18px; margin-bottom: 30px; }
+  .signin-brand-logo { height: auto; width: auto; display: block; }
+  .signin-brand-logo.cgp { height: 38px; }
+  .signin-brand-logo.keystone { height: 18px; }
+  .signin-brand-title { font-size: 23px; font-weight: 700; color: #f5f5f4; margin-bottom: 12px; line-height: 1.3; }
+  .signin-brand-sub { font-size: 13.5px; color: #b3a89c; line-height: 1.6; }
+  .signin-form-panel {
+    flex: 1 1 58%; display: flex; align-items: center; justify-content: center;
+    padding: 32px 20px; overflow-y: auto; background: var(--page);
+  }
+  .signin-card { width: 100%; max-width: 380px; }
+  .signin-card-logos { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .signin-card-logo { height: 30px; width: auto; display: block; }
+  .signin-card h1 { font-size: 19px; margin: 0 0 4px; color: var(--text-primary); }
+  .signin-divider {
+    display: flex; align-items: center; gap: 10px; margin: 18px 0;
+    color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .signin-divider::before, .signin-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .signin-ms-btn {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--text-primary); font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 10px;
+  }
+  .signin-ms-btn:hover { border-color: var(--brand); }
+  @media (min-width: 860px) {
+    .signin-brand-panel { display: flex; }
+    .signin-card-logos { display: none; }
+  }
+
   .nav { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
   .nav-item {
     display: flex; align-items: center; gap: 10px;
@@ -892,7 +942,7 @@
           <span class="theme-toggle-knob" id="themeToggleKnob"></span>
         </button>
         <span class="pill" id="connectionPill">Not connected</span>
-        <button class="btn ghost small" id="pinLoginBtn" type="button">Soy Reclutador (Sin Microsoft 365)</button>
+        <button class="btn ghost small" id="pinLoginBtn" type="button">I'm a Recruiter (No Microsoft 365)</button>
         <button class="btn primary small" id="connectBtn" type="button">Connect Microsoft 365</button>
       </div>
     </div>
@@ -1220,7 +1270,7 @@
               <div class="form-field full"><label>Full Name</label><input type="text" id="newRecName" placeholder="e.g. John Smith"></div>
               <div class="form-field full"><label>Email</label><input type="email" id="newRecEmail" placeholder="john.smith@company.com"></div>
               <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="newRecTitle" placeholder="e.g. Talent Partner"></div>
-              <div class="form-field full"><label>PIN (Para Entrar Sin Microsoft 365)</label><input type="text" inputmode="numeric" id="newRecPin" placeholder="e.g. 4821"></div>
+              <div class="form-field full"><label>PIN (For Signing In Without Microsoft 365)</label><input type="text" inputmode="numeric" id="newRecPin" placeholder="e.g. 4821"></div>
               <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="newRecPhoto" placeholder="Leave blank to use initials instead"></div>
               <div class="form-field full">
                 <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
@@ -1659,7 +1709,7 @@
       <div class="form-field full"><label>Recruiter</label><select id="editRecSelect"></select></div>
       <div class="form-field full"><label>Email</label><input type="email" id="editRecEmail" placeholder="john.smith@company.com"></div>
       <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="editRecTitle" placeholder="e.g. Talent Partner"></div>
-      <div class="form-field full"><label>PIN (Para Entrar Sin Microsoft 365)</label><input type="text" inputmode="numeric" id="editRecPin" placeholder="e.g. 4821"></div>
+      <div class="form-field full"><label>PIN (For Signing In Without Microsoft 365)</label><input type="text" inputmode="numeric" id="editRecPin" placeholder="e.g. 4821"></div>
       <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="editRecPhoto" placeholder="Leave blank to use initials instead"></div>
     </div>
     <div class="form-actions">
@@ -1752,30 +1802,49 @@
   </div>
 </div>
 
-<!-- ======================= PIN LOGIN MODAL (sin Microsoft 365) ======================= -->
-<!-- Para cualquier reclutador menos Nicolas, que sigue usando su login real de Microsoft
-     (Connect Microsoft 365) sin ningun cambio. Ver pinModeActive/workerRecruiterWrite() y el
-     comentario grande junto a "let pinModeActive" en el <script>. -->
-<div class="modal-overlay" id="pinLoginModal">
-  <div class="modal-card" style="max-width:420px;">
-    <div class="modal-head">
-      <div>
-        <h2 id="pinLoginTitle" style="margin:0; font-size:16px;">¿Cómo Vas A Usar El Tracker?</h2>
-        <div class="modal-sub" id="pinLoginSub">Elige una opción para continuar.</div>
+<!-- ======================= SIGN-IN SCREEN (no Microsoft 365 required) ======================= -->
+<!-- Shown right after the loading splash for anyone who isn't already signed in. Nicolas keeps
+     using his real Microsoft login (Connect Microsoft 365 / the admin option below) with no
+     change at all. See pinModeActive/workerRecruiterWrite() and the big comment next to
+     "let pinModeActive" in the <script>. -->
+<div class="signin-overlay" id="pinLoginModal">
+  <div class="signin-brand-panel">
+    <div class="signin-brand-content">
+      <div class="signin-brand-logos">
+        <img src="logos/cgp-group.svg" alt="CGP Group" class="signin-brand-logo cgp" id="signinCgpLogo">
+        <img src="logos/keystone-ai.svg" alt="KeyStone AI" class="signin-brand-logo keystone" id="signinKeystoneLogo">
       </div>
-      <button class="modal-close" id="pinLoginClose" type="button">&times;</button>
+      <div class="signin-brand-title">Talent Acquisition Tracker</div>
+      <div class="signin-brand-sub">Real-time visibility into every requisition, from intake to offer, shared across the whole recruiting team.</div>
     </div>
-    <div class="form-grid">
-      <div class="form-field full"><label>Reclutador</label><select id="pinLoginSelect"></select></div>
-      <div class="form-field full"><label>PIN</label><input type="password" id="pinLoginInput" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
-    </div>
-    <div class="form-actions">
-      <button class="btn primary" type="button" id="pinLoginSave">Entrar Como Reclutador</button>
-    </div>
-    <div class="panel-sub" id="pinLoginMsg" style="margin-top:8px;"></div>
-    <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:10px; align-items:center;">
-      <button class="btn ghost small" type="button" id="pinLoginVisitorBtn" style="width:100%;">Solo Quiero Ver (Sin Iniciar Sesión)</button>
-      <button type="button" class="fact-edit-link" id="pinLoginAdminLink">¿Eres administrador? Conéctate con Microsoft 365</button>
+  </div>
+  <div class="signin-form-panel">
+    <div class="signin-card">
+      <div class="signin-card-logos">
+        <img src="logos/cgp-group.svg" alt="CGP Group" class="signin-card-logo" id="signinCardCgpLogo">
+        <img src="logos/keystone-ai.svg" alt="KeyStone AI" class="signin-card-logo" id="signinCardKeystoneLogo">
+      </div>
+      <h1 id="pinLoginTitle">How will you use the tracker?</h1>
+      <div class="modal-sub" id="pinLoginSub">Choose an option to continue.</div>
+      <div class="form-grid">
+        <div class="form-field full"><label>Recruiter</label><select id="pinLoginSelect"></select></div>
+        <div class="form-field full"><label>PIN</label><input type="password" id="pinLoginInput" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" type="button" id="pinLoginSave" style="width:100%;">Sign In as Recruiter</button>
+      </div>
+      <div class="panel-sub" id="pinLoginMsg" style="margin-top:8px;"></div>
+      <div class="signin-divider"><span>or</span></div>
+      <button class="btn ghost" type="button" id="pinLoginVisitorBtn" style="width:100%;">Just Viewing (No Sign-In)</button>
+      <button type="button" class="signin-ms-btn" id="pinLoginAdminLink">
+        <svg width="16" height="16" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+          <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+          <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+          <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+        </svg>
+        Admin? Sign in with Microsoft 365
+      </button>
     </div>
   </div>
 </div>
@@ -5498,7 +5567,7 @@ function setConnectionUi(connected, label){
     pinBtn.style.display = "none";
     banner.style.display = "none";
     modalNote.textContent = pinModeActive
-      ? `Conectado como ${MY_RECRUITER_NAME}. Los cambios aqui se guardan al archivo compartido.`
+      ? `Connected as ${MY_RECRUITER_NAME}. Changes here are saved straight to the shared file.`
       : "Connected to Microsoft 365, changes here are saved straight to the shared file.";
     modalNote.classList.remove("tier-yellow");
     modalNote.classList.add("tier-good");
@@ -6322,7 +6391,7 @@ async function graphClearTable(tableName){
 
 document.getElementById("connectBtn").addEventListener("click", connectM365);
 
-// ======================= PIN LOGIN (sin Microsoft 365) =======================
+// ======================= SIGN-IN SCREEN (no Microsoft 365 required) =======================
 function openPinLoginModal(){
   const sel = document.getElementById("pinLoginSelect");
   sel.innerHTML = RECRUITERS.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
@@ -6334,14 +6403,10 @@ function closePinLoginModal(){
   document.getElementById("pinLoginModal").classList.remove("open");
 }
 document.getElementById("pinLoginBtn").addEventListener("click", openPinLoginModal);
-document.getElementById("pinLoginClose").addEventListener("click", closePinLoginModal);
-document.getElementById("pinLoginModal").addEventListener("click", (e)=>{
-  if(e.target.id === "pinLoginModal") closePinLoginModal();
-});
-// Cerrar esta pantalla de cualquier forma (X, clic afuera, o este boton) siempre significa lo
-// mismo: continuar como visitante de solo lectura — el Team Dashboard ya esta renderizado
-// detras (tryLoadPublicSnapshotAndRender() ya corrio antes de mostrar esta pantalla la primera
-// vez), asi que no hace falta nada mas.
+// This is a full-page screen (no backdrop to click outside of), so "Just Viewing" is the only
+// way to dismiss it — same as before, it just continues as a read-only visitor: the Team
+// Dashboard is already rendered behind it (tryLoadPublicSnapshotAndRender() already ran before
+// this screen is shown the first time), so nothing else needs to happen.
 document.getElementById("pinLoginVisitorBtn").addEventListener("click", closePinLoginModal);
 document.getElementById("pinLoginAdminLink").addEventListener("click", ()=>{
   closePinLoginModal();
@@ -6352,17 +6417,17 @@ document.getElementById("pinLoginSave").addEventListener("click", async ()=>{
   const name = document.getElementById("pinLoginSelect").value;
   const code = document.getElementById("pinLoginInput").value.trim();
   if(!name || !code){
-    msg.textContent = "Selecciona tu nombre y escribe tu PIN.";
+    msg.textContent = "Select your name and enter your PIN.";
     msg.style.color = "var(--critical)";
     return;
   }
   const btn = document.getElementById("pinLoginSave");
   btn.disabled = true;
-  msg.textContent = "Verificando…";
+  msg.textContent = "Verifying…";
   msg.style.color = "var(--text-muted)";
   try {
-    // No se usa workerRecruiterWrite() aqui a proposito — todavia no hay nada que guardar en
-    // pinModeCode/MY_RECRUITER_NAME, es justo lo que este mismo llamado va a confirmar.
+    // workerRecruiterWrite() is not used here on purpose — there's nothing to save into
+    // pinModeCode/MY_RECRUITER_NAME yet, that's exactly what this call is confirming.
     const res = await fetch(`${PUBLIC_READ_URL}/recruiter-write`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -6370,7 +6435,7 @@ document.getElementById("pinLoginSave").addEventListener("click", async ()=>{
     });
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
-    if(!res.ok) throw new Error((data && data.error) || `No se pudo verificar (${res.status})`);
+    if(!res.ok) throw new Error((data && data.error) || `Could not verify (${res.status})`);
     pinModeActive = true;
     MY_RECRUITER_NAME = name;
     pinModeCode = code;
@@ -6383,7 +6448,7 @@ document.getElementById("pinLoginSave").addEventListener("click", async ()=>{
     closePinLoginModal();
   } catch(err){
     console.error(err);
-    msg.textContent = "PIN incorrecto o reclutador no encontrado.";
+    msg.textContent = "Incorrect PIN, or recruiter not found.";
     msg.style.color = "var(--critical)";
   } finally {
     btn.disabled = false;
@@ -6409,6 +6474,14 @@ function applyTheme(theme){
   const loadingKeystone = document.getElementById("loadingKeystoneLogo");
   if(loadingCgp) loadingCgp.src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
   if(loadingKeystone) loadingKeystone.src = theme === "light" ? "logos/keystone-ai-dark.svg" : "logos/keystone-ai.svg";
+  // El panel de marca del sign-in screen es oscuro siempre (parte del diseno, no cambia con el
+  // tema), asi que sus logos se quedan en la variante blanca sin importar el tema — solo los
+  // logos chicos que aparecen en la tarjeta (fondo var(--surface-1), ese si sigue el tema) en
+  // pantallas angostas necesitan la misma logica de swap que loadingCgp/loadingKeystone.
+  const signinCardCgp = document.getElementById("signinCardCgpLogo");
+  const signinCardKeystone = document.getElementById("signinCardKeystoneLogo");
+  if(signinCardCgp) signinCardCgp.src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
+  if(signinCardKeystone) signinCardKeystone.src = theme === "light" ? "logos/keystone-ai-dark.svg" : "logos/keystone-ai.svg";
 }
 document.getElementById("themeToggle").addEventListener("click", ()=>{
   applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
