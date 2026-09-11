@@ -218,8 +218,8 @@
     padding: 48px; background: linear-gradient(160deg, #241f1b, #17130f);
     border-right: 1px solid var(--border);
   }
-  .signin-brand-content { max-width: 360px; }
-  .signin-brand-logos { display: flex; align-items: center; gap: 18px; margin-bottom: 30px; }
+  .signin-brand-content { max-width: 360px; text-align: center; }
+  .signin-brand-logos { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 30px; }
   .signin-brand-logo { height: auto; width: auto; display: block; }
   .signin-brand-logo.cgp { height: 38px; }
   .signin-brand-logo.keystone { height: 18px; }
@@ -1742,6 +1742,7 @@
     </div>
     <div class="form-actions">
       <button class="btn primary" type="button" id="saveRecruiterBtn">Save Changes</button>
+      <button class="link-danger" type="button" id="deleteRecruiterBtn" style="border:1px solid var(--critical); border-radius:8px; padding:8px 14px;">Delete Recruiter</button>
     </div>
     <div class="panel-sub" id="editRecruiterMsg" style="margin-top:8px;"></div>
   </div>
@@ -6520,6 +6521,16 @@ async function graphAppendRecruiter(name, email, photoUrl, jobTitle, pin){
     body: JSON.stringify({ values: [row] }),
   });
 }
+// No toca las posiciones ya asignadas a este nombre — siguen mostrando su nombre tal cual
+// (ninguna llave real los conecta, solo un string), es responsabilidad de quien borra
+// reasignarlas primero si no quiere eso. El aviso va en el confirm() del boton, no aqui.
+async function graphDeleteRecruiter(name){
+  const rowIndex = await resolveRecruiterRowIndex(name);
+  if(rowIndex === undefined) throw new Error("This recruiter no longer exists in the shared file (someone may have already removed them).");
+  await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows/itemAt(index=${rowIndex})`, {
+    method: "DELETE",
+  });
+}
 
 async function graphDeletePosition(positionId){
   const rowIndex = await resolveRowIndex(positionId);
@@ -7193,6 +7204,52 @@ document.getElementById("saveRecruiterBtn").addEventListener("click", async () =
     msg.style.color = "var(--critical)";
   } finally {
     saveBtn.disabled = false;
+  }
+});
+
+document.getElementById("deleteRecruiterBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("editRecruiterMsg");
+  const name = document.getElementById("editRecSelect").value;
+  if(!name){
+    msg.textContent = "No recruiters to delete.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  if(!isConnected()){
+    msg.textContent = "Connect to Microsoft 365 first (button at the top) to do this.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  // Ademas de estar escondido para no-admins (Edit Recruiter solo se abre desde SSOT
+  // Management, ya admin-gated via updateManageNavVisibility()) — mismo doble seguro que
+  // resetAllBtn, no confiar solo en que el boton estuviera oculto.
+  if(!isAdmin()){
+    msg.textContent = "Only the tracker admin can delete a recruiter.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const sure = confirm(
+    `Delete ${name} from the recruiter list? Their PIN (if any) stops working immediately. `+
+    `Any requisitions still assigned to them keep showing their name — reassign those first `+
+    `if you don't want that. This can't be undone from here. Are you sure?`
+  );
+  if(!sure) return;
+  const btn = document.getElementById("deleteRecruiterBtn");
+  btn.disabled = true;
+  msg.textContent = "Deleting…";
+  msg.style.color = "var(--text-muted)";
+  try {
+    await graphDeleteRecruiter(name);
+    msg.textContent = `${name} deleted. Reloading data…`;
+    msg.style.color = "var(--good)";
+    await loadFromGraph();
+    msg.textContent = "Deleted.";
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not delete: " + err.message;
+    msg.style.color = "var(--critical)";
+  } finally {
+    btn.disabled = false;
   }
 });
 
