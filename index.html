@@ -954,6 +954,7 @@
           <span class="theme-toggle-knob" id="themeToggleKnob"></span>
         </button>
         <span class="pill" id="connectionPill">Not connected</span>
+        <button class="btn ghost small" id="signOutBtn" type="button" style="display:none;">Sign Out</button>
       </div>
     </div>
 
@@ -5618,6 +5619,7 @@ function setConnectionUi(connected, label){
   const pill = document.getElementById("connectionPill");
   const banner = document.getElementById("demoBanner");
   const modalNote = document.getElementById("modalNote");
+  const signOutBtn = document.getElementById("signOutBtn");
   if(connected){
     pill.textContent = label || "Connected";
     pill.classList.remove("demo");
@@ -5629,6 +5631,9 @@ function setConnectionUi(connected, label){
       : "Connected to Microsoft 365, changes here are saved straight to the shared file.";
     modalNote.classList.remove("tier-yellow");
     modalNote.classList.add("tier-good");
+    // Solo tiene sentido si de verdad hay una sesion que cerrar (PIN o Microsoft 365) — un
+    // visitante de Public Access nunca inicio sesion, no hay nada que "salir".
+    signOutBtn.style.display = "";
     startAutoRefresh();
   } else {
     pill.textContent = "Not connected";
@@ -5636,8 +5641,30 @@ function setConnectionUi(connected, label){
     modalNote.textContent = "Not connected to Microsoft 365, updates here only stay in this browser tab. Sign in from the welcome screen to save changes to the shared file.";
     modalNote.classList.remove("tier-good");
     modalNote.classList.add("tier-yellow");
+    signOutBtn.style.display = "none";
   }
 }
+// Cierra la sesion actual (PIN o Microsoft 365) y te devuelve al sign-in screen. En los dos
+// casos termina en un reload/redirect completo de la pagina en vez de intentar resetear cada
+// variable global a mano — mas simple y sin riesgo de dejar algun estado a medias.
+async function signOut(){
+  if(pinModeActive){
+    localStorage.removeItem("pinModeSession");
+    location.reload();
+    return;
+  }
+  if(graphAccount){
+    try {
+      await msalInstance.logoutRedirect({ account: graphAccount });
+    } catch(err){
+      console.error("Could not log out of Microsoft 365 cleanly:", err);
+      location.reload();
+    }
+    return;
+  }
+  location.reload();
+}
+document.getElementById("signOutBtn").addEventListener("click", signOut);
 
 async function getGraphToken(){
   await msalReady;
