@@ -1268,7 +1268,7 @@
               <thead><tr>
                 <th id="positionsSelectAllHeader" style="display:none;"><input type="checkbox" id="positionsSelectAllCheckbox"></th>
                 <th>Position</th><th>Code</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Market Location</th><th>Arrangement</th><th>Status</th><th>Kickoff Date</th>
-                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Activity</th><th>Placement</th>
+                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Activity</th><th>Fill Date</th><th>Hire Date</th><th>Placement</th>
               </tr></thead>
               <tbody></tbody>
             </table>
@@ -3782,6 +3782,8 @@ function renderPositions(){
       <td>${escapeHtml(p.kickoff)||'-'}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
       <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(p.lastRemark)}">${escapeHtml(p.lastRemark)||'-'}</td>
+      <td>${escapeHtml(p.fill)||'-'}</td>
+      <td>${escapeHtml(p.hire)||'-'}</td>
       <td>${p.status==="Hired" ? "Yes" : "No"}</td>
     </tr>`;
   }).join("");
