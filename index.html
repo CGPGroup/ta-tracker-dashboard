@@ -1322,12 +1322,8 @@
               <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="newRecPhoto" placeholder="Leave blank to use initials instead"></div>
               <div class="form-field full">
                 <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
-                  <input type="checkbox" id="newRecShare" checked> Share the shared file with them by email, and send them the tracker link
+                  <input type="checkbox" id="newRecEmailLink" checked> Email them the tracker link
                 </label>
-                <select id="newRecShareRole" style="margin-top:6px;">
-                  <option value="write">Can edit (they'll update their own reqs)</option>
-                  <option value="read">Can view only</option>
-                </select>
               </div>
             </div>
             <div class="form-actions">
@@ -1347,22 +1343,6 @@
               <button class="btn ghost" type="button" disabled title="Not connected yet, coming soon">Add to Config</button>
             </div>
             <div class="panel-sub" style="margin-top:8px;">Not wired up yet, statuses and holidays still need to be added directly in the Config sheet for now.</div>
-
-            <h3 style="margin-top:26px;">Share Tracker Access</h3>
-            <div class="panel-sub">For anyone who needs to see or use the tracker without being a recruiter in it — a stakeholder, an exec, a coordinator. Shares the shared file with their email and sends them the tracker link, without adding them to the Team list.</div>
-            <div class="form-grid">
-              <div class="form-field full"><label>Email</label><input type="email" id="shareAccessEmail" placeholder="e.g. nicole@irthsolutions.com"></div>
-              <div class="form-field full"><label>Access Level</label>
-                <select id="shareAccessRole">
-                  <option value="read">Can view only</option>
-                  <option value="write">Can edit</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-actions">
-              <button class="btn primary" type="button" id="shareAccessBtn">Share Access</button>
-            </div>
-            <div class="panel-sub" id="shareAccessMsg" style="margin-top:8px;"></div>
 
             <details class="danger-zone-details" id="dangerZoneDetails">
               <summary>Danger Zone: Reset All Data</summary>
@@ -5932,45 +5912,10 @@ async function workbookBase(){
   await resolveFileIds();
   return `/drives/${RESOLVED_DRIVE_ID}/items/${RESOLVED_ITEM_ID}/workbook`;
 }
-// Sin ":/workbook", para acciones sobre el archivo mismo (ej. invitar a alguien a verlo/
-// editarlo) en vez de sobre su contenido.
-async function fileItemBase(){
-  await resolveFileIds();
-  return `/drives/${RESOLVED_DRIVE_ID}/items/${RESOLVED_ITEM_ID}`;
-}
-// Comparte el archivo real con un correo (ademas de guardarlo como reclutador en el tracker),
-// para que no haya que ir a OneDrive a mano cada vez que se suma alguien nuevo. role: "write"
-// para reclutadores que van a editar sus propias posiciones, "read" para alguien que solo
-// necesita verlo (ej. Nicole/Immy si algun dia solo quieren mirar, no editar).
-async function graphShareFile(email, role, siteUrl){
-  const result = await graphFetch(`${await fileItemBase()}/invite`, {
-    method: "POST",
-    body: JSON.stringify({
-      requireSignIn: true,
-      sendInvitation: true,
-      roles: [role],
-      recipients: [{ email }],
-      message: `You've been added to the Irth TA Tracker. Once you accept this, connect Microsoft 365 from the dashboard here to see live data: ${siteUrl}`,
-    }),
-  });
-  // Graph puede responder 200 sin haber concedido el acceso todavia (queda como invitacion
-  // pendiente en vez de permiso real) — sin revisar el body, eso se veia como "compartido" con
-  // exito cuando en realidad el destinatario todavia no podia abrir el archivo. Bug real
-  // encontrado 2026-09-03: un reclutador nuevo (mismo tenant, sin nada raro) recibio "File
-  // shared and invite emailed" pero su cuenta nunca encontro el archivo al conectar. Ahora solo
-  // se cuenta como exito si Graph devuelve una identidad ya resuelta (grantedToV2 /
-  // grantedToIdentitiesV2) para el permiso nuevo, no solo el eco de la invitacion pedida.
-  const granted = (result?.value || []).some(perm =>
-    perm.grantedToV2 || (perm.grantedToIdentitiesV2 && perm.grantedToIdentitiesV2.length)
-  );
-  if(!granted){
-    throw new Error(`Graph accepted the request but didn't confirm ${email} was actually granted access. Share TA_Tracker.xlsx with them manually from OneDrive (right-click the file → Share) to be safe.`);
-  }
-}
-// La invitacion de OneDrive de arriba trae un campo "message" con el link, pero Microsoft
-// reemplaza el cuerpo del correo por su propia plantilla en invitaciones a cuentas externas
-// (cross-tenant, ej. gente de Irth vista desde una cuenta de CGP), ahi el link nunca llega.
-// Este correo aparte, enviado desde el buzon real de quien comparte, siempre lleva el link.
+// Correo con el link del tracker, enviado desde el buzon real de Nicolas — ya NO comparte el
+// archivo real con nadie (2026-09-17: con el login por PIN, ningun reclutador necesita tocar el
+// Excel directamente, y Public Access cubre a cualquiera que solo necesite ver; graphShareFile()/
+// fileItemBase(), que hacian ese invite de OneDrive, se borraron por quedar sin uso).
 async function graphSendTrackerLinkEmail(email, siteUrl, name){
   const greeting = name ? name.split(" ")[0] : "there";
   const content = `
@@ -5988,10 +5933,9 @@ async function graphSendTrackerLinkEmail(email, siteUrl, name){
       <li>The full activity history and remarks behind every position</li>
     </ul>
     <p><a href="${siteUrl}">Open The Tracker &rarr;</a></p>
-    <p>You'll also get a separate email inviting you to the shared file itself, that's what
-    actually powers the tracker.</p>
-    <p>If you only need to view it, no login is required. If you need to make changes, choose
-    "Internal Access" on the welcome screen when you open the link.</p>`;
+    <p>If you only need to view it, choose "Public Access" on the welcome screen, no login
+    required. If you need to make changes, choose "Internal Access" instead — Nicolás will give
+    you the PIN to sign in with separately.</p>`;
   // No pasa por graphFetch()/getGraphToken() (esas usan GRAPH_SCOPES, que ya NO incluye
   // Mail.Send) — este pide su propio token con MAIL_SCOPES, y tampoco necesita la cola de
   // escrituras (no toca el Excel compartido, no hay nada que serializar contra otra escritura).
@@ -7010,15 +6954,14 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   const jobTitle = document.getElementById("newRecTitle").value.trim();
   const pin = document.getElementById("newRecPin").value.trim();
   const photoUrl = document.getElementById("newRecPhoto").value.trim();
-  const shouldShare = document.getElementById("newRecShare").checked;
-  const shareRole = document.getElementById("newRecShareRole").value;
+  const shouldEmail = document.getElementById("newRecEmailLink").checked;
   if(!name){
     msg.textContent = "Full name is required.";
     msg.style.color = "var(--critical)";
     return;
   }
-  if(shouldShare && !email){
-    msg.textContent = "An email is required to share the file with them.";
+  if(shouldEmail && !email){
+    msg.textContent = "An email is required to email them the tracker link.";
     msg.style.color = "var(--critical)";
     return;
   }
@@ -7030,31 +6973,23 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
   msg.textContent = "Saving…";
   msg.style.color = "var(--text-muted)";
   // Sin bloquear el boton, un doble clic (o un reintento antes de que "Saving..." cambiara)
-  // duplicaba la fila del reclutador Y, si "share" estaba marcado, mandaba 2 invitaciones de
-  // OneDrive + 2 correos con el link del tracker a la misma persona.
+  // duplicaba la fila del reclutador Y, si el email estaba marcado, mandaba 2 correos con el
+  // link del tracker a la misma persona.
   const createBtn = document.getElementById("createRecruiterBtn");
   createBtn.disabled = true;
   try {
     await graphAppendRecruiter(name, email, photoUrl, jobTitle, pin);
-    let shareNote = "";
-    if(shouldShare){
+    let emailNote = "";
+    // Ya no comparte el archivo real con nadie (ver el comentario grande junto a "let
+    // pinModeActive"): un reclutador nuevo entra por PIN, nunca necesita tocar el Excel
+    // directamente. Este correo solo avisa del link, el PIN se le da aparte (chat, no email).
+    if(shouldEmail){
       try {
-        await graphShareFile(email, shareRole, TRACKER_URL);
-        shareNote = ` File shared with ${email} and invite emailed.`;
-        try {
-          await graphSendTrackerLinkEmail(email, TRACKER_URL, name);
-          // Microsoft's "shared with me" list has proven unreliable to reflect a brand-new
-          // share right away (real case, 2026-09-04) — opening the file once from the
-          // invitation email first makes it show up in "recent files" instead, which the
-          // tracker's Connect flow checks too and is far more reliable.
-          shareNote += " Tracker link emailed too. Tell them to open the Excel file from the invitation email FIRST, before clicking Connect Microsoft 365 on the tracker — otherwise Connect may not find the file right away.";
-        } catch(mailErr){
-          console.error(mailErr);
-          shareNote += ` Couldn't email the tracker link separately (${mailErr.message}), share the link with them yourself: ${TRACKER_URL}`;
-        }
-      } catch(shareErr){
-        console.error(shareErr);
-        shareNote = " Recruiter saved, but sharing the file failed: " + shareErr.message;
+        await graphSendTrackerLinkEmail(email, TRACKER_URL, name);
+        emailNote = ` Tracker link emailed to ${email}.`;
+      } catch(mailErr){
+        console.error(mailErr);
+        emailNote = ` Couldn't email the tracker link (${mailErr.message}), share it with them yourself: ${TRACKER_URL}`;
       }
     }
     msg.textContent = "Recruiter added. Reloading data…";
@@ -7064,7 +6999,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
     document.getElementById("newRecEmail").value = "";
     document.getElementById("newRecTitle").value = "";
     document.getElementById("newRecPhoto").value = "";
-    msg.textContent = "Recruiter added and loaded." + shareNote;
+    msg.textContent = "Recruiter added and loaded." + emailNote;
   } catch(err){
     console.error(err);
     msg.textContent = "Could not save: " + err.message;
@@ -7075,7 +7010,7 @@ document.getElementById("createRecruiterBtn").addEventListener("click", async ()
 });
 document.getElementById("clearRecruiterBtn").addEventListener("click", () => {
   ["newRecName","newRecEmail","newRecTitle","newRecPin","newRecPhoto"].forEach(id => document.getElementById(id).value = "");
-  document.getElementById("newRecShare").checked = true;
+  document.getElementById("newRecEmailLink").checked = true;
   document.getElementById("createRecruiterMsg").textContent = "";
 });
 
@@ -7258,51 +7193,6 @@ document.getElementById("saveRecruiterBtn").addEventListener("click", async () =
     msg.style.color = "var(--critical)";
   } finally {
     saveBtn.disabled = false;
-  }
-});
-
-document.getElementById("shareAccessBtn").addEventListener("click", async () => {
-  const msg = document.getElementById("shareAccessMsg");
-  const email = document.getElementById("shareAccessEmail").value.trim();
-  const role = document.getElementById("shareAccessRole").value;
-  if(!email){
-    msg.textContent = "An email is required.";
-    msg.style.color = "var(--critical)";
-    return;
-  }
-  if(!isConnected()){
-    msg.textContent = "Connect to Microsoft 365 first (button at the top) to do this.";
-    msg.style.color = "var(--critical)";
-    return;
-  }
-  msg.textContent = "Sharing…";
-  msg.style.color = "var(--text-muted)";
-  // Sin bloquear el boton, un doble clic mandaba 2 invitaciones de OneDrive + 2 correos con el
-  // link del tracker a la misma persona.
-  const shareBtn = document.getElementById("shareAccessBtn");
-  shareBtn.disabled = true;
-  try {
-    await graphShareFile(email, role, TRACKER_URL);
-    msg.textContent = `Shared with ${email}.`;
-    msg.style.color = "var(--good)";
-    try {
-      await graphSendTrackerLinkEmail(email, TRACKER_URL);
-      // Ver la misma nota en createRecruiterBtn: sharedWithMe no es confiable para reflejar un
-      // share nuevo de inmediato, abrir el archivo una vez desde el correo si lo llena en
-      // "recent files", que si funciona de forma confiable.
-      msg.textContent += " They'll get the file access invite plus a separate email with the tracker link. Tell them to open the Excel file from the invitation email FIRST, before clicking Connect Microsoft 365 on the tracker.";
-    } catch(mailErr){
-      console.error(mailErr);
-      msg.textContent += ` Couldn't email them the tracker link (${mailErr.message}), share it yourself: ${TRACKER_URL}`;
-      msg.style.color = "var(--warning)";
-    }
-    document.getElementById("shareAccessEmail").value = "";
-  } catch(err){
-    console.error(err);
-    msg.textContent = "Could not share: " + err.message;
-    msg.style.color = "var(--critical)";
-  } finally {
-    shareBtn.disabled = false;
   }
 });
 
