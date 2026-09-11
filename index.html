@@ -1210,8 +1210,8 @@
             <table class="data" id="positionsTable">
               <thead><tr>
                 <th id="positionsSelectAllHeader" style="display:none;"><input type="checkbox" id="positionsSelectAllCheckbox"></th>
-                <th>Position</th><th>Code</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Market Location</th><th>Arrangement</th><th>Status</th>
-                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Remark</th><th>Placement</th>
+                <th>Position</th><th>Code</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Market Location</th><th>Arrangement</th><th>Status</th><th>Kickoff Date</th>
+                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Activity</th><th>Placement</th>
               </tr></thead>
               <tbody></tbody>
             </table>
@@ -3464,8 +3464,12 @@ function renderPositions(){
   document.getElementById("positionsCount").textContent = rows.length + " positions";
   // Checkbox de seleccion en lote: solo admin la ve (mismo criterio que borrar posiciones) —
   // reasignar reqs de otras personas de golpe es una accion de gestion, no algo que cualquier
-  // recruiter viendo el directorio completo deba poder disparar.
-  const bulkOn = isAdmin();
+  // recruiter viendo el directorio completo deba poder disparar. isAdmin() por si solo trata
+  // "sin conexion" como admin (allowance de pruebas locales, ver su propio comentario), pero un
+  // visitante de Public Access llega a ese mismo estado "sin conexion" — sin el isConnected()
+  // aqui, cualquiera en Public Access veia (aunque no pudiera realmente usar) los checkboxes y
+  // el boton Reassign/Handoff. Mismo criterio ya usado en updateManageNavVisibility().
+  const bulkOn = isConnected() && isAdmin();
   document.getElementById("positionsSelectAllHeader").style.display = bulkOn ? "" : "none";
   // Filtrar la seleccion a lo que sigue existiendo, para no arrastrar ids de posiciones
   // borradas o que ya no calzan tras un Reset All Data.
@@ -3478,6 +3482,7 @@ function renderPositions(){
       ${bulkOn ? `<td><input type="checkbox" class="positions-row-check" data-id="${escapeHtml(p.id)}" ${positionsSelectedIds.has(p.id)?"checked":""}></td>` : ""}
       <td class="cell-position">${posLabel(p, false)}</td><td class="cell-code">${escapeHtml(p.id)}</td><td>${escapeHtml(p.client)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${marketLocation(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
+      <td>${escapeHtml(p.kickoff)||'-'}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
       <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(p.lastRemark)}">${escapeHtml(p.lastRemark)||'-'}</td>
       <td>${p.status==="Hired" ? "Yes" : "No"}</td>
@@ -3738,8 +3743,12 @@ function renderTracking(){
   document.getElementById("trackingCount").textContent = rows.length + " positions";
   // Checkbox de seleccion en lote: solo si el perfil actual es editable por ti — reasignar
   // reqs es una accion tuya sobre tus propias posiciones, no algo que tenga sentido mientras
-  // solo estas viendo el perfil de otro reclutador de paso.
-  const bulkOn = trackingCanEdit();
+  // solo estas viendo el perfil de otro reclutador de paso. trackingCanEdit() por si solo trata
+  // "sin conexion" como editable (mismo allowance de pruebas locales que isAdmin()); el
+  // isConnected() aqui evita que un visitante de Public Access llegue a verla, aunque hoy la
+  // pestaña de Tracking ya este oculta para ese caso — defensa en profundidad, mismo criterio
+  // que el bulkOn de Positions.
+  const bulkOn = isConnected() && trackingCanEdit();
   document.getElementById("trackingSelectAllHeader").style.display = bulkOn ? "" : "none";
   const validTrackingIds = new Set(POSITIONS.map(p=>p.id));
   trackingSelectedIds.forEach(id=>{ if(!validTrackingIds.has(id)) trackingSelectedIds.delete(id); });
