@@ -2252,10 +2252,7 @@ function setDashboardScope(name, opts){
     document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b.dataset.dashTab==="team"));
     document.querySelectorAll(".dash-tab-panel").forEach(p=> p.classList.toggle("active", p.dataset.dashPanel==="team"));
   }
-  // SSOT Management es administracion de todo el equipo (crear posiciones/reclutadores,
-  // compartir acceso, borrar data) — no tiene sentido dentro del perfil de un solo reclutador,
-  // asi que se esconde ahi, igual que Tracking se esconde fuera de un perfil.
-  document.querySelector('.nav-item[data-view="manage"]').style.display = name ? "none" : "";
+  updateManageNavVisibility();
   document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   document.getElementById("panelRecentActivity").style.display = name ? "" : "none";
@@ -5557,10 +5554,25 @@ function renderEditRecruiterSelect(){
 function updateDangerZoneVisibility(){
   document.getElementById("dangerZoneDetails").style.display = isAdmin() ? "" : "none";
 }
+// SSOT Management es administracion de todo el equipo (crear posiciones/reclutadores, compartir
+// acceso, borrar data) — no tiene sentido dentro del perfil de un solo reclutador (se esconde
+// igual que Tracking se esconde fuera de un perfil), Y ADEMAS ahora requiere una sesion real
+// ademas de isAdmin(): isAdmin() trata "sin conexion" como admin por su fallback de pruebas
+// locales (ver el comentario junto a esa funcion), pero un visitante de Public Access SI llega
+// a ese mismo estado "sin conexion" ahora que el sign-in gate es el unico camino de entrada —
+// nunca podria usar nada de esto de todas formas (cada accion destructiva ya exige isConnected()
+// antes de ejecutar, ver resetAllBtn), pero no deberia ni verla en el nav. Llamada tanto desde
+// renderAll() (cubre visitante publico y el login de admin, que nunca llaman setDashboardScope())
+// como desde setDashboardScope() (reacciona al instante si cambias de/hacia un workspace).
+function updateManageNavVisibility(){
+  const show = isConnected() && isAdmin() && !activeDashboardScope;
+  document.querySelector('.nav-item[data-view="manage"]').style.display = show ? "" : "none";
+}
 function renderAll(){
   renderNewPosRecruiterSelect();
   renderEditRecruiterSelect();
   updateDangerZoneVisibility();
+  updateManageNavVisibility();
   updateWorkspaceSwitchVisibility();
   renderDashboardPanels();
   renderPositions();
