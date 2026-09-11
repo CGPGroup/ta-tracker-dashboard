@@ -907,22 +907,27 @@
     font-size: 9.5px; font-weight: 600; text-transform: uppercase; padding: 2px 6px;
     border-radius: 5px; height: fit-content; margin-top: 1px;
   }
-  /* 5 tags de Activity, cada uno con un significado especifico (ver TL_BADGE_LABELS):
+  /* 4 tags de Activity, cada uno con un significado especifico (ver TL_BADGE_LABELS):
      auto = hecho derivado de una fecha (nadie "hizo" nada, se desprende del Timeline)
      action = el reclutador hizo un clic concreto (ej. aceptar la asignacion), no es texto libre
      status = cambio de status via el dropdown
-     guidance = sugerencia automatica de "que sigue" segun el status
      manual = remark de texto libre escrito por el reclutador
-     Colores deliberadamente todos distintos entre si para poder distinguirlos de un vistazo. */
+     Colores deliberadamente todos distintos entre si para poder distinguirlos de un vistazo.
+     "guidance" (sugerencia de "que sigue" segun el status) ya NO aparece en este historial —
+     vive en #modalNextStep, siempre en vivo desde el status actual (ver nextStepRowHtml()) — pero
+     su estilo de color se reusa ahi, por eso la regla .tl-badge.guidance se mantiene abajo. */
   .timeline .tl-badge.auto { background: var(--surface-2); color: var(--text-secondary); }
   .timeline .tl-badge.action { background: rgba(92,174,158,0.16); color: var(--stage-teal); }
   .timeline .tl-badge.status { background: rgba(111,147,201,0.16); color: var(--stage-blue); }
   .timeline .tl-badge.guidance { background: rgba(var(--warning-rgb),0.16); color: var(--warning); }
   .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
   .timeline .tl-text { flex: 1; }
-  /* Link a un entregable (ej. "Lead Kickoff Note ->") pegado justo despues del texto de guidance
-     vigente en Activity — se ve como un chip inline, nunca como un link azul subrayado suelto,
-     para que no compita visualmente con el resto de la linea. */
+  /* #modalNextStep reusa el mismo <ul class="timeline"><li>...</li></ul> que Activity (mismo
+     badge/texto, mismo look) en vez de inventar un layout aparte — solo se salta el <span
+     class="tl-date">, ya que esto no es un evento historico con fecha, es el estado actual. */
+  /* Link a un entregable (ej. "Lead Kickoff Note ->") pegado justo despues del texto de Next
+     Step — se ve como un chip inline, nunca como un link azul subrayado suelto, para que no
+     compita visualmente con el resto de la linea. */
   .deliverable-link {
     display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px;
     border: 1px solid rgba(var(--brand-rgb),0.32); background: var(--brand-wash);
@@ -1679,6 +1684,13 @@
     <div class="sla-grid" id="modalCompletionGrid"></div>
     <div id="modalCompletionAlert"></div>
 
+    <!-- Siempre visible (floating y docked por igual, a diferencia de Activity abajo) — a
+         diferencia de un "Next Step" logueado en HistorialTable (el diseño viejo, ver
+         commitStatusChange()), esto se recalcula en vivo desde p.status en cada render, asi que
+         nunca falta ni queda desactualizado sin importar como se haya creado o editado el req. -->
+    <div class="modal-section-title">Next Step</div>
+    <ul class="timeline" id="modalNextStep"></ul>
+
     <!-- En Tracking (docked) esto se oculta: la actividad de la posicion seleccionada vive en el
          panel de la izquierda (#trackingSelectedActivityPanel) para dejar mas espacio vertical
          a la lista de reqs. En Positions/Dashboard (modal flotante) se sigue viendo aqui. -->
@@ -2121,12 +2133,23 @@ const STATUS_DATE_FIELD = {
   // fusionaron en un solo campo: la fecha real de la reunion, la misma que arranca TTS/TTF/TTH.
   "Intake Pending": {key:"intake", col:"H", label:"Intake Meeting Date"},
 };
-// Mensaje de "que hacer ahora" por status, logueado en Activity cada vez que un req entra a ese
-// status (al crearlo, o al cambiarlo) — Nicolas pidio esto para todos los status, no solo Kickoff.
-// El texto vive centralizado aqui para poder ajustarlo facil si el proceso real cambia.
+// Mensaje de "que hacer ahora" por status — Nicolas pidio esto para todos los status, no solo
+// Kickoff. El texto vive centralizado aqui para poder ajustarlo facil si el proceso real cambia.
 // Texto grounded en el Playbook y el Master Prompt (nunca inventado) — cada uno describe los
 // pasos reales que tocan en ese momento, no una linea generica. Ver esos dos documentos como
 // fuente si algo aqui necesita ajustarse.
+// DISEÑO (corregido 2026-09-11, auditoria pre-deploy): esto se muestra SIEMPRE EN VIVO desde
+// p.status (ver #modalNextStep/nextStepRowHtml()), nunca logueado a Activity/HistorialTable.
+// El diseño original lo escribia como una entrada mas en Activity al cambiar de status
+// (commitStatusChange()) — pero eso significaba que CUALQUIER req cuyo status se hubiera puesto
+// via migracion/script/escritura directa a Graph (la gran mayoria de las 16 reqs reales, ya que
+// solo un cambio de status hecho DESDE la UI disparaba el log) se quedaba sin ningun Next Step
+// visible — exactamente el bug que Nicolas reporto ("en ninguno de los reqs hay tag de next
+// steps"). Ademas, para las pocas reqs que si tenian una entrada logueada, un cambio de status
+// POSTERIOR hecho por fuera de la UI dejaba ese texto viejo (de un status ya superado) como si
+// todavia fuera el vigente — RD-018/RD-019/RD-020 mostraban next steps de un status que ya
+// habian dejado atras. Al mostrarlo siempre en vivo desde p.status, nunca puede faltar ni
+// quedar desactualizado, sin importar como se haya creado o editado el req.
 const STATUS_GUIDANCE = {
   "Kickoff": "Send the Kickoff email to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting) and confirm you've accepted it. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
   "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or send written answers instead if a live call isn't possible). Once they confirm, move the status to Intake Pending and log the date — sourcing still can't start until the intake actually happens.",
@@ -2247,19 +2270,24 @@ function guidanceDeliverablesFor(p){
   }
   return [];
 }
-// Un link por entregable, insertado justo despues del texto de guidance en Activity — el click
-// delegado que abre el preview vive junto al modal (ver mas abajo, seccion del modal).
+// Un link por entregable, insertado junto al texto del Next Step en vivo (ver nextStepRowHtml()
+// mas abajo) — el click delegado que abre el preview vive junto al modal de preview.
 function guidanceDeliverableLinksHtml(p){
   const list = guidanceDeliverablesFor(p);
   if(!list.length) return "";
   return list.map(d=>` <button type="button" class="deliverable-link" data-pid="${escapeHtml(p.id)}" data-deliverable="${d.id}">${escapeHtml(d.label)} →</button>`).join("");
 }
-// Una entrada "guidance" vieja (de un status ya superado) nunca deberia mostrar el link — solo
-// la que todavia describe el status ACTUAL del req. Como el texto de guidance nunca se edita
-// despues de logueado, comparar contra STATUS_GUIDANCE[p.status] alcanza para distinguir "esta
-// sigue vigente" de "esto ya quedo atras en la historia".
-function isCurrentGuidance(e, p){
-  return !!p && e.type === "guidance" && e.text === STATUS_GUIDANCE[p.status];
+// Contenido de #modalNextStep (ver renderDetailModal()) — siempre presente para cualquier req,
+// sin importar como se creo o si su status se cambio alguna vez desde la propia UI (a diferencia
+// del guidance viejo, logueado solo al cambiar de status via commitStatusChange(), que se
+// quedaba sin nada para cualquier req cuyo historial vino de una migracion o escritura directa).
+function nextStepRowHtml(p){
+  const text = STATUS_GUIDANCE[p.status];
+  if(!text) return "";
+  return `<li>
+    <span class="tl-badge guidance">${TL_BADGE_LABELS.guidance}</span>
+    <span class="tl-text">${escapeHtml(text)}${guidanceDeliverableLinksHtml(p)}</span>
+  </li>`;
 }
 // Antes usaba --stage-blue/teal/purple/mauve para las etapas activas: colores sin relacion
 // con la marca, se veian genericos comparado con el naranja monocromatico que usa KeyStone AI
@@ -3873,7 +3901,7 @@ function renderTrackingActivity(){
     <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; margin:2px 0;" : ""}">
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
-      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${isCurrentGuidance(e, e.position) ? guidanceDeliverableLinksHtml(e.position) : ""}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
+      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity in the last 7 days.</li>`;
   // Contador visible aunque el <details> este cerrado, para no tener que abrirlo solo para
   // saber si vale la pena (y para que mucha actividad no obligue a colapsar el resto de la
@@ -4102,8 +4130,15 @@ function buildTimeline(p){
   // "accepted" se mencionaba), Activity se quedaba sin ningun rastro de que si se acepto. Este
   // fallback solo aparece si no hay ya una entrada real de "Accepted the assignment." —
   // nunca duplica el caso sano.
-  const hasAcceptedAction = (p.extra||[]).some(e=>e.type==="action" && e.text==="Accepted the assignment.")
-    || (p.remarksHistory||[]).some(e=>e.type==="action" && e.text==="Accepted the assignment.");
+  // BUG REAL encontrado 2026-09-11 (auditoria pre-deploy): esto comparaba con IGUALDAD EXACTA
+  // contra el texto por defecto — varias reqs reales (GA-033, CE-022, SM-111, CE-020, GA-030,
+  // CE-016, RD-071) tienen su "Accepted the assignment." real logueado CON detalle adicional
+  // pegado (ej. "Accepted the assignment. Kickoff came via Immy Nader..."), asi que la igualdad
+  // exacta fallaba, hasAcceptedAction daba false, y el fallback agregaba un SEGUNDO "Accepted
+  // the assignment." duplicado en Activity para las 7 reqs. Cambiado a startsWith() para
+  // reconocer cualquier variante real del mismo hecho, sin importar el detalle agregado.
+  const hasAcceptedAction = (p.extra||[]).some(e=>e.type==="action" && e.text.startsWith("Accepted the assignment"))
+    || (p.remarksHistory||[]).some(e=>e.type==="action" && e.text.startsWith("Accepted the assignment"));
   // type "action" (no "auto"/Milestone) a proposito: aceptar es algo que alguien HIZO, no un
   // hecho derivado de que una fecha ya paso (a diferencia de "Intake meeting held.", que si es
   // un milestone real) — mismo texto que el action real que deberia haber quedado, para que se
@@ -4120,8 +4155,13 @@ function buildTimeline(p){
   if(p.fill)   entries.push({date:p.fill,   type:"auto", text:"Offer accepted, position filled."});
   if(p.hire)   entries.push({date:p.hire,   type:"auto", text:"Placement confirmed, candidate hired."});
   // Remarks de sesiones anteriores (traidos completos de HistorialTable, no solo el ultimo —
-  // ver mergeLatestRemarks()), con su fecha real de cuando se escribieron.
-  (p.remarksHistory || []).forEach(r => entries.push({date:r.date, type:r.type || "manual", author:r.author, text:r.text}));
+  // ver mergeLatestRemarks()), con su fecha real de cuando se escribieron. Filtra filas viejas
+  // type="guidance" (el diseño anterior, ver commitStatusChange()) — ya no se escriben nuevas
+  // (ver #modalNextStep/nextStepRowHtml(), siempre en vivo desde p.status), y las que ya existen
+  // en reqs reales quedaron desactualizadas (describen un status que el req ya dejo atras, ej.
+  // RD-018/RD-019/RD-020) sin ninguna forma de saber si siguen vigentes — mostrarlas en Activity
+  // solo confundia con informacion que ya no aplica. Auditoria 2026-09-11.
+  (p.remarksHistory || []).forEach(r => { if(r.type!=="guidance") entries.push({date:r.date, type:r.type || "manual", author:r.author, text:r.text}); });
   (p.extra || []).forEach(e=> entries.push(e));
   return entries.filter(e=>e.date).sort((a,b)=>{
     if(a.date !== b.date) return a.date < b.date ? -1 : 1;
@@ -4129,12 +4169,12 @@ function buildTimeline(p){
   });
 }
 const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step" };
-function timelineListHtml(timeline, emptyText, p){
+function timelineListHtml(timeline, emptyText){
   return timeline.length ? timeline.map(e=>`
     <li>
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
-      <span class="tl-text">${escapeHtml(e.text)}${isCurrentGuidance(e, p) ? guidanceDeliverableLinksHtml(p) : ""}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
+      <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">${emptyText || "No activity logged yet."}</li>`;
 }
 // Un campo de Timeline se ve siempre (nunca se oculta), pero se deshabilita con un candadito +
@@ -4189,7 +4229,7 @@ function renderTrackingSelectedActivity(p, timeline){
   }
   const t = timeline || buildTimeline(p).slice().reverse();
   sub.innerHTML = `${posLabel(p)} — most recent first.`;
-  list.innerHTML = timelineListHtml(t, null, p);
+  list.innerHTML = timelineListHtml(t);
 }
 
 let activeDetailId = null;
@@ -4241,6 +4281,7 @@ function renderDetailPlaceholder(){
   document.getElementById("modalRemarkTitle").style.display = "none";
   document.getElementById("modalRemarkSection").style.display = "none";
   document.getElementById("modalTimeline").innerHTML = "";
+  document.getElementById("modalNextStep").innerHTML = "";
   document.getElementById("modalDeleteZone").style.display = "none";
   renderTrackingSelectedActivity(null);
 }
@@ -4667,8 +4708,10 @@ function renderDetailModal(){
     });
   }
 
+  document.getElementById("modalNextStep").innerHTML = nextStepRowHtml(p);
+
   const timeline = buildTimeline(p).slice().reverse();
-  document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline, null, p);
+  document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
   // En Tracking (docked), la Activity vive en el panel de la izquierda en vez de aqui, para
   // dejar mas espacio vertical a la lista de reqs (ver #trackingSelectedActivityPanel).
   document.getElementById("modalActivityBlock").style.display =
@@ -5523,14 +5566,13 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     : `Status changed from ${oldStatus} to ${newStatus}.`;
   const today = localTodayStr();
   p.extra = p.extra || [];
-  // Idempotencia: si el ultimo evento REAL ya logueado (ignorando "guidance", que siempre sigue
-  // a uno de "status") es este MISMO cambio, mismo texto, mismo dia, no lo repitas. Caso real
-  // 2026-09-04 (RD-020): las lecturas (auto-refresh de 2 min) no esperan la cola de escrituras
-  // (ver graphFetch/queueIfWrite), asi que una lectura podia traer de vuelta el status viejo
-  // antes de que el guardado anterior se reflejara — en pantalla parecia que el cambio no se
-  // habia guardado, y al reclutador dandole Save otra vez al mismo status terminaba duplicando
-  // tanto la entrada de status como la de guidance.
-  const lastReal = [...p.extra].reverse().find(e=>e.type!=="guidance");
+  // Idempotencia: si el ultimo evento ya logueado es este MISMO cambio, mismo texto, mismo dia,
+  // no lo repitas. Caso real 2026-09-04 (RD-020): las lecturas (auto-refresh de 2 min) no esperan
+  // la cola de escrituras (ver graphFetch/queueIfWrite), asi que una lectura podia traer de vuelta
+  // el status viejo antes de que el guardado anterior se reflejara — en pantalla parecia que el
+  // cambio no se habia guardado, y al reclutador dandole Save otra vez al mismo status terminaba
+  // duplicando la entrada de status.
+  const lastReal = p.extra[p.extra.length - 1];
   if(lastReal && lastReal.type==="status" && lastReal.text===remarkText && lastReal.date===today){
     p.status = newStatus;
     if(dateField) p[dateField.key] = dateVal;
@@ -5544,8 +5586,6 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     return;
   }
   p.extra.push({date: today, type:"status", author:currentAuthorName(), text:remarkText});
-  const guidanceText = STATUS_GUIDANCE[newStatus];
-  if(guidanceText) p.extra.push({date: today, type:"guidance", text:guidanceText});
   p.status = newStatus;
   if(dateField) p[dateField.key] = dateVal;
   pendingStatusChange = null;
@@ -5566,7 +5606,6 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
       await graphUpdatePositionField(p.id, "G", newStatus);
       if(dateField) await graphUpdatePositionField(p.id, dateField.col, dateVal);
       await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
-      if(guidanceText) await graphAppendHistorial(p.id, p.title, guidanceText, "System", "guidance");
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
     } catch(err){
@@ -7423,10 +7462,6 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
       msg.style.color = "var(--text-muted)";
       const row = buildNewPositionRow(fields, code, headcountGroup, careersUrl);
       await graphAppendPosition(row);
-      // Igual que con un cambio de status, un req nuevo tambien recibe su mensaje de "que hacer
-      // ahora" segun el status inicial elegido — se escribe directo a HistorialTable (no hay un
-      // objeto en memoria todavia) para que loadFromGraph() lo traiga de vuelta como lastRemark.
-      if(STATUS_GUIDANCE[fields.status]) await graphAppendHistorial(code, title, STATUS_GUIDANCE[fields.status], "System", "guidance");
     }
     msg.textContent = `${codes.length} position${codes.length===1?"":"s"} created. Reloading data…`;
     msg.style.color = "var(--good)";
