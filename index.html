@@ -1686,6 +1686,22 @@
       </div>
       <div class="form-field full"><label>City</label><input type="text" id="reqInfoCity" placeholder="e.g. Toronto (leave blank if not applicable)"></div>
       <div class="form-field full"><label>Work Arrangement</label><select id="reqInfoWorkArrangement"></select></div>
+      <div class="form-field full">
+        <label>Compensation <span style="font-weight:400; color:var(--text-muted);">(confirmed with the hiring manager)</span></label>
+        <div style="display:grid; grid-template-columns:90px 1fr 1fr; gap:8px;">
+          <select id="reqInfoSalaryCurrency">
+            <option value="">Currency</option>
+            <option value="USD">USD</option>
+            <option value="CAD">CAD</option>
+            <option value="AUD">AUD</option>
+          </select>
+          <input type="number" id="reqInfoSalaryMin" placeholder="Min (or flat amount)">
+          <input type="number" id="reqInfoSalaryMax" placeholder="Max">
+        </div>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-top:6px;">
+          <input type="checkbox" id="reqInfoSalaryFlat" style="width:auto;"> Flat rate (no range)
+        </label>
+      </div>
     </div>
     <div class="form-actions">
       <button class="btn primary" type="button" id="reqInfoSave">Save Changes</button>
@@ -1705,6 +1721,13 @@
     <div class="modal-head">
       <div><h2 style="margin:0; font-size:16px;" id="logBatchModalTitle">Log Submission Batch</h2></div>
       <button class="modal-close" id="logBatchClose" type="button">&times;</button>
+    </div>
+
+    <div id="logBatchSalaryRequiredState" style="display:none;">
+      <div class="panel-sub" style="margin:0 0 10px;">Compensation needs to be confirmed with the hiring manager before logging the first submission batch — it doesn't make sense to be sourcing candidates against a range nobody's agreed on yet.</div>
+      <div class="form-actions">
+        <button class="btn primary" type="button" id="logBatchGoToSalaryBtn">Add Compensation</button>
+      </div>
     </div>
 
     <div id="logBatchFormState">
@@ -2756,6 +2779,21 @@ function formatLocation(p){
 }
 function locationOnly(p){
   return p.city ? `${escapeHtml(p.city)}, ${escapeHtml(p.country)}` : (escapeHtml(p.country) || "-");
+}
+// Compensacion confirmada por el reclutador con el hiring manager: moneda (ISO) + un rango de 2
+// numeros, o "flat" cuando Min y Max son el mismo valor (no hay una columna aparte para "es
+// flat", con que coincidan alcanza). Sin Currency+Min no hay nada que mostrar todavia.
+function formatSalary(p){
+  if(!p.salaryCurrency || p.salaryMin == null || p.salaryMin === "") return null;
+  const fmt = n => Number(n).toLocaleString("en-US");
+  const min = fmt(p.salaryMin);
+  const hasMax = p.salaryMax != null && p.salaryMax !== "" && Number(p.salaryMax) !== Number(p.salaryMin);
+  return hasMax
+    ? `${p.salaryCurrency} $${min}-$${fmt(p.salaryMax)}`
+    : `${p.salaryCurrency} $${min} flat`;
+}
+function hasSalaryConfirmed(p){
+  return !!(p.salaryCurrency && p.salaryMin != null && p.salaryMin !== "");
 }
 // Fuera del modal (tablas de Positions/Tracking, quick lists) solo se muestra el pais — la
 // ciudad/provincia solo tiene sentido dentro del detalle de una req especifica, mostrarla en
@@ -4055,10 +4093,10 @@ function renderDetailModal(){
     positionFacts.push({label:"Status", value:statusChip(p.status)});
     positionFacts.push({label:"Location", value:locationOnly(p)});
     positionFacts.push({label:"Work Arrangement", value:arrangementBadge(p)});
+    const salaryDisplay = formatSalary(p);
+    if(salaryDisplay) positionFacts.push({label:"Compensation", value:escapeHtml(salaryDisplay)});
   }
-  if(p.productLine) positionFacts.push({label:"Product Line", value:escapeHtml(p.productLine)});
-  if(p.salaryRange) positionFacts.push({label:"Salary Range", value:escapeHtml(p.salaryRange)});
-  // Editable en los dos modos (a diferencia de Product Line/Salary Range, que son solo lectura):
+  // Editable en los dos modos (a diferencia de Compensation, que en edicion vive dentro de Edit
   // reqs ya existentes tambien necesitan poder agruparse retroactivamente por headcount, no
   // solo las que se crean nuevas desde SSOT Management.
   if(isView){
@@ -4153,6 +4191,7 @@ function renderDetailModal(){
       <div><div class="fact-label">Country</div><div class="fact-value">${p.country ? escapeHtml(p.country) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">City</div><div class="fact-value">${p.city ? escapeHtml(p.city) : `<span style="color:var(--text-muted);">Not set</span>`}</div></div>
       <div><div class="fact-label">Work Arrangement</div><div class="fact-value">${arrangementBadge(p)}</div></div>
+      <div><div class="fact-label">Compensation</div><div class="fact-value">${formatSalary(p) ? escapeHtml(formatSalary(p)) : `<span style="color:var(--text-muted);">Not confirmed yet</span>`}</div></div>
     </div>
     <div style="margin-bottom:24px;">
       <button type="button" class="btn ghost small" id="editReqInfoBtn">Edit Basic Info</button>
@@ -4647,9 +4686,22 @@ function openEditReqInfoModal(){
   document.getElementById("reqInfoCity").value = p.city || "";
   document.getElementById("reqInfoWorkArrangement").innerHTML = ["Remote","Hybrid","On-site"]
     .map(a=>`<option value="${a}" ${a===(p.workArrangement||"Remote")?"selected":""}>${a}</option>`).join("");
+  document.getElementById("reqInfoSalaryCurrency").value = p.salaryCurrency || "";
+  document.getElementById("reqInfoSalaryMin").value = p.salaryMin != null ? p.salaryMin : "";
+  const isFlat = p.salaryMin != null && (p.salaryMax == null || Number(p.salaryMax) === Number(p.salaryMin));
+  document.getElementById("reqInfoSalaryFlat").checked = isFlat;
+  document.getElementById("reqInfoSalaryMax").value = (!isFlat && p.salaryMax != null) ? p.salaryMax : "";
+  toggleSalaryFlatUi();
   document.getElementById("reqInfoMsg").textContent = "";
   document.getElementById("editReqInfoModal").classList.add("open");
 }
+// Flat rate: un solo numero (Min hace de "el monto"), sin Max visible — al guardar, Max se
+// iguala a Min (ver reqInfoSave) en vez de agregar una columna aparte solo para marcar "es flat".
+function toggleSalaryFlatUi(){
+  const flat = document.getElementById("reqInfoSalaryFlat").checked;
+  document.getElementById("reqInfoSalaryMax").style.display = flat ? "none" : "";
+}
+document.getElementById("reqInfoSalaryFlat").addEventListener("change", toggleSalaryFlatUi);
 function closeEditReqInfoModal(){
   document.getElementById("editReqInfoModal").classList.remove("open");
 }
@@ -4661,11 +4713,17 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
   const msg = document.getElementById("reqInfoMsg");
+  const salaryFlat = document.getElementById("reqInfoSalaryFlat").checked;
+  const salaryMinVal = document.getElementById("reqInfoSalaryMin").value.trim() || null;
+  const salaryMaxVal = salaryFlat ? salaryMinVal : (document.getElementById("reqInfoSalaryMax").value.trim() || null);
   const fields = [
     {key:"hiringManager", header:"Hiring Manager", value: getAddNewValue("reqInfoHmSelect","reqInfoHmInput")},
     {key:"country", header:"Country", value: getAddNewValue("reqInfoCountrySelect","reqInfoCountryInput")},
     {key:"city", header:"City", value: document.getElementById("reqInfoCity").value.trim() || null},
     {key:"workArrangement", header:"Work Arrangement", value: document.getElementById("reqInfoWorkArrangement").value},
+    {key:"salaryCurrency", header:"Salary Currency", value: document.getElementById("reqInfoSalaryCurrency").value || null},
+    {key:"salaryMin", header:"Salary Min", value: salaryMinVal},
+    {key:"salaryMax", header:"Salary Max", value: salaryMaxVal},
   ];
   const changed = fields.filter(f => f.value !== (p[f.key] || null));
   if(!changed.length){
@@ -4782,10 +4840,19 @@ function openLogBatchModal(p){
   const isFirst = !(p.batches && p.batches.length);
   const pivotOk = isSlaExceptionApproved(p);
   const hasPendingRequest = !!p.pivotRequestedDate && !pivotOk;
+  // Compensacion confirmada es requisito para el PRIMER batch (no para follow-ups: si ya se
+  // sourceo una vez con un rango acordado, un pivot follow-up no necesita repetir el chequeo) —
+  // no tendria sentido estar sourceando candidatos contra un rango que el hiring manager nunca
+  // confirmo. Ver formatSalary()/hasSalaryConfirmed().
+  const salaryMissing = isFirst && !hasSalaryConfirmed(p);
+  document.getElementById("logBatchSalaryRequiredState").style.display = "none";
   document.getElementById("logBatchFormState").style.display = "none";
   document.getElementById("pivotRequestState").style.display = "none";
   document.getElementById("pivotPendingState").style.display = "none";
-  if(isFirst || pivotOk){
+  if(salaryMissing){
+    document.getElementById("logBatchModalTitle").textContent = "Confirm Compensation First";
+    document.getElementById("logBatchSalaryRequiredState").style.display = "";
+  } else if(isFirst || pivotOk){
     document.getElementById("logBatchModalTitle").textContent = "Log Submission Batch";
     document.getElementById("logBatchFormState").style.display = "";
     document.getElementById("logBatchDate").value = localTodayStr();
@@ -4815,6 +4882,10 @@ function closeLogBatchModal(){
 document.getElementById("logBatchClose").addEventListener("click", closeLogBatchModal);
 document.getElementById("logBatchModal").addEventListener("click", (e)=>{
   if(e.target.id === "logBatchModal") closeLogBatchModal();
+});
+document.getElementById("logBatchGoToSalaryBtn").addEventListener("click", ()=>{
+  closeLogBatchModal();
+  openEditReqInfoModal();
 });
 document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   const p = POSITIONS.find(x=>x.id===activeDetailId);
@@ -6235,8 +6306,9 @@ function parsePositionsTable(posHeaders, posRows){
       // Columna nueva/opcional: si el archivo real todavia no la tiene, idx() devuelve -1 y
       // r[-1] es undefined, asi que simplemente se muestra como "Not set" sin romper nada.
       linkedinRecruiterUrl: r[idx("LinkedIn Recruiter URL")] || null,
-      productLine: r[idx("Product Line")],
-      salaryRange: r[idx("Salary Range")],
+      salaryCurrency: r[idx("Salary Currency")] || null,
+      salaryMin: r[idx("Salary Min")] != null && r[idx("Salary Min")] !== "" ? r[idx("Salary Min")] : null,
+      salaryMax: r[idx("Salary Max")] != null && r[idx("Salary Max")] !== "" ? r[idx("Salary Max")] : null,
       sourced: r[idx("Sourced")],
       directApps: r[idx("Direct Apps")],
       submittedCount: r[idx("Submitted")],
