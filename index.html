@@ -213,9 +213,16 @@
   .signin-brand-panel {
     /* Sigue el tema igual que el resto del gate (antes era oscuro fijo a proposito, pero se
        veia partido a la mitad — un lado negro, el otro blanco — apenas alguien probaba el
-       toggle en modo claro; corregido 2026-09-17). */
+       toggle en modo claro; corregido 2026-09-17). El resplandor calido (radial-gradient con
+       --brand-rgb, sin tocar el color de marca en si) mas la tarjeta flotante de
+       .signin-form-panel/.signin-card son el mismo patron que usa gokeystone.ai en su propio
+       login — pedido explicito de Nicolas viendo screenshots reales de ese login en los dos
+       temas, para que los dos lados se noten distintos en vez de un solo color plano parejo. */
     display: none; flex: 1 1 42%; min-width: 300px; align-items: center; justify-content: center;
-    padding: 48px; background: linear-gradient(160deg, var(--surface-2), var(--page));
+    padding: 48px; position: relative; overflow: hidden;
+    background:
+      radial-gradient(circle at 75% 70%, rgba(var(--brand-rgb), 0.28), transparent 60%),
+      var(--page);
     border-right: 1px solid var(--border);
   }
   .signin-brand-content { max-width: 360px; text-align: center; }
@@ -229,9 +236,16 @@
   .signin-brand-sub { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; }
   .signin-form-panel {
     flex: 1 1 58%; display: flex; align-items: center; justify-content: center;
-    padding: 32px 20px; overflow-y: auto; background: var(--page);
+    padding: 32px 20px; overflow-y: auto; background: var(--surface-2);
   }
-  .signin-card { width: 100%; max-width: 380px; text-align: center; }
+  /* Tarjeta flotante (fondo/borde/sombra propios) en vez del contenido suelto directo sobre el
+     panel — sin esto, un panel derecho practicamente plano (arriba) no se distinguia de la
+     tarjeta en si. */
+  .signin-card {
+    width: 100%; max-width: 380px; text-align: center;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 32px 28px;
+  }
   .signin-card-logos { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
   .signin-card-logo { height: 30px; width: auto; display: block; }
   .signin-card h1 { font-size: 19px; margin: 0 0 4px; color: var(--text-primary); }
