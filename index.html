@@ -339,7 +339,7 @@
   /* Lista clickeable de posiciones activas debajo del anillo (mismas filas .recent-req-row que
      ya se usan en Recently Assigned, misma familia visual) — max-height+scroll para que la
      tarjeta no tenga que crecer si hay muchas activas a la vez. */
-  .active-positions-list { max-height: 132px; overflow-y: auto; margin-top: 8px; text-align: left; }
+  .active-positions-list { max-height: 190px; overflow-y: auto; margin-top: 8px; text-align: left; }
   /* Encabezado de grupo de headcounts (varias reqs = mismo rol, distintos codigos de job en
      Irth) — mismo tratamiento tipografico que .rail-section-title pero sin mayusculas, para no
      confundirse con las etiquetas de seccion reales del sidebar. Las filas hijas se indentan un
@@ -362,12 +362,18 @@
   .nav-workspace-btn:hover { color: var(--text-primary); }
   .nav-workspace-btn.active { color: var(--brand); }
 
-  /* Active Positions/Submitted Vs Expected: cada anillo (renderDonut) vive en su PROPIA tarjeta
+  /* Active Positions/Total Requisitions: cada anillo (renderDonut) vive en su PROPIA tarjeta
      grande dentro de dash-grid, mismo tratamiento que "Applications by channel" en KeyStone —
-     titulo+subtitulo alineados a la izquierda (igual que cualquier .panel), pero el anillo
-     centrado abajo. La leyenda que renderDonut agrega siempre se oculta aqui porque el valor ya
-     esta en el centro del anillo, repetirlo abajo era ruido. */
+     titulo+subtitulo alineados a la izquierda (igual que cualquier .panel), anillo+leyenda
+     centrados abajo. */
   .panel-ring .donut-wrap { justify-content: center; padding-top: 6px; }
+  /* Active Positions especificamente: anillo a la izquierda, lista de posiciones a la derecha
+     (antes apiladas verticalmente — anillo arriba, lista abajo a todo lo ancho, mucho mas alto
+     de lo necesario). align-items:flex-start para que la lista no se estire a la altura del
+     anillo si tiene pocas filas. */
+  .active-positions-split { display: flex; gap: 24px; align-items: flex-start; padding-top: 6px; }
+  .active-positions-split #statRingActive { flex: none; }
+  .active-positions-split .active-positions-list { flex: 1; min-width: 0; margin-top: 0; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -1060,18 +1066,25 @@
                 <h3>Active Positions</h3>
                 <div class="panel-sub">Positions not yet in a terminal status, right now.</div>
                 <div class="panel-sub" id="activePositionsRolesStat" style="margin-top:-4px;"></div>
-                <div id="statRingActive"></div>
-                <!-- Lista de las mismas posiciones activas, cada una clickeable directo a su
-                     modal — antes solo se podia llegar ahi haciendo clic en el anillo entero
-                     (abria un quick-list generico). max-height+scroll para que la tarjeta no
-                     crezca si hay muchas posiciones activas; con pocas (el caso real hoy) cabe
-                     entera sin scroll. -->
-                <div class="active-positions-list" id="activePositionsList"></div>
+                <!-- Anillo a la izquierda, lista de las mismas posiciones activas a la derecha
+                     (antes apiladas: anillo arriba, lista abajo a todo lo ancho — ocupaba mucho
+                     mas alto de lo necesario). Cada fila de la lista es clickeable directo a su
+                     modal. max-height+scroll para que la tarjeta no crezca si hay muchas
+                     posiciones activas. -->
+                <div class="active-positions-split">
+                  <div id="statRingActive"></div>
+                  <div class="active-positions-list" id="activePositionsList"></div>
+                </div>
               </div>
               <div class="panel">
                 <h3>Submitted Vs Expected</h3>
                 <div class="panel-sub">Submitted candidates vs the SLA minimum batch size (3.5 per active position).</div>
                 <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
+              </div>
+              <div class="panel panel-ring">
+                <h3>Total Requisitions</h3>
+                <div class="panel-sub">Every requisition ever assigned, in any status — active or already closed out.</div>
+                <div id="statRingTotal"></div>
               </div>
               <div class="panel" id="panelWorkloadByRecruiter">
                 <h3>Active Workload By Recruiter</h3>
@@ -1094,9 +1107,9 @@
                    importar en cual tab estuvieras — Nicolas señalo que eso "spameaba" el Team
                    Dashboard con un banner grande arriba, cuando ya hay espacio libre en el grid
                    (debajo de Submitted Vs Expected en Team; debajo de Recent Activity en tu
-                   propio workspace). Movido adentro de Overview como una tarjeta mas, mismo
-                   patron visual que el panel "Needs Attention" de Tracking. -->
-              <div class="panel" id="panelDashboardAttention">
+                   propio workspace). Movido adentro de Overview como una tarjeta mas, a todo lo
+                   ancho (siempre queda solo/impar al final del grid sin importar el contexto). -->
+              <div class="panel" id="panelDashboardAttention" style="grid-column:1 / -1;">
                 <h3>Needs Attention <span class="panel-details-count" id="dashboardAttentionCount"></span></h3>
                 <div class="panel-sub">Out of SLA or at risk, or falling behind on Kickoff/Intake follow-up, most urgent first.</div>
                 <div id="dashboardAttentionZone"></div>
@@ -1318,7 +1331,15 @@
               <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
               <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"></select></div>
               <div class="panel-sub full" id="newPosCapacityHint" style="margin:-6px 0 0;"></div>
-              <div class="form-field"><label>Country/Market</label><select id="newPosCountry"><option>United States</option><option>Canada</option><option>Australia</option></select></div>
+              <div class="form-field full">
+                <label>Country/Market <span style="font-weight:400; color:var(--text-muted);">(check all that the search covers)</span></label>
+                <div style="display:flex; flex-wrap:wrap; gap:14px;">
+                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="United States" style="width:auto;"> United States</label>
+                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="Canada" style="width:auto;"> Canada</label>
+                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="Australia" style="width:auto;"> Australia</label>
+                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="New Zealand" style="width:auto;"> New Zealand</label>
+                </div>
+              </div>
               <div class="form-field"><label>Work Arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
               <div class="form-field"><label>City (Only If Hybrid Or On-Site)</label><input type="text" id="newPosCity" placeholder="e.g. Calgary, AB"></div>
               <div class="form-field"><label>Initial Status</label><select id="newPosStatus"></select></div>
@@ -1679,10 +1700,8 @@
         <button type="button" class="fact-edit-link" id="reqInfoHmBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
       </div>
       <div class="form-field full">
-        <label>Country</label>
-        <select id="reqInfoCountrySelect"></select>
-        <input type="text" id="reqInfoCountryInput" placeholder="Type the country">
-        <button type="button" class="fact-edit-link" id="reqInfoCountryBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
+        <label>Country <span style="font-weight:400; color:var(--text-muted);">(check all that the search covers)</span></label>
+        <div id="reqInfoCountryChecks" style="display:flex; flex-wrap:wrap; gap:14px;"></div>
       </div>
       <div class="form-field full"><label>City</label><input type="text" id="reqInfoCity" placeholder="e.g. Toronto (leave blank if not applicable)"></div>
       <div class="form-field full"><label>Work Arrangement</label><select id="reqInfoWorkArrangement"></select></div>
@@ -2820,8 +2839,8 @@ function statusChip(status){
 // misma informacion ya vive, mejor explicada, en SLA Health/SLA Compliance (tab SLA &
 // Completion) y Pending Offers (tab Offers & Placements). Ahora vive dentro de Overview (no
 // flotando encima de los 4 tabs) como graficas reales, no numeros sueltos en una tarjeta —
-// Active Positions es decorativo (un solo valor, sin "de cuanto"), asi que se queda como
-// anillo (renderDonut); Submitted Vs Expected si tiene una proporcion real que mostrar
+// Active Positions y Total Requisitions son anillos desglosados por balde (ver mas abajo, nunca
+// un solo color sin "de cuanto"); Submitted Vs Expected tiene una proporcion real que mostrar
 // (submitted / minimo esperado), asi que es una barra (mismo estilo que el funnel).
 // Suma los candidatos logueados en Submission Batches — reemplaza el viejo p.submittedCount
 // que dependia de Pipeline (From Spott) (removido: nunca hubo sync real, era pegado a mano en
@@ -2898,6 +2917,23 @@ function renderKpis(){
   document.querySelectorAll("#activePositionsList .recent-req-row").forEach(row=>{
     row.addEventListener("click", ()=> openDetailModal(row.dataset.id, "view", false, true));
   });
+
+  // Total Requisitions: TODAS las asignadas alguna vez (incluye cerradas), no solo las activas
+  // — complementa el anillo de arriba mostrando el panorama completo del ciclo de vida en vez
+  // de solo el momento actual. Activas vs Cerradas (Hired/Filled Internal Hire/Cancelled/Fell
+  // Through juntas, sin desglosar el motivo — eso ya vive en el status de cada una).
+  const allPositions = dashboardPositions();
+  const closedPositions = allPositions.filter(p=>TERMINAL.includes(p.status));
+  const totalRows = [
+    {label:"Active", value:active.length, positions:active, color:"var(--brand)"},
+    {label:"Closed", value:closedPositions.length, positions:closedPositions, color:"var(--neutral)"},
+  ].filter(r=>r.value>0);
+  const totalRingRows = totalRows.length ? totalRows : [{label:"No requisitions", value:1, realValue:0, color:"var(--grid)"}];
+  renderDonut("statRingTotal", totalRingRows, totalRingRows.map(r=>r.color), "Total", 168,
+    {value: allPositions.length, label:"Total"},
+    allPositions.length>0 ? (row)=>{
+      openQuickList(row.label, `${row.value} requisition${row.value===1?"":"s"}`, row.positions);
+    } : null);
 
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
@@ -3095,10 +3131,14 @@ function renderReclutadorChart(){
 
 function renderHiredLocChart(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  // Por pais individual, no por el valor crudo del campo — un req que cubre US+Canada a la vez
+  // cuenta en las dos barras, no en una tercera categoria compuesta "United States, Canada".
+  // El total de las barras puede superar el total de posiciones activas, y esta bien: es una
+  // cuenta de pertenencia (membership), no una particion.
   const byCountry = {};
   active.forEach(p=>{
-    const country = p.country || "Unknown";
-    byCountry[country] = (byCountry[country] || 0) + 1;
+    const countries = countryList(p).length ? countryList(p) : ["Unknown"];
+    countries.forEach(country=>{ byCountry[country] = (byCountry[country] || 0) + 1; });
   });
   const rows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
   // Antes un donut de 70px con leyenda al lado — con 4-5 paises distintos y uno dominante (ej.
@@ -3118,7 +3158,7 @@ function renderHiredLocChart(){
     el.addEventListener("click", ()=>{
       const row = rows[i];
       openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
-        active.filter(p=>(p.country||"Unknown")===row.label));
+        active.filter(p=>(countryList(p).length ? countryList(p) : ["Unknown"]).includes(row.label)));
     });
   });
 
@@ -3497,7 +3537,7 @@ function renderPositions(){
     if(est && p.status!==est) return false;
     if(rec && p.recruiter!==rec) return false;
     if(hm && p.hiringManager!==hm) return false;
-    if(loc && p.country!==loc) return false;
+    if(loc && !countryList(p).includes(loc)) return false;
     if(placementF && (p.status==="Hired"?"yes":"no")!==placementF) return false;
     if(ttsF || ttfF || tthF){
       const s = computeSla(p);
@@ -4674,15 +4714,37 @@ function wireAddNewSelect(selectId, inputId, backBtnId){
   });
 }
 wireAddNewSelect("reqInfoHmSelect", "reqInfoHmInput", "reqInfoHmBackToList");
-wireAddNewSelect("reqInfoCountrySelect", "reqInfoCountryInput", "reqInfoCountryBackToList");
+// Country ya no es un solo valor de texto libre: se restringe a los mercados reales donde
+// reclutamos (algunas busquedas cubren mas de uno a la vez, ej. US+Canada o AU+NZ), asi que es
+// un set fijo de checkboxes en vez del patron select/"add new" que usan Hiring Manager y demas
+// campos de texto libre. countryList()/countryToStoredValue() abajo son las unicas dos
+// funciones que conocen el formato de almacenamiento (string separado por comas).
+const COUNTRY_OPTIONS = ["United States","Canada","Australia","New Zealand"];
+function splitCountries(str){
+  // Datos historicos de antes de que Country fuera multi-select real usaban "/" a mano (ej.
+  // "Canada / United States", a veces con una anotacion como "(APAC)" pegada al final) — se
+  // acepta "," o "/" como separador y se descarta cualquier parentesis, para que esos valores
+  // viejos se sigan leyendo bien sin necesitar una migracion de datos aparte.
+  return (str || "")
+    .replace(/\([^)]*\)/g, "")
+    .split(/[,/]/)
+    .map(s=>s.trim())
+    .filter(Boolean);
+}
+function countryList(p){
+  return splitCountries(p.country);
+}
 
 function openEditReqInfoModal(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
   const hmOptions = [...new Set(POSITIONS.map(x=>x.hiringManager).filter(Boolean))].sort();
-  const countryOptions = [...new Set(POSITIONS.map(x=>x.country).filter(Boolean))].sort();
   setupAddNewSelect("reqInfoHmSelect", "reqInfoHmInput", "reqInfoHmBackToList", hmOptions, p.hiringManager);
-  setupAddNewSelect("reqInfoCountrySelect", "reqInfoCountryInput", "reqInfoCountryBackToList", countryOptions, p.country);
+  const selectedCountries = countryList(p);
+  document.getElementById("reqInfoCountryChecks").innerHTML = COUNTRY_OPTIONS.map(c=>`
+    <label style="display:flex; align-items:center; gap:5px; font-weight:400;">
+      <input type="checkbox" class="reqInfoCountryCheck" value="${escapeHtml(c)}" ${selectedCountries.includes(c)?"checked":""} style="width:auto;"> ${escapeHtml(c)}
+    </label>`).join("");
   document.getElementById("reqInfoCity").value = p.city || "";
   document.getElementById("reqInfoWorkArrangement").innerHTML = ["Remote","Hybrid","On-site"]
     .map(a=>`<option value="${a}" ${a===(p.workArrangement||"Remote")?"selected":""}>${a}</option>`).join("");
@@ -4716,9 +4778,10 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
   const salaryFlat = document.getElementById("reqInfoSalaryFlat").checked;
   const salaryMinVal = document.getElementById("reqInfoSalaryMin").value.trim() || null;
   const salaryMaxVal = salaryFlat ? salaryMinVal : (document.getElementById("reqInfoSalaryMax").value.trim() || null);
+  const checkedCountries = [...document.querySelectorAll(".reqInfoCountryCheck:checked")].map(el=>el.value);
   const fields = [
     {key:"hiringManager", header:"Hiring Manager", value: getAddNewValue("reqInfoHmSelect","reqInfoHmInput")},
-    {key:"country", header:"Country", value: getAddNewValue("reqInfoCountrySelect","reqInfoCountryInput")},
+    {key:"country", header:"Country", value: checkedCountries.length ? checkedCountries.join(", ") : null},
     {key:"city", header:"City", value: document.getElementById("reqInfoCity").value.trim() || null},
     {key:"workArrangement", header:"Work Arrangement", value: document.getElementById("reqInfoWorkArrangement").value},
     {key:"salaryCurrency", header:"Salary Currency", value: document.getElementById("reqInfoSalaryCurrency").value || null},
@@ -4735,7 +4798,7 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
   // Country es la fuente del filtro de ubicacion (LOCATIONS); si cambio, se recalcula antes de
   // re-renderizar para que el nuevo pais quede disponible ahi tambien.
   if(changed.some(f=>f.key==="country")){
-    LOCATIONS = [...new Set(POSITIONS.map(x=>x.country).filter(Boolean))];
+    LOCATIONS = [...new Set(POSITIONS.flatMap(x=>splitCountries(x.country)))];
   }
   renderAll();
   renderDetailModal();
@@ -6464,7 +6527,7 @@ async function loadFromGraph(){
   } catch(err){ console.warn("Could not load Recruiters (non-fatal):", err); }
   MY_RECRUITER_NAME = myRecruiterName;
 
-  LOCATIONS = [...new Set(newPositions.map(p => p.country).filter(Boolean))];
+  LOCATIONS = [...new Set(newPositions.flatMap(p => splitCountries(p.country)))];
   POSITIONS = newPositions;
   renderAll();
   // Aterrizas directo en TU workspace, en Tracking, en vez de Team Dashboard — Team Workspace
@@ -6500,7 +6563,7 @@ async function tryLoadPublicSnapshot(){
       RECRUITER_TITLES = newTitles;
       RECRUITER_EMAILS = newEmails;
     }
-    LOCATIONS = [...new Set(newPositions.map(p => p.country).filter(Boolean))];
+    LOCATIONS = [...new Set(newPositions.flatMap(p => splitCountries(p.country)))];
     POSITIONS = newPositions;
     return true;
   } catch(err){
@@ -7046,7 +7109,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     title,
     hm: document.getElementById("newPosHM").value.trim(),
     recruiter: document.getElementById("newPosRecruiter").value,
-    country: document.getElementById("newPosCountry").value.trim(),
+    country: [...document.querySelectorAll(".newPosCountryCheck:checked")].map(el=>el.value).join(", "),
     workArrangement: document.getElementById("newPosWorkArrangement").value,
     city: document.getElementById("newPosCity").value.trim() || null,
     status: document.getElementById("newPosStatus").value || "Sourcing",
@@ -7138,6 +7201,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     document.getElementById("newPosRemark").value = "";
     document.getElementById("newPosStatus").value = "Kickoff";
     updateStatusDateUI("newPos", "Kickoff", null);
+    document.querySelectorAll(".newPosCountryCheck").forEach(el=>el.checked = false);
     msg.textContent = `${codes.length} position${codes.length===1?"":"s"} created and loaded.`;
   } catch(err){
     console.error(err);
@@ -7154,6 +7218,7 @@ document.getElementById("clearPositionBtn").addEventListener("click", () => {
   document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
   document.getElementById("newPosStatus").value = "Kickoff";
   updateStatusDateUI("newPos", "Kickoff", null);
+  document.querySelectorAll(".newPosCountryCheck").forEach(el=>el.checked = false);
   document.getElementById("createPositionMsg").textContent = "";
 });
 
