@@ -922,6 +922,9 @@
 </head>
 <body>
 <div class="app-loading-overlay" id="appLoadingOverlay">
+  <button class="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Switch to light theme" style="position:absolute; top:20px; right:24px;">
+    <span class="theme-toggle-knob"></span>
+  </button>
   <div class="app-loading-logos">
     <div class="app-loading-logo-stack">
       <img src="logos/cgp-group.svg" alt="CGP Group" class="app-loading-logo cgp" id="loadingCgpLogo">
@@ -1880,6 +1883,9 @@
      with no change to how that login itself works. See pinModeActive/workerRecruiterWrite() and
      the big comment next to "let pinModeActive" in the <script>. -->
 <div class="signin-overlay" id="pinLoginModal">
+  <button class="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Switch to light theme" style="position:absolute; top:20px; right:24px; z-index:1;">
+    <span class="theme-toggle-knob"></span>
+  </button>
   <div class="signin-brand-panel">
     <div class="signin-brand-content">
       <div class="signin-brand-logos">
@@ -6767,8 +6773,13 @@ function applyTheme(theme){
   if(theme === "light") document.documentElement.setAttribute("data-theme", "light");
   else document.documentElement.removeAttribute("data-theme");
   try { localStorage.setItem("tk_theme", theme); } catch(e){}
-  document.getElementById("themeToggleKnob").innerHTML = theme === "light" ? THEME_ICON_SUN : THEME_ICON_MOON;
-  document.getElementById("themeToggle").title = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
+  // Ya no es un solo boton: hay uno en el topbar, uno en la pantalla de carga y uno en el
+  // sign-in gate (ver los 3 <button class="theme-toggle"> en el HTML) — todos comparten la
+  // misma clase en vez de un id, asi que se actualizan todos de una via querySelectorAll.
+  const icon = theme === "light" ? THEME_ICON_SUN : THEME_ICON_MOON;
+  const title = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
+  document.querySelectorAll(".theme-toggle-knob").forEach(el => el.innerHTML = icon);
+  document.querySelectorAll(".theme-toggle").forEach(el => el.title = title);
   // Los wordmarks "CGP GROUP" y "KeyStone" estan dibujados en blanco solido en sus SVG
   // originales — sin esto se volverian invisibles contra un fondo claro. *-dark.svg son los
   // mismos archivos con ese texto recoloreado a oscuro (el naranja/rojo de marca se queda igual
@@ -6787,8 +6798,10 @@ function applyTheme(theme){
   if(signinCardCgp) signinCardCgp.src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
   if(signinCardKeystone) signinCardKeystone.src = theme === "light" ? "logos/keystone-ai-dark.svg" : "logos/keystone-ai.svg";
 }
-document.getElementById("themeToggle").addEventListener("click", ()=>{
-  applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
+document.querySelectorAll(".theme-toggle").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
+  });
 });
 // El script bloqueante al principio de <head> ya dejo el atributo puesto si tocaba (evita el
 // flash), esto solo sincroniza el icono del knob con lo que haya quedado.
