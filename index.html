@@ -3758,7 +3758,17 @@ function renderPositions(){
     if(q && !(p.title.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.hiringManager.toLowerCase().includes(q) || p.recruiter.toLowerCase().includes(q))) return false;
     return true;
   });
-  document.getElementById("positionsCount").textContent = rows.length + " positions";
+  // Active = no cerrada todavia (mismo TERMINAL que usa el resto del tracker, ej. Dashboard).
+  // Potential Placements = activa Y todavia sin oferta aceptada (excluye "Filled" ademas de
+  // TERMINAL) — una vez en Filled ya no es "potencial", es una colocacion practicamente
+  // confirmada esperando la fecha de inicio real (ver STATUS_GUIDANCE["Filled"]). Actual
+  // Placements = Hired especificamente, nunca Filled (esa distincion ya es la regla del
+  // tracker en todos lados: Filled != colocacion real todavia, ver STATUS_GUIDANCE["Hired"]).
+  const activeCount = rows.filter(p=>!TERMINAL.includes(p.status)).length;
+  const potentialCount = rows.filter(p=>!TERMINAL.includes(p.status) && p.status!=="Filled").length;
+  const actualCount = rows.filter(p=>p.status==="Hired").length;
+  document.getElementById("positionsCount").textContent =
+    `${rows.length} positions · ${activeCount} Active Positions · ${potentialCount} Potential Placements · ${actualCount} Actual Placements`;
   // Checkbox de seleccion en lote: solo admin la ve (mismo criterio que borrar posiciones) —
   // reasignar reqs de otras personas de golpe es una accion de gestion, no algo que cualquier
   // recruiter viendo el directorio completo deba poder disparar. isAdmin() por si solo trata
