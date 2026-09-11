@@ -1211,7 +1211,7 @@
             <table class="data" id="positionsTable">
               <thead><tr>
                 <th id="positionsSelectAllHeader" style="display:none;"><input type="checkbox" id="positionsSelectAllCheckbox"></th>
-                <th>Position</th><th>Code</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
+                <th>Position</th><th>Code</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Market Location</th><th>Arrangement</th><th>Status</th>
                 <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Remark</th><th>Placement</th>
               </tr></thead>
               <tbody></tbody>
@@ -1267,7 +1267,7 @@
                 <table class="data" id="trackingTable">
                   <thead><tr>
                     <th id="trackingSelectAllHeader" style="display:none;"><input type="checkbox" id="trackingSelectAllCheckbox"></th>
-                    <th>Position</th><th>Code</th><th>Hiring Manager</th><th>Location</th><th>Arrangement</th><th>Status</th>
+                    <th>Position</th><th>Code</th><th>Hiring Manager</th><th>Market Location</th><th>Arrangement</th><th>Status</th>
                     <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th>
                   </tr></thead>
                   <tbody></tbody>
@@ -2510,7 +2510,11 @@ function isSlaExceptionApproved(p){
   return v === true || v === "Yes" || v === "yes" || v === "YES";
 }
 function slaFor(p, key, closeDateStr){
-  const intake = parseD(p.intake);
+  // Si el req fue handoff a otro recruiter, el reloj de SLA es el de quien la trabaja AHORA:
+  // debe arrancar cuando esa persona acepto el handoff, no en el intake original del recruiter
+  // anterior (que puede haber sido semanas antes) — mismo criterio que ya usa stepHandoff en
+  // computeCompletion() para el checklist de Requisition Completion.
+  const intake = parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake);
   const baseTarget = SLA_TARGETS[key];
   if(!intake) return {status:"none", elapsed:null, target:baseTarget};
   const start = nextBizDay(intake);
@@ -2755,6 +2759,12 @@ function formatLocation(p){
 }
 function locationOnly(p){
   return p.city ? `${escapeHtml(p.city)}, ${escapeHtml(p.country)}` : (escapeHtml(p.country) || "-");
+}
+// Fuera del modal (tablas de Positions/Tracking, quick lists) solo se muestra el pais — la
+// ciudad/provincia solo tiene sentido dentro del detalle de una req especifica, mostrarla en
+// una lista mezclaba paises con ciudades sin ningun criterio consistente de agrupacion.
+function marketLocation(p){
+  return escapeHtml(p.country) || "-";
 }
 const ARRANGEMENT_COLORS = { "Remote": "var(--arr-remote)", "Hybrid": "var(--arr-hybrid)", "On-site": "var(--arr-onsite)" };
 function arrangementBadge(p){
@@ -3451,7 +3461,7 @@ function renderPositions(){
     return `
     <tr class="clickable" data-id="${escapeHtml(p.id)}">
       ${bulkOn ? `<td><input type="checkbox" class="positions-row-check" data-id="${escapeHtml(p.id)}" ${positionsSelectedIds.has(p.id)?"checked":""}></td>` : ""}
-      <td class="cell-position">${posLabel(p, false)}</td><td class="cell-code">${escapeHtml(p.id)}</td><td>${escapeHtml(p.client)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
+      <td class="cell-position">${posLabel(p, false)}</td><td class="cell-code">${escapeHtml(p.id)}</td><td>${escapeHtml(p.client)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${marketLocation(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
       <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(p.lastRemark)}">${escapeHtml(p.lastRemark)||'-'}</td>
@@ -3722,7 +3732,7 @@ function renderTracking(){
     const s = computeSla(p);
     return `<tr class="clickable" data-id="${escapeHtml(p.id)}">
       ${bulkOn ? `<td><input type="checkbox" class="tracking-row-check" data-id="${escapeHtml(p.id)}" ${trackingSelectedIds.has(p.id)?"checked":""}></td>` : ""}
-      <td class="cell-position">${posLabel(p, false)}</td><td class="cell-code">${escapeHtml(p.id)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
+      <td class="cell-position">${posLabel(p, false)}</td><td class="cell-code">${escapeHtml(p.id)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${marketLocation(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
     </tr>`;
@@ -3949,7 +3959,7 @@ function openQuickList(title, sub, positions, subLineFn){
   document.getElementById("quickListTitle").textContent = title;
   document.getElementById("quickListSub").textContent = sub || `${positions.length} position${positions.length===1?"":"s"}`;
   const body = document.getElementById("quickListBody");
-  const subLine = subLineFn || (p => `${escapeHtml(p.recruiter)} · ${locationOnly(p)}`);
+  const subLine = subLineFn || (p => `${escapeHtml(p.recruiter)} · ${marketLocation(p)}`);
   body.innerHTML = positions.length ? positions.map(p => `
     <div class="quick-list-row" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${subLine(p)}</div></div>
@@ -6233,7 +6243,14 @@ function parsePositionsTable(posHeaders, posRows){
       batches: [],
       remarksHistory: [],
     };
-  }).filter(p => p.id).reverse(); // reqs se agregan al final del Excel; invertido = mas reciente primero en todo el tracker
+  }).filter(p => p.id)
+    // Orden canonico para todo el tracker: mas reciente primero, en todas las listas (Positions,
+    // Tracking, quick lists, etc.) ya que ninguna aplica su propio sort aparte. El orden de
+    // insercion en Excel ya NO es un proxy confiable de "mas reciente" (reqs viejas se
+    // respaldaron/crearon fuera de orden durante el backfill historico), asi que se ordena
+    // explicito por Kickoff Date real — la mejor aproximacion a "fecha de creacion" que
+    // tenemos, a falta de un campo de creacion propio.
+    .sort((a,b) => (b.kickoff||"").localeCompare(a.kickoff||""));
 }
 // Reemplaza el ultimo remark de cada posicion por el mas reciente segun HistorialTable.
 // Ademas de p.lastRemark (usado en la columna "Last Update" de Tracking), guarda el HISTORIAL
