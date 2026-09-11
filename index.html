@@ -920,6 +920,24 @@
   .timeline .tl-badge.guidance { background: rgba(var(--warning-rgb),0.16); color: var(--warning); }
   .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
   .timeline .tl-text { flex: 1; }
+  /* Link a un entregable (ej. "Lead Kickoff Note ->") pegado justo despues del texto de guidance
+     vigente en Activity — se ve como un chip inline, nunca como un link azul subrayado suelto,
+     para que no compita visualmente con el resto de la linea. */
+  .deliverable-link {
+    display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px;
+    border: 1px solid rgba(var(--brand-rgb),0.32); background: var(--brand-wash);
+    color: var(--brand-dark); font-size: 11px; font-weight: 600; font-family: inherit;
+    cursor: pointer; white-space: nowrap;
+  }
+  .deliverable-link:hover { background: rgba(var(--brand-rgb),0.16); }
+  .deliverable-preview-body {
+    max-height: 420px; overflow-y: auto; padding: 16px 18px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--surface-2); font-size: 13px; line-height: 1.5;
+  }
+  .deliverable-preview-body p { margin: 0 0 10px; }
+  .deliverable-preview-body p:last-child { margin-bottom: 0; }
+  .deliverable-preview-body ul { margin: 0 0 10px; padding-left: 20px; }
+  .deliverable-preview-body li { margin-bottom: 4px; }
   .add-remark textarea {
     width: 100%; font-family: inherit; font-size: 13px; padding: 9px 11px;
     border: 1px solid var(--border); border-radius: 8px; resize: vertical; margin-bottom: 8px;
@@ -1860,6 +1878,28 @@
   </div>
 </div>
 
+<!-- ======================= DELIVERABLE PREVIEW MODAL ======================= -->
+<!-- Abierto desde un link ".deliverable-link" en Activity (ver guidanceDeliverableLinksHtml() /
+     openDeliverablePreview()) — preview de un entregable del Master Prompt ya pre-llenado con
+     los datos del req, listo para copiar y pegar en el correo real. -->
+<div class="modal-overlay" id="deliverablePreviewModal">
+  <div class="modal-card" style="max-width:640px;">
+    <div class="modal-head">
+      <div>
+        <h2 style="margin:0; font-size:16px;" id="deliverablePreviewTitle">Deliverable</h2>
+        <div class="modal-sub" id="deliverablePreviewSub"></div>
+      </div>
+      <button class="modal-close" id="deliverablePreviewClose" type="button">&times;</button>
+    </div>
+    <div class="alert-banner tier-yellow compact" id="deliverablePreviewNote" style="display:none;"></div>
+    <div class="deliverable-preview-body" id="deliverablePreviewBody"></div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="deliverablePreviewCopyBtn">Copy</button>
+    </div>
+    <div class="panel-sub" id="deliverablePreviewCopyMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
 <!-- ======================= REASSIGN RECRUITER MODAL ======================= -->
 <!-- Handoff: la req no es nueva, pero PARA el reclutador que la recibe si lo es — ver
      openAcceptHandoffModal() para el otro lado de este flujo. -->
@@ -2107,6 +2147,120 @@ const STATUS_GUIDANCE = {
   "On Hold — Internal Candidates": "The hiring manager wants to see the outcome of Irth's internal candidate process before deciding on the external candidates already interviewed. This is not an SLA violation — there's no fixed deadline, since that internal process runs on Irth's own timeline, not Cornerstone's. Keep a periodic (e.g. weekly) check-in with the hiring manager for a status update regardless. Sourcing/other work on this requisition can continue in parallel where it applies — only the decision on already-interviewed candidates is paused.",
   "Cancelled": "This requisition was cancelled by the client. No further action is needed.",
 };
+
+// ============================================================
+// Next Step deliverables: cuando el "Next Step" de un status trae un entregable real (un correo
+// que hay que redactar), el texto de guidance en Activity muestra ademas un link clickeable —
+// abre un preview ya pre-llenado con los datos del req, listo para copiar. Primera fase: solo
+// Kickoff (Entregable 1A/1B del Master Prompt, seccion 3) — el resto de los 16 entregables se
+// van agregando aqui mismo, de a poco, por eso esto vive separado de STATUS_GUIDANCE en vez de
+// mezclarse con el texto plano que sí se persiste tal cual en Activity/HistorialTable.
+// Plantillas verbatim del Master Prompt ("Irth Solutions Recruiting Workflows", seccion 3) —
+// nunca reformular el texto, solo los placeholders senalados ahi se resuelven con datos del req.
+function kickoffProcessSectionsHtml(){
+  return `
+    <p><strong>Communication approach:</strong></p>
+    <ul>
+      <li>Candidate submissions and profiles: Workable - Introduction/First Screen stage</li>
+      <li>Pipeline status updates and candidate process communication: Email and Workable</li>
+      <li>Hiring Manager interview feedback: Workable, under the Review tab on each candidate's profile</li>
+      <li>Quick syncs or discussions: Microsoft Teams</li>
+    </ul>
+    <p>If you'd prefer a different approach for any of these, just let me know and we'll adjust.</p>
+    <p><strong>Sourcing:</strong></p>
+    <ul>
+      <li>I handle all sourcing for this role, both passive outreach and active applications.</li>
+      <li>You won't need to manage any of the sourcing details day-to-day.</li>
+    </ul>
+    <p><strong>Submissions:</strong></p>
+    <ul>
+      <li>All candidates are submitted through Workable.</li>
+      <li>Submitted profiles will appear under the "Introduction/First Screen" stage.</li>
+      <li>You'll receive an email confirmation each time a candidate is submitted.</li>
+    </ul>
+    <p><strong>Feedback:</strong></p>
+    <ul>
+      <li>When I submit a batch, please let us know which candidates you'd like to interview — for any you'd rather not move forward with, a quick note on why (based on their CV/profile) helps us fine-tune the next batch.</li>
+      <li>Once you've interviewed someone, please leave your feedback directly in the Review tab of their profile.</li>
+    </ul>
+    <p><strong>SLA:</strong></p>
+    <ul>
+      <li>We ask for a decision on which candidates to interview within 3 business days of a batch submission, and for feedback within 3 business days after an interview.</li>
+      <li>This directly impacts candidate experience and our employer branding, so timely responses make a real difference.</li>
+      <li>We'll walk through this in more detail, along with the full process, during our intake meeting.</li>
+    </ul>
+    <p><strong>Intake alignment:</strong></p>
+    <p>I'd like to schedule a 30-45 minute intake meeting over Teams to align on responsibilities, must-haves vs. nice-to-haves, the ideal candidate profile, timeline, and team dynamics. We'll also use that time to go deeper into everything covered in this email and answer any questions you might have.</p>
+    <p><strong>Timeline and approach:</strong></p>
+    <ul>
+      <li>Initial submission (7-9 business days from our intake meeting): 3-5 pre-screened candidates, prioritizing quality over quantity.</li>
+      <li>Follow-up batches (every 5 business days): 3-5 additional candidates from the pipeline already in progress, without restarting sourcing from scratch. This applies only if the previous batch was declined in full.</li>
+    </ul>`;
+}
+// Registro de entregables: cada uno sabe construir su propio preview a partir de un req real.
+// title/subtitle van en el header del modal de preview; note (opcional) es la aclaracion de
+// checkpoint que el Master Prompt pide junto al entregable (ej. "asegurate que el Lead ya
+// presento antes de mandar el tuyo"); body es el HTML real (strong/ul/li reales, nunca markdown
+// sin convertir — regla explicita del Master Prompt para que el copiado quede listo para pegar).
+const DELIVERABLE_TEMPLATES = {
+  leadKickoffA: p => ({
+    title: "Lead Kickoff Note",
+    subtitle: "Variant A — you're both the Lead Talent Partner and the recruiter running this requisition day-to-day. Sent to the hiring manager.",
+    note: null,
+    body: `
+      <p>Hi ${escapeHtml(p.hiringManager || "[Hiring Manager]")},</p>
+      <p>My name is Nicolas, I'm the Lead Talent Partner assigned to the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) requisition.</p>
+      <p>As part of the RPO partnership between Cornerstone and Irth Solutions, I wanted to reach out to align on how we'll work together, given this requires your ownership as the hiring manager. We'll keep all process documentation and feedback logged directly in Workable throughout.</p>
+      ${kickoffProcessSectionsHtml()}
+      <p>Thank you for your collaboration on this. Looking forward to working with you.</p>`
+  }),
+  leadKickoffB: p => ({
+    title: "Lead Kickoff Note (short)",
+    subtitle: `Variant B — ${escapeHtml(p.recruiter || "the assigned recruiter")} owns this requisition day-to-day. This short note just introduces them; it's sent first, before their own Recruiter Kickoff Note.`,
+    note: null,
+    body: `
+      <p>Hi ${escapeHtml(p.hiringManager || "[Hiring Manager]")},</p>
+      <p>My name is Nicolas, I'm the Lead Talent Partner for the Irth Solutions account. ${escapeHtml(p.recruiter || "[Recruiter]")} is your dedicated Talent Partner for the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) requisition, and will own this search day-to-day. [He/She] will reach out shortly to walk you through how we'll work together.</p>
+      <p>I stay closely involved supporting [him/her] on this requisition, so if anything urgent comes up (a calibration call, or anything that can't wait), I'm here to help move things along.</p>
+      <p>Looking forward to working with you.</p>`
+  }),
+  recruiterKickoff: p => ({
+    title: "Recruiter Kickoff Note",
+    subtitle: `Sent by ${escapeHtml(p.recruiter || "the assigned recruiter")}, in the same email thread, right after the Lead Kickoff Note above.`,
+    note: `Before sending this, make sure ${LEAD_TALENT_PARTNER} has already sent the short Lead Kickoff Note above in this same thread, introducing you to the hiring manager — that's what opens the door for this one. Not a hard blocker if you can't wait, but sending yours first would be out of order.`,
+    body: `
+      <p>Hi ${escapeHtml(p.hiringManager || "[Hiring Manager]")},</p>
+      <p>My name is ${escapeHtml(p.recruiter || "[Recruiter]")}, I'll be your dedicated Talent Partner for the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) requisition.</p>
+      <p>As part of the RPO partnership between Cornerstone and Irth Solutions, I wanted to reach out to align on how we'll work together, given this requires your ownership as the hiring manager. We'll keep all process documentation and feedback logged directly in Workable throughout.</p>
+      ${kickoffProcessSectionsHtml()}
+      <p>Looking forward to working together.</p>`
+  }),
+};
+// Que entregable(s) mostrar como link clickeable junto al "Next Step" vigente de un req, segun
+// su status actual — hoy solo Kickoff esta mapeado; agregar aqui el siguiente status cuando se
+// construya su propio entregable, nunca todos de una sola vez (ver nota arriba).
+function guidanceDeliverablesFor(p){
+  if(p.status === "Kickoff"){
+    return p.recruiter === LEAD_TALENT_PARTNER
+      ? [{id:"leadKickoffA", label:"Lead Kickoff Note"}]
+      : [{id:"leadKickoffB", label:"Lead Kickoff Note"}, {id:"recruiterKickoff", label:"Recruiter Kickoff Note"}];
+  }
+  return [];
+}
+// Un link por entregable, insertado justo despues del texto de guidance en Activity — el click
+// delegado que abre el preview vive junto al modal (ver mas abajo, seccion del modal).
+function guidanceDeliverableLinksHtml(p){
+  const list = guidanceDeliverablesFor(p);
+  if(!list.length) return "";
+  return list.map(d=>` <button type="button" class="deliverable-link" data-pid="${escapeHtml(p.id)}" data-deliverable="${d.id}">${escapeHtml(d.label)} →</button>`).join("");
+}
+// Una entrada "guidance" vieja (de un status ya superado) nunca deberia mostrar el link — solo
+// la que todavia describe el status ACTUAL del req. Como el texto de guidance nunca se edita
+// despues de logueado, comparar contra STATUS_GUIDANCE[p.status] alcanza para distinguir "esta
+// sigue vigente" de "esto ya quedo atras en la historia".
+function isCurrentGuidance(e, p){
+  return !!p && e.type === "guidance" && e.text === STATUS_GUIDANCE[p.status];
+}
 // Antes usaba --stage-blue/teal/purple/mauve para las etapas activas: colores sin relacion
 // con la marca, se veian genericos comparado con el naranja monocromatico que usa KeyStone AI
 // en sus propias graficas (ver captura de referencia). El progreso activo ahora es una sola
@@ -2450,6 +2604,11 @@ let RECRUITER_PINS = {};
 // Unico admin del tracker por ahora (Nicolas): solo esta cuenta puede eliminar requisitions
 // desde Positions. Es una barrera de interfaz, no seguridad real (ver isAdmin()).
 const ADMIN_EMAIL = "nicolas.patarroyo.ramirez@cgpgroupus.com";
+// Quien ocupa el rol de Lead Talent Partner de la cuenta Irth ahora mismo (hoy Nicolas) — vive
+// como constante separada, no hardcodeado inline, porque el Master Prompt es explicito en que
+// el titular puede cambiar sin que cambie la mecanica (ver DELIVERABLE_TEMPLATES abajo, que la
+// usa para decidir Variante A vs B del Kickoff Note).
+const LEAD_TALENT_PARTNER = "Nicolás Patarroyo";
 // Declarado aqui (no donde vive el resto de la integracion con Graph, mas abajo) porque
 // isConnected()/isAdmin()/trackingCanEdit() ya lo necesitan desde el primer renderAll() al
 // cargar la pagina, antes de que el bloque de MSAL se ejecute.
@@ -3714,7 +3873,7 @@ function renderTrackingActivity(){
     <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; margin:2px 0;" : ""}">
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
-      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
+      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${isCurrentGuidance(e, e.position) ? guidanceDeliverableLinksHtml(e.position) : ""}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity in the last 7 days.</li>`;
   // Contador visible aunque el <details> este cerrado, para no tener que abrirlo solo para
   // saber si vale la pena (y para que mucha actividad no obligue a colapsar el resto de la
@@ -3970,12 +4129,12 @@ function buildTimeline(p){
   });
 }
 const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step" };
-function timelineListHtml(timeline, emptyText){
+function timelineListHtml(timeline, emptyText, p){
   return timeline.length ? timeline.map(e=>`
     <li>
       <span class="tl-date">${e.date}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
-      <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
+      <span class="tl-text">${escapeHtml(e.text)}${isCurrentGuidance(e, p) ? guidanceDeliverableLinksHtml(p) : ""}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">${emptyText || "No activity logged yet."}</li>`;
 }
 // Un campo de Timeline se ve siempre (nunca se oculta), pero se deshabilita con un candadito +
@@ -4030,7 +4189,7 @@ function renderTrackingSelectedActivity(p, timeline){
   }
   const t = timeline || buildTimeline(p).slice().reverse();
   sub.innerHTML = `${posLabel(p)} — most recent first.`;
-  list.innerHTML = timelineListHtml(t);
+  list.innerHTML = timelineListHtml(t, null, p);
 }
 
 let activeDetailId = null;
@@ -4509,7 +4668,7 @@ function renderDetailModal(){
   }
 
   const timeline = buildTimeline(p).slice().reverse();
-  document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
+  document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline, null, p);
   // En Tracking (docked), la Activity vive en el panel de la izquierda en vez de aqui, para
   // dejar mas espacio vertical a la lista de reqs (ver #trackingSelectedActivityPanel).
   document.getElementById("modalActivityBlock").style.display =
@@ -5118,6 +5277,65 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
   renderPivotPendingState(p);
   } finally {
     calBtn.disabled = false;
+  }
+});
+
+// ======================= NEXT STEP DELIVERABLE PREVIEW =======================
+// Click delegado (no un listener por link, ya que Activity se re-renderiza seguido via
+// innerHTML) sobre cualquier ".deliverable-link" — funciona sin importar en cual de las 3
+// listas de Activity aparecio (Recent Activity global, el timeline docked de Tracking, o el
+// modal flotante de Positions/Dashboard).
+document.addEventListener("click", (e)=>{
+  const btn = e.target.closest(".deliverable-link");
+  if(!btn) return;
+  openDeliverablePreview(btn.dataset.pid, btn.dataset.deliverable);
+});
+function openDeliverablePreview(positionId, deliverableId){
+  const p = POSITIONS.find(x=>x.id===positionId);
+  const build = DELIVERABLE_TEMPLATES[deliverableId];
+  if(!p || !build) return;
+  const d = build(p);
+  document.getElementById("deliverablePreviewTitle").textContent = d.title;
+  document.getElementById("deliverablePreviewSub").textContent = d.subtitle || "";
+  const noteEl = document.getElementById("deliverablePreviewNote");
+  if(d.note){ noteEl.style.display = ""; noteEl.textContent = d.note; }
+  else { noteEl.style.display = "none"; noteEl.textContent = ""; }
+  document.getElementById("deliverablePreviewBody").innerHTML = d.body;
+  document.getElementById("deliverablePreviewCopyMsg").textContent = "";
+  document.getElementById("deliverablePreviewModal").classList.add("open");
+}
+function closeDeliverablePreview(){
+  document.getElementById("deliverablePreviewModal").classList.remove("open");
+}
+document.getElementById("deliverablePreviewClose").addEventListener("click", closeDeliverablePreview);
+document.getElementById("deliverablePreviewModal").addEventListener("click", (e)=>{
+  if(e.target.id === "deliverablePreviewModal") closeDeliverablePreview();
+});
+// Regla del Master Prompt (seccion 3, "Regla tecnica de copiado"): el objetivo es que esto se
+// pueda pegar directo en Outlook/Gmail sin perder negrillas ni bullets — por eso el Clipboard
+// API copia text/html real (no solo texto plano), con un fallback de solo-texto para
+// navegadores/paginas sin soporte de ClipboardItem.
+document.getElementById("deliverablePreviewCopyBtn").addEventListener("click", async ()=>{
+  const bodyEl = document.getElementById("deliverablePreviewBody");
+  const msg = document.getElementById("deliverablePreviewCopyMsg");
+  const html = bodyEl.innerHTML;
+  const text = bodyEl.innerText;
+  try{
+    if(window.ClipboardItem){
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], {type:"text/html"}),
+          "text/plain": new Blob([text], {type:"text/plain"}),
+        })
+      ]);
+    } else {
+      await navigator.clipboard.writeText(text);
+    }
+    msg.textContent = "Copied — formatting (bold, bullets) is preserved when pasted into Outlook or Gmail.";
+    msg.style.color = "var(--good)";
+  } catch(err){
+    msg.textContent = "Couldn't copy automatically — select the text above and copy it manually.";
+    msg.style.color = "var(--critical)";
   }
 });
 
