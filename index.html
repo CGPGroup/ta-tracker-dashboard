@@ -383,11 +383,36 @@
   }
   .theme-toggle-knob svg { width: 11px; height: 11px; }
   :root[data-theme="light"] .theme-toggle-knob { transform: translateX(19px); }
-  .pill {
-    font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
-    background: var(--brand-wash); color: var(--brand-dark);
+  /* ---------- User menu: avatar circle in the topbar, opens a small dropdown (identity +
+     Sign Out + switch between Public/Internal Access) instead of the old always-visible
+     "Connected: ..." pill + separate Sign Out button — see renderUserMenu() in the script. ---------- */
+  .user-menu { position: relative; }
+  .user-menu-trigger {
+    width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center; background: var(--surface-2);
   }
-  .pill.demo { background: rgba(var(--warning-rgb),0.14); color: var(--warning); }
+  .user-menu-avatar {
+    width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 12.5px; font-weight: 700; color: #fff;
+  }
+  .user-menu-avatar svg { width: 18px; height: 18px; color: var(--text-muted); }
+  .user-menu-dropdown {
+    position: absolute; top: calc(100% + 8px); right: 0; min-width: 240px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow); padding: 8px; z-index: 70; display: none;
+  }
+  .user-menu-dropdown.open { display: block; }
+  .user-menu-identity {
+    font-size: 11.5px; color: var(--text-muted); padding: 6px 10px 8px;
+    border-bottom: 1px solid var(--border); margin-bottom: 6px; word-break: break-word;
+  }
+  .user-menu-item {
+    display: block; width: 100%; text-align: left; background: none; border: none;
+    cursor: pointer; padding: 8px 10px; border-radius: 6px; font-size: 12.5px; font-weight: 600;
+    color: var(--text-primary); font-family: inherit;
+  }
+  .user-menu-item:hover { background: var(--hover-wash); }
+  .user-menu-item.danger { color: var(--critical); }
 
   .content { padding: 16px 32px 30px; width: 100%; }
 
@@ -953,8 +978,17 @@
         <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light/dark theme" title="Switch to light theme">
           <span class="theme-toggle-knob" id="themeToggleKnob"></span>
         </button>
-        <span class="pill" id="connectionPill">Not connected</span>
-        <button class="btn ghost small" id="signOutBtn" type="button" style="display:none;">Sign Out</button>
+        <div class="user-menu" id="userMenu">
+          <button class="user-menu-trigger" id="userMenuTrigger" type="button" aria-haspopup="true" aria-expanded="false" title="Account">
+            <span class="user-menu-avatar" id="userMenuAvatar"></span>
+          </button>
+          <div class="user-menu-dropdown" id="userMenuDropdown">
+            <div class="user-menu-identity" id="userMenuIdentity">Not connected</div>
+            <button class="user-menu-item" id="userMenuSwitchPublic" type="button" style="display:none;">Switch To Public Access</button>
+            <button class="user-menu-item" id="userMenuSwitchInternal" type="button" style="display:none;">Switch To Internal Access</button>
+            <button class="user-menu-item danger" id="userMenuSignOut" type="button" style="display:none;">Sign Out</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -5616,38 +5650,70 @@ function startAutoRefresh(){
   }, 120000);
 }
 function setConnectionUi(connected, label){
-  const pill = document.getElementById("connectionPill");
   const banner = document.getElementById("demoBanner");
   const modalNote = document.getElementById("modalNote");
-  const signOutBtn = document.getElementById("signOutBtn");
   if(connected){
-    pill.textContent = label || "Connected";
-    pill.classList.remove("demo");
-    pill.style.background = "var(--brand-wash)";
-    pill.style.color = "var(--brand-dark)";
     banner.style.display = "none";
     modalNote.textContent = pinModeActive
       ? `Connected as ${MY_RECRUITER_NAME}. Changes here are saved straight to the shared file.`
       : "Connected to Microsoft 365, changes here are saved straight to the shared file.";
     modalNote.classList.remove("tier-yellow");
     modalNote.classList.add("tier-good");
-    // Solo tiene sentido si de verdad hay una sesion que cerrar (PIN o Microsoft 365) — un
-    // visitante de Public Access nunca inicio sesion, no hay nada que "salir".
-    signOutBtn.style.display = "";
     startAutoRefresh();
   } else {
-    pill.textContent = "Not connected";
     banner.style.display = "";
     modalNote.textContent = "Not connected to Microsoft 365, updates here only stay in this browser tab. Sign in from the welcome screen to save changes to the shared file.";
     modalNote.classList.remove("tier-good");
     modalNote.classList.add("tier-yellow");
+  }
+  renderUserMenu(label);
+}
+const USER_MENU_VISITOR_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"/></svg>';
+// Avatar circular en el topbar (reemplaza el viejo pill "Connected: ..." siempre visible + un
+// boton "Sign Out" aparte): iniciales + color de `colorForName()` cuando hay una sesion real
+// (PIN o Microsoft 365, mismo criterio que graphAccount/pinModeActive en todo el resto del
+// archivo), un icono generico de visitante cuando no la hay. El dropdown decide que opciones
+// mostrar con el mismo criterio.
+function renderUserMenu(label){
+  const avatar = document.getElementById("userMenuAvatar");
+  const identity = document.getElementById("userMenuIdentity");
+  const switchPublicBtn = document.getElementById("userMenuSwitchPublic");
+  const switchInternalBtn = document.getElementById("userMenuSwitchInternal");
+  const signOutBtn = document.getElementById("userMenuSignOut");
+  const connected = pinModeActive || !!graphAccount;
+  if(connected){
+    const name = MY_RECRUITER_NAME || (graphAccount && graphAccount.username) || "Admin";
+    avatar.textContent = initialsFor(name);
+    avatar.style.background = colorForName(name);
+    identity.textContent = pinModeActive
+      ? `Connected as ${MY_RECRUITER_NAME} (PIN)`
+      : `Connected: ${(graphAccount && graphAccount.username) || label || "Microsoft 365"}`;
+    switchPublicBtn.style.display = "";
+    switchInternalBtn.style.display = "none";
+    signOutBtn.style.display = "";
+  } else {
+    avatar.innerHTML = USER_MENU_VISITOR_ICON;
+    avatar.style.background = "var(--surface-2)";
+    identity.textContent = "Viewing as a public visitor";
+    switchPublicBtn.style.display = "none";
+    switchInternalBtn.style.display = "";
     signOutBtn.style.display = "none";
   }
 }
+function closeUserMenu(){
+  document.getElementById("userMenuDropdown").classList.remove("open");
+}
+document.getElementById("userMenuTrigger").addEventListener("click", (e)=>{
+  e.stopPropagation();
+  document.getElementById("userMenuDropdown").classList.toggle("open");
+});
+document.getElementById("userMenuDropdown").addEventListener("click", (e)=> e.stopPropagation());
+document.addEventListener("click", closeUserMenu);
 // Cierra la sesion actual (PIN o Microsoft 365) y te devuelve al sign-in screen. En los dos
 // casos termina en un reload/redirect completo de la pagina en vez de intentar resetear cada
 // variable global a mano — mas simple y sin riesgo de dejar algun estado a medias.
 async function signOut(){
+  closeUserMenu();
   if(pinModeActive){
     localStorage.removeItem("pinModeSession");
     location.reload();
@@ -5664,7 +5730,49 @@ async function signOut(){
   }
   location.reload();
 }
-document.getElementById("signOutBtn").addEventListener("click", signOut);
+document.getElementById("userMenuSignOut").addEventListener("click", signOut);
+// A diferencia de Sign Out (termina la sesion por completo), esto deja a un reclutador/admin
+// YA conectado pasar a ver el tracker como lo veria cualquier visitante publico, sin tener que
+// cerrar sesion primero — pensado para el propio Nicolas revisando como se ve algo desde
+// afuera, o un reclutador que momentaneamente solo quiere consultar sin arriesgar un cambio
+// accidental. En modo PIN esto no necesita ni reload (los datos publicos ya estan cargados);
+// en Microsoft 365 si necesita un logout real (no hay forma de "ocultar" una sesion MSAL activa
+// sin cerrarla), asi que deja una migaja en localStorage para que trysilentConnect() sepa saltar
+// el sign-in gate al volver y caer directo en Public Access.
+async function switchToPublicAccess(){
+  closeUserMenu();
+  if(pinModeActive){
+    localStorage.removeItem("pinModeSession");
+    pinModeActive = false; MY_RECRUITER_NAME = null; pinModeCode = null;
+    setDashboardScope(null);
+    activateView("dashboard");
+    setConnectionUi(false);
+    // renderAll() (no solo setDashboardScope/activateView) porque "My Workspace" en el nav
+    // (updateWorkspaceSwitchVisibility()) y el gate de Danger Zone (updateDangerZoneVisibility())
+    // tambien dependen de MY_RECRUITER_NAME/isAdmin() y quedaban obsoletos sin esto.
+    renderAll();
+    return;
+  }
+  if(graphAccount){
+    try {
+      localStorage.setItem("signinPreferPublic", "1");
+      await msalInstance.logoutRedirect({ account: graphAccount });
+    } catch(err){
+      console.error("Could not log out of Microsoft 365 cleanly:", err);
+      localStorage.removeItem("signinPreferPublic");
+      location.reload();
+    }
+  }
+}
+// El reverso: un visitante publico que quiere entrar como reclutador/admin. No hay sesion que
+// cerrar (nunca hubo una), asi que solo hace falta reabrir el gate en el paso "Internal Access".
+function switchToInternalAccess(){
+  closeUserMenu();
+  document.getElementById("pinLoginModal").classList.add("open");
+  showGateStep("signinStepInternal");
+}
+document.getElementById("userMenuSwitchPublic").addEventListener("click", switchToPublicAccess);
+document.getElementById("userMenuSwitchInternal").addEventListener("click", switchToInternalAccess);
 
 async function getGraphToken(){
   await msalReady;
@@ -5974,6 +6082,13 @@ async function trysilentConnect(){
     // de fondo (para que quien elija "Solo quiero ver" ya tenga todo listo) y pregunta que tipo
     // de usuario es, en vez de dejarlo parado en el Team Dashboard sin explicarle nada.
     await tryLoadPublicSnapshotAndRender();
+    // Excepcion: "Switch To Public Access" desde una sesion de Microsoft 365 deja esta migaja
+    // antes de un logoutRedirect() real (ver switchToPublicAccess()) — al volver aqui ya sabemos
+    // que la intencion era terminar como visitante publico, no que se le vuelva a preguntar.
+    if(localStorage.getItem("signinPreferPublic")){
+      localStorage.removeItem("signinPreferPublic");
+      return;
+    }
     openPinLoginModal();
     return;
   }
@@ -6490,6 +6605,10 @@ function openPinLoginModal(){
   document.getElementById("pinLoginInput").value = "";
   document.getElementById("pinLoginMsg").textContent = "";
   document.getElementById("pinLoginModal").classList.add("open");
+  // Limpieza defensiva: si quedo esta migaja de un "Switch To Public Access" interrumpido (ver
+  // switchToPublicAccess()) pero de alguna forma se termino mostrando el gate igual, que no
+  // sobreviva a que alguien de verdad lo use para entrar por PIN o Microsoft 365.
+  localStorage.removeItem("signinPreferPublic");
 }
 function closePinLoginModal(){
   document.getElementById("pinLoginModal").classList.remove("open");
