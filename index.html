@@ -570,8 +570,6 @@
   .funnel-stat { text-align: right; font-variant-numeric: tabular-nums; }
   .funnel-value { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
   .funnel-pct { font-size: 11px; color: var(--text-muted); line-height: 1.3; }
-  .funnel-dropoff { display: flex; align-items: center; gap: 6px; padding: 6px 0; font-size: 11px; color: var(--text-muted); }
-  .funnel-dropoff-pill { background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; }
 
   .workload-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
   .workload-card {
@@ -2913,26 +2911,26 @@ function renderBarlist(elId, rows, colorVar, onClickRow){
   }
 }
 
-// rows viene ya ordenado (etapa 1 primero). El fill se degrada de opacidad 1.0 en la primera
-// fila a 0.35 en la ultima — no una paleta de N colores fijos, para que funcione igual de bien
-// con 2 etapas activas que con 8.
+// rows viene ordenado por STATUS_ORDER (etapa de kickoff primero), no por valor descendente —
+// a diferencia de un funnel real de conversion, un req puede llegar a cualquier etapa sin pasar
+// "de a uno" por las anteriores, y una etapa mas tardia puede perfectamente tener mas reqs que
+// una mas temprana. Por eso ya NO se muestran "% of top"/"advanced %" (implicaban una
+// conversion secuencial que no aplica aqui y daban numeros sin sentido, ej. "200% advanced")
+// — solo el conteo crudo por etapa. El fill se degrada de opacidad 1.0 en la primera fila a 0.35
+// en la ultima (puramente por posicion en la lista, no por valor) — no una paleta de N colores
+// fijos, para que funcione igual de bien con 2 etapas activas que con 8.
 function renderFunnel(elId, rows, onClickRow){
   const top = rows[0]?.value || 1;
   const n = rows.length;
   const rowsHtml = rows.map((r,i)=>{
     const opacity = n<=1 ? 1 : (1 - (i/(n-1))*0.65).toFixed(2);
-    const pctOfTop = Math.round(r.value/top*100);
-    const dropoff = i>0 && rows[i-1].value>0
-      ? `<div class="funnel-dropoff"><span>↓</span><span class="funnel-dropoff-pill">${Math.round(r.value/rows[i-1].value*100)}% advanced</span></div>`
-      : "";
     return `
-    ${dropoff}
     <div class="funnel-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
       <div class="funnel-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
       <div class="funnel-track"><div class="funnel-fill" style="width:${(r.value/top*100).toFixed(1)}%; background:rgba(var(--brand-rgb),${opacity});"></div></div>
       <div class="funnel-stat">
         <div class="funnel-value">${r.value}</div>
-        <div class="funnel-pct">${pctOfTop}% of top</div>
+        <div class="funnel-pct">position${r.value===1?"":"s"}</div>
       </div>
     </div>`;
   }).join("");
@@ -3059,21 +3057,32 @@ function renderReclutadorChart(){
 
 function renderHiredLocChart(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  const ramp = ["var(--seq-200)","var(--seq-300)","var(--seq-400)","var(--seq-500)","var(--seq-600)"];
   const byCountry = {};
   active.forEach(p=>{
     const country = p.country || "Unknown";
     byCountry[country] = (byCountry[country] || 0) + 1;
   });
   const rows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
-  if(rows.length){
-    renderDonut("chartHiredLoc", rows, ramp, "Active", 70, null, (row)=>{
+  // Antes un donut de 70px con leyenda al lado — con 4-5 paises distintos y uno dominante (ej.
+  // Canada 8, el resto en 1), un donut asi apenas se lee (una rebanada gigante + astillas) y
+  // desentonaba con BY ARRANGEMENT justo debajo, que ya es un barlist. Mismo tratamiento que
+  // BY ARRANGEMENT para que las dos mitades del panel se vean consistentes.
+  document.getElementById("chartHiredLoc").innerHTML = rows.length ? rows.map((r,i)=>{
+    const max = rows[0].value || 1;
+    return `
+    <div class="barlist-row clickable-stat" data-idx="${i}">
+      <div class="barlist-label">${escapeHtml(r.label)}</div>
+      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:var(--seq-400);"></div></div>
+      <div class="barlist-value">${r.value}</div>
+    </div>`;
+  }).join("") : `<div class="panel-sub" style="margin:0;">No active positions.</div>`;
+  document.querySelectorAll("#chartHiredLoc .barlist-row").forEach((el,i)=>{
+    el.addEventListener("click", ()=>{
+      const row = rows[i];
       openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
         active.filter(p=>(p.country||"Unknown")===row.label));
     });
-  } else {
-    renderDonut("chartHiredLoc", [{label:"No active positions", value:1, realValue:0}], ["var(--grid)"], "Active", 70);
-  }
+  });
 
   const byArrangement = { "Remote": 0, "Hybrid": 0, "On-site": 0 };
   active.forEach(p=>{
