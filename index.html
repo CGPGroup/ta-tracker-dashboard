@@ -336,16 +336,6 @@
   .recent-req-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
   .recent-req-row:hover { background: var(--hover-wash); color: var(--text-primary); }
   .recent-req-row .rr-code { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
-  /* Lista clickeable de posiciones activas debajo del anillo (mismas filas .recent-req-row que
-     ya se usan en Recently Assigned, misma familia visual) — max-height+scroll para que la
-     tarjeta no tenga que crecer si hay muchas activas a la vez. */
-  .active-positions-list { max-height: 190px; overflow-y: auto; margin-top: 8px; text-align: left; }
-  /* Encabezado de grupo de headcounts (varias reqs = mismo rol, distintos codigos de job en
-     Irth) — mismo tratamiento tipografico que .rail-section-title pero sin mayusculas, para no
-     confundirse con las etiquetas de seccion reales del sidebar. Las filas hijas se indentan un
-     poco para dejar claro que "pertenecen" al grupo, sin perder el mismo hover clickeable. */
-  .active-positions-group-header { font-size: 10.5px; font-weight: 600; color: var(--text-muted); padding: 6px 10px 2px; }
-  .recent-req-row.grouped { padding-left: 18px; }
 
   /* Switcher Team Workspace / My Workspace, desplegado justo debajo de Dashboard SOLO mientras
      Dashboard es la vista activa (ver activateView()) — como un acordeon de sidebar normal,
@@ -362,18 +352,18 @@
   .nav-workspace-btn:hover { color: var(--text-primary); }
   .nav-workspace-btn.active { color: var(--brand); }
 
-  /* Active Positions/Total Requisitions: cada anillo (renderDonut) vive en su PROPIA tarjeta
-     grande dentro de dash-grid, mismo tratamiento que "Applications by channel" en KeyStone —
-     titulo+subtitulo alineados a la izquierda (igual que cualquier .panel), anillo+leyenda
-     centrados abajo. */
+  /* Total Requisitions: el anillo (renderDonut) vive en su PROPIA tarjeta grande dentro de
+     dash-grid, mismo tratamiento que "Applications by channel" en KeyStone — titulo+subtitulo
+     alineados a la izquierda (igual que cualquier .panel), anillo+leyenda centrados abajo. */
   .panel-ring .donut-wrap { justify-content: center; padding-top: 6px; }
-  /* Active Positions especificamente: anillo a la izquierda, lista de posiciones a la derecha
-     (antes apiladas verticalmente — anillo arriba, lista abajo a todo lo ancho, mucho mas alto
-     de lo necesario). align-items:flex-start para que la lista no se estire a la altura del
-     anillo si tiene pocas filas. */
-  .active-positions-split { display: flex; gap: 24px; align-items: flex-start; padding-top: 6px; }
-  .active-positions-split #statRingActive { flex: none; }
-  .active-positions-split .active-positions-list { flex: 1; min-width: 0; margin-top: 0; }
+  /* "Positions & Placements" (Overview, reemplaza el viejo anillo de Active Positions) — 4
+     numeros grandes en linea, de izquierda a derecha, cada uno clickeable (mismo patron de
+     renderAvgTtsChart(): numero + label + openQuickList()). space-between para que ocupen todo
+     el ancho de la tarjeta parejo, sin importar cuantos digitos tenga cada numero. */
+  .positions-summary-strip { display: flex; justify-content: space-between; gap: 16px; padding-top: 10px; }
+  .positions-summary-stat { text-align: center; }
+  .positions-summary-stat .stat-num { font-size: 32px; line-height: 1; }
+  .positions-summary-stat .stat-label { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
   /* Needs Attention comparte fila con Submitted Vs Expected (ver dash-grid, align-items:stretch)
      — sin este limite, una lista larga de banderas estiraria toda la fila a una altura enorme.
      Con el limite + su propio scroll, la fila queda con una altura razonable sin importar
@@ -1102,41 +1092,37 @@
                  de Overview, mismo tratamiento visual que "Applications by channel" en
                  KeyStone: titulo + subtitulo arriba, anillo grande y centrado abajo. -->
             <div class="dash-grid">
-              <!-- Fila 1, tres tarjetas iguales (span 2 de 6 cada una): panorama rapido de
-                   posiciones + carga del equipo. Active Workload By Recruiter / Average Time To
-                   Submit ocupan el mismo tercer puesto — nunca se ven los dos a la vez (Team ve
-                   Workload, tu propio workspace ve AvgTts, ver setDashboardScope), asi que cual
-                   de los dos aparezca ahi no rompe la fila de 3. -->
-              <div class="panel panel-ring" style="grid-column: span 2;">
-                <h3>Active Positions</h3>
-                <div class="panel-sub">Positions not yet in a terminal status, right now.</div>
-                <div class="panel-sub" id="activePositionsRolesStat" style="margin-top:-4px;"></div>
-                <!-- Anillo a la izquierda, lista de las mismas posiciones activas a la derecha
-                     (antes apiladas: anillo arriba, lista abajo a todo lo ancho — ocupaba mucho
-                     mas alto de lo necesario). Cada fila de la lista es clickeable directo a su
-                     modal. max-height+scroll para que la tarjeta no crezca si hay muchas
-                     posiciones activas. -->
-                <div class="active-positions-split">
-                  <div id="statRingActive"></div>
-                  <div class="active-positions-list" id="activePositionsList"></div>
-                </div>
+              <!-- Fila 1, a todo lo ancho: reemplaza el anillo de "Active Positions" de antes.
+                   Nicolas pidio los 4 conceptos que ya vive el conteo del toolbar de Positions
+                   (ver renderPositions()) juntos en una sola tarjeta, como una linea que ocupe
+                   de izquierda a derecha — no un anillo, numeros grandes clickeables (mismo
+                   patron que renderAvgTtsChart(): numero + label + openQuickList()). -->
+              <div class="panel" id="panelPositionsSummary" style="grid-column: span 6;">
+                <h3>Positions &amp; Placements</h3>
+                <div class="panel-sub">Every requisition, broken down by where it stands toward becoming an actual placement.</div>
+                <div class="positions-summary-strip" id="positionsSummaryStrip"></div>
               </div>
-              <div class="panel panel-ring" style="grid-column: span 2;">
+              <!-- Fila 2, dos tarjetas iguales (span 3 de 6 cada una): panorama de requisitions +
+                   carga del equipo. Active Workload By Recruiter / Average Time To Submit ocupan
+                   el mismo segundo puesto — nunca se ven los dos a la vez (Team ve Workload, tu
+                   propio workspace ve AvgTts, ver setDashboardScope), asi que cual de los dos
+                   aparezca ahi no rompe la fila de 2. -->
+              <div class="panel panel-ring" style="grid-column: span 3;">
                 <h3>Total Requisitions</h3>
                 <div class="panel-sub">Every requisition ever assigned, in any status — active or already closed out.</div>
                 <div id="statRingTotal"></div>
               </div>
-              <div class="panel" id="panelWorkloadByRecruiter" style="grid-column: span 2;">
+              <div class="panel" id="panelWorkloadByRecruiter" style="grid-column: span 3;">
                 <h3>Active Workload By Recruiter</h3>
                 <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max.</div>
                 <div class="workload-grid" id="chartReclutador"></div>
               </div>
-              <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 2;">
+              <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 3;">
                 <h3>Average Time To Submit</h3>
                 <div class="panel-sub">Their own average TTS across active positions where submitting has started, vs the 9 business day target.</div>
                 <div id="chartAvgTts"></div>
               </div>
-              <!-- Fila 2, dos tarjetas iguales (span 3 de 6 cada una). Needs Attention tiene su
+              <!-- Fila 3, dos tarjetas iguales (span 3 de 6 cada una). Needs Attention tiene su
                    propio scroll interno (#dashboardAttentionZone) para que, si crece mucho,
                    nunca desalinee la altura de esta fila ni la de Submitted Vs Expected. -->
               <div class="panel" style="grid-column: span 3;">
@@ -3062,77 +3048,38 @@ function batchesSubmittedCount(p){
 }
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  // Antes un anillo de un solo color con el total (decorativo, sin "de cuanto"). Desglosado por
-  // etapa gruesa (4 baldes, no uno por status individual — eso ya lo cubre Active Pipeline By
-  // Status en Pipeline) para que cuente algo real de un vistazo. Mismos colores que ya usa
-  // STAGE_COLORS para las etapas equivalentes, nada nuevo inventado.
-  const ACTIVE_BUCKETS = [
-    {label:"Sourcing & Screening", color:"var(--seq-400)", statuses:["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening"]},
-    {label:"Interviewing", color:"var(--seq-600)", statuses:["Technical Interview","Hiring Manager Interview"]},
-    {label:"Offer / Filled", color:"var(--good)", statuses:["Offer Request","Filled"]},
-    {label:"On Hold", color:"var(--neutral)", statuses:["On Hold","On Hold — Internal Candidates"]},
+  // "Positions & Placements": los mismos 4 conceptos que ya muestra el toolbar de Positions
+  // (ver renderPositions()) — Total, Active (no cerrada todavia), Potential Placements (activa
+  // Y todavia sin oferta aceptada — una vez en Filled ya no es "potencial", ver
+  // STATUS_GUIDANCE["Filled"]), Actual Placements (Hired especificamente, nunca Filled). Numeros
+  // grandes en linea en vez del viejo anillo desglosado por etapa (eso ya lo cubre Active
+  // Pipeline By Status en Pipeline) — cada uno clickeable a su propio quick-list, mismo patron
+  // que renderAvgTtsChart().
+  const allPositions = dashboardPositions();
+  const potentialPlacements = active.filter(p=>p.status!=="Filled");
+  const actualPlacements = allPositions.filter(p=>p.status==="Hired");
+  const summaryStats = [
+    {label:"Positions", value:allPositions.length, positions:allPositions},
+    {label:"Active Positions", value:active.length, positions:active},
+    {label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements},
+    {label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements},
   ];
-  const bucketRows = ACTIVE_BUCKETS.map(b=>{
-    const positions = active.filter(p=>b.statuses.includes(p.status));
-    return {label:b.label, value:positions.length, positions, color:b.color};
-  }).filter(r=>r.value>0);
-  const ringRows = bucketRows.length ? bucketRows : [{label:"No active positions", value:1, realValue:0, color:"var(--grid)"}];
-  renderDonut("statRingActive", ringRows, ringRows.map(r=>r.color), "Active", 168,
-    {value: active.length, label:"Active"},
-    active.length>0 ? (row)=>{
-      openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`, row.positions);
-    } : null);
-  // Headcounts: p.headcountGroup agrupa varias reqs (Irth publica un codigo de job distinto por
-  // cada headcount, aunque sea el mismo rol) — el conteo de "requisitions" (active.length, lo que
-  // ya mostraba el anillo) y el de "roles distintos" (grupos unicos) son cosas diferentes, y
-  // mezclarlos confunde ("si tengo 3 headcounts no son 3 reqs, es 1 req con 3 headcounts" —
-  // exactamente al reves para este tracker, que sigue siendo 1 fila = 1 req/headcount, pero el
-  // CONTEO de roles si debe distinguirse). Cada posicion sin headcountGroup es su propio rol de 1.
-  const groupKey = p => p.headcountGroup || `__solo_${p.id}`;
-  const groupsMap = new Map();
-  active.forEach(p=>{
-    const key = groupKey(p);
-    if(!groupsMap.has(key)) groupsMap.set(key, []);
-    groupsMap.get(key).push(p);
-  });
-  const roleCount = groupsMap.size;
-  const rolesStatEl = document.getElementById("activePositionsRolesStat");
-  if(rolesStatEl){
-    rolesStatEl.textContent = (active.length && roleCount !== active.length)
-      ? `${active.length} requisitions across ${roleCount} distinct role${roleCount===1?"":"s"} (some roles post 1 job code per headcount)`
-      : "";
-  }
-
-  // Mismas posiciones activas, listadas debajo del anillo — cada una va directo a su propio
-  // modal (mismo modo "view" que usa openQuickList para sus filas), sin pasar por el quick-list
-  // generico primero. La tarjeta no crece: .active-positions-list tiene su propio scroll.
-  // Grupos de headcount (mas de 1 miembro) llevan un encabezado con el nombre del grupo + cuantos
-  // headcounts tiene; grupos de 1 sola posicion se ven exactamente igual que antes.
-  document.getElementById("activePositionsList").innerHTML = [...groupsMap.values()].map(members=>{
-    if(members.length === 1){
-      const p = members[0];
-      return `<div class="recent-req-row" data-id="${escapeHtml(p.id)}">
-        <div>${escapeHtml(p.title)}</div>
-        <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(p.status)}</div>
-      </div>`;
-    }
-    return `
-      <div class="active-positions-group-header">${escapeHtml(members[0].headcountGroup)} &middot; ${members.length} headcounts</div>
-      ${members.map(p=>`
-        <div class="recent-req-row grouped" data-id="${escapeHtml(p.id)}">
-          <div>${escapeHtml(p.title)}</div>
-          <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(p.status)}</div>
-        </div>`).join("")}`;
-  }).join("");
-  document.querySelectorAll("#activePositionsList .recent-req-row").forEach(row=>{
-    row.addEventListener("click", ()=> openDetailModal(row.dataset.id, "view", false, true));
+  document.getElementById("positionsSummaryStrip").innerHTML = summaryStats.map(s=>`
+    <div class="positions-summary-stat clickable-stat">
+      <div class="stat-num">${s.value}</div>
+      <div class="stat-label">${s.label}</div>
+    </div>`).join("");
+  document.querySelectorAll("#positionsSummaryStrip .positions-summary-stat").forEach((el,i)=>{
+    const s = summaryStats[i];
+    el.addEventListener("click", ()=>{
+      openQuickList(s.label, `${s.value} position${s.value===1?"":"s"}`, s.positions);
+    });
   });
 
   // Total Requisitions: TODAS las asignadas alguna vez (incluye cerradas), no solo las activas
-  // — complementa el anillo de arriba mostrando el panorama completo del ciclo de vida en vez
+  // — complementa la tarjeta de arriba mostrando el panorama completo del ciclo de vida en vez
   // de solo el momento actual. Activas vs Cerradas (Hired/Filled Internal Hire/Cancelled/Fell
   // Through juntas, sin desglosar el motivo — eso ya vive en el status de cada una).
-  const allPositions = dashboardPositions();
   const closedPositions = allPositions.filter(p=>TERMINAL.includes(p.status));
   const totalRows = [
     {label:"Active", value:active.length, positions:active, color:"var(--brand)"},
