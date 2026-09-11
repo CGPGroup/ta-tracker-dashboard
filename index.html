@@ -685,6 +685,7 @@
   .pos-code { color: var(--text-muted); font-weight: 600; font-size: 11.5px; margin-left: 5px; white-space: nowrap; }
   .pos-pending-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: rgba(var(--warning-rgb),0.16); color: var(--warning); white-space: nowrap; }
   td.cell-position { white-space: normal; min-width: 220px; }
+  td.cell-code { color: var(--text-muted); font-weight: 600; font-size: 11.5px; white-space: nowrap; }
 
   .status-chip {
     display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 3px 9px 3px 8px; border-radius: 999px;
@@ -1210,7 +1211,7 @@
             <table class="data" id="positionsTable">
               <thead><tr>
                 <th id="positionsSelectAllHeader" style="display:none;"><input type="checkbox" id="positionsSelectAllCheckbox"></th>
-                <th>Position</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
+                <th>Position</th><th>Code</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Location</th><th>Arrangement</th><th>Status</th>
                 <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Remark</th><th>Placement</th>
               </tr></thead>
               <tbody></tbody>
@@ -1266,7 +1267,7 @@
                 <table class="data" id="trackingTable">
                   <thead><tr>
                     <th id="trackingSelectAllHeader" style="display:none;"><input type="checkbox" id="trackingSelectAllCheckbox"></th>
-                    <th>Position</th><th>Hiring Manager</th><th>Location</th><th>Arrangement</th><th>Status</th>
+                    <th>Position</th><th>Code</th><th>Hiring Manager</th><th>Location</th><th>Arrangement</th><th>Status</th>
                     <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th>
                   </tr></thead>
                   <tbody></tbody>
@@ -1279,11 +1280,6 @@
               <h3 style="margin:0 0 2px;">Activity</h3>
               <div class="panel-sub" id="trackingSelectedActivitySub">Select a requisition on the left to see its history here.</div>
               <ul class="timeline" id="trackingSelectedActivityList"></ul>
-            </div>
-            <div class="panel" style="margin-top:16px;">
-              <h3 style="margin:0 0 2px;">Remarks</h3>
-              <div class="panel-sub" id="trackingSelectedRemarksSub">Free-text notes only, most recent first.</div>
-              <ul class="timeline" id="trackingSelectedRemarksList"></ul>
             </div>
           </div>
           <div class="tracking-resize-handle" id="trackingResizeHandle"></div>
@@ -1630,9 +1626,6 @@
     <div id="modalActivityBlock">
       <div class="modal-section-title">Activity</div>
       <ul class="timeline" id="modalTimeline"></ul>
-      <div class="modal-section-title">Remarks</div>
-      <div class="panel-sub" style="margin:0 0 6px;">Free-text notes only, most recent first.</div>
-      <ul class="timeline" id="modalRemarksList"></ul>
     </div>
 
     <div class="modal-section-title" id="modalRemarkTitle">Add A Remark</div>
@@ -2717,12 +2710,13 @@ function escapeHtml(str){
 // de que una req seguia sin aceptarse era el banner de arriba (facil de perder de vista fila por
 // fila), lo que llevo justo a la confusion real que motivo esto: Nicolas viendo RD-020 en
 // Tracking y asumiendo que "poder verla y trabajarla" significaba que ya estaba aceptada.
-function posLabel(p){
+function posLabel(p, withCode){
   const notYetAccepted = (p.handoffFrom && !p.handoffAcceptedDate) || (!p.handoffFrom && !p.recruiterAcceptedDate);
   const pendingBadge = notYetAccepted
     ? `<span class="pos-pending-badge" title="${p.handoffFrom ? "Handoff context not confirmed yet" : "Not accepted yet"} — you can open it to view, but editing is locked until then.">${p.handoffFrom ? "Handoff Pending" : "Pending Accept"}</span>`
     : "";
-  return `<span class="pos-title">${escapeHtml(p.title)}</span><span class="pos-code">${escapeHtml(p.id)}</span>${pendingBadge}`;
+  const codeSpan = withCode === false ? "" : `<span class="pos-code">${escapeHtml(p.id)}</span>`;
+  return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}`;
 }
 // Campos como Spott Job ID venian historicamente como un ID crudo (no un link), pero de aqui
 // en adelante deberian guardar la URL completa (pegada tal cual desde la barra de direcciones,
@@ -3457,7 +3451,7 @@ function renderPositions(){
     return `
     <tr class="clickable" data-id="${escapeHtml(p.id)}">
       ${bulkOn ? `<td><input type="checkbox" class="positions-row-check" data-id="${escapeHtml(p.id)}" ${positionsSelectedIds.has(p.id)?"checked":""}></td>` : ""}
-      <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.client)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
+      <td class="cell-position">${posLabel(p, false)}</td><td class="cell-code">${escapeHtml(p.id)}</td><td>${escapeHtml(p.client)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${escapeHtml(p.recruiter)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
       <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(p.lastRemark)}">${escapeHtml(p.lastRemark)||'-'}</td>
@@ -3728,7 +3722,7 @@ function renderTracking(){
     const s = computeSla(p);
     return `<tr class="clickable" data-id="${escapeHtml(p.id)}">
       ${bulkOn ? `<td><input type="checkbox" class="tracking-row-check" data-id="${escapeHtml(p.id)}" ${trackingSelectedIds.has(p.id)?"checked":""}></td>` : ""}
-      <td class="cell-position">${posLabel(p)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
+      <td class="cell-position">${posLabel(p, false)}</td><td class="cell-code">${escapeHtml(p.id)}</td><td>${escapeHtml(p.hiringManager)}</td><td>${locationOnly(p)}</td><td>${arrangementBadge(p)}</td>
       <td>${statusChip(p.status)}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
     </tr>`;
@@ -3840,11 +3834,6 @@ function timelineListHtml(timeline, emptyText){
       <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">${emptyText || "No activity logged yet."}</li>`;
 }
-// Igual que buildTimeline() pero solo las notas de texto libre (type "manual") — se muestra en
-// su propia lista aparte de Activity, todas comparten el mismo tag "Remark" por definicion.
-function remarksOnly(timeline){
-  return timeline.filter(e => e.type === "manual");
-}
 // Un campo de Timeline se ve siempre (nunca se oculta), pero se deshabilita con un candadito +
 // tooltip mientras el campo anterior de la secuencia siga vacio, para que el recruiter sepa que
 // existe sin poder llenarlo fuera de orden.
@@ -3890,20 +3879,14 @@ function timelineFieldHtml(label, id, value, locked, unlockHint, capToday, extra
 function renderTrackingSelectedActivity(p, timeline){
   const sub = document.getElementById("trackingSelectedActivitySub");
   const list = document.getElementById("trackingSelectedActivityList");
-  const remarksSub = document.getElementById("trackingSelectedRemarksSub");
-  const remarksList = document.getElementById("trackingSelectedRemarksList");
   if(!p){
     sub.textContent = "Select a requisition on the left to see its history here.";
     list.innerHTML = "";
-    remarksSub.textContent = "Select a requisition on the left to see its remarks here.";
-    remarksList.innerHTML = "";
     return;
   }
   const t = timeline || buildTimeline(p).slice().reverse();
   sub.innerHTML = `${posLabel(p)} — most recent first.`;
   list.innerHTML = timelineListHtml(t);
-  remarksSub.innerHTML = `${posLabel(p)} — free-text notes only, most recent first.`;
-  remarksList.innerHTML = timelineListHtml(remarksOnly(t), "No remarks yet.");
 }
 
 let activeDetailId = null;
@@ -3955,7 +3938,6 @@ function renderDetailPlaceholder(){
   document.getElementById("modalRemarkTitle").style.display = "none";
   document.getElementById("modalRemarkSection").style.display = "none";
   document.getElementById("modalTimeline").innerHTML = "";
-  document.getElementById("modalRemarksList").innerHTML = "";
   document.getElementById("modalDeleteZone").style.display = "none";
   renderTrackingSelectedActivity(null);
 }
@@ -4057,7 +4039,6 @@ function renderDetailModal(){
 
   const outcomeFacts = [];
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
-  if(p.finalComp) outcomeFacts.push({label:"Final Compensation", value:escapeHtml(p.finalComp)});
 
   // Intake Waived vive DENTRO de la celda de Intake Requested Date (debajo de su input), no
   // como celda propia aparte ni debajo de Intake Meeting Date — ahi es donde tiene sentido:
@@ -4179,7 +4160,7 @@ function renderDetailModal(){
     urlFactsHtml +
     timelineHtml +
     batchesHtml +
-    factsSection("Outcome", outcomeFacts);
+    factsSection("", outcomeFacts);
   if(!isView){
     document.getElementById("logBatchBtn").addEventListener("click", ()=> openLogBatchModal(p));
     const submissionTrigger = document.getElementById("submissionDateTrigger");
@@ -4384,7 +4365,6 @@ function renderDetailModal(){
 
   const timeline = buildTimeline(p).slice().reverse();
   document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
-  document.getElementById("modalRemarksList").innerHTML = timelineListHtml(remarksOnly(timeline), "No remarks yet.");
   // En Tracking (docked), la Activity vive en el panel de la izquierda en vez de aqui, para
   // dejar mas espacio vertical a la lista de reqs (ver #trackingSelectedActivityPanel).
   document.getElementById("modalActivityBlock").style.display =
@@ -6220,7 +6200,6 @@ function parsePositionsTable(posHeaders, posRows){
       activeCount: r[idx("Active (count)")],
       rejectedCount: r[idx("Rejected")],
       placedCandidate: r[idx("Placed Candidate")],
-      finalComp: r[idx("Final Compensation")],
       kickoff: excelValToDateStr(r[idx("Kickoff Date")]),
       intakeRequestedDate: excelValToDateStr(r[idx("Intake Requested Date")]),
       recruiterAcceptedDate: excelValToDateStr(r[idx("Recruiter Accepted Date")]),
