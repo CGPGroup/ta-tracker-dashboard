@@ -702,6 +702,18 @@
     font-family: inherit; font-size: 13px; padding: 9px 11px;
     border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text-primary);
   }
+  /* Fila del campo PIN + boton "generate" (dado, ver generateUniquePin()) — el input se queda
+     con el mismo look de siempre, solo se envuelve para poner el boton al lado sin tocar el
+     ancho de ningun otro form-field de la app. */
+  .pin-input-row { display: flex; gap: 8px; }
+  .pin-input-row input { flex: 1; min-width: 0; }
+  .pin-generate-btn {
+    flex: none; width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-2); color: var(--text-secondary); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pin-generate-btn:hover { border-color: var(--brand); color: var(--brand); }
+  .pin-generate-btn svg { width: 16px; height: 16px; }
   /* Una fila por headcount al crear un grupo (codigo + URL de careers page lado a lado, mas un
      boton para quitar esa fila) — reemplaza el textarea de texto libre de antes, mas dificil de
      usar mal ya que cada campo es evidentemente lo que es, sin depender de acordarse del "|". */
@@ -1318,7 +1330,21 @@
               <div class="form-field full"><label>Full Name</label><input type="text" id="newRecName" placeholder="e.g. John Smith"></div>
               <div class="form-field full"><label>Email</label><input type="email" id="newRecEmail" placeholder="john.smith@company.com"></div>
               <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="newRecTitle" placeholder="e.g. Talent Partner"></div>
-              <div class="form-field full"><label>PIN (For Signing In Without Microsoft 365)</label><input type="text" inputmode="numeric" id="newRecPin" placeholder="e.g. 4821"></div>
+              <div class="form-field full"><label>PIN (For Signing In Without Microsoft 365)</label>
+                <div class="pin-input-row">
+                  <input type="text" inputmode="numeric" id="newRecPin" placeholder="e.g. 4821">
+                  <button type="button" class="pin-generate-btn" id="newRecPinGenerate" title="Generate a random PIN" aria-label="Generate a random PIN">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="3"/>
+                      <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/>
+                      <circle cx="16" cy="8" r="1" fill="currentColor" stroke="none"/>
+                      <circle cx="8" cy="16" r="1" fill="currentColor" stroke="none"/>
+                      <circle cx="16" cy="16" r="1" fill="currentColor" stroke="none"/>
+                      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
               <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="newRecPhoto" placeholder="Leave blank to use initials instead"></div>
               <div class="form-field full">
                 <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
@@ -1737,7 +1763,21 @@
       <div class="form-field full"><label>Recruiter</label><select id="editRecSelect"></select></div>
       <div class="form-field full"><label>Email</label><input type="email" id="editRecEmail" placeholder="john.smith@company.com"></div>
       <div class="form-field full"><label>Job Title (Optional)</label><input type="text" id="editRecTitle" placeholder="e.g. Talent Partner"></div>
-      <div class="form-field full"><label>PIN (For Signing In Without Microsoft 365)</label><input type="text" inputmode="numeric" id="editRecPin" placeholder="e.g. 4821"></div>
+      <div class="form-field full"><label>PIN (For Signing In Without Microsoft 365)</label>
+        <div class="pin-input-row">
+          <input type="text" inputmode="numeric" id="editRecPin" placeholder="e.g. 4821">
+          <button type="button" class="pin-generate-btn" id="editRecPinGenerate" title="Generate a random PIN" aria-label="Generate a random PIN">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="3"/>
+              <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="16" cy="8" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="8" cy="16" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="16" cy="16" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+      </div>
       <div class="form-field full"><label>Photo URL (Optional)</label><input type="text" id="editRecPhoto" placeholder="Leave blank to use initials instead"></div>
     </div>
     <div class="form-actions">
@@ -5523,6 +5563,31 @@ function updateNewPosCapacityHint(){
 // Precarga los campos de Edit Recruiter con lo que ya se sabe de ese nombre, para poder
 // comparar contra lo que quede escrito al momento de guardar (y no reescribir sin necesidad
 // los campos que no cambiaron).
+// PIN de 4 digitos (1000-9999, nunca empieza en 0 asi Excel jamas se lo puede comer con un
+// formato de celda Numero — ver la advertencia de ceros a la izquierda en
+// reference-ta-tracker-systems) que no choque con el de NINGUN otro reclutador ya conocido.
+// RECRUITER_PINS solo llega poblado cuando estas conectado por Microsoft 365 real (nunca desde
+// el snapshot publico), que es justo el unico estado en el que estos 2 formularios son
+// alcanzables (SSOT Management ya esta admin-gated). excludeName evita que, al regenerar el PIN
+// de alguien que edito, su propio PIN viejo cuente como "en uso" por otra persona.
+function generateUniquePin(excludeName){
+  const used = new Set(
+    Object.entries(RECRUITER_PINS)
+      .filter(([n]) => n !== excludeName)
+      .map(([, p]) => String(p))
+  );
+  let pin;
+  do {
+    pin = String(Math.floor(1000 + Math.random() * 9000));
+  } while(used.has(pin));
+  return pin;
+}
+document.getElementById("newRecPinGenerate").addEventListener("click", ()=>{
+  document.getElementById("newRecPin").value = generateUniquePin();
+});
+document.getElementById("editRecPinGenerate").addEventListener("click", ()=>{
+  document.getElementById("editRecPin").value = generateUniquePin(document.getElementById("editRecSelect").value);
+});
 function prefillEditRecruiterFields(name){
   document.getElementById("editRecEmail").value = RECRUITER_EMAILS[name] || "";
   document.getElementById("editRecTitle").value = RECRUITER_TITLES[name] || "";
