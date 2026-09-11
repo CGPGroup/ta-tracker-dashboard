@@ -218,7 +218,7 @@
        .signin-form-panel/.signin-card son el mismo patron que usa gokeystone.ai en su propio
        login — pedido explicito de Nicolas viendo screenshots reales de ese login en los dos
        temas, para que los dos lados se noten distintos en vez de un solo color plano parejo. */
-    display: none; flex: 1 1 42%; min-width: 300px; align-items: center; justify-content: center;
+    display: none; flex: 1 1 50%; min-width: 300px; align-items: center; justify-content: center;
     padding: 48px; position: relative; overflow: hidden;
     background:
       radial-gradient(circle at 75% 70%, rgba(var(--brand-rgb), 0.28), transparent 60%),
@@ -235,7 +235,7 @@
   .signin-brand-title { font-size: 23px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; line-height: 1.3; }
   .signin-brand-sub { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; }
   .signin-form-panel {
-    flex: 1 1 58%; display: flex; align-items: center; justify-content: center;
+    flex: 1 1 50%; display: flex; align-items: center; justify-content: center;
     padding: 32px 20px; overflow-y: auto; background: var(--surface-2);
   }
   /* Tarjeta flotante (fondo/borde/sombra propios) en vez del contenido suelto directo sobre el
@@ -257,8 +257,8 @@
   /* Se queda como el mismo pill completo de siempre (border-radius:999px de .btn, sin tocar) —
      solo layout en columna + texto centrado, nada de radio propio aqui. */
   .btn.signin-choice-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    width: 100%; text-align: center; padding: 16px 18px; margin-top: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    width: 100%; text-align: center; padding: 9px 18px; margin-top: 10px;
   }
   .signin-choice-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; }
   .signin-choice-sub { font-size: 11.5px; font-weight: 500; opacity: 0.82; }
