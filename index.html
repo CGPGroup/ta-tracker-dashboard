@@ -2007,7 +2007,7 @@
 // negociable del master prompt: nada de sourcing antes del intake meeting). El motor de SLA
 // no necesita cambios para esto: computeSla() ya devuelve "Not started" en TTS/TTF/TTH
 // mientras el campo Intake Date siga vacio, que es justo el caso en estos 3 statuses.
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Aclaracion corta que se muestra debajo del selector de status (no se guarda como parte del
 // valor, para que las tablas/filtros/chips sigan mostrando el nombre corto del status).
 const STATUS_SUBTITLE = {
@@ -2043,6 +2043,7 @@ const STATUS_GUIDANCE = {
   "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
   "Filled": "An offer was accepted. Log the Fill Date if you haven't already — this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
   "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Hire Date if you haven't already; this requisition is complete.",
+  "Filled (Internal Hire)": "The client filled this requisition on their own — an internal employee move or an intern conversion — without a Cornerstone placement. This requisition is closed and does not count as a placement or an SLA miss; add a remark noting who filled it and how, if known.",
   "Fell Through": "This requisition fell through. Add a remark explaining what happened — if it reopens, it most likely restarts at Sourcing rather than from scratch.",
   "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
   // Distinto de "On Hold" normal: no es un incumplimiento de SLA, es una razon de negocio
@@ -2068,6 +2069,7 @@ const STAGE_COLORS = {
   "Offer Request": "var(--warning)",
   "Filled": "var(--good)",
   "Hired": "var(--good)",
+  "Filled (Internal Hire)": "var(--neutral)",
   "Fell Through": "var(--critical)",
   "On Hold": "var(--neutral)",
   "On Hold — Internal Candidates": "var(--neutral)",
@@ -2380,7 +2382,7 @@ function renderRecentReqs(){
     });
   });
 }
-const TERMINAL = ["Hired","Cancelled","Fell Through"];
+const TERMINAL = ["Hired","Cancelled","Fell Through","Filled (Internal Hire)"];
 
 let RECRUITERS = ["Nicolás Patarroyo"];
 let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
@@ -6582,7 +6584,7 @@ async function graphAppendPosition(row){
      `=IF(${H}="","",IF(${K}<>"",MAX(NETWORKDAYS(${H}+1,${K},Config!$A$12:$A$29),0),MAX(NETWORKDAYS(${H}+1,TODAY(),Config!$A$12:$A$29),0)))`,
      "=Config!$B$6",
      `=IF(${H}="","Not started",IF(${K}<>"",IF(${R}<=${S},"Within SLA","Out of SLA"),IF(${R}>${S},"Out of SLA",IF(${R}>=${S}*Config!$B$7,"At risk","Within SLA"))))`,
-     `=IF(OR(G${excelRow}="Hired",G${excelRow}="Cancelled",G${excelRow}="Fell Through"),"No","Yes")`,
+     `=IF(OR(G${excelRow}="Hired",G${excelRow}="Cancelled",G${excelRow}="Fell Through",G${excelRow}="Filled (Internal Hire)"),"No","Yes")`,
      `=IF(G${excelRow}="Hired","Yes","No")`,
      `=IF(AND(${N}<>"Out of SLA",${Q}<>"Out of SLA",${T}<>"Out of SLA"),"Yes","No")`],
   ];
