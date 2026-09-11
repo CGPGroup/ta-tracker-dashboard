@@ -211,11 +211,11 @@
   }
   .signin-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
   .signin-brand-panel {
-    /* Fondo oscuro fijo a proposito, sin importar el tema (ver el comentario grande junto a
-       "El panel de marca del sign-in screen" en applyTheme()) — por eso no usa var(--page)/
-       var(--surface-1), que si cambian con el tema. */
+    /* Sigue el tema igual que el resto del gate (antes era oscuro fijo a proposito, pero se
+       veia partido a la mitad — un lado negro, el otro blanco — apenas alguien probaba el
+       toggle en modo claro; corregido 2026-09-17). */
     display: none; flex: 1 1 42%; min-width: 300px; align-items: center; justify-content: center;
-    padding: 48px; background: linear-gradient(160deg, #241f1b, #17130f);
+    padding: 48px; background: linear-gradient(160deg, var(--surface-2), var(--page));
     border-right: 1px solid var(--border);
   }
   .signin-brand-content { max-width: 360px; text-align: center; }
@@ -224,9 +224,9 @@
   .signin-brand-logo.cgp { height: 38px; }
   .signin-brand-logo.keystone { height: 18px; }
   .signin-brand-logo.irth { height: 32px; }
-  .signin-brand-plus { font-size: 18px; font-weight: 600; color: #a8a29e; }
-  .signin-brand-title { font-size: 23px; font-weight: 700; color: #f5f5f4; margin-bottom: 12px; line-height: 1.3; }
-  .signin-brand-sub { font-size: 13.5px; color: #b3a89c; line-height: 1.6; }
+  .signin-brand-plus { font-size: 18px; font-weight: 600; color: var(--text-muted); }
+  .signin-brand-title { font-size: 23px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; line-height: 1.3; }
+  .signin-brand-sub { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; }
   .signin-form-panel {
     flex: 1 1 58%; display: flex; align-items: center; justify-content: center;
     padding: 32px 20px; overflow-y: auto; background: var(--page);
@@ -6789,10 +6789,14 @@ function applyTheme(theme){
   const loadingKeystone = document.getElementById("loadingKeystoneLogo");
   if(loadingCgp) loadingCgp.src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
   if(loadingKeystone) loadingKeystone.src = theme === "light" ? "logos/keystone-ai-dark.svg" : "logos/keystone-ai.svg";
-  // El panel de marca del sign-in screen es oscuro siempre (parte del diseno, no cambia con el
-  // tema), asi que sus logos se quedan en la variante blanca sin importar el tema — solo los
-  // logos chicos que aparecen en la tarjeta (fondo var(--surface-1), ese si sigue el tema) en
-  // pantallas angostas necesitan la misma logica de swap que loadingCgp/loadingKeystone.
+  // El panel de marca del sign-in screen ya sigue el tema igual que el resto (ver el comentario
+  // junto a .signin-brand-panel), asi que sus logos necesitan el mismo swap que loadingCgp/
+  // loadingKeystone arriba — igual que los logos chicos que aparecen en la tarjeta en pantallas
+  // angostas (fondo var(--surface-1), tambien sigue el tema).
+  const signinCgp = document.getElementById("signinCgpLogo");
+  const signinKeystone = document.getElementById("signinKeystoneLogo");
+  if(signinCgp) signinCgp.src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
+  if(signinKeystone) signinKeystone.src = theme === "light" ? "logos/keystone-ai-dark.svg" : "logos/keystone-ai.svg";
   const signinCardCgp = document.getElementById("signinCardCgpLogo");
   const signinCardKeystone = document.getElementById("signinCardKeystoneLogo");
   if(signinCardCgp) signinCardCgp.src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
