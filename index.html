@@ -374,6 +374,15 @@
   .active-positions-split { display: flex; gap: 24px; align-items: flex-start; padding-top: 6px; }
   .active-positions-split #statRingActive { flex: none; }
   .active-positions-split .active-positions-list { flex: 1; min-width: 0; margin-top: 0; }
+  /* Needs Attention comparte fila con Submitted Vs Expected (ver dash-grid, align-items:stretch)
+     — sin este limite, una lista larga de banderas estiraria toda la fila a una altura enorme.
+     Con el limite + su propio scroll, la fila queda con una altura razonable sin importar
+     cuantas banderas haya. */
+  #dashboardAttentionZone { max-height: 260px; overflow-y: auto; }
+  /* Mismo motivo que #dashboardAttentionZone: comparte fila (align-items:stretch) con
+     Placements This Month, que tiene una altura fija — sin este limite, muchas ofertas
+     pendientes a la vez estirarian la fila entera. */
+  #listPendingOffers { max-height: 260px; overflow-y: auto; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -479,10 +488,18 @@
      tarjetas (2-4, no las 9-10 de antes apiladas juntas), asi que un grid normal con mas aire
      entre tarjetas ya no se siente apachurrado — align-items:start evita que una tarjeta corta
      se estire a la altura de su vecina mas alta. */
+  /* Grid base de 6 columnas para los 4 tabs del Dashboard (Overview/SLA/Pipeline/Offers) — cada
+     panel indica cuantas columnas ocupa con grid-column:span N (2 = un tercio, 3 = la mitad,
+     6 = ancho completo), asi una misma fila puede tener 3 tarjetas iguales o 2, segun el tab,
+     sin necesitar un grid distinto por caso. align-items:stretch (antes "start") es lo que
+     realmente alinea la ALTURA de todas las tarjetas de una misma fila entre si — la tarjeta mas
+     corta se estira para igualar a la mas alta, en vez de quedar mas baja con un espacio vacio
+     debajo de ella. Ver #dashboardAttentionZone para el caso de una tarjeta cuyo contenido puede
+     crecer mucho: se le pone su propio scroll interno en vez de dejar que estire toda la fila. */
   .dash-grid {
-    display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; align-items: start;
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; align-items: stretch;
   }
-  @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } .dash-grid > .panel { grid-column: auto !important; } }
 
   /* Tracking: lista a la izquierda, detalle fijo a la derecha (no tapa la lista al abrir una
      posicion). El mismo #detailModal que usan Positions/Dashboard se "acopla" aqui via JS
@@ -1062,7 +1079,12 @@
                  de Overview, mismo tratamiento visual que "Applications by channel" en
                  KeyStone: titulo + subtitulo arriba, anillo grande y centrado abajo. -->
             <div class="dash-grid">
-              <div class="panel panel-ring">
+              <!-- Fila 1, tres tarjetas iguales (span 2 de 6 cada una): panorama rapido de
+                   posiciones + carga del equipo. Active Workload By Recruiter / Average Time To
+                   Submit ocupan el mismo tercer puesto — nunca se ven los dos a la vez (Team ve
+                   Workload, tu propio workspace ve AvgTts, ver setDashboardScope), asi que cual
+                   de los dos aparezca ahi no rompe la fila de 3. -->
+              <div class="panel panel-ring" style="grid-column: span 2;">
                 <h3>Active Positions</h3>
                 <div class="panel-sub">Positions not yet in a terminal status, right now.</div>
                 <div class="panel-sub" id="activePositionsRolesStat" style="margin-top:-4px;"></div>
@@ -1076,60 +1098,61 @@
                   <div class="active-positions-list" id="activePositionsList"></div>
                 </div>
               </div>
-              <div class="panel">
-                <h3>Submitted Vs Expected</h3>
-                <div class="panel-sub">Submitted candidates vs the SLA minimum batch size (3.5 per active position).</div>
-                <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
-              </div>
-              <div class="panel panel-ring">
+              <div class="panel panel-ring" style="grid-column: span 2;">
                 <h3>Total Requisitions</h3>
                 <div class="panel-sub">Every requisition ever assigned, in any status — active or already closed out.</div>
                 <div id="statRingTotal"></div>
               </div>
-              <div class="panel" id="panelWorkloadByRecruiter">
+              <div class="panel" id="panelWorkloadByRecruiter" style="grid-column: span 2;">
                 <h3>Active Workload By Recruiter</h3>
                 <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max.</div>
                 <div class="workload-grid" id="chartReclutador"></div>
               </div>
-              <div class="panel" id="panelAvgTts" style="display:none;">
+              <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 2;">
                 <h3>Average Time To Submit</h3>
                 <div class="panel-sub">Their own average TTS across active positions where submitting has started, vs the 9 business day target.</div>
                 <div id="chartAvgTts"></div>
               </div>
-              <!-- Solo dentro de tu propio workspace (ver setDashboardScope) — antes vivia en un
-                   panel lateral aparte que ya no existe; ahora es una tarjeta mas de Overview. -->
-              <div class="panel" id="panelRecentActivity" style="display:none;">
-                <h3>Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></h3>
-                <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
-                <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
+              <!-- Fila 2, dos tarjetas iguales (span 3 de 6 cada una). Needs Attention tiene su
+                   propio scroll interno (#dashboardAttentionZone) para que, si crece mucho,
+                   nunca desalinee la altura de esta fila ni la de Submitted Vs Expected. -->
+              <div class="panel" style="grid-column: span 3;">
+                <h3>Submitted Vs Expected</h3>
+                <div class="panel-sub">Submitted candidates vs the SLA minimum batch size (3.5 per active position).</div>
+                <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
               </div>
               <!-- Antes un alert-banner de ancho completo encima de los dash-tabs, visible sin
                    importar en cual tab estuvieras — Nicolas señalo que eso "spameaba" el Team
-                   Dashboard con un banner grande arriba, cuando ya hay espacio libre en el grid
-                   (debajo de Submitted Vs Expected en Team; debajo de Recent Activity en tu
-                   propio workspace). Movido adentro de Overview como una tarjeta mas, a todo lo
-                   ancho (siempre queda solo/impar al final del grid sin importar el contexto). -->
-              <div class="panel" id="panelDashboardAttention" style="grid-column:1 / -1;">
+                   Dashboard con un banner grande arriba, cuando ya hay espacio libre en el grid.
+                   Movido adentro de Overview como una tarjeta mas, junto a Submitted Vs Expected. -->
+              <div class="panel" id="panelDashboardAttention" style="grid-column: span 3;">
                 <h3>Needs Attention <span class="panel-details-count" id="dashboardAttentionCount"></span></h3>
                 <div class="panel-sub">Out of SLA or at risk, or falling behind on Kickoff/Intake follow-up, most urgent first.</div>
                 <div id="dashboardAttentionZone"></div>
+              </div>
+              <!-- Solo dentro de tu propio workspace (ver setDashboardScope) — a todo el ancho,
+                   su propia fila, para no romper el emparejamiento de arriba cuando aparece. -->
+              <div class="panel" id="panelRecentActivity" style="display:none; grid-column: span 6;">
+                <h3>Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></h3>
+                <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
+                <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
               </div>
             </div>
           </div>
 
             <div class="dash-tab-panel" data-dash-panel="sla">
               <div class="dash-grid">
-                <div class="panel">
+                <div class="panel" style="grid-column: span 3;">
                   <h3>SLA Compliance</h3>
                   <div class="panel-sub">Share of active positions on time on every SLA target (submit, fill, and hire deadlines). The rest are running behind on at least one.</div>
                   <div id="chartSlaCompliance"></div>
                 </div>
-                <div class="panel">
+                <div class="panel" style="grid-column: span 3;">
                   <h3>Requisition Completion</h3>
                   <div class="panel-sub">Share of assigned requisitions where the recruiter accepted and requested the intake meeting within 1 business day of Kickoff.</div>
                   <div id="chartCompletion"></div>
                 </div>
-                <div class="panel" style="grid-column:1 / -1;">
+                <div class="panel" style="grid-column: span 6;">
                   <h3>SLA Health</h3>
                   <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
                   <div id="chartSla"></div>
@@ -1139,12 +1162,12 @@
 
             <div class="dash-tab-panel" data-dash-panel="pipeline">
               <div class="dash-grid">
-                <div class="panel">
+                <div class="panel" style="grid-column: span 3;">
                   <h3>Active Pipeline By Status</h3>
                   <div class="panel-sub">Open positions, grouped by funnel stage</div>
                   <div class="funnel" id="chartEstado"></div>
                 </div>
-                <div class="panel" id="panelPositionByLocation">
+                <div class="panel" id="panelPositionByLocation" style="grid-column: span 3;">
                   <h3>Position By Location/Work Arrangement</h3>
                   <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
                   <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
@@ -1159,17 +1182,17 @@
 
             <div class="dash-tab-panel" data-dash-panel="offers">
               <div class="dash-grid">
-                <div class="panel">
+                <div class="panel" style="grid-column: span 3;">
                   <h3>Pending Offers</h3>
                   <div class="panel-sub">Positions currently waiting on an offer decision</div>
                   <div id="listPendingOffers"></div>
                 </div>
-                <div class="panel">
+                <div class="panel" style="grid-column: span 3;">
                   <h3>Placements This Month</h3>
                   <div class="panel-sub">Confirmed hires, this month vs last month</div>
                   <div id="chartPlacementsMonth"></div>
                 </div>
-                <div class="panel" style="grid-column:1 / -1;">
+                <div class="panel" style="grid-column: span 6;">
                   <h3 id="hiresTrendTitle">Hires Per Month</h3>
                   <div class="panel-sub">Confirmed placements per month, year to date. Click a point to see who.</div>
                   <div id="chartHiresTrend"></div>
