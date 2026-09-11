@@ -368,7 +368,6 @@
      centrado abajo. La leyenda que renderDonut agrega siempre se oculta aqui porque el valor ya
      esta en el centro del anillo, repetirlo abajo era ruido. */
   .panel-ring .donut-wrap { justify-content: center; padding-top: 6px; }
-  #statRingActive .donut-legend { display: none; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -574,7 +573,7 @@
   .funnel-dropoff { display: flex; align-items: center; gap: 6px; padding: 6px 0; font-size: 11px; color: var(--text-muted); }
   .funnel-dropoff-pill { background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; }
 
-  .workload-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .workload-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
   .workload-card {
     display: flex; flex-direction: column; align-items: center; gap: 5px;
     width: 92px; padding: 10px 8px; border-radius: 10px; cursor: pointer;
@@ -1110,11 +1109,6 @@
             <div class="dash-tab-panel" data-dash-panel="sla">
               <div class="dash-grid">
                 <div class="panel">
-                  <h3>SLA Health</h3>
-                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
-                  <div id="chartSla"></div>
-                </div>
-                <div class="panel">
                   <h3>SLA Compliance</h3>
                   <div class="panel-sub">Share of active positions on time on every SLA target (submit, fill, and hire deadlines). The rest are running behind on at least one.</div>
                   <div id="chartSlaCompliance"></div>
@@ -1123,6 +1117,11 @@
                   <h3>Requisition Completion</h3>
                   <div class="panel-sub">Share of assigned requisitions where the recruiter accepted and requested the intake meeting within 1 business day of Kickoff.</div>
                   <div id="chartCompletion"></div>
+                </div>
+                <div class="panel" style="grid-column:1 / -1;">
+                  <h3>SLA Health</h3>
+                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
+                  <div id="chartSla"></div>
                 </div>
               </div>
             </div>
@@ -2798,9 +2797,25 @@ function batchesSubmittedCount(p){
 }
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  renderDonut("statRingActive", [{label:"Active Positions", value: active.length}],
-    [active.length ? "var(--brand)" : "var(--grid)"], "Active", 168, null, active.length>0 ? ()=>{
-      openQuickList("Active Positions", `${active.length} position${active.length===1?"":"s"} not yet in a terminal status`, active);
+  // Antes un anillo de un solo color con el total (decorativo, sin "de cuanto"). Desglosado por
+  // etapa gruesa (4 baldes, no uno por status individual — eso ya lo cubre Active Pipeline By
+  // Status en Pipeline) para que cuente algo real de un vistazo. Mismos colores que ya usa
+  // STAGE_COLORS para las etapas equivalentes, nada nuevo inventado.
+  const ACTIVE_BUCKETS = [
+    {label:"Sourcing & Screening", color:"var(--seq-400)", statuses:["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening"]},
+    {label:"Interviewing", color:"var(--seq-600)", statuses:["Technical Interview","Hiring Manager Interview"]},
+    {label:"Offer / Filled", color:"var(--good)", statuses:["Offer Request","Filled"]},
+    {label:"On Hold", color:"var(--neutral)", statuses:["On Hold","On Hold — Internal Candidates"]},
+  ];
+  const bucketRows = ACTIVE_BUCKETS.map(b=>{
+    const positions = active.filter(p=>b.statuses.includes(p.status));
+    return {label:b.label, value:positions.length, positions, color:b.color};
+  }).filter(r=>r.value>0);
+  const ringRows = bucketRows.length ? bucketRows : [{label:"No active positions", value:1, realValue:0, color:"var(--grid)"}];
+  renderDonut("statRingActive", ringRows, ringRows.map(r=>r.color), "Active", 168,
+    {value: active.length, label:"Active"},
+    active.length>0 ? (row)=>{
+      openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`, row.positions);
     } : null);
   // Headcounts: p.headcountGroup agrupa varias reqs (Irth publica un codigo de job distinto por
   // cada headcount, aunque sea el mismo rol) — el conteo de "requisitions" (active.length, lo que
@@ -2872,7 +2887,7 @@ function renderKpis(){
       <div class="funnel-label">Candidates Submitted</div>
       <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${barColor};"></div></div>
       <div class="funnel-stat">
-        <div class="funnel-value">${submittedTotal}</div>
+        <div class="funnel-value">${submittedTotal} / ${minExpected}</div>
         <div class="funnel-pct">${displayPct} of expected</div>
       </div>
     </div>`;
