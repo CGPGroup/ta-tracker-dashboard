@@ -394,6 +394,7 @@
   .user-menu-avatar {
     width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center;
     justify-content: center; font-size: 12.5px; font-weight: 700; color: #fff;
+    background-size: cover; background-position: center;
   }
   .user-menu-avatar svg { width: 18px; height: 18px; color: var(--text-muted); }
   .user-menu-dropdown {
@@ -5683,8 +5684,16 @@ function renderUserMenu(label){
   const connected = pinModeActive || !!graphAccount;
   if(connected){
     const name = MY_RECRUITER_NAME || (graphAccount && graphAccount.username) || "Admin";
-    avatar.textContent = initialsFor(name);
-    avatar.style.background = colorForName(name);
+    // Misma logica que renderSidebarProfile()/renderReclutadorChart(): si RECRUITER_PHOTOS
+    // tiene una foto para este nombre, usarla en vez de iniciales — asi el avatar del topbar de
+    // verdad coincide con quien esta conectado, no solo un color+letras generico.
+    const photo = RECRUITER_PHOTOS[name];
+    // backgroundImage/backgroundColor por separado (nunca el shorthand "background") a
+    // proposito: asignar el shorthand resetea TODOS sus componentes, incluida cualquier
+    // backgroundImage puesta en la linea de arriba — se pisarian entre si.
+    avatar.textContent = photo ? "" : initialsFor(name);
+    avatar.style.backgroundImage = photo ? `url('${escapeHtml(photo)}')` : "none";
+    avatar.style.backgroundColor = photo ? "" : colorForName(name);
     identity.textContent = pinModeActive
       ? `Connected as ${MY_RECRUITER_NAME} (PIN)`
       : `Connected: ${(graphAccount && graphAccount.username) || label || "Microsoft 365"}`;
@@ -5693,7 +5702,8 @@ function renderUserMenu(label){
     signOutBtn.style.display = "";
   } else {
     avatar.innerHTML = USER_MENU_VISITOR_ICON;
-    avatar.style.background = "var(--surface-2)";
+    avatar.style.backgroundImage = "none";
+    avatar.style.backgroundColor = "var(--surface-2)";
     identity.textContent = "Viewing as a public visitor";
     switchPublicBtn.style.display = "none";
     switchInternalBtn.style.display = "";
