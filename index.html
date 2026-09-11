@@ -2322,8 +2322,11 @@ function updateStatusDateUI(prefix, status, prefillValue){
 function isAdmin(){
   // Un login por PIN es una sesion real (aunque debil), no "nadie conectado, esto es prueba
   // local" — sin este chequeo, el fallback de abajo (!email -> admin) trataria a CUALQUIER
-  // reclutador por PIN como admin, exponiendo Delete/Reset All Data/SSOT Management.
+  // reclutador por PIN como admin, exponiendo Delete/Reset All Data/SSOT Management. Mismo
+  // razonamiento para Public Access (ver publicAccessMode): es una sesion real, solo-lectura,
+  // no "nadie conectado todavia".
   if(pinModeActive) return false;
+  if(publicAccessMode) return false;
   const email = (graphAccount && graphAccount.username || "").toLowerCase();
   return !email || email === ADMIN_EMAIL;
 }
@@ -2331,6 +2334,11 @@ function isAdmin(){
 // puede editar (status, remarks, fechas) si su cuenta de MS365 conectada es literalmente esa
 // persona. Sin conexion (pruebas locales) se trata como editable, mismo criterio que isAdmin().
 function trackingCanEdit(){
+  // Ver publicAccessMode: sin este chequeo, un visitante real de Public Access (sin login,
+  // pero que SI paso por el gate) caia en el mismo "sin conexion = confiable" que las pruebas
+  // locales, exponiendo el modal de detalle en modo edicion completo (ej. desde Needs
+  // Attention en Overview, visible sin ningun click extra). Bug real reportado por Nicolas.
+  if(publicAccessMode) return false;
   if(!isConnected()) return true;
   return !!activeDashboardScope && MY_RECRUITER_NAME === activeDashboardScope;
 }
@@ -2639,6 +2647,20 @@ let graphAccount = null;
 let pinModeActive = false;
 let pinModeCode = null;
 let MY_RECRUITER_NAME = null; // se llena al conectar, si tu correo coincide con un reclutador
+// BUG REAL encontrado 2026-09-11 (Nicolas: "cualquier reclutador puede editar cualquier
+// posicion de cualquier otro reclutador"): antes de esta bandera, "Public Access" (el gate de
+// solo-lectura sin login, ver signinPublicAgreeBtn) no dejaba NINGUN rastro propio — solo
+// cerraba el overlay del gate, dejando graphAccount/pinModeActive exactamente como estaban
+// (ambos en null/false, ya que nadie se conecto). Eso es INDISTINGUIBLE del estado "sin
+// conexion" que isAdmin()/trackingCanEdit() tratan como pruebas locales confiables (ver sus
+// propios comentarios) — asi que cualquier visitante real de Public Access, sin login alguno,
+// caia en el mismo fallback "admin + editable", exponiendo el modal de detalle en modo edicion
+// (Needs Attention en Overview es el mas expuesto: visible sin necesidad de ningun click extra).
+// publicAccessMode se marca explicitamente al aceptar el disclosure de Public Access, y
+// isAdmin()/trackingCanEdit() lo revisan ANTES de caer en el fallback de "sin conexion" —
+// cierra el hueco sin tocar la conveniencia real de pruebas locales (cargar el archivo directo,
+// sin siquiera pasar por el gate, sigue cayendo en el mismo fallback de siempre).
+let publicAccessMode = false;
 // Antes cada accion se grababa en History con author LITERAL "You", sin importar quien
 // estuviera conectado — inofensivo con un solo reclutador, pero enganoso en cuanto hay mas de
 // uno viendo el mismo Activity (un admin viendo el historial de David veria "You" para algo
@@ -4351,6 +4373,16 @@ function renderDetailModal(){
   // editar la razon si ya se marco. Solo aplica al flujo normal (Handoff ya tiene su propio
   // mecanismo de confirmacion de contexto, ver stepHandoff mas abajo).
   const intakeWaiveStepForTimeline = computeCompletion(p).step2;
+  // BUG REAL encontrado 2026-09-11 (Nicolas: "hay reqs en los que no sale lo del intake
+  // waived"): esto escondia el "Waived: <razon>" por completo en modo view — que es como se ve
+  // un req desde Positions, Public Access, o el Tracking de otro reclutador, es decir, la
+  // mayoria de las formas de mirar un req. No era un problema de datos (el campo si estaba
+  // guardado), el texto de solo-lectura nunca se armaba fuera de modo edicion. Separado en dos:
+  // la nota de solo-lectura (isView, se usa en el facts-grid), y el boton de Editar/Explicar
+  // (solo en modo edicion, igual que antes).
+  const intakeWaivedNote = (!p.handoffFrom && intakeWaiveStepForTimeline.waived)
+    ? `<div class="panel-sub" style="margin:2px 0 0; font-size:11px;">Waived: ${escapeHtml(p.intakeWaivedReason)}</div>`
+    : "";
   const intakeWaivedExtraHtml = (isView || p.handoffFrom) ? "" :
     intakeWaiveStepForTimeline.waived
       ? `<div class="panel-sub" style="margin:4px 0 0; font-size:11px;">Waived: ${escapeHtml(p.intakeWaivedReason)} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
@@ -4360,7 +4392,7 @@ function renderDetailModal(){
   const timelineHtml = isView
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
-        {label:"Intake Requested Date", value:escapeHtml(p.intakeRequestedDate) || "-"},
+        {label:"Intake Requested Date", value:(escapeHtml(p.intakeRequestedDate) || "-") + intakeWaivedNote},
         {label:"Intake Meeting Date", value:escapeHtml(p.intake) || "-"},
         {label:"Submission Date", value:escapeHtml(p.submit) || "-"},
         {label:"Fill Date", value:escapeHtml(p.fill) || "-"},
@@ -6238,6 +6270,7 @@ async function switchToPublicAccess(){
   if(pinModeActive){
     localStorage.removeItem("pinModeSession");
     pinModeActive = false; MY_RECRUITER_NAME = null; pinModeCode = null;
+    publicAccessMode = true;
     setDashboardScope(null);
     activateView("dashboard");
     setConnectionUi(false);
@@ -6468,6 +6501,7 @@ async function connectM365(){
       await msalInstance.loginRedirect({ scopes: GRAPH_SCOPES });
       return; // la pagina va a navegar fuera de aqui
     }
+    publicAccessMode = false;
     setConnectionUi(true, "Connecting…");
     await loadFromGraph();
     setConnectionUi(true, "Connected: " + (graphAccount.username || "Microsoft 365"));
@@ -6488,6 +6522,7 @@ async function trysilentConnect(){
     try {
       const saved = JSON.parse(savedPin);
       pinModeActive = true;
+      publicAccessMode = false;
       MY_RECRUITER_NAME = saved.name;
       pinModeCode = saved.code;
       await tryLoadPublicSnapshot();
@@ -6545,6 +6580,7 @@ async function trysilentConnect(){
     // que la intencion era terminar como visitante publico, no que se le vuelva a preguntar.
     if(localStorage.getItem("signinPreferPublic")){
       localStorage.removeItem("signinPreferPublic");
+      publicAccessMode = true;
       return;
     }
     openPinLoginModal();
@@ -7112,9 +7148,9 @@ document.getElementById("signinInternalBtn").addEventListener("click", ()=> show
 document.getElementById("signinInternalBackBtn").addEventListener("click", ()=> showGateStep("signinStepMain"));
 document.getElementById("signinPublicDisagreeBtn").addEventListener("click", ()=> showGateStep("signinStepMain"));
 // Data publica de solo lectura ya se cargo de fondo antes de mostrar el gate (ver
-// tryLoadPublicSnapshotAndRender() en trysilentConnect()) — no hace falta ningun trabajo aqui,
-// solo la transicion visual.
-document.getElementById("signinPublicAgreeBtn").addEventListener("click", ()=> transitionIntoTracker());
+// tryLoadPublicSnapshotAndRender() en trysilentConnect()) — la unica accion real aqui es marcar
+// publicAccessMode (ver su comentario junto a la declaracion) antes de la transicion visual.
+document.getElementById("signinPublicAgreeBtn").addEventListener("click", ()=> transitionIntoTracker(async ()=>{ publicAccessMode = true; }));
 document.getElementById("signinAdminBtn").addEventListener("click", ()=> transitionIntoTracker(connectM365));
 
 document.getElementById("signinRecruiterBtn").addEventListener("click", ()=>{
@@ -7173,6 +7209,7 @@ document.getElementById("signinConfirmYesBtn").addEventListener("click", ()=>{
   const { recruiterName, pin } = pendingPinIdentity;
   transitionIntoTracker(async ()=>{
     pinModeActive = true;
+    publicAccessMode = false;
     MY_RECRUITER_NAME = recruiterName;
     pinModeCode = pin;
     localStorage.setItem("pinModeSession", JSON.stringify({name: recruiterName, code: pin}));
