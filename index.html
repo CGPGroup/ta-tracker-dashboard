@@ -7363,6 +7363,16 @@ document.getElementById("newPosAddHeadcountRowBtn").addEventListener("click", ad
 // van vacias; Headcount Group se llena solo si el usuario lo escribio (o si es un grupo, con
 // el mismo valor compartido por todos los headcounts, ver el submit handler de abajo).
 function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
+  // BUG REAL encontrado 2026-09-14 (Nicolas: error de Graph API al asignar un req nueva —
+  // "The number of rows or columns in the input array doesn't match the size or dimensions of
+  // the range"). PositionsTable en el archivo real tiene 56 columnas (las ultimas 3, agregadas
+  // hace tiempo: Salary Currency/Salary Min/Salary Max, ver [[project_compensation_field]]) pero
+  // este array se quedo en 53 — nunca se le agregaron esas 3 al final cuando se creo el campo de
+  // Compensation. rows/add exige que el array tenga EXACTAMENTE el mismo numero de columnas que
+  // la tabla real, asi que cualquier intento de crear una posicion nueva fallaba. Confirmado
+  // contra el header real de PositionsTable via Graph API antes de este fix. La compensacion
+  // nunca se pide en este formulario (se confirma despues en Tracking, ver Entregable de
+  // Compensation) — los 3 nulls al final son intencionales, no un placeholder temporal.
   return [
     code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, null, null,
     null,null,null,null,null,null,null,null,null,null,null,null,
@@ -7375,6 +7385,7 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     careersUrl, null,
     null, null, null, null, null,
     null, null, null, headcountGroup, null,
+    null, null, null,
   ];
 }
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
