@@ -558,9 +558,6 @@
   .danger-zone-details { margin-top: 26px; }
   .danger-zone-details summary { color: var(--critical); }
 
-  /* Antes 16px de alto con esquinas apenas redondeadas (4px) — se veian como una barra de
-     progreso generica. Full pill-shape (radius = mitad del alto) + mas grosor, mismo
-     tratamiento que las barras del funnel de referencia de KeyStone AI. */
   .barlist { display: flex; flex-direction: column; gap: 10px; }
   .barlist-row { display: grid; grid-template-columns: 108px 1fr 34px; align-items: center; gap: 10px; }
   .barlist-label { font-size: 12px; color: var(--text-secondary); white-space: normal; word-break: break-word; }
@@ -3237,15 +3234,22 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
   // division de abajo no truene cuando se dibuja el placeholder gris de "sin datos".
   const realTotal = rows.reduce((s,r)=>s+(r.realValue !== undefined ? r.realValue : r.value),0);
   const arcTotal = rows.reduce((s,r)=>s+r.value,0) || 1;
-  const r = 45, cx = 60, cy = 60, sw = 12;
+  const r = 45, cx = 60, cy = 60, sw = 11;
   const circ = 2*Math.PI*r;
+  // Espacio real entre segmentos + puntas redondeadas (en vez de un anillo solido pegado) —
+  // mismo tratamiento que un anillo tipo Linear/GitHub, mas moderno que el borde a borde de
+  // antes. Solo tiene sentido con 2+ segmentos visibles; con 1 solo (o el placeholder gris de
+  // "sin datos") no hay vecino del cual separarse, asi que no se le resta nada.
+  const visibleCount = rows.filter(row=>row.value>0).length;
+  const segGap = visibleCount > 1 ? sw * 0.55 : 0;
   let offset = 0;
   const arcs = rows.map((row,i)=>{
     const frac = row.value/arcTotal;
-    const dash = frac*circ;
+    const rawDash = frac*circ;
+    const dash = Math.max(0, rawDash - segGap);
     const gap = circ-dash;
-    const el = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="${sw}" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" ${onClickRow?`class="clickable-stat" data-idx="${i}"`:""}></circle>`;
-    offset += dash;
+    const el = row.value>0 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" ${onClickRow?`class="clickable-stat" data-idx="${i}"`:""}></circle>` : "";
+    offset += rawDash;
     return el;
   }).join("");
   const legend = rows.map((row,i)=>`
