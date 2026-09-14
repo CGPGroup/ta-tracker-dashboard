@@ -602,6 +602,10 @@
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
   .workload-count { font-size: 10.5px; color: var(--text-muted); }
+  /* SLA compliance por reclutador (ver renderReclutadorChart()) — mismo .dot que el resto de la
+     app, mismos 3 colores/umbrales que el donut de SLA Compliance, solo que aqui puntual por
+     persona en vez de agregado para todo el equipo. */
+  .workload-sla { display: flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; }
 
   .stackbar-wrap { margin-bottom: 6px; }
   .stackbar-title { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
@@ -1140,7 +1144,7 @@
               </div>
               <div class="panel" id="panelWorkloadByRecruiter" style="grid-column: span 3;">
                 <h3>Active Workload By Recruiter</h3>
-                <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max.</div>
+                <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
                 <div class="workload-grid" id="chartReclutador"></div>
               </div>
               <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 3;">
@@ -3310,18 +3314,39 @@ function workloadColor(v){
   if(v >= 7) return "var(--warning)";
   return "var(--good)";
 }
+// SLA compliance por reclutador, mismo criterio "on time" que ya usa el donut de SLA
+// Compliance (ninguna de TTS/TTF/TTH en "out") — agregado a la tarjeta de Workload siguiendo
+// el patron real de ATS de recruiting (Greenhouse, etc.): visibilidad de compliance por
+// dueño/reclutador, no solo volumen de trabajo. Sin posiciones activas no hay nada que medir.
+function recruiterSlaRate(assigned){
+  if(!assigned.length) return null;
+  const outOfSla = assigned.filter(p=>{
+    const s = computeSla(p);
+    return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
+  }).length;
+  return Math.round(((assigned.length - outOfSla) / assigned.length) * 100);
+}
+function slaRateColor(rate){
+  if(rate < 75) return "var(--critical)";
+  if(rate < 90) return "var(--warning)";
+  return "var(--good)";
+}
 function renderReclutadorChart(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const rows = RECRUITERS.map(r=>{
     const assigned = active.filter(p=>p.recruiter===r);
     const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
-    return {label:r, count: assigned.length, value: Math.round(weighted * 10) / 10};
+    return {label:r, count: assigned.length, value: Math.round(weighted * 10) / 10, slaRate: recruiterSlaRate(assigned)};
   }).sort((a,b)=>b.value-a.value);
   document.getElementById("chartReclutador").innerHTML = rows.map(r=>{
     const photo = RECRUITER_PHOTOS[r.label];
     const jobTitle = RECRUITER_TITLES[r.label] || "";
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
     const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
+    const slaHtml = r.slaRate === null ? "" : `
+      <div class="workload-sla" style="color:${slaRateColor(r.slaRate)};">
+        <span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA
+      </div>`;
     return `
     <div class="workload-card clickable-stat" data-label="${escapeHtml(r.label)}" title="Open ${escapeHtml(r.label)}'s dashboard">
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
@@ -3329,6 +3354,7 @@ function renderReclutadorChart(){
       ${jobTitle ? `<div class="workload-title">${escapeHtml(jobTitle)}</div>` : ""}
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${workloadColor(r.value)};"></div></div>
       <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
+      ${slaHtml}
     </div>`;
   }).join("");
   // Clic en una tarjeta te lleva al Dashboard de ESE reclutador (solo lectura) — no a su
