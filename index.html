@@ -5947,17 +5947,10 @@ function updateWorkspaceSwitchVisibility(){
 }
 // Tabs del Dashboard: Overview/SLA & Completion/Pipeline/Offers & Placements solo alternan cual
 // .dash-tab-panel se ve (ningun render*() depende de cual esta activo, todos siguen llenando
-// los mismos ids de siempre) y te garantizan quedarte en Dashboard. Tracking es la excepcion:
-// no tiene un .dash-tab-panel (es un layout completo aparte, lista+detalle acoplado), asi que
-// en vez de alternar paneles navega de verdad a la vista Tracking.
+// los mismos ids de siempre) y te garantizan quedarte en Dashboard. Tracking ya no es uno de
+// estos tabs (volvio a ser su propio nav-item, ver #navItemTracking), asi que este listener ya
+// no necesita ningun caso especial para el.
 document.querySelectorAll(".dash-tab").forEach(btn=>{
-  if(btn.dataset.dashTab === "tracking"){
-    btn.addEventListener("click", ()=>{
-      document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b===btn));
-      activateView("tracking");
-    });
-    return;
-  }
   btn.addEventListener("click", ()=>{
     document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b===btn));
     document.querySelectorAll(".dash-tab-panel").forEach(p=> p.classList.toggle("active", p.dataset.dashPanel===btn.dataset.dashTab));
