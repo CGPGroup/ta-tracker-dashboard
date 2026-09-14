@@ -1370,6 +1370,7 @@
                   <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="Canada" style="width:auto;"> Canada</label>
                   <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="Australia" style="width:auto;"> Australia</label>
                   <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="New Zealand" style="width:auto;"> New Zealand</label>
+                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="India" style="width:auto;"> India</label>
                 </div>
               </div>
               <div class="form-field"><label>Work Arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
@@ -4935,7 +4936,7 @@ wireAddNewSelect("reqInfoHmSelect", "reqInfoHmInput", "reqInfoHmBackToList");
 // un set fijo de checkboxes en vez del patron select/"add new" que usan Hiring Manager y demas
 // campos de texto libre. countryList()/countryToStoredValue() abajo son las unicas dos
 // funciones que conocen el formato de almacenamiento (string separado por comas).
-const COUNTRY_OPTIONS = ["United States","Canada","Australia","New Zealand"];
+const COUNTRY_OPTIONS = ["United States","Canada","Australia","New Zealand","India"];
 function splitCountries(str){
   // Datos historicos de antes de que Country fuera multi-select real usaban "/" a mano (ej.
   // "Canada / United States", a veces con una anotacion como "(APAC)" pegada al final) — se
