@@ -1044,6 +1044,11 @@
         <button type="button" class="nav-workspace-btn" id="navWorkspaceMineBtn" style="display:none;">My Workspace</button>
       </div>
       <button class="nav-item active" data-view="dashboard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="10" y1="10" x2="10" y2="20"/></svg></span> Dashboard</button>
+      <!-- Solo visible dentro de tu propio workspace (setDashboardScope() lo muestra/oculta,
+           igual que antes cuando esto vivia como un dash-tab mas arriba) — Nicolas pidio
+           devolverlo al panel izquierdo como los demas nav-item, en vez de una pestaña mas
+           dentro de la fila de tabs del Dashboard. -->
+      <button class="nav-item" data-view="tracking" id="navItemTracking" style="display:none;"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Tracking</button>
       <button class="nav-item" data-view="positions"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span> Positions</button>
       <button class="nav-item" data-view="manage"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="5" x2="14" y2="5"/><line x1="10" y1="5" x2="3" y2="5"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="19" x2="16" y2="19"/><line x1="12" y1="19" x2="3" y2="19"/><line x1="14" y1="3" x2="14" y2="7"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="17" x2="16" y2="21"/></svg></span> SSOT Management</button>
       <button class="nav-item" data-view="guide"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> Process & SLA Guide</button>
@@ -1091,19 +1096,14 @@
 
       <div id="pendingAssignmentZone"></div>
 
-      <!-- Vive FUERA de view-dashboard/view-tracking (los 2 son secciones .view separadas,
-           mutuamente excluyentes) para que la fila de tabs siga visible sin importar cual de
-           las 2 este activa — si viviera adentro de una sola, se desaparecia entera al navegar
-           a la otra. Solo visible cuando la vista activa es "dashboard" o "tracking" (ver
-           activateView()), oculta en Positions/SSOT/Guide. Tracking es un tab mas aqui (icono +
-           label, mismo trato visual que los demas) en vez de un boton aparte en el nav
-           principal — pero a diferencia de los otros 4 (que solo alternan que .dash-tab-panel
-           se ve), este SI navega a una vista distinta (activateView("tracking")) porque
-           Tracking es un layout completo aparte (lista+detalle acoplado), no algo que quepa
-           dentro de un dash-tab-panel mas. Solo visible dentro de tu propio workspace. -->
+      <!-- Vive FUERA de view-dashboard (su propia seccion .view aparte) para que la fila de tabs
+           siga visible sin importar si cambias de dash-tab-panel. Solo visible cuando la vista
+           activa es "dashboard" (ver activateView()), oculta en Tracking/Positions/SSOT/Guide —
+           Tracking ya NO es un tab mas aqui, volvio a ser su propio nav-item en el panel
+           izquierdo (ver #navItemTracking), asi que esta fila no necesita quedarse visible
+           mientras estas en Tracking. -->
       <div class="dash-tabs" id="dashTabs" role="tablist">
         <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
-        <button type="button" class="dash-tab" id="dashTabTracking" data-dash-tab="tracking" style="display:none;"><span class="nav-ic" style="width:15px;height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Tracking</button>
         <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
         <button type="button" class="dash-tab" id="dashTabPipeline" data-dash-tab="pipeline">Pipeline</button>
         <button type="button" class="dash-tab" data-dash-tab="offers">Offers &amp; Placements</button>
@@ -1164,13 +1164,6 @@
                 <h3>Needs Attention <span class="panel-details-count" id="dashboardAttentionCount"></span></h3>
                 <div class="panel-sub">Out of SLA or at risk, or falling behind on Kickoff/Intake follow-up, most urgent first.</div>
                 <div id="dashboardAttentionZone"></div>
-              </div>
-              <!-- Solo dentro de tu propio workspace (ver setDashboardScope) — a todo el ancho,
-                   su propia fila, para no romper el emparejamiento de arriba cuando aparece. -->
-              <div class="panel" id="panelRecentActivity" style="display:none; grid-column: span 6;">
-                <h3>Recent Activity <span class="panel-details-count" id="recentActivityCount"></span></h3>
-                <div class="panel-sub">Everything logged across your positions in the last 7 days, most recent first.</div>
-                <ul class="timeline" id="trackingActivityList" style="max-height:none;"></ul>
               </div>
             </div>
           </div>
@@ -2399,7 +2392,6 @@ function dashboardPositions(){
 }
 function renderDashboardPanels(){
   renderPendingAssignments();
-  renderTrackingActivity();
   renderKpis();
   renderEstadoChart();
   renderReclutadorChart();
@@ -2562,7 +2554,7 @@ function setDashboardScope(name, opts){
   if(!readOnly && !isAdmin() && MY_RECRUITER_NAME && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
   activeDashboardScope = name;
   activeDashboardReadOnly = readOnly && name !== MY_RECRUITER_NAME;
-  document.getElementById("dashTabTracking").style.display = (name && !activeDashboardReadOnly) ? "" : "none";
+  document.getElementById("navItemTracking").style.display = (name && !activeDashboardReadOnly) ? "" : "none";
   // Pipeline (funnel de status + Position By Location/Work Arrangement) es una vista de equipo
   // — no le sirve de nada a un solo reclutador viendo unicamente sus propias posiciones. Si
   // estabas parado ahi cuando entras a tu workspace, te caes a Overview (que si existe siempre).
@@ -2574,7 +2566,6 @@ function setDashboardScope(name, opts){
   updateManageNavVisibility();
   document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
-  document.getElementById("panelRecentActivity").style.display = name ? "" : "none";
   // Positions es intencionalmente el directorio COMPLETO para cualquiera, admin o no — es el
   // camino sancionado para ver requisitions de otro reclutador sin entrar a su workspace. Solo
   // se pre-filtra como comodidad al entrar a un workspace (el tuyo o, si eres admin, el de
@@ -2632,9 +2623,13 @@ function renderRecentReqs(){
   // "reciente" que seguir trabajando desde este atajo — el camino real para corregir algo en
   // una req ya cerrada es Positions -> Edit In Tracking (sigue funcionando igual, ver
   // modalEditInTrackingBtn), no este atajo lateral que sugiere que sigue activa.
-  const recent = dashboardPositions().filter(p=>!TERMINAL.includes(p.status)).slice()
-    .sort((a,b)=> (b.kickoff||"").localeCompare(a.kickoff||""))
-    .slice(0, 10);
+  // Ventana real de 7 dias por Kickoff Date (antes: top 10 mas recientes sin importar que tan
+  // vieja fuera la ultima) — Nicolas pidio que esto refleje "reciente" de verdad, no un conteo.
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  const cutoffStr = cutoff.getFullYear() + "-" + String(cutoff.getMonth()+1).padStart(2,"0") + "-" + String(cutoff.getDate()).padStart(2,"0");
+  const recent = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && p.kickoff && p.kickoff >= cutoffStr).slice()
+    .sort((a,b)=> (b.kickoff||"").localeCompare(a.kickoff||""));
   if(!recent.length){ zone.innerHTML = ""; return; }
   zone.innerHTML = `
     <div class="rail-section-title">Recently Assigned</div>
@@ -3897,37 +3892,6 @@ function slaChip(s){
   const holidayNote = h ? `<span class="sla-chip-holiday" title="Includes ${h} holiday${h===1?"":"s"} excluded from this business-day count">+${h}h</span>` : "";
   return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}${holidayNote}</span>`;
 }
-function renderTrackingActivity(){
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
-  const cutoffStr = cutoff.getFullYear() + "-" + String(cutoff.getMonth()+1).padStart(2,"0") + "-" + String(cutoff.getDate()).padStart(2,"0");
-  const entries = [];
-  dashboardPositions().forEach(p=>{
-    buildTimeline(p).forEach(e=>{
-      if(e.date >= cutoffStr) entries.push({...e, position: p});
-    });
-  });
-  // Mas reciente primero; en caso de empate de fecha, los remarks manuales
-  // pesan mas que los eventos automaticos (son la señal mas relevante para leer).
-  entries.sort((a,b)=>{
-    if(a.date !== b.date) return a.date < b.date ? 1 : -1;
-    if(a.type !== b.type) return a.type === "manual" ? -1 : 1;
-    return 0;
-  });
-  const list = document.getElementById("trackingActivityList");
-  list.innerHTML = entries.length ? entries.map(e=>`
-    <li style="${e.type==="manual" ? "background:var(--surface-2); border-radius:8px; margin:2px 0;" : ""}">
-      <span class="tl-date">${e.date}</span>
-      <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
-      <span class="tl-text"><b>${posLabel(e.position)}</b>: ${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
-    </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">No activity in the last 7 days.</li>`;
-  // Contador visible aunque el <details> este cerrado, para no tener que abrirlo solo para
-  // saber si vale la pena (y para que mucha actividad no obligue a colapsar el resto de la
-  // vista, que era justo la queja original).
-  document.getElementById("recentActivityCount").textContent = entries.length
-    ? `(${entries.length})` : "(none)";
-}
-
 function attentionInfo(p){
   const s = computeSla(p);
   const rank = {out:3, risk:2, within:1, none:0};
@@ -5879,27 +5843,22 @@ const TITLES = {
   guide: ["Process & SLA Guide", "How the requisition process actually works end to end, and how every SLA is defined"],
 };
 function activateView(view){
-  // El nav-item "Dashboard" se mantiene resaltado tambien en Tracking (Tracking es un tab MAS
-  // de Dashboard ahora, no una seccion hermana independiente) — ver el tab dedicado en
-  // #dashTabs en vez de un boton aparte en el nav principal.
-  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view || (b.dataset.view==="dashboard" && view==="tracking")));
-  // La fila de tabs (Overview/Tracking/SLA & Completion/Pipeline/Offers) vive fuera de ambas
-  // secciones .view para no desaparecer al saltar entre Dashboard y Tracking (ver el comentario
-  // en el HTML) — solo se ve mientras estas en cualquiera de las 2.
-  document.getElementById("dashTabs").style.display = (view === "dashboard" || view === "tracking") ? "" : "none";
-  // pendingAssignmentZone vive fuera de view-dashboard/view-tracking (mismo motivo que
-  // dashTabs) y se muestra en las dos — el banner de "Accept" para asignaciones/handoffs nuevos
+  // Tracking volvio a ser su propio nav-item (ver #navItemTracking) en vez de un tab mas dentro
+  // de Dashboard, asi que ya no necesita el caso especial de resaltar "Dashboard" tambien —
+  // coincide directo por su propio data-view="tracking".
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
+  // La fila de tabs (Overview/SLA & Completion/Pipeline/Offers) vive fuera de view-dashboard
+  // para no desaparecer al cambiar de dash-tab-panel — pero ya solo aplica a Dashboard, Tracking
+  // tiene su propia seccion .view aparte y no la necesita.
+  document.getElementById("dashTabs").style.display = (view === "dashboard") ? "" : "none";
+  // pendingAssignmentZone vive fuera de view-dashboard/view-tracking (los 2 son secciones .view
+  // separadas) y se muestra en las dos — el banner de "Accept" para asignaciones/handoffs nuevos
   // tambien se usa desde Tracking (Nicolas señalo que aceptar una asignacion es justo algo que
   // se hace desde ahi). dashboardAttentionZone ya NO vive aca afuera — ahora es una tarjeta mas
   // dentro del tab Overview (ver panelDashboardAttention en el HTML), asi que su visibilidad la
   // maneja el toggle normal de dash-tab-panel/view, sin necesitar este toggle aparte.
   const dashboardOrTracking = (view === "dashboard" || view === "tracking") ? "" : "none";
   document.getElementById("pendingAssignmentZone").style.display = dashboardOrTracking;
-  // Si llegaste a Tracking sin pasar por el click del tab (ej. el auto-entry al conectar, o
-  // "Edit In Tracking" desde Positions), el tab de Tracking igual tiene que verse resaltado.
-  if(view === "tracking"){
-    document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b.dataset.dashTab==="tracking"));
-  }
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById("view-"+view).classList.add("active");
   // El titulo grande siempre sigue el mismo patron sin importar en que vista o en que workspace
@@ -5954,10 +5913,6 @@ document.querySelectorAll(".nav-item[data-view]").forEach(btn=>{
 // cambia el scope de datos que el Dashboard muestra.
 function goToDashboard(name, opts){
   setDashboardScope(name, opts);
-  // Por si el tab de Tracking se habia quedado marcado activo de una visita anterior — elegir
-  // Team/My Workspace desde el switcher siempre te deja viendo el ultimo dash-tab-panel real
-  // (Overview u otro), nunca a Tracking con su boton sin resaltar.
-  document.getElementById("dashTabTracking").classList.remove("active");
   activateView("dashboard");
 }
 document.getElementById("navWorkspaceTeamBtn").addEventListener("click", ()=> goToDashboard(null));
