@@ -880,6 +880,32 @@
   }
   .status-dropdown-item:hover { background: var(--surface-2); }
   .status-dropdown-item .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  /* Dropdown desplegable con checkboxes adentro (Country/Market en New Position y Edit Basic
+     Info) — mismo mecanismo de abrir/cerrar que .status-dropdown de arriba, pero el trigger se
+     ve como un input/select normal (no un chip de color), y clickear un checkbox adentro NUNCA
+     cierra el menu (a diferencia del status-dropdown de una sola opcion) — aqui se puede marcar
+     mas de una a la vez, asi que cerrarlo en cada click obligaria a reabrirlo por cada pais. */
+  .multiselect-dropdown { position: relative; }
+  .multiselect-trigger {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-family: inherit; font-size: 13px; padding: 9px 11px; text-align: left;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text-primary);
+    cursor: pointer;
+  }
+  .multiselect-trigger .ms-trigger-text.placeholder { color: var(--text-muted); }
+  .multiselect-trigger .caret { flex: none; color: var(--text-muted); font-size: 10px; }
+  .multiselect-menu {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 6px; max-height: 220px; overflow-y: auto;
+  }
+  .multiselect-menu.open { display: block; }
+  .multiselect-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;
+    font-size: 13px; font-weight: 400; cursor: pointer;
+  }
+  .multiselect-item:hover { background: var(--surface-2); }
+  .multiselect-item input { width: auto; }
   .timeline { list-style: none; margin: 0 0 14px; padding: 0; max-height: 220px; overflow-y: auto; }
   /* padding horizontal parejo en TODAS las filas (no solo las "manual" resaltadas) — antes solo
      las manual llevaban 10px de padding lateral via inline style, lo que corria su badge/fecha/
@@ -1365,12 +1391,17 @@
               <div class="panel-sub full" id="newPosCapacityHint" style="margin:-6px 0 0;"></div>
               <div class="form-field full">
                 <label>Country/Market <span style="font-weight:400; color:var(--text-muted);">(check all that the search covers)</span></label>
-                <div style="display:flex; flex-wrap:wrap; gap:14px;">
-                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="United States" style="width:auto;"> United States</label>
-                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="Canada" style="width:auto;"> Canada</label>
-                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="Australia" style="width:auto;"> Australia</label>
-                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="New Zealand" style="width:auto;"> New Zealand</label>
-                  <label style="display:flex; align-items:center; gap:5px; font-weight:400;"><input type="checkbox" class="newPosCountryCheck" value="India" style="width:auto;"> India</label>
+                <div class="multiselect-dropdown" id="newPosCountryDropdown">
+                  <button type="button" class="multiselect-trigger" id="newPosCountryTrigger">
+                    <span class="ms-trigger-text placeholder">Select countries&hellip;</span><span class="caret">&#9662;</span>
+                  </button>
+                  <div class="multiselect-menu" id="newPosCountryMenu">
+                    <label class="multiselect-item"><input type="checkbox" class="newPosCountryCheck" value="United States"> United States</label>
+                    <label class="multiselect-item"><input type="checkbox" class="newPosCountryCheck" value="Canada"> Canada</label>
+                    <label class="multiselect-item"><input type="checkbox" class="newPosCountryCheck" value="Australia"> Australia</label>
+                    <label class="multiselect-item"><input type="checkbox" class="newPosCountryCheck" value="New Zealand"> New Zealand</label>
+                    <label class="multiselect-item"><input type="checkbox" class="newPosCountryCheck" value="India"> India</label>
+                  </div>
                 </div>
               </div>
               <div class="form-field"><label>Work Arrangement</label><select id="newPosWorkArrangement"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></div>
@@ -1741,7 +1772,12 @@
       </div>
       <div class="form-field full">
         <label>Country <span style="font-weight:400; color:var(--text-muted);">(check all that the search covers)</span></label>
-        <div id="reqInfoCountryChecks" style="display:flex; flex-wrap:wrap; gap:14px;"></div>
+        <div class="multiselect-dropdown" id="reqInfoCountryDropdown">
+          <button type="button" class="multiselect-trigger" id="reqInfoCountryTrigger">
+            <span class="ms-trigger-text placeholder">Select countries&hellip;</span><span class="caret">&#9662;</span>
+          </button>
+          <div class="multiselect-menu" id="reqInfoCountryChecks"></div>
+        </div>
       </div>
       <div class="form-field full"><label>City</label><input type="text" id="reqInfoCity" placeholder="e.g. Toronto (leave blank if not applicable)"></div>
       <div class="form-field full"><label>Work Arrangement</label><select id="reqInfoWorkArrangement"></select></div>
@@ -4952,6 +4988,39 @@ function countryList(p){
   return splitCountries(p.country);
 }
 
+// Dropdown desplegable con checkboxes adentro (ver .multiselect-dropdown en el CSS) — se abre
+// con el trigger, se queda abierto entre clicks (a diferencia de .status-dropdown, aqui se puede
+// marcar mas de una opcion), y se cierra solo al hacer click afuera. Se cablea UNA sola vez por
+// instancia (el trigger/menu/dropdown en si nunca se destruyen, solo el contenido interno del
+// menu puede reemplazarse via innerHTML — ver openEditReqInfoModal()), asi que el listener de
+// "change" en el menu (delegado, no en cada checkbox individual) sigue funcionando aunque los
+// checkboxes de adentro se hayan vuelto a generar. Devuelve refreshTriggerText() para que quien
+// llene los checkboxes por su cuenta (ej. al abrir un modal con valores ya guardados) pueda
+// sincronizar el texto del trigger sin esperar un evento "change" real.
+function wireMultiselectDropdown(dropdownId, triggerId, menuId, checkboxClass, placeholder){
+  const dropdown = document.getElementById(dropdownId);
+  const trigger = document.getElementById(triggerId);
+  const menu = document.getElementById(menuId);
+  const textEl = trigger.querySelector(".ms-trigger-text");
+  function refreshTriggerText(){
+    const checked = [...menu.querySelectorAll(`.${checkboxClass}:checked`)].map(el=>el.value);
+    textEl.textContent = checked.length ? checked.join(", ") : placeholder;
+    textEl.classList.toggle("placeholder", !checked.length);
+  }
+  trigger.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    menu.classList.toggle("open");
+  });
+  menu.addEventListener("change", refreshTriggerText);
+  document.addEventListener("click", (e)=>{
+    if(!dropdown.contains(e.target)) menu.classList.remove("open");
+  });
+  refreshTriggerText();
+  return refreshTriggerText;
+}
+const refreshNewPosCountryTrigger = wireMultiselectDropdown("newPosCountryDropdown", "newPosCountryTrigger", "newPosCountryMenu", "newPosCountryCheck", "Select countries…");
+const refreshReqInfoCountryTrigger = wireMultiselectDropdown("reqInfoCountryDropdown", "reqInfoCountryTrigger", "reqInfoCountryChecks", "reqInfoCountryCheck", "Select countries…");
+
 function openEditReqInfoModal(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
@@ -4959,9 +5028,10 @@ function openEditReqInfoModal(){
   setupAddNewSelect("reqInfoHmSelect", "reqInfoHmInput", "reqInfoHmBackToList", hmOptions, p.hiringManager);
   const selectedCountries = countryList(p);
   document.getElementById("reqInfoCountryChecks").innerHTML = COUNTRY_OPTIONS.map(c=>`
-    <label style="display:flex; align-items:center; gap:5px; font-weight:400;">
-      <input type="checkbox" class="reqInfoCountryCheck" value="${escapeHtml(c)}" ${selectedCountries.includes(c)?"checked":""} style="width:auto;"> ${escapeHtml(c)}
+    <label class="multiselect-item">
+      <input type="checkbox" class="reqInfoCountryCheck" value="${escapeHtml(c)}" ${selectedCountries.includes(c)?"checked":""}> ${escapeHtml(c)}
     </label>`).join("");
+  refreshReqInfoCountryTrigger();
   document.getElementById("reqInfoCity").value = p.city || "";
   document.getElementById("reqInfoWorkArrangement").innerHTML = ["Remote","Hybrid","On-site"]
     .map(a=>`<option value="${a}" ${a===(p.workArrangement||"Remote")?"selected":""}>${a}</option>`).join("");
@@ -7486,6 +7556,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     document.getElementById("newPosStatus").value = "Kickoff";
     updateStatusDateUI("newPos", "Kickoff", null);
     document.querySelectorAll(".newPosCountryCheck").forEach(el=>el.checked = false);
+    refreshNewPosCountryTrigger();
     msg.textContent = `${codes.length} position${codes.length===1?"":"s"} created and loaded.`;
   } catch(err){
     console.error(err);
@@ -7503,6 +7574,7 @@ document.getElementById("clearPositionBtn").addEventListener("click", () => {
   document.getElementById("newPosStatus").value = "Kickoff";
   updateStatusDateUI("newPos", "Kickoff", null);
   document.querySelectorAll(".newPosCountryCheck").forEach(el=>el.checked = false);
+  refreshNewPosCountryTrigger();
   document.getElementById("createPositionMsg").textContent = "";
 });
 
