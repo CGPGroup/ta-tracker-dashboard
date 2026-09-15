@@ -3232,7 +3232,18 @@ function linkifyIfUrl(val, linkLabel){
 // abierto); si esta vacio, el boton dice "Add". Ambos casos abren el mismo modal generico.
 // Devuelve solo la celda (sin envolver su propio facts-grid) para que las tres URLs de una
 // posicion (Irth, Spott, LinkedIn) puedan mostrarse juntas en una sola fila de 3 columnas.
-function urlFactCell(label, value, linkLabel, editBtnId){
+// lockedMsg (opcional, ver canStartSourcing()): si no hay valor TODAVIA y se paso un mensaje, se
+// muestra el mismo candado 🔒 + tooltip que ya usa timelineFieldHtml() en vez del boton "Add" —
+// un dato que YA existe (migrado antes de esta regla) nunca se esconde, solo se bloquea poder
+// agregar uno nuevo antes de tiempo.
+function urlFactCell(label, value, linkLabel, editBtnId, lockedMsg){
+  if(!value && lockedMsg){
+    return `
+      <div>
+        <div class="fact-label">${escapeHtml(label)} <span class="tl-lock" title="${escapeHtml(lockedMsg)}">&#128274;</span></div>
+        <div class="fact-value"><span style="color:var(--text-muted);">Not set</span></div>
+      </div>`;
+  }
   return editableFactCell(label, value ? linkifyIfUrl(value, linkLabel) : "", editBtnId);
 }
 // Celda de un campo cualquiera (no necesariamente un link) con su boton Edit/Add al lado, mismo
@@ -3270,6 +3281,16 @@ function formatSalary(p){
 }
 function hasSalaryConfirmed(p){
   return !!(p.salaryCurrency && p.salaryMin != null && p.salaryMin !== "");
+}
+// Nicolas + David (2026-09-15): "hasta despues de la intake meeting es hasta cuando se puede
+// comenzar a hacer sourcing" — antes de eso, poner un Spott Job URL o un LinkedIn Recruiter URL
+// no tiene sentido (nada que sourcear todavia). Mismo criterio que sourcingStarted en
+// renderKpis() (ver [[project_submitted_vs_expected_fix]]): intake real, waived cuenta igual, y
+// para Handoff se usa handoffAcceptedDate (el nuevo reclutador arranca desde ahi, no desde el
+// intake original que ya paso por otra persona).
+function canStartSourcing(p){
+  if(p.handoffFrom) return !!p.handoffAcceptedDate;
+  return !!(p.intake || p.intakeWaivedReason);
 }
 // Fuera del modal (tablas de Positions/Tracking, quick lists) solo se muestra el pais — la
 // ciudad/provincia solo tiene sentido dentro del detalle de una req especifica, mostrarla en
@@ -4779,10 +4800,17 @@ function renderDetailModal(){
   // solo que digas que abajo en requisition completion esta el comentario"). Aqui solo queda el
   // chip, apuntando a donde esta la razon real.
   const intakeWaivedChip = ()=> `<span class="sla-chip risk" style="border:1px solid var(--warning);">Waived — see Requisition Completion below</span>`;
-  const intakeWaivedNote = (!p.handoffFrom && intakeWaiveStepForTimeline.waived)
+  // BUG REAL encontrado 2026-09-15 (Nicolas, RD-019 despues del handoff a David: "estoy seguro
+  // que yo puse el comentario... pero no sale por ningun lado"). El `!p.handoffFrom` de aqui (y
+  // el de intakeWaivedExtraHtml abajo) se copio sin querer del hecho de que la tarjeta "Request
+  // Intake Meeting" en Requisition Completion desaparece para posiciones con Handoff — pero eso
+  // dejaba la razon del waiver invisible TAMBIEN ahi (ver el fix en completionCards mas abajo, que
+  // ahora SI la muestra bajo "Handoff Context Confirmed"), asi que este chip debe verse en los dos
+  // casos, apuntando a un lugar que ahora de verdad la tiene.
+  const intakeWaivedNote = intakeWaiveStepForTimeline.waived
     ? `<div style="margin-top:4px;">${intakeWaivedChip()}</div>`
     : "";
-  const intakeWaivedExtraHtml = (isView || p.handoffFrom) ? "" :
+  const intakeWaivedExtraHtml = isView ? "" :
     intakeWaiveStepForTimeline.waived
       ? `<div style="margin-top:4px;">${intakeWaivedChip()} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
       : intakeWaiveStepForTimeline.status !== "done"
@@ -4854,11 +4882,18 @@ function renderDetailModal(){
   // + boton Edit) si ya tiene valor, formulario de captura si no; Edit/Add abren el modal
   // generico de un solo campo. Las tres van juntas en una sola fila de 3 columnas en los dos
   // modos: Irth primero, luego Spott, luego LinkedIn.
+  // Nicolas + David: no darle de una vez la lista completa de todos los campos posibles desde el
+  // arranque de la req confunde a alguien que apenas esta aprendiendo el proceso — paso a paso,
+  // Spott/LinkedIn se bloquean (candado + tooltip, no se esconden) hasta que de verdad se puede
+  // empezar a sourcear. Irth Careers Page URL queda fuera de esta regla: esa la suele crear/tener
+  // el cliente desde antes, no es una accion de sourcing del reclutador.
+  const sourcingLockMsg = canStartSourcing(p) ? null
+    : "Available once the intake meeting is held (or waived) — sourcing shouldn't start before that.";
   const urlFactsHtml = isView ? factsSection("", urlFacts) : `
     <div class="facts-grid" style="margin-bottom:22px;">
       ${urlFactCell("Irth Careers Page URL", p.careersUrl, "View Posting", "editCareersUrlBtn")}
-      ${urlFactCell("Spott Job URL", p.spottJobId, "View In Spott", "editSpottIdBtn")}
-      ${urlFactCell("LinkedIn Recruiter URL", p.linkedinRecruiterUrl, "View Job Post", "editLinkedinUrlBtn")}
+      ${urlFactCell("Spott Job URL", p.spottJobId, "View In Spott", "editSpottIdBtn", sourcingLockMsg)}
+      ${urlFactCell("LinkedIn Recruiter URL", p.linkedinRecruiterUrl, "View Job Post", "editLinkedinUrlBtn", sourcingLockMsg)}
     </div>`;
 
   // Historial de batches de candidatos enviados (3-5 por batch tipicamente): cuantos se han
@@ -4959,7 +4994,9 @@ function renderDetailModal(){
         });
       });
     }
-    document.getElementById("editSpottIdBtn").addEventListener("click", ()=>{
+    // Puede no existir si canStartSourcing(p) esta bloqueado ahora mismo (ver urlFactCell()) —
+    // sin valor y sin permiso todavia, urlFactCell no dibuja el boton "Add" para nada.
+    document.getElementById("editSpottIdBtn")?.addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit Spott Job URL",
         label: "Spott Job URL",
@@ -4991,7 +5028,7 @@ function renderDetailModal(){
         },
       });
     });
-    document.getElementById("editLinkedinUrlBtn").addEventListener("click", ()=>{
+    document.getElementById("editLinkedinUrlBtn")?.addEventListener("click", ()=>{
       openEditFieldModal({
         title: "Edit LinkedIn Recruiter URL",
         label: "LinkedIn Recruiter URL",
@@ -5082,9 +5119,15 @@ function renderDetailModal(){
           {subLabel:"Request Intake Meeting", chip: recruiterChip(c.stepIntakeRequest, "Intake Meeting Waived")},
         ], note: c.stepIntakeRequest.waived ? p.intakeWaivedReason : null, noteIsWaived: c.stepIntakeRequest.waived},
       p.handoffFrom
+        // BUG REAL encontrado 2026-09-15 (Nicolas, RD-019: handed off a David con un intake
+        // waived de antes del handoff) — esta tarjeta reemplaza por completo a "Request Intake
+        // Meeting" (arriba, null cuando hay handoff), que era el UNICO lugar que mostraba
+        // p.intakeWaivedReason. Sin este waivedNote, la razon quedaba guardada en el dato pero
+        // invisible en toda la pantalla para cualquier req que fuera handoff Y waived a la vez.
         ? {label:"Handoff Context Confirmed", tag:"Follow-Up Only", chip: followUpChip(c.stepHandoff),
             note: c.stepHandoff.status==="waiting" ? `Handed off from ${escapeHtml(p.handoffFrom)}, ${ESCALATION_CONTACT} tracks that context gets confirmed quickly.`
-              : c.stepHandoff.status==="done" ? `Confirmed on ${p.handoffAcceptedDate}.` : null}
+              : c.stepHandoff.status==="done" ? `Confirmed on ${p.handoffAcceptedDate}.` : null,
+            waivedNote: c.step2.waived ? p.intakeWaivedReason : null}
         : (c.step2.waived ? null : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
             note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
               : c.step2.status==="done" ? `Held on ${p.intake}.` : null}),
@@ -5096,6 +5139,7 @@ function renderDetailModal(){
         ${cc.note ? (cc.noteIsWaived
             ? `<div class="alert-banner tier-yellow compact" style="margin:6px 0 0;">${escapeHtml(cc.note)}</div>`
             : `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>`) : ""}
+        ${cc.waivedNote ? `<div class="alert-banner tier-yellow compact" style="margin:6px 0 0;">Intake Meeting Waived: ${escapeHtml(cc.waivedNote)}</div>` : ""}
       </div>`).join("");
     const alerts = [];
     // Igual que completionCards/completionFlags: una vez la req paso por Handoff, step1 (la
