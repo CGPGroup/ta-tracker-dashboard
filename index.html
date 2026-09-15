@@ -512,15 +512,12 @@
      nada que el detalle no muestre tambien), pero el ancho real ahora lo decide quien lo usa
      arrastrando el separador, no un ratio fijo — en pantallas muy anchas un ratio fijo dejaba
      espacio muerto sin usar. La preferencia se guarda por navegador (ver trackingSplitInit()). */
-  /* Nicolas: la columna izquierda (Tracking + Activity) quedaba mucho mas corta que el detalle
-     de la derecha (que crece libre segun cuanto contenido tenga esa posicion), dejando un hueco
-     vacio raro debajo. align-items:stretch (default de flex, ya no forzado a flex-start) hace que
-     .tracking-list-col ocupe la MISMA altura que .tracking-detail-col (su hermano, el mas alto);
-     .tracking-list-col pasa a ser column flex para repartir esa altura entre sus dos paneles:
-     Tracking (mas alto que antes, ver .tracking-table-scroll) y Activity (flex:1, se estira para
-     absorber lo que sobre y terminar alineado con el fondo del panel derecho).*/
-  .tracking-split { display: flex; }
-  .tracking-list-col { flex: none; width: 900px; min-width: 280px; max-width: 940px; display: flex; flex-direction: column; }
+  /* Nicolas (correccion 2026-09-19, el intento anterior estiraba Activity hasta ~1300px para
+     igualar la altura del panel derecho — MAL, no era lo pedido): solo el cuadro de Tracking
+     (la lista de requisitions) debia quedar mas alto. Activity va DEBAJO de ese cuadro mas alto,
+     con su tamaño normal de siempre y su propio scroll — nunca estirado a proposito. */
+  .tracking-split { display: flex; align-items: flex-start; }
+  .tracking-list-col { flex: none; width: 900px; min-width: 280px; max-width: 940px; }
   /* Antes ~5-6 filas visibles (300px); mas alto para que se vean mas posiciones sin scrollear —
      el resto sigue con su propio scroll interno si la lista no alcanza a mostrarse completa. */
   .tracking-table-scroll { overflow-x: auto; overflow-y: auto; max-height: 480px; }
@@ -537,21 +534,12 @@
     background: var(--brand); height: 60px;
   }
   .tracking-detail-col { flex: 1; min-width: 340px; position: sticky; top: 20px; }
-  /* Panel de Activity dentro de .tracking-list-col: flex:1 para estirarse y absorber la
-     altura que .tracking-list-col gana por el stretch de arriba — sin esto, ese espacio extra
-     quedaria como hueco vacio bajo el panel de Tracking en vez de alargar Activity. min-height:0
-     es necesario para que un hijo flex pueda encogerse por debajo de su contenido natural (si no,
-     el <ul class="timeline"> de adentro fuerza al panel a crecer sin limite en vez de scrollear). */
-  .tracking-activity-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; margin-top: 16px; }
-  #trackingSelectedActivityList { flex: 1; min-height: 120px; max-height: none; }
+  .tracking-activity-panel { margin-top: 16px; }
   @media (max-width: 1300px) {
     .tracking-split { flex-direction: column; }
     .tracking-list-col { width: 100%; max-width: none; }
     .tracking-resize-handle { display: none; }
     .tracking-detail-col { width: 100%; max-width: none; min-width: 0; position: static; }
-    /* Sin un hermano estirado que estirar contra, flex:1 aqui no tiene limite real — vuelve a
-       un scroll acotado, como el resto del tracker en pantallas angostas. */
-    #trackingSelectedActivityList { flex: none; max-height: 260px; }
   }
   .modal-overlay.docked {
     position: static; display: block !important; background: none; padding: 0;
