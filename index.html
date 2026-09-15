@@ -4600,17 +4600,20 @@ function renderDetailModal(){
   // (solo en modo edicion, igual que antes).
   // Antes la razon completa (puede ser un parrafo entero, ver caso real de Garima Neema/RD-071)
   // se mostraba como texto gris de 11px pegado bajo el campo — facil de pasar por alto (Nicolas:
-  // "no veo por ningun lado facil por que fue waived"). Ahora es un chip ambar bien visible
-  // (mismo lenguaje visual que sla-chip.risk), con la razon completa en su title (hover) en vez
-  // de forzar el parrafo entero siempre visible inline; en modo edicion, "Edit" sigue abriendo el
-  // modal de siempre, que ya muestra/permite cambiar el texto completo.
-  const intakeWaivedChip = (reason)=> `<span class="sla-chip risk" style="cursor:help;" title="Waived: ${escapeHtml(reason)}">Waived</span>`;
+  // "no veo por ningun lado facil por que fue waived"). Primer intento: chip ambar con la razon
+  // solo en el title (hover) — Nicolas lo encontro (asi confirmo que "ya sale el por que"), pero
+  // pidio que no dependiera de pasar el mouse: el chip debe invitar a mirar abajo, y la razon
+  // tiene que estar siempre visible ahi, en un cuadro bien delimitado (no texto suelto) — reusa
+  // el mismo .alert-banner.tier-yellow.compact ya usado para otros avisos de esta tarjeta (ver
+  // "No submission batches logged yet"), en vez de inventar un estilo nuevo.
+  const intakeWaivedChip = ()=> `<span class="sla-chip risk" style="border:1px solid var(--warning);">Waived — reason below</span>`;
+  const intakeWaivedReasonBox = (reason)=> `<div class="alert-banner tier-yellow compact" style="margin:4px 0 0;">${escapeHtml(reason)}</div>`;
   const intakeWaivedNote = (!p.handoffFrom && intakeWaiveStepForTimeline.waived)
-    ? `<div style="margin-top:4px;">${intakeWaivedChip(p.intakeWaivedReason)}</div>`
+    ? `<div style="margin-top:4px;">${intakeWaivedChip()}${intakeWaivedReasonBox(p.intakeWaivedReason)}</div>`
     : "";
   const intakeWaivedExtraHtml = (isView || p.handoffFrom) ? "" :
     intakeWaiveStepForTimeline.waived
-      ? `<div style="margin-top:4px;">${intakeWaivedChip(p.intakeWaivedReason)} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
+      ? `<div style="margin-top:4px;">${intakeWaivedChip()} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button>${intakeWaivedReasonBox(p.intakeWaivedReason)}</div>`
       : intakeWaiveStepForTimeline.status !== "done"
         ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">Intake Meeting Not Needed? Explain Why</button>`
         : "";
