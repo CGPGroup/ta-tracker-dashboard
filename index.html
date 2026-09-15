@@ -2167,6 +2167,21 @@ const STATUS_SUBTITLE = {
   "Intake Meeting Requested": "Kickoff Email Replied",
   "Intake Pending": "Meeting Scheduled",
 };
+// Nombre que se MUESTRA para un status, cuando es distinto del valor real guardado — Nicolas
+// senalo que "Hired" suena a que ya esta trabajando ahi, cuando en realidad es el termino de
+// reclutamiento para una colocacion confirmada (lo que el resto del tracker ya llama "Placement",
+// ver "Actual Placements"/"Positions & Placements"). SOLO cambia lo que el usuario LEE — el valor
+// guardado en el Excel, STATUS_ORDER, TERMINAL, STATUS_DATE_FIELD, y cualquier p.status==="Hired"
+// en el codigo siguen siendo literalmente "Hired": renombrar el valor de verdad exigiria migrar
+// cada fila ya existente en el archivo real (riesgo real de romper filtros/comparaciones en filas
+// viejas) por ningun beneficio real sobre solo cambiar el texto que se ve. Usar statusLabel(status)
+// en vez de mostrar status crudo en cualquier lugar nuevo que se agregue.
+const STATUS_DISPLAY = {
+  "Hired": "Placed",
+};
+function statusLabel(status){
+  return STATUS_DISPLAY[status] || status;
+}
 // Estos 3 statuses exigen llenar una fecha especifica antes de poder guardar el cambio (el
 // resto de statuses no la piden). key = campo en el objeto de la posicion, col = columna real
 // en PositionsTable.
@@ -2214,7 +2229,7 @@ const STATUS_GUIDANCE = {
   "Technical Interview": "Candidates are in technical interviews, usually the round before the Hiring Manager Interview. Same rule applies: feedback due within 1-3 business days per candidate, logged in Workable's Review tab.",
   "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
   "Filled": "An offer was accepted. Log the Fill Date in Timeline if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
-  "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Start Date in Timeline if you haven't already — this requisition moves to Hired automatically once it's logged.",
+  "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Start Date in Timeline if you haven't already — this requisition moves to Placed automatically once it's logged.",
   "Filled (Internal Hire)": "The client filled this requisition on their own — an internal employee move or an intern conversion — without a Cornerstone placement. This requisition is closed and does not count as a placement or an SLA miss; add a remark noting who filled it and how, if known.",
   "Fell Through": "This requisition fell through. Add a remark explaining what happened — if it reopens, it most likely restarts at Sourcing rather than from scratch.",
   "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
@@ -2677,7 +2692,7 @@ function renderRecentReqs(){
     ${recent.map(p=>`
       <div class="recent-req-row" data-id="${escapeHtml(p.id)}">
         <div>${escapeHtml(p.title)}</div>
-        <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(p.status)}</div>
+        <div class="rr-code">${escapeHtml(p.id)} &middot; ${escapeHtml(statusLabel(p.status))}</div>
       </div>`).join("")}`;
   zone.querySelectorAll(".recent-req-row").forEach(row=>{
     row.addEventListener("click", ()=>{
@@ -3127,7 +3142,7 @@ function arrangementBadge(p){
 }
 function statusChip(status){
   const color = STAGE_COLORS[status] || "var(--neutral)";
-  return `<span class="status-chip"><span class="dot" style="background:${color}; border-radius:50%;"></span>${status}</span>`;
+  return `<span class="status-chip"><span class="dot" style="background:${color}; border-radius:50%;"></span>${escapeHtml(statusLabel(status))}</span>`;
 }
 
 /* ============================================================
@@ -3212,7 +3227,7 @@ function renderKpis(){
   const internalHirePositions = allPositions.filter(p=>p.status==="Filled (Internal Hire)");
   const totalRows = [
     {label:"Active", value:active.length, positions:active, color:"var(--brand)"},
-    {label:"Hired", value:hiredPositions.length, positions:hiredPositions, color:"var(--good)"},
+    {label:statusLabel("Hired"), value:hiredPositions.length, positions:hiredPositions, color:"var(--good)"},
     {label:"Cancelled / Fell Through", value:lostPositions.length, positions:lostPositions, color:"var(--critical)"},
     {label:"Filled (Internal Hire)", value:internalHirePositions.length, positions:internalHirePositions, color:"var(--neutral)"},
   ].filter(r=>r.value>0);
@@ -3797,9 +3812,9 @@ function renderPendingOffers(){
 /* ============================================================
    TABLE: Positions (full directory, no drill-down)
    ============================================================ */
-function fillSelectOnce(sel, values){
+function fillSelectOnce(sel, values, labelFn){
   if(sel.options.length<=1){
-    values.forEach(v=>{ const o=document.createElement("option"); o.value=v; o.textContent=v; sel.appendChild(o); });
+    values.forEach(v=>{ const o=document.createElement("option"); o.value=v; o.textContent=labelFn ? labelFn(v) : v; sel.appendChild(o); });
   }
 }
 
@@ -3819,7 +3834,7 @@ function renderPositions(){
   const ttfSel = document.getElementById("positionsTTF");
   const tthSel = document.getElementById("positionsTTH");
   const placementSel = document.getElementById("positionsPlacement");
-  fillSelectOnce(statusSel, STATUS_ORDER);
+  fillSelectOnce(statusSel, STATUS_ORDER, statusLabel);
   fillSelectOnce(recSel, RECRUITERS);
   fillSelectOnce(hmSel, [...new Set(POSITIONS.map(p=>p.hiringManager))].sort());
   fillSelectOnce(locSel, LOCATIONS);
@@ -3851,7 +3866,7 @@ function renderPositions(){
   const slaLabel = v => (SLA_FILTER_OPTIONS.find(([val])=>val===v) || [])[1] || v;
   const chips = [];
   if(searchEl.value.trim()) chips.push({label:`Search: "${searchEl.value.trim()}"`, clear:()=>{ searchEl.value=""; }});
-  if(est) chips.push({label:`Status: ${est}`, clear:()=>{ statusSel.value=""; }});
+  if(est) chips.push({label:`Status: ${statusLabel(est)}`, clear:()=>{ statusSel.value=""; }});
   if(rec) chips.push({label:`Recruiter: ${rec}`, clear:()=>{ recSel.value=""; }});
   if(hm) chips.push({label:`Hiring Manager: ${hm}`, clear:()=>{ hmSel.value=""; }});
   if(loc) chips.push({label:`Country: ${loc}`, clear:()=>{ locSel.value=""; }});
@@ -4096,7 +4111,7 @@ function renderTracking(){
   const ttsSel = document.getElementById("trackingTTS");
   const ttfSel = document.getElementById("trackingTTF");
   const tthSel = document.getElementById("trackingTTH");
-  fillSelectOnce(statusSel, STATUS_ORDER);
+  fillSelectOnce(statusSel, STATUS_ORDER, statusLabel);
   fillSlaSelectOnce(ttsSel);
   fillSlaSelectOnce(ttfSel);
   fillSlaSelectOnce(tthSel);
@@ -4119,7 +4134,7 @@ function renderTracking(){
   const slaLabel = v => (SLA_FILTER_OPTIONS.find(([val])=>val===v) || [])[1] || v;
   const chips = [];
   if(searchEl.value.trim()) chips.push({label:`Search: "${searchEl.value.trim()}"`, clear:()=>{ searchEl.value=""; }});
-  if(est) chips.push({label:`Status: ${est}`, clear:()=>{ statusSel.value=""; }});
+  if(est) chips.push({label:`Status: ${statusLabel(est)}`, clear:()=>{ statusSel.value=""; }});
   if(ttsF) chips.push({label:`Time To Submit: ${slaLabel(ttsF)}`, clear:()=>{ ttsSel.value=""; }});
   if(ttfF) chips.push({label:`Time To Fill: ${slaLabel(ttfF)}`, clear:()=>{ ttfSel.value=""; }});
   if(tthF) chips.push({label:`Time To Hire: ${slaLabel(tthF)}`, clear:()=>{ tthSel.value=""; }});
@@ -4558,12 +4573,12 @@ function renderDetailModal(){
   const statusDropdownHtml = `
     <div class="status-dropdown" id="statusDropdown">
       <button type="button" class="status-chip status-dropdown-trigger" id="statusDropdownTrigger">
-        <span class="dot" style="background:${STAGE_COLORS[p.status] || "var(--neutral)"}"></span>${escapeHtml(p.status)}
+        <span class="dot" style="background:${STAGE_COLORS[p.status] || "var(--neutral)"}"></span>${escapeHtml(statusLabel(p.status))}
       </button>
       <div class="status-dropdown-menu" id="statusDropdownMenu">
         ${STATUS_ORDER.map(st=>`
           <div class="status-dropdown-item" data-status="${escapeHtml(st)}">
-            <span class="dot" style="background:${STAGE_COLORS[st] || "var(--neutral)"}"></span>${escapeHtml(st)}
+            <span class="dot" style="background:${STAGE_COLORS[st] || "var(--neutral)"}"></span>${escapeHtml(statusLabel(st))}
           </div>`).join("")}
       </div>
     </div>`;
@@ -4949,7 +4964,7 @@ async function saveModalDates(){
   const autoStatusChange = p.status !== originalStatus ? {from: originalStatus, to: p.status} : null;
   let statusRemarkText = null;
   if(autoStatusChange){
-    statusRemarkText = `Status changed from ${autoStatusChange.from} to ${autoStatusChange.to} (automatic — ${triggeredBy.join(", ")} logged).`;
+    statusRemarkText = `Status changed from ${statusLabel(autoStatusChange.from)} to ${statusLabel(autoStatusChange.to)} (automatic — ${triggeredBy.join(", ")} logged).`;
     p.extra = p.extra || [];
     p.extra.push({date: localTodayStr(), type:"status", author:currentAuthorName(), text: statusRemarkText});
   }
@@ -4958,7 +4973,7 @@ async function saveModalDates(){
   // renderDetailModal() reconstruye el HTML de modalFacts (incluido este span), asi que hay
   // que volver a buscarlo DESPUES de re-renderizar, o el mensaje se pierde en un nodo viejo.
   const msg = document.getElementById("modalDatesMsg");
-  const savedNote = autoStatusChange ? ` Status moved to ${autoStatusChange.to}.` : "";
+  const savedNote = autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "";
   if(isConnected()){
     msg.textContent = "Saving…";
     msg.style.color = "var(--text-muted)";
@@ -5029,22 +5044,22 @@ function onStatusOptionClick(p, newStatus){
   // abajo sin exigir la aceptacion.
   if(newStatus !== "Kickoff"){
     if(p.handoffFrom && !p.handoffAcceptedDate){
-      alert(`Can't move to "${newStatus}" yet — the handoff context hasn't been confirmed. Accept the handoff first from the pending-assignment banner in Dashboard or Tracking.`);
+      alert(`Can't move to "${statusLabel(newStatus)}" yet — the handoff context hasn't been confirmed. Accept the handoff first from the pending-assignment banner in Dashboard or Tracking.`);
       return;
     }
     if(!p.handoffFrom && !p.recruiterAcceptedDate){
-      alert(`Can't move to "${newStatus}" yet — this requisition hasn't been accepted. Accept it first from the pending-assignment banner in Dashboard or Tracking.`);
+      alert(`Can't move to "${statusLabel(newStatus)}" yet — this requisition hasn't been accepted. Accept it first from the pending-assignment banner in Dashboard or Tracking.`);
       return;
     }
   }
   if(REQUIRES_INTAKE_HELD.includes(newStatus) && !p.intake && !p.intakeWaivedReason){
-    alert(`Can't move to "${newStatus}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
+    alert(`Can't move to "${statusLabel(newStatus)}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
     return;
   }
   const dateField = STATUS_DATE_FIELD[newStatus];
   if(dateField){
     pendingStatusChange = newStatus;
-    document.getElementById("editStatusModalTitle").textContent = `Confirm Status: ${newStatus}`;
+    document.getElementById("editStatusModalTitle").textContent = `Confirm Status: ${statusLabel(newStatus)}`;
     document.getElementById("modalStatusMsg").textContent = "";
     // Prefill con la fecha que ya exista para este campo (ej. Fill/Start Date logueada antes en
     // Timeline) en vez de pedirla de nuevo como si nunca se hubiera capturado.
@@ -5758,8 +5773,8 @@ document.getElementById("acceptHandoffSave").addEventListener("click", async ()=
 async function commitStatusChange(p, newStatus, dateField, dateVal){
   const oldStatus = p.status;
   const remarkText = dateField
-    ? `Status changed from ${oldStatus} to ${newStatus} (${dateField.label}: ${dateVal}).`
-    : `Status changed from ${oldStatus} to ${newStatus}.`;
+    ? `Status changed from ${statusLabel(oldStatus)} to ${statusLabel(newStatus)} (${dateField.label}: ${dateVal}).`
+    : `Status changed from ${statusLabel(oldStatus)} to ${statusLabel(newStatus)}.`;
   const today = localTodayStr();
   p.extra = p.extra || [];
   // Idempotencia: si el ultimo evento ya logueado es este MISMO cambio, mismo texto, mismo dia,
@@ -7476,7 +7491,7 @@ setTimeout(hideAppLoadingOverlay, 12000);
 /* ---- SSOT Management: crear posicion / reclutador ---- */
 // "Kickoff" es el punto de partida real de una posicion nueva (asignada, pero el
 // intake ni se ha pedido), asi que es el default aqui, no "Sourcing".
-fillSelectOnce(document.getElementById("newPosStatus"), STATUS_ORDER);
+fillSelectOnce(document.getElementById("newPosStatus"), STATUS_ORDER, statusLabel);
 document.getElementById("newPosStatus").value = "Kickoff";
 updateStatusDateUI("newPos", "Kickoff", null);
 document.getElementById("newPosStatus").addEventListener("change", (e)=>{
