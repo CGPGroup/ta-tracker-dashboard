@@ -1192,7 +1192,7 @@
                    donde tiene mas sentido leerlo. -->
               <div class="panel" style="grid-column: span 6;">
                 <h3>Submitted Vs Expected</h3>
-                <div class="panel-sub">Submitted candidates vs how many should exist by today, based on each position's own intake date — not yet due doesn't count against it.</div>
+                <div class="panel-sub">Submitted candidates vs how many should exist by today, based on each position's own intake date. Only counts positions whose intake has already happened — nothing to source before that.</div>
                 <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
               </div>
             </div>
@@ -3416,9 +3416,21 @@ function renderKpis(){
   // ventana, +3.5 mas por cada ciclo de 5 dias habiles adicionales (el mismo ritmo de follow-up
   // batches que ya describe el guidance de Sourcing) — asi que el numero de arriba ahora es
   // literalmente "cuantos candidatos deberian existir A ESTA FECHA", no un promedio parejo.
+  // BUG REAL #2 encontrado 2026-09-19 (Nicolas: "para los de data science, architect y engineer
+  // no se ha tenido el intake meeting, entonces por que deberia contarlos, si hasta que se hace
+  // el intake meeting es que se comienza a hacer sourcing") — workingPositions incluia posiciones
+  // que ni siquiera han tenido su intake meeting todavia (Kickoff/Intake Meeting Requested), asi
+  // que aparecian en la cuenta de posiciones y en el quick-list de este chart aunque no tengan
+  // NADA que ver con sourcing/submission todavia — su expected ya daba 0 (matematicamente no
+  // cambiaba el numero), pero seguian ahi como ruido visual, mezcladas con las que SI ya estan
+  // sourcing. Ahora se filtran fuera del todo para este chart especifico — una posicion en
+  // Sourcing que apenas lleva pocos dias (ej. Full Stack Developer) SI sigue apareciendo con 0
+  // esperado (esa si es informacion real: "todavia esta dentro de la ventana, no esta atrasada"),
+  // la diferencia es exclusivamente "ya tuvo intake o no".
   const workingPositions = active.filter(p=>!NOT_ACTIVELY_WORKED.includes(p.status));
-  const submittedTotal = workingPositions.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
-  const minExpected = Math.round(workingPositions.reduce((sum,p)=> sum + expectedSubmittedForPosition(p), 0));
+  const sourcingStarted = workingPositions.filter(p=> !!parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake));
+  const submittedTotal = sourcingStarted.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
+  const minExpected = Math.round(sourcingStarted.reduce((sum,p)=> sum + expectedSubmittedForPosition(p), 0));
   // Barra en vez de anillo (mismo .funnel-row/.funnel-track ya usado en Active Pipeline By
   // Status) — Nicolas la queria como las barras de KeyStone, no como un anillo. El color pasa
   // por 3 tramos segun que tan lejos esta del minimo esperado (no solo bueno/malo binario):
@@ -3431,7 +3443,7 @@ function renderKpis(){
   const barWidthPct = ratio===null ? 0 : Math.min(100, Math.round(ratio*100));
   const displayPct = ratio===null ? "-" : Math.round(ratio*100)+"%";
   document.getElementById("statBarSubmitted").innerHTML = `
-    <div class="funnel-row${workingPositions.length>0 ? " clickable-stat" : ""}">
+    <div class="funnel-row${sourcingStarted.length>0 ? " clickable-stat" : ""}">
       <div class="funnel-label">Candidates Submitted</div>
       <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${gradientFill(barColor)};"></div></div>
       <div class="funnel-stat">
@@ -3439,9 +3451,9 @@ function renderKpis(){
         <div class="funnel-pct">${displayPct} of expected to date</div>
       </div>
     </div>`;
-  if(workingPositions.length>0){
+  if(sourcingStarted.length>0){
     document.querySelector("#statBarSubmitted .funnel-row").addEventListener("click", ()=>{
-      openQuickList("Submitted Vs Expected", `${submittedTotal} submitted &middot; expected at least ${minExpected} to date across ${workingPositions.length} position${workingPositions.length===1?"":"s"}`, workingPositions);
+      openQuickList("Submitted Vs Expected", `${submittedTotal} submitted &middot; expected at least ${minExpected} to date across ${sourcingStarted.length} position${sourcingStarted.length===1?"":"s"} (intake already held)`, sourcingStarted);
     });
   }
 }
