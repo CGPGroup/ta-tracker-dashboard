@@ -2178,6 +2178,29 @@ const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sou
 // aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
 // para el preview de "Up Next" (ver ahi).
 const PIPELINE_SEQUENCE = STATUS_ORDER.slice(0, STATUS_ORDER.indexOf("Hired")+1);
+// Nicolas: "por que este req sigue en kickoff por tanto tiempo si ya pediste el intake meeting,
+// o por que sigue en intake meeting held si ya pusiste la fecha en la que se tuvo el intake
+// meeting... basado en la logica de negocio" — un chequeo de "los datos ya implican mas progreso
+// del que dice el status" para los primeros pasos del pipeline, donde es facil que alguien llene
+// una fecha en Timeline directamente sin acordarse de tambien mover el dropdown de Status (a
+// diferencia de Fill/Start Date, que ya auto-avanzan el status solos, ver
+// [[project_status_date_sync]] — Intake Requested/Intake Meeting/primer batch no tienen ese mismo
+// auto-avance porque cada uno tiene mas de una razon legitima de state, asi que aqui solo se
+// AVISA, nunca se cambia el status solo). Devuelve null si el status actual ya va acorde a los
+// datos, o {nextStatus, reason} si parece atrasado.
+function staleStatusHint(p){
+  if(p.handoffFrom) return null;
+  if(p.status==="Kickoff" && p.intakeRequestedDate){
+    return {nextStatus:"Intake Meeting Requested", reason:"the Intake Meeting Requested Date is already logged in Timeline"};
+  }
+  if(p.status==="Intake Meeting Requested" && p.intake){
+    return {nextStatus:"Intake Pending", reason:"the Intake Meeting Date is already logged in Timeline"};
+  }
+  if(p.status==="Intake Pending" && p.batches && p.batches.length){
+    return {nextStatus:"Sourcing", reason:"a submission batch is already logged"};
+  }
+  return null;
+}
 // Aclaracion corta que se muestra debajo del selector de status (no se guarda como parte del
 // valor, para que las tablas/filtros/chips sigan mostrando el nombre corto del status).
 const STATUS_SUBTITLE = {
@@ -2202,6 +2225,12 @@ const STATUS_DISPLAY = {
   // el mismo problema y se elimino (ver mas arriba) — quedaba redundante/incorrecto una vez el
   // label mismo ya dice "Held".
   "Intake Pending": "Intake Held",
+  // "Fell Through" no decia quien/que fallo — Nicolas eligio "Candidate Withdrawn" (mas preciso
+  // que un generico "Withdrawn", ya que en este tracker este status especificamente es el
+  // candidato echandose para atras despues de haber avanzado, no un req cancelado por el cliente
+  // — eso ya es su propio status separado, "Cancelled"). Valor guardado sigue siendo "Fell
+  // Through" (mismo patron display-only de siempre, ver comentario de Hired arriba).
+  "Fell Through": "Candidate Withdrawn",
 };
 function statusLabel(status){
   return STATUS_DISPLAY[status] || status;
@@ -2255,7 +2284,7 @@ const STATUS_GUIDANCE = {
   "Filled": "An offer was accepted. Log the Fill Date in Timeline if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
   "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Start Date in Timeline if you haven't already — this requisition moves to Placed automatically once it's logged.",
   "Filled (Internal Hire)": "The client filled this requisition on their own — an internal employee move or an intern conversion — without a Cornerstone placement. This requisition is closed and does not count as a placement or an SLA miss; add a remark noting who filled it and how, if known.",
-  "Fell Through": "This requisition fell through. Add a remark explaining what happened — if it reopens, it most likely restarts at Sourcing rather than from scratch.",
+  "Fell Through": "The candidate withdrew. Add a remark explaining what happened — if it reopens, it most likely restarts at Sourcing rather than from scratch.",
   "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
   // Distinto de "On Hold" normal: no es un incumplimiento de SLA, es una razon de negocio
   // legitima (el HM quiere ver el resultado de un proceso interno de Irth antes de decidir sobre
@@ -4976,7 +5005,15 @@ function renderDetailModal(){
     } else {
       if(c.step2.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step2.elapsed} business days since it was requested (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
     }
-    document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">${a.text}</div>`).join("");
+    const staleHint = staleStatusHint(p);
+    if(staleHint) alerts.push({tier:"tier-orange", text:`Status still shows "${statusLabel(p.status)}", but ${staleHint.reason} — this looks behind.`, actionStatus: staleHint.nextStatus});
+    document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">
+      <span>${a.text}</span>
+      ${(a.actionStatus && !isView) ? `<button type="button" class="btn ghost small staleStatusMoveBtn" data-next-status="${escapeHtml(a.actionStatus)}" style="margin-left:auto; white-space:nowrap;">Move to ${escapeHtml(statusLabel(a.actionStatus))} →</button>` : ""}
+    </div>`).join("");
+    document.querySelectorAll(".staleStatusMoveBtn").forEach(btn=>{
+      btn.addEventListener("click", ()=> onStatusOptionClick(p, btn.dataset.nextStatus));
+    });
   }
 
   if(!isView){
