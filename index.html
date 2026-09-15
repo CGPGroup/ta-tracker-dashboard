@@ -2165,7 +2165,6 @@ const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sou
 const STATUS_SUBTITLE = {
   "Kickoff": "Req Assigned",
   "Intake Meeting Requested": "Kickoff Email Replied",
-  "Intake Pending": "Meeting Scheduled",
 };
 // Nombre que se MUESTRA para un status, cuando es distinto del valor real guardado — Nicolas
 // senalo que "Hired" suena a que ya esta trabajando ahi, cuando en realidad es el termino de
@@ -2178,6 +2177,13 @@ const STATUS_SUBTITLE = {
 // en vez de mostrar status crudo en cualquier lugar nuevo que se agregue.
 const STATUS_DISPLAY = {
   "Hired": "Placed",
+  // "Intake Pending" sonaba como si la reunion todavia no hubiera pasado ("pending" = pendiente
+  // de ocurrir) — pero STATUS_DATE_FIELD exige la fecha REAL de una reunion ya sostenida para
+  // poder entrar a este status (nunca una fecha futura, ver capToday en saveModalDates()), asi
+  // que por definicion la reunion YA paso. El STATUS_SUBTITLE viejo ("Meeting Scheduled") tenia
+  // el mismo problema y se elimino (ver mas arriba) — quedaba redundante/incorrecto una vez el
+  // label mismo ya dice "Held".
+  "Intake Pending": "Intake Held",
 };
 function statusLabel(status){
   return STATUS_DISPLAY[status] || status;
@@ -2222,7 +2228,7 @@ const STATUS_DATE_FIELD = {
 const STATUS_GUIDANCE = {
   "Kickoff": "Send the Kickoff email to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting) and confirm you've accepted it. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
   "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or send written answers instead if a live call isn't possible). Once they confirm, move the status to Intake Pending and log the date — sourcing still can't start until the intake actually happens.",
-  "Intake Pending": "Intake meeting date logged. Use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone. Once the meeting has actually taken place, move status to Sourcing — the first batch is due within 7-9 business days of that meeting, not from today.",
+  "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
   "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Curate a batch of 3-5 candidates, never more, and get it to the hiring manager within 7-9 business days of the intake meeting.",
   "Screening": "Run Screening Interviews with your sourced candidates before submitting anyone formally. Only candidates you'd genuinely stand behind should move forward — leave your evaluation as a comment on each profile once you're ready to submit them.",
   "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch.",
@@ -4541,6 +4547,16 @@ function renderDetailModal(){
 
   const outcomeFacts = [];
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
+  // Antes esto SOLO se mostraba (fact de solo lectura, y solo si ya tenia valor) — no habia
+  // ninguna forma de escribirlo desde el tracker, el unico modo de que aparezca era alguien
+  // editando el Excel directo. Nicolas: "no veo un campo para poner al candidato que quedo
+  // placed." En edicion ahora siempre aparece (Edit/Add, mismo patron que Headcount Group/las
+  // URLs), sin importar el status — no hay razon para esperar a Filled/Hired para poder anotar
+  // el nombre si el reclutador ya lo sabe antes.
+  const outcomeFactsHtml = isView ? factsSection("", outcomeFacts) : `
+    <div class="facts-grid" style="margin-bottom:22px;">
+      ${editableFactCell("Placed Candidate", p.placedCandidate ? escapeHtml(p.placedCandidate) : "", "editPlacedCandidateBtn")}
+    </div>`;
 
   // Intake Waived vive DENTRO de la celda de Intake Requested Date (debajo de su input), no
   // como celda propia aparte ni debajo de Intake Meeting Date — ahi es donde tiene sentido:
@@ -4673,7 +4689,7 @@ function renderDetailModal(){
     urlFactsHtml +
     timelineHtml +
     batchesHtml +
-    factsSection("", outcomeFacts);
+    outcomeFactsHtml;
   if(!isView){
     document.getElementById("logBatchBtn").addEventListener("click", ()=> openLogBatchModal(p));
     const submissionTrigger = document.getElementById("submissionDateTrigger");
@@ -4779,6 +4795,21 @@ function renderDetailModal(){
         onSave: async (newVal)=>{
           p.linkedinRecruiterUrl = newVal;
           if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "LinkedIn Recruiter URL", newVal || "");
+          renderDetailModal();
+          renderPositions();
+          renderTracking();
+        },
+      });
+    });
+    document.getElementById("editPlacedCandidateBtn").addEventListener("click", ()=>{
+      openEditFieldModal({
+        title: "Edit Placed Candidate",
+        label: "Placed Candidate",
+        placeholder: "e.g. Mel Ladner",
+        value: p.placedCandidate,
+        onSave: async (newVal)=>{
+          p.placedCandidate = newVal;
+          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Placed Candidate", newVal || "");
           renderDetailModal();
           renderPositions();
           renderTracking();
