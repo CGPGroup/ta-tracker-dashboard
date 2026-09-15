@@ -2702,6 +2702,17 @@ function renderRecentReqs(){
   });
 }
 const TERMINAL = ["Hired","Cancelled","Fell Through","Filled (Internal Hire)"];
+// Estados NO terminales pero donde no hay trabajo de reclutamiento activo pasando: Filled ya
+// no tiene nada pendiente de Cornerstone (oferta aceptada, ver STATUS_GUIDANCE["Filled"]) y
+// ambos On Hold estan pausados por definicion — Nicolas fue explicito 2026-09-19: que el
+// reclutador deba hacer seguimiento periodico no los hace "activos" (ver
+// [[feedback_active_excludes_on_hold]]). UNA SOLA fuente de verdad para "Active Positions" en
+// todo el tracker — antes esta regla solo vivia dentro de renderKpis(), y el conteo de
+// "Active Positions"/"Potential Placements" del toolbar de Positions (renderPositions()) tenia
+// su propia logica vieja aparte, mostrando un numero distinto bajo el mismo nombre. Cualquier
+// vista nueva que necesite "esta activa de verdad" debe filtrar contra esta constante, nunca
+// reinventar el filtro localmente.
+const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates"];
 
 let RECRUITERS = ["Nicolás Patarroyo"];
 let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
@@ -3180,7 +3191,6 @@ function renderKpis(){
   //    distintos. `active` (el set amplio, no-terminal) NO se toco — sigue usandose tal cual en
   //    el balde "Active" de Total Requisitions (abajo en esta misma funcion) y en Candidates
   //    Submitted, que son vistas distintas con su propio criterio, no parte de este embudo.
-  const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates"];
   const activePositions = active.filter(p=>!NOT_ACTIVELY_WORKED.includes(p.status));
   const allPositions = dashboardPositions();
   const actualPlacements = allPositions.filter(p=>p.status==="Hired");
@@ -3900,17 +3910,16 @@ function renderPositions(){
     if(q && !(p.title.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.hiringManager.toLowerCase().includes(q) || p.recruiter.toLowerCase().includes(q))) return false;
     return true;
   });
-  // Active = no cerrada todavia (mismo TERMINAL que usa el resto del tracker, ej. Dashboard).
-  // Potential Placements = activa Y todavia sin oferta aceptada (excluye "Filled" ademas de
-  // TERMINAL) — una vez en Filled ya no es "potencial", es una colocacion practicamente
-  // confirmada esperando la fecha de inicio real (ver STATUS_GUIDANCE["Filled"]). Actual
-  // Placements = Hired especificamente, nunca Filled (esa distincion ya es la regla del
-  // tracker en todos lados: Filled != colocacion real todavia, ver STATUS_GUIDANCE["Hired"]).
-  const activeCount = rows.filter(p=>!TERMINAL.includes(p.status)).length;
-  const potentialCount = rows.filter(p=>!TERMINAL.includes(p.status) && p.status!=="Filled").length;
+  // Active Positions = misma definicion que el KPI de Overview (NOT_ACTIVELY_WORKED, ver esa
+  // constante) — este conteo tenia su propia logica vieja aparte ("no terminal", sin excluir
+  // Filled/On Hold) y mostraba un numero DISTINTO bajo el mismo nombre "Active Positions" que
+  // el resto del tracker (bug real reportado por Nicolas: "Potential Placements" ya ni existe
+  // como tarjeta y esto seguia calculandola con la definicion vieja). Actual Placements = Hired
+  // especificamente, nunca Filled (ver STATUS_GUIDANCE["Hired"]).
+  const activeCount = rows.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status)).length;
   const actualCount = rows.filter(p=>p.status==="Hired").length;
   document.getElementById("positionsCount").textContent =
-    `${rows.length} positions · ${activeCount} Active Positions · ${potentialCount} Potential Placements · ${actualCount} Actual Placements`;
+    `${rows.length} positions · ${activeCount} Active Positions · ${actualCount} Actual Placements`;
   // Checkbox de seleccion en lote: solo admin la ve (mismo criterio que borrar posiciones) —
   // reasignar reqs de otras personas de golpe es una accion de gestion, no algo que cualquier
   // recruiter viendo el directorio completo deba poder disparar. isAdmin() por si solo trata
