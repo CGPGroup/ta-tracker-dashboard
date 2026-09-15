@@ -760,6 +760,17 @@
   .sla-chip-handoff {
     font-size: 9px; font-weight: 700; opacity: 0.75; margin-left: 1px; cursor: help;
   }
+  /* Lista de candidatos dentro de una tarjeta de Submission Batches (ver batchCandidatesBlockHtml()
+     / candidateRowHtml()) — una fila compacta por candidato, checkbox + nombre + CV/estado. */
+  .batch-candidates-block { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+  .batch-candidate-row { display: flex; align-items: center; gap: 7px; padding: 4px 0; font-size: 12px; }
+  .batch-candidate-row input[type="checkbox"] { width: auto; margin: 0; }
+  .batch-candidate-name { flex: 1; font-weight: 600; }
+  .batch-candidate-cv { font-size: 11px; white-space: nowrap; }
+  .batch-candidate-row select { font-size: 11.5px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
+  .batch-candidates-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+  .batch-bulk-bar { display: flex; align-items: center; gap: 6px; }
+  .batch-bulk-bar select { font-size: 11.5px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
 
   /* ---------- Insert form ---------- */
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
@@ -1924,6 +1935,39 @@
     <div class="panel-sub" id="logBatchMsg" style="margin-top:8px;"></div>
   </div>
 </div>
+
+<!-- ======================= ADD/EDIT BATCH CANDIDATE MODAL ======================= -->
+<!-- Un candidato dentro de un batch ya logueado: nombre, CV (adjuntar archivo real, sube a
+     OneDrive via Graph, ver graphUploadCandidateCv()), y su estado inicial. addCandidateBatchDate
+     y addCandidateEditId (ver openAddCandidateModal()) distinguen "agregar nuevo" de "editar
+     nombre/CV de uno existente" reusando el mismo modal, mismo patron que el resto del archivo. -->
+<div class="modal-overlay" id="addCandidateModal">
+  <div class="modal-card" style="max-width:440px;">
+    <div class="modal-head">
+      <div><h2 style="margin:0; font-size:16px;" id="addCandidateModalTitle">Add Candidate</h2></div>
+      <button class="modal-close" id="addCandidateClose" type="button">&times;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field full"><label>Candidate Name</label><input type="text" id="addCandidateName" placeholder="e.g. Maria Gomez"></div>
+      <div class="form-field full">
+        <label>CV <span style="font-weight:400; color:var(--text-muted);">(optional, up to 4MB)</span></label>
+        <input type="file" id="addCandidateCvFile" accept=".pdf,.doc,.docx">
+      </div>
+      <div class="form-field full" id="addCandidateStatusField">
+        <label>Status</label>
+        <select id="addCandidateStatus"></select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="button" id="addCandidateSave">Save Candidate</button>
+    </div>
+    <div class="panel-sub" id="addCandidateMsg" style="margin-top:8px;"></div>
+  </div>
+</div>
+<!-- Compartido por cada boton "Attach CV" de un candidato YA existente (ver candidateRowHtml()) —
+     un solo input oculto en vez de uno por fila; pendingCvCandidateId (JS) dice a cual fila
+     aplica el archivo que se elija. -->
+<input type="file" id="candidateCvFileInput" accept=".pdf,.doc,.docx" style="display:none;">
 
 <!-- ======================= EDIT RECRUITER MODAL ======================= -->
 <div class="modal-overlay" id="editRecruiterModal">
@@ -3292,6 +3336,54 @@ function canStartSourcing(p){
   if(p.handoffFrom) return !!p.handoffAcceptedDate;
   return !!(p.intake || p.intakeWaivedReason);
 }
+// Un solo eje de estado por candidato (no dos separados de "etapa" + "rechazado/hold") — Nicolas:
+// "que se les pueda poner la etapa a la que avanzan y... si alguno de ese batch es elegido, que
+// sea ese el que quede como candidate placed." Placed/Rejected/Keep Warm son salidas terminales,
+// las de en medio son el avance normal por el pipeline de un candidato individual (distinto del
+// status de la POSICION en STATUS_ORDER, que es sobre el req completo, no sobre una persona).
+const BATCH_CANDIDATE_STATUSES = ["Active","Screening","Technical Interview","Hiring Manager Interview","Offer Request","Placed","Rejected","Keep Warm / Hold"];
+const BATCH_CANDIDATE_STATUS_TONE = {
+  "Active": "none", "Screening": "within", "Technical Interview": "within",
+  "Hiring Manager Interview": "within", "Offer Request": "within", "Placed": "within",
+  "Rejected": "out", "Keep Warm / Hold": "risk",
+};
+function candidateRowHtml(c){
+  const tone = STATUS_META[BATCH_CANDIDATE_STATUS_TONE[c.status] || "none"];
+  const cvHtml = c.cvLink
+    ? `<a href="${escapeHtml(c.cvLink)}" target="_blank" rel="noopener" class="batch-candidate-cv">CV ↗</a>`
+    : `<button type="button" class="fact-edit-link candidateAttachCvBtn" data-candidate-id="${escapeHtml(c.id)}">Attach CV</button>`;
+  return `
+    <div class="batch-candidate-row">
+      <input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">
+      <span class="dot" style="background:${tone.color};"></span>
+      <span class="batch-candidate-name">${escapeHtml(c.name)}</span>
+      ${cvHtml}
+      <select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
+        ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(s)}</option>`).join("")}
+      </select>
+    </div>`;
+}
+// Una tarjeta de Submission Batches -> su propia lista de candidatos + "Add Candidate" + una
+// barra de bulk (solo aparece si hay >=1 checkbox marcado en ESE batch, ver wireCandidateEvents()
+// mas abajo) — el bulk es por batch, no global, para no mezclar candidatos de batches distintos
+// en una sola accion.
+function batchCandidatesBlockHtml(p, batchDate){
+  const candidates = (p.batchCandidates||[]).filter(c=>c.batchDate===batchDate);
+  return `
+    <div class="batch-candidates-block" data-batch-date="${escapeHtml(batchDate)}">
+      ${candidates.map(candidateRowHtml).join("")}
+      <div class="batch-candidates-actions">
+        <button type="button" class="fact-edit-link addCandidateBtn" data-batch-date="${escapeHtml(batchDate)}">+ Add Candidate</button>
+        ${candidates.length ? `
+          <span class="batch-bulk-bar" data-batch-date="${escapeHtml(batchDate)}" style="display:none;">
+            <select class="bulkStatusSelect" data-batch-date="${escapeHtml(batchDate)}">
+              ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}
+            </select>
+            <button type="button" class="btn ghost small applyBulkBtn" data-batch-date="${escapeHtml(batchDate)}">Apply to selected</button>
+          </span>` : ""}
+      </div>
+    </div>`;
+}
 // Fuera del modal (tablas de Positions/Tracking, quick lists) solo se muestra el pais — la
 // ciudad/provincia solo tiene sentido dentro del detalle de una req especifica, mostrarla en
 // una lista mezclaba paises con ciudades sin ningun criterio consistente de agrupacion.
@@ -4615,6 +4707,11 @@ function renderTrackingSelectedActivity(p, timeline){
 }
 
 let activeDetailId = null;
+// Estado del boton "Attach CV" de un candidato ya existente (ver candidateRowHtml()) — un solo
+// input de archivo compartido (#candidateCvFileInput) en vez de uno por fila, asi que hay que
+// recordar A CUAL candidato/posicion aplica el archivo que se elija justo despues de hacer clic.
+let pendingCvCandidateId = null;
+let pendingCvPositionId = null;
 let activeDetailMode = "edit";
 let activeDetailAllowDelete = false;
 let activeDetailFromDashboard = false;
@@ -4915,6 +5012,7 @@ function renderDetailModal(){
         <div class="sla-card">
           <div class="sla-name"><span>${escapeHtml(b.date)}</span><span class="tag ${b.type==="Pivot Follow-up" ? "internal" : "official"}">${escapeHtml(b.type)}</span></div>
           <div style="font-size:13px; font-weight:600;">${b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : "Count not set"}</div>
+          ${batchCandidatesBlockHtml(p, b.date)}
         </div>`).join("")}
     </div>` : (batchesOverdue
         ? `<div class="alert-banner tier-yellow compact">No submission batches logged yet, and it's been ${batchesTts.elapsed} business days since the intake meeting (TTS target: ${batchesTts.target}).</div>`
@@ -4933,6 +5031,7 @@ function renderDetailModal(){
     outcomeFactsHtml;
   if(!isView){
     document.getElementById("logBatchBtn").addEventListener("click", ()=> openLogBatchModal(p));
+    wireCandidateEvents(p);
     const submissionTrigger = document.getElementById("submissionDateTrigger");
     if(submissionTrigger) submissionTrigger.addEventListener("click", ()=> openLogBatchModal(p));
     document.querySelectorAll(".pivotSlaTrigger").forEach(btn=> btn.addEventListener("click", ()=> openLogBatchModal(p)));
@@ -5668,6 +5767,169 @@ async function markPivotApproval(p, who){
     renderPivotPendingState(p);
   }
 }
+// Vuelve a enganchar los listeners de la lista de candidatos cada vez que se re-renderiza el
+// modal (innerHTML nuevo = elementos nuevos, ningun listener sobrevive) — mismo patron que el
+// resto de renderDetailModal(). Delegar en el contenedor no sirve mejor aqui: hay 3 tipos de
+// controles distintos (boton, select, checkbox) y ya son pocos por batch.
+function wireCandidateEvents(p){
+  document.querySelectorAll(".addCandidateBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=> openAddCandidateModal(p, btn.dataset.batchDate));
+  });
+  document.querySelectorAll(".candidateStatusSelect").forEach(sel=>{
+    sel.addEventListener("change", ()=> updateCandidateStatus(p, sel.dataset.candidateId, sel.value));
+  });
+  document.querySelectorAll(".candidateAttachCvBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      pendingCvCandidateId = btn.dataset.candidateId;
+      pendingCvPositionId = p.id;
+      document.getElementById("candidateCvFileInput").click();
+    });
+  });
+  document.querySelectorAll(".candidateCheck").forEach(chk=>{
+    chk.addEventListener("change", ()=>{
+      const batchDate = chk.dataset.batchDate;
+      const block = document.querySelector(`.batch-candidates-block[data-batch-date="${cssEscape(batchDate)}"]`);
+      const bar = document.querySelector(`.batch-bulk-bar[data-batch-date="${cssEscape(batchDate)}"]`);
+      if(!block || !bar) return;
+      const anyChecked = [...block.querySelectorAll(".candidateCheck")].some(c=>c.checked);
+      bar.style.display = anyChecked ? "" : "none";
+    });
+  });
+  document.querySelectorAll(".applyBulkBtn").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const batchDate = btn.dataset.batchDate;
+      const block = document.querySelector(`.batch-candidates-block[data-batch-date="${cssEscape(batchDate)}"]`);
+      if(!block) return;
+      const checkedIds = [...block.querySelectorAll(".candidateCheck:checked")].map(c=>c.dataset.candidateId);
+      const newStatus = block.querySelector(".bulkStatusSelect").value;
+      btn.disabled = true;
+      for(const id of checkedIds){
+        await updateCandidateStatus(p, id, newStatus, {skipRerender:true});
+      }
+      renderDetailModal();
+    });
+  });
+}
+// CSS.escape existe en todo navegador moderno, pero este archivo no lo usa en ningun otro lado —
+// wrapper chiquito por si alguna vez corre en un contexto sin el (evita tronar toda la lista de
+// candidatos por un selector, degrada a buscar sin escapar en vez de fallar).
+function cssEscape(s){
+  return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/["\\]/g, "\\$&");
+}
+// skipRerender: usado por el bulk apply de arriba, que llama esto varias veces seguidas antes de
+// re-renderizar una sola vez al final — re-renderizar en cada iteracion destruiria los elementos
+// del DOM (checkboxes, boton) a mitad del bucle.
+async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
+  const c = (p.batchCandidates||[]).find(x=>x.id===candidateId);
+  if(!c) return;
+  const prevStatus = c.status;
+  c.status = newStatus;
+  try {
+    if(isConnected()) await graphUpdateBatchCandidateField(candidateId, "Status", newStatus);
+  } catch(err){
+    console.error(err);
+    c.status = prevStatus;
+    alert("Could not save this candidate's status.\n\n"+err.message);
+    if(!opts.skipRerender) renderDetailModal();
+    return;
+  }
+  // Elegido de este batch = el Placed Candidate de la posicion completa (Nicolas: "si alguno de
+  // ese batch es elegido, que sea ese el que quede como candidate placed"). No revierte al que
+  // estuviera Placed antes (si habia otro) — casos asi son raros y mejor que el reclutador lo
+  // corrija a mano que asumir cual de los dos es el correcto.
+  if(newStatus === "Placed" && p.placedCandidate !== c.name){
+    p.placedCandidate = c.name;
+    try {
+      if(isConnected()){
+        await graphUpdatePositionFieldByHeader(p.id, "Placed Candidate", c.name);
+        await graphAppendHistorial(p.id, p.title, `${c.name} marked as Placed Candidate (from the ${c.batchDate} batch).`, currentAuthorName(), "milestone");
+      }
+    } catch(err){ console.error("Could not save Placed Candidate (non-fatal for the status change itself):", err); }
+  }
+  if(!opts.skipRerender) renderDetailModal();
+}
+function openAddCandidateModal(p, batchDate){
+  document.getElementById("addCandidateModalTitle").textContent = "Add Candidate";
+  document.getElementById("addCandidateName").value = "";
+  document.getElementById("addCandidateCvFile").value = "";
+  document.getElementById("addCandidateStatus").innerHTML = BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  document.getElementById("addCandidateMsg").textContent = "";
+  document.getElementById("addCandidateModal").dataset.positionId = p.id;
+  document.getElementById("addCandidateModal").dataset.batchDate = batchDate;
+  document.getElementById("addCandidateModal").classList.add("open");
+}
+function closeAddCandidateModal(){
+  document.getElementById("addCandidateModal").classList.remove("open");
+}
+document.getElementById("addCandidateClose").addEventListener("click", closeAddCandidateModal);
+document.getElementById("addCandidateModal").addEventListener("click", (e)=>{
+  if(e.target.id === "addCandidateModal") closeAddCandidateModal();
+});
+document.getElementById("addCandidateSave").addEventListener("click", async ()=>{
+  const modal = document.getElementById("addCandidateModal");
+  const p = POSITIONS.find(x=>x.id===modal.dataset.positionId);
+  const batchDate = modal.dataset.batchDate;
+  const msg = document.getElementById("addCandidateMsg");
+  const name = document.getElementById("addCandidateName").value.trim();
+  const status = document.getElementById("addCandidateStatus").value;
+  const file = document.getElementById("addCandidateCvFile").files[0] || null;
+  if(!p || !name){ msg.textContent = "Candidate name is required."; msg.style.color = "var(--critical)"; return; }
+  const btn = document.getElementById("addCandidateSave");
+  btn.disabled = true;
+  msg.style.color = "var(--text-muted)";
+  msg.textContent = "Saving…";
+  try {
+    const author = currentAuthorName();
+    let cvLink = null;
+    const id = isConnected()
+      ? await graphAppendBatchCandidate(p.id, batchDate, name, status, null, author)
+      : `${p.id}-${Date.now()}`;
+    if(file && isConnected()){
+      msg.textContent = "Uploading CV…";
+      cvLink = await graphUploadCandidateCv(p.id, file);
+      await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
+    } else if(file){
+      msg.textContent = "Not connected — the CV wasn't uploaded, only kept in this browser tab.";
+    }
+    p.batchCandidates.push({ id, batchDate, name, status, cvLink, addedBy: author, addedDate: localTodayStr() });
+    if(status === "Placed") await updateCandidateStatus(p, id, "Placed", {skipRerender:true});
+    closeAddCandidateModal();
+    renderDetailModal();
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not save: " + err.message;
+    msg.style.color = "var(--critical)";
+  } finally {
+    btn.disabled = false;
+  }
+});
+document.getElementById("candidateCvFileInput").addEventListener("change", async ()=>{
+  const input = document.getElementById("candidateCvFileInput");
+  const file = input.files[0];
+  input.value = "";
+  if(!file || !pendingCvCandidateId || !pendingCvPositionId) return;
+  const p = POSITIONS.find(x=>x.id===pendingCvPositionId);
+  const c = p && p.batchCandidates.find(x=>x.id===pendingCvCandidateId);
+  if(!p || !c) return;
+  if(!isConnected()){
+    alert("Not connected to Microsoft 365 — sign in to attach a CV.");
+    pendingCvCandidateId = null;
+    pendingCvPositionId = null;
+    return;
+  }
+  try {
+    const cvLink = await graphUploadCandidateCv(p.id, file);
+    if(isConnected()) await graphUpdateBatchCandidateField(c.id, "CV Link", cvLink);
+    c.cvLink = cvLink;
+    renderDetailModal();
+  } catch(err){
+    console.error(err);
+    alert("Could not upload this CV.\n\n"+err.message);
+  } finally {
+    pendingCvCandidateId = null;
+    pendingCvPositionId = null;
+  }
+});
 function openLogBatchModal(p){
   document.getElementById("logBatchMsg").textContent = "";
   const isFirst = !(p.batches && p.batches.length);
@@ -7138,6 +7400,7 @@ async function trysilentConnect(){
       MY_RECRUITER_NAME = saved.name;
       pinModeCode = saved.code;
       await tryLoadPublicSnapshot();
+      await pinLoadMyCandidatesAndMerge();
       renderAll();
       setConnectionUi(true, `Connected as ${saved.name} (PIN)`);
       if(!didAutoEnterWorkspace){
@@ -7300,6 +7563,7 @@ function parsePositionsTable(posHeaders, posRows){
       intakeWaivedReason: r[idx("Intake Waived Reason")] || null,
       extra: [],
       batches: [],
+      batchCandidates: [],
       remarksHistory: [],
     };
   }).filter(p => p.id)
@@ -7358,6 +7622,38 @@ function mergeBatches(positions, batchHeaders, batchRows){
   });
   positions.forEach(p => p.batches.sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
+// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name | Status |
+// CV Link | Added By | Added Date. Candidate Row ID es una clave generada del lado del cliente
+// (no un ID de Excel) porque una posicion puede tener muchos candidatos y necesitamos poder
+// actualizar UNO especifico despues (status/CV) sin ambiguedad — Position ID aqui solo enlaza al
+// req, no identifica la fila (varias filas comparten el mismo Position ID).
+// Deliberadamente NO se expone via el snapshot publico (ver loadFromGraph/tryLoadPublicSnapshot)
+// — nombres de candidatos son datos personales de gente que aplico, no algo que Public Access
+// (sin login) deberia poder ver. Solo BatchesTable (un conteo) es publico.
+function mergeBatchCandidates(positions, bcHeaders, bcRows){
+  if(!bcHeaders || !bcRows) return;
+  const bIdx = (name) => bcHeaders.indexOf(name);
+  const byId = {};
+  positions.forEach(p => { byId[p.id] = p; });
+  bcRows.forEach(row => {
+    const pid = row[bIdx("Position ID")];
+    const p = byId[pid];
+    if(!p) return;
+    const id = row[bIdx("Candidate Row ID")];
+    const name = row[bIdx("Candidate Name")];
+    if(!id || !name) return;
+    p.batchCandidates.push({
+      id,
+      batchDate: excelValToDateStr(row[bIdx("Batch Date")]),
+      name,
+      status: row[bIdx("Status")] || "Active",
+      cvLink: row[bIdx("CV Link")] || null,
+      addedBy: row[bIdx("Added By")] || null,
+      addedDate: excelValToDateStr(row[bIdx("Added Date")]),
+    });
+  });
+  positions.forEach(p => p.batchCandidates.sort((a,b)=> (a.addedDate||"") < (b.addedDate||"") ? -1 : 1));
+}
 // Filas de RecruitersTable (A Name, B Email, C Active?, D Photo URL, E Job Title) -> las 4
 // piezas que el resto de la app necesita.
 function parseRecruitersTable(recRows){
@@ -7397,6 +7693,15 @@ async function loadFromGraph(){
     const batchHeaderResp = await graphFetch(`${await workbookBase()}/tables('BatchesTable')/headerRowRange`);
     mergeBatches(newPositions, batchHeaderResp.values[0], batchResp.value.map(r => r.values[0]));
   } catch(err){ console.warn("Could not load Batches (non-fatal, BatchesTable may not exist yet):", err); }
+
+  // BatchCandidatesTable: igual de opcional que BatchesTable arriba, hasta que Nicolas la cree en
+  // el Excel real (ver [[reference]] en la guia de deploy). Solo se carga por esta ruta
+  // autenticada (MSAL) o via PIN — nunca por tryLoadPublicSnapshot, ver mergeBatchCandidates().
+  try {
+    const bcResp = await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows?$select=values`);
+    const bcHeaderResp = await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/headerRowRange`);
+    mergeBatchCandidates(newPositions, bcHeaderResp.values[0], bcResp.value.map(r => r.values[0]));
+  } catch(err){ console.warn("Could not load Batch Candidates (non-fatal, BatchCandidatesTable may not exist yet):", err); }
 
   let myRecruiterName = null;
   try {
@@ -7479,6 +7784,18 @@ async function workerRecruiterWrite(action, params){
   const data = text ? JSON.parse(text) : null;
   if(!res.ok) throw new Error((data && data.error) || `Worker error (${res.status})`);
   return data;
+}
+// Candidatos por batch (nombre, CV, estado) nunca vienen en tryLoadPublicSnapshot() — son datos
+// personales de gente que aplico, no algo que el snapshot publico sin login deba exponer (ver
+// mergeBatchCandidates()). Un reclutador en PIN mode SI necesita verlos para sus propias
+// posiciones, asi que se piden aparte con su PIN ya verificado (el Worker filtra del lado del
+// servidor, nunca manda la tabla completa — ver doGetMyCandidates() en el Worker). No-fatal si
+// BatchCandidatesTable todavia no existe en el Excel real.
+async function pinLoadMyCandidatesAndMerge(){
+  try {
+    const data = await workerRecruiterWrite("getMyCandidates", {});
+    mergeBatchCandidates(POSITIONS, data.headers, data.rows);
+  } catch(err){ console.warn("Could not load this recruiter's batch candidates (non-fatal):", err); }
 }
 async function tryLoadPublicSnapshotAndRender(){
   const ok = await tryLoadPublicSnapshot();
@@ -7608,6 +7925,80 @@ async function graphAppendBatch(positionId, date, batchType, candidateCount){
     body: JSON.stringify({
       values: [[positionId, date, batchType, candidateCount]],
     }),
+  });
+}
+// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name | Status |
+// CV Link | Added By | Added Date. id se genera aqui (no lo asigna Excel) para poder actualizar
+// esta fila especifica despues — ver mergeBatchCandidates() arriba para por que hace falta.
+async function graphAppendBatchCandidate(positionId, batchDate, name, status, cvLink, author){
+  if(pinModeActive) return (await workerRecruiterWrite("appendBatchCandidate", {positionId, batchDate, name, status, cvLink: cvLink || ""})).id;
+  const id = `${positionId}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+  await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows/add`, {
+    method: "POST",
+    body: JSON.stringify({
+      values: [[id, positionId, batchDate, name, status, cvLink || "", author, localTodayStr()]],
+    }),
+  });
+  return id;
+}
+// Igual que graphUpdatePositionField(), pero busca la fila por Candidate Row ID en vez de
+// Position ID (una posicion tiene muchos candidatos, Position ID no identifica una fila unica
+// aqui). resolveTableRowIndexByColumn es generico para no repetir esta busqueda dos veces.
+async function resolveTableRowIndexByColumn(tableName, columnHeader, value){
+  const headerResp = await graphFetch(`${await workbookBase()}/tables('${tableName}')/headerRowRange`);
+  const headers = headerResp.values[0] || [];
+  const col = headers.indexOf(columnHeader);
+  if(col < 0) return undefined;
+  const colResp = await graphFetch(`${await workbookBase()}/tables('${tableName}')/columns('${columnHeader}')/range?$select=values`);
+  const colValues = colResp.values || [];
+  for(let i=1; i<colValues.length; i++){
+    if(colValues[i][0] === value) return { rowIndex: i - 1, headers };
+  }
+  return undefined;
+}
+async function graphUpdateBatchCandidateField(candidateRowId, headerName, value){
+  if(pinModeActive) return workerRecruiterWrite("updateBatchCandidateField", {candidateRowId, header: headerName, value});
+  const found = await resolveTableRowIndexByColumn("BatchCandidatesTable", "Candidate Row ID", candidateRowId);
+  if(!found) throw new Error("This candidate row no longer exists in the shared file. Reload the data before trying again.");
+  const colIdx = found.headers.indexOf(headerName);
+  if(colIdx < 0) throw new Error(`Column "${headerName}" was not found in BatchCandidatesTable.`);
+  const excelRow = found.rowIndex + 2;
+  const address = `${excelColumnLetter(colIdx)}${excelRow}`;
+  await graphFetch(`${await workbookBase()}/worksheets('BatchCandidates')/range(address='${address}')`, {
+    method: "PATCH",
+    body: JSON.stringify({ values: [[value]] }),
+  });
+}
+// Sube el CV real (hasta 4MB, de sobra para un PDF/Word de hoja de vida) a una carpeta
+// "Candidate CVs/{positionId}/" al lado del Excel — nunca adentro del workbook, es un archivo,
+// no una fila. En PIN mode, el Worker hace el mismo PUT con su propia credencial delegada (ver
+// doUploadCandidateCv en el Worker); aqui, con la sesion MSAL real de quien esta conectado.
+async function graphUploadCandidateCv(positionId, file){
+  if(file.size > 4*1024*1024) throw new Error("File is larger than 4MB — please attach a smaller file.");
+  if(pinModeActive){
+    const base64 = await fileToBase64(file);
+    const result = await workerRecruiterWrite("uploadCandidateCv", {positionId, fileName: file.name, fileContentBase64: base64});
+    return result.cvLink;
+  }
+  await resolveFileIds();
+  const folderPath = EXCEL_FILE_PATH.replace(/\/[^/]+$/, "");
+  const uploadPath = `${folderPath}/Candidate CVs/${positionId}/${file.name}`.split("/").map(encodeURIComponent).join("/");
+  const token = await getGraphToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:${uploadPath}:/content`, {
+    method: "PUT",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/octet-stream" },
+    body: file,
+  });
+  if(!res.ok) throw new Error(`Graph API error (${res.status}): ${(await res.text()).slice(0,300)}`);
+  const item = await res.json();
+  return item.webUrl;
+}
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
 }
 async function graphAppendPosition(row){
@@ -7830,6 +8221,7 @@ document.getElementById("signinConfirmYesBtn").addEventListener("click", ()=>{
     pinModeCode = pin;
     localStorage.setItem("pinModeSession", JSON.stringify({name: recruiterName, code: pin}));
     await tryLoadPublicSnapshot();
+    await pinLoadMyCandidatesAndMerge();
     renderAll();
     setConnectionUi(true, `Connected as ${recruiterName} (PIN)`);
     setDashboardScope(recruiterName);
