@@ -3175,24 +3175,34 @@ function statusChip(status){
 function batchesSubmittedCount(p){
   return (p.batches || []).reduce((sum,b)=> sum + (Number(b.count) || 0), 0);
 }
+// Offer out or ya aceptada — lo unico que todavia no es una colocacion confirmada (Hired) pero
+// ya esta lo bastante encaminado para contar como "podria convertirse en colocacion pronto".
+// Nicolas fue explicito: "Potential placements solo debe contar a partir de que estan en offer
+// requested, no antes" — NO es "activa y sin oferta" (esa era mi lectura original, y quedaba
+// identico a Active Positions una vez esta excluyo Filled/On Hold; ver historial abajo). Es su
+// propio concepto, sin relacion con la definicion de Active Positions.
+const POTENTIAL_PLACEMENT_STATUSES = ["Offer Request","Filled"];
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  // "Positions & Placements" — REDISEÑADO 2026-09-19, dos rondas:
+  // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
   // 1) Nicolas: "no sabemos a que se refiere nada" con solo un numero + una etiqueta chica ->
   //    se agrego una frase por tarjeta explicando EXACTAMENTE que cuenta, mas un embudo real con
-  //    flecha + barra proporcional entre Positions/Active/Potential (subconjunto de la anterior).
+  //    flecha + barra proporcional entre Positions/Active (subconjunto de la anterior).
   // 2) Nicolas, viendo el numero real de "Active Positions": "no, porque aunque el reclutador
   //    deba hacer seguimiento eso no cuenta como una posicion activa, esta on hold precisamente"
   //    -> "Active Positions" NO puede seguir siendo solo "no terminal" (eso incluia Filled, ya sin
   //    ningun trabajo de reclutamiento pendiente, Y ambos On Hold, pausados por definicion). Ahora
-  //    excluye tambien Filled/On Hold/On Hold-Internal Candidates ademas de TERMINAL — y con eso,
-  //    "Potential Placements" (que solo excluia Filled) queda matematicamente IDENTICO a Active
-  //    Positions, asi que se elimino esa tarjeta en vez de dejar dos numeros iguales con nombres
-  //    distintos. `active` (el set amplio, no-terminal) NO se toco — sigue usandose tal cual en
-  //    el balde "Active" de Total Requisitions (abajo en esta misma funcion) y en Candidates
-  //    Submitted, que son vistas distintas con su propio criterio, no parte de este embudo.
+  //    excluye tambien Filled/On Hold/On Hold-Internal Candidates ademas de TERMINAL.
+  // 3) Con eso, asumi que "Potential Placements" (que solo excluia Filled) habia quedado
+  //    IDENTICO a Active Positions y lo quite — MAL: Nicolas la queria de vuelta pero con su
+  //    propio criterio (ver POTENTIAL_PLACEMENT_STATUSES arriba), sin relacion con Active. Ahora
+  //    vive junto a Actual Placements, despues del divisor — ninguna de las dos es "el siguiente
+  //    paso" de Active Positions (un req puede saltar de Sourcing a Offer Request sin pasar por
+  //    ahi "activo" en el sentido de esta tarjeta), asi que ninguna lleva flecha ni barra
+  //    proporcional compartida con el embudo de la izquierda.
   const activePositions = active.filter(p=>!NOT_ACTIVELY_WORKED.includes(p.status));
   const allPositions = dashboardPositions();
+  const potentialPlacements = allPositions.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
   const actualPlacements = allPositions.filter(p=>p.status==="Hired");
   const funnelStats = [
     {label:"Positions", value:allPositions.length, positions:allPositions,
@@ -3200,10 +3210,14 @@ function renderKpis(){
     {label:"Active Positions", value:activePositions.length, positions:activePositions,
       desc:"Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
   ];
-  const outcomeStat = {label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
-    desc:"Confirmed hires to date — a running total, not a next step from the number on the left."};
+  const outcomeStats = [
+    {label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
+      color:"var(--warning)", desc:"At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
+    {label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
+      color:"var(--good)", desc:"Confirmed hires to date — a running total, not a next step from the numbers on the left."},
+  ];
   const maxVal = funnelStats[0].value || 1;
-  const allStats = [...funnelStats, outcomeStat];
+  const allStats = [...funnelStats, ...outcomeStats];
   const funnelHtml = funnelStats.map((s,i)=>`
     <div class="ps-stat clickable-stat" data-i="${i}">
       <div class="stat-num">${s.value}</div>
@@ -3213,11 +3227,12 @@ function renderKpis(){
     </div>${i<funnelStats.length-1 ? `<div class="ps-arrow">&rarr;</div>` : ""}`).join("");
   const outcomeHtml = `
     <div class="ps-divider"></div>
-    <div class="ps-stat ps-stat-outcome clickable-stat" data-i="${funnelStats.length}">
-      <div class="stat-num" style="color:var(--good);">${outcomeStat.value}</div>
-      <div class="stat-label">${outcomeStat.label}</div>
-      <div class="stat-desc">${outcomeStat.desc}</div>
-    </div>`;
+    ${outcomeStats.map((s,i)=>`
+    <div class="ps-stat ps-stat-outcome clickable-stat" data-i="${funnelStats.length+i}">
+      <div class="stat-num" style="color:${s.color};">${s.value}</div>
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-desc">${s.desc}</div>
+    </div>`).join("")}`;
   document.getElementById("positionsSummaryStrip").innerHTML = funnelHtml + outcomeHtml;
   document.querySelectorAll("#positionsSummaryStrip .ps-stat").forEach(el=>{
     const s = allStats[+el.dataset.i];
