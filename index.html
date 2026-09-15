@@ -4331,13 +4331,6 @@ document.getElementById("trackingBulkReassignBtn").addEventListener("click", ()=
 /* ============================================================
    Position detail: combined automatic + manual activity log
    ============================================================ */
-// Prioridad para desempatar entries del MISMO dia (buildTimeline ordena ascendente, los que
-// llaman a esto lo invierten para mostrar mas reciente primero) — de mas "vieja" a mas
-// "fresca" en ese orden ascendente: auto (el hecho fundacional, ej. "fue asignada") -> action
-// (algo concreto que alguien hizo, ej. aceptar) -> status (un cambio de status) -> manual (un
-// comentario humano sobre la situacion actual) -> guidance (el "next step" vigente ahora
-// mismo, siempre lo mas accionable, por eso queda de ultimo = mas arriba una vez invertido).
-const TIMELINE_TYPE_ORDER = { auto: 0, action: 1, status: 2, manual: 3, guidance: 4 };
 function buildTimeline(p){
   const entries = [];
   // "assigned, esperando que el reclutador acepte" es el primer hecho real de la vida de un
@@ -4384,11 +4377,26 @@ function buildTimeline(p){
   // en reqs reales quedaron desactualizadas (describen un status que el req ya dejo atras, ej.
   // RD-018/RD-019/RD-020) sin ninguna forma de saber si siguen vigentes — mostrarlas en Activity
   // solo confundia con informacion que ya no aplica. Auditoria 2026-09-11.
+  // BUG REAL encontrado 2026-09-19 (Nicolas, viendo SE-002: "no se muestra el orden de la
+  // actividad en orden correcto"): el desempate de entries del MISMO dia usaba una prioridad de
+  // tipo FIJA (auto -> action -> status -> manual -> guidance), sin importar el orden real en
+  // que pasaron. Se rompia justo cuando algo tipo "manual" ocurria ANTES que un "action"/"status"
+  // el mismo dia (caso real: una correccion manual de p.recruiterAcceptedDate se hizo a mitad de
+  // sesion, ANTES de que el reclutador confirmara el Next Step y cambiara el status — pero por
+  // tipo, "manual" siempre se reordenaba al final, mostrando la correccion como si hubiera
+  // pasado DESPUES del cambio de status, al reves de lo que realmente paso).
+  // p.remarksHistory ya viene en el orden real en que se escribieron las filas en HistorialTable
+  // (append-only, orden cronologico real) — no hay que "adivinar" su orden con una regla de tipo,
+  // solo preservarlo. Array.prototype.sort en JS moderno es estable (ECMA-262 desde ES2019): dos
+  // entries con la MISMA fecha que comparan "0" (return 0 abajo) se quedan en su orden original
+  // dentro de `entries`, que ya es cronologico real (los "auto" sinteticos se insertan primero,
+  // en un orden razonable, antes de remarksHistory/extra). Por eso el desempate ahora es "0" a
+  // proposito — no un bug, es dejar que la estabilidad del sort haga el trabajo correcto.
   (p.remarksHistory || []).forEach(r => { if(r.type!=="guidance") entries.push({date:r.date, type:r.type || "manual", author:r.author, text:r.text}); });
   (p.extra || []).forEach(e=> entries.push(e));
   return entries.filter(e=>e.date).sort((a,b)=>{
     if(a.date !== b.date) return a.date < b.date ? -1 : 1;
-    return (TIMELINE_TYPE_ORDER[a.type] ?? 3) - (TIMELINE_TYPE_ORDER[b.type] ?? 3);
+    return 0;
   });
 }
 const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step" };
