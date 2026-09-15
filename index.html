@@ -5150,7 +5150,12 @@ async function saveModalDates(){
   // REGLA NUEVA: loguear una de estas fechas avanza el status automaticamente — nunca en reversa
   // (STATUS_ORDER, solo hacia adelante) y nunca sobre un estado especial que es una decision de
   // negocio explicita (Cancelled/Fell Through/Filled (Internal Hire) no se tocan).
-  const DATE_IMPLIES_STATUS = {fill:"Filled", hire:"Hired"};
+  // Extendido 2026-09-19 (Nicolas: "si va a poner el intake meeting requested date, deberia
+  // entonces poner el estado del req en eso... si no tiene sentido lo que pone") a los mismos 2
+  // campos que ya tenian este problema en el otro extremo del pipeline (ver
+  // [[project_stale_status_hint]], que solo avisaba sin corregir) — ahora se corrigen solos, en
+  // vez de solo avisar, igual que Fill/Start Date.
+  const DATE_IMPLIES_STATUS = {intakeRequestedDate:"Intake Meeting Requested", intake:"Intake Pending", fill:"Filled", hire:"Hired"};
   // Estados que son una decision de negocio explicita, no un paso mas del pipeline lineal — On
   // Hold puede significar muchas cosas distintas (feedback vencido, pausa del cliente, etc.), asi
   // que salir de ahi debe ser siempre una eleccion manual en el dropdown, nunca un efecto
