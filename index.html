@@ -587,6 +587,14 @@
      lista) se sintiera generica. El fill se degrada de --brand a mas palido por fila (mas opacas
      las primeras etapas, mas tenues las de menor volumen), igual que en la referencia real. */
   .funnel { display: flex; flex-direction: column; }
+  /* El gap entre filas TIENE que ser mas grande que la distancia real del label a su propio track
+     (abajo). Esa distancia no es solo el margin-bottom:6px del label — el grid-gap:14px de
+     .funnel-row (aplica tambien como row-gap entre el label y la fila track+stat) se suma, dando
+     ~20px reales. Antes el gap ENTRE filas era 0px, asi que el label de la fila N+1 quedaba
+     pegado justo debajo del track de la fila N (mas cerca que su propio track), y el ojo agrupaba
+     cada label con la barra de ARRIBA en vez de la de abajo (bug real reportado por Nicolas viendo
+     "Active Pipeline By Status"). 30px > ~20px asegura que la fila se lea como un bloque propio. */
+  .funnel-row + .funnel-row { margin-top: 30px; }
   .funnel-row { display: grid; grid-template-columns: 1fr 74px; align-items: center; gap: 14px; }
   .funnel-label { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; grid-column: 1 / -1; }
   .funnel-track { position: relative; height: 30px; background: var(--track-bg); border-radius: 4px; overflow: hidden; }
@@ -3000,12 +3008,20 @@ const TAG_EXPLANATIONS = {
   "Follow-Up Only": "Never counted against the recruiter — it only surfaces as a reminder to follow up or escalate.",
 };
 const STATUS_WORD = {within:"Within SLA", risk:"At Risk", out:"Out Of SLA", none:"Not Started"};
-// Lista de banderas (con emoji) de cuales de las 3 SLAs de una posicion estan mal, para
-// mostrar "por que" en los quick lists de KPIs/Needs Attention en vez de solo "la peor".
+const SLA_FULL_NAME = {TTS:"Time To Submit", TTF:"Time To Fill", TTH:"Time To Hire"};
+// Una frase en texto plano por SLA en riesgo/vencido, con los numeros reales (dias transcurridos,
+// dias de margen o de exceso, target) — REESCRITO 2026-09-19 porque "🚩 TTF: Out Of SLA" no decia
+// nada sin ya saber que es TTF ni cuantos dias de diferencia hay (Nicolas: "tiene que ser algo que
+// nos diga exactamente que esta pasando"). Devuelve un array (una entrada por SLA en problema) en
+// vez de un string ya unido, para que el caller decida el separador (Needs Attention usa <br>, una
+// frase por linea, no " · " comprimido).
 function slaFlags(p){
   const s = computeSla(p);
-  return ["TTS","TTF","TTH"].filter(k=>s[k].status==="risk"||s[k].status==="out")
-    .map(k=>`🚩 ${k}: ${STATUS_WORD[s[k].status]}`).join(" · ") || "No SLA issues";
+  return ["TTS","TTF","TTH"].filter(k=>s[k].status==="risk"||s[k].status==="out").map(k=>{
+    const row = s[k];
+    const diff = row.status==="out" ? `${row.elapsed-row.target}d past` : `${Math.max(0,row.target-row.elapsed)}d left before`;
+    return `🚩 ${SLA_FULL_NAME[k]}: ${row.elapsed}d elapsed — ${diff} the ${row.target}d target`;
+  });
 }
 
 // Cualquier campo de texto libre (title, remarks, nombres, etc.) que un reclutador escriba
@@ -4018,10 +4034,14 @@ function buildAttentionRows(positions){
   return {slaRows, completionRows};
 }
 function attentionRowsHtml(slaRows, completionRows){
+  // El chip a la derecha antes mostraba solo "53d/40d" del PEOR SLA (sin decir cual), mientras el
+  // texto de abajo podia listar TTF y TTH a la vez — no se podia saber a cual de los dos se
+  // referia el numero grande. Ahora el chip nombra el SLA + su estado (ej. "Time To Fill — Out Of
+  // SLA"); los dias exactos ya viven en la frase de abajo (slaFlags), sin duplicar ni repetir.
   const slaHtml = slaRows.map(({p, s, worstKey})=>`
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">${slaFlags(p)}</div></div>
-      ${slaChip(s[worstKey])}
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px; line-height:1.5;">${slaFlags(p).join("<br>")}</div></div>
+      <span class="sla-chip ${s[worstKey].status}"><span class="dot" style="background:${STATUS_META[s[worstKey].status].color}"></span>${SLA_FULL_NAME[worstKey]} — ${STATUS_WORD[s[worstKey].status]}</span>
     </div>`).join("");
   const completionHtml = completionRows.map(p=>{
     const c = computeCompletion(p);
