@@ -3166,27 +3166,29 @@ function batchesSubmittedCount(p){
 }
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  // "Positions & Placements" — REDISEÑADO 2026-09-19 (Nicolas: "no sabemos a que se refiere
-  // nada" con solo un numero + una etiqueta chica). Antes eran 4 numeros sueltos sin nada que
-  // explicara el criterio real de cada uno, ni por que "Active" (15) es mas grande que
-  // "Potential Placements" (11) — sin saber que Potential excluye Filled, esa diferencia se lee
-  // como un bug, no como informacion. Ahora cada tarjeta lleva su propia frase explicando
-  // EXACTAMENTE que cuenta, y las primeras 3 (Positions/Active/Potential) son un embudo real —
-  // cada una es subconjunto de la anterior — asi que llevan flecha + barra proporcional entre
-  // ellas para que la relacion se vea, no solo se lea. Actual Placements NO es "lo que estos 11
-  // se van a convertir" (es un conteo historico acumulado de colocaciones ya confirmadas, ajeno
-  // al embudo de arriba) — por eso va separado por un divisor, no como un cuarto paso del mismo
-  // embudo, para no sugerir una relacion que no existe.
+  // "Positions & Placements" — REDISEÑADO 2026-09-19, dos rondas:
+  // 1) Nicolas: "no sabemos a que se refiere nada" con solo un numero + una etiqueta chica ->
+  //    se agrego una frase por tarjeta explicando EXACTAMENTE que cuenta, mas un embudo real con
+  //    flecha + barra proporcional entre Positions/Active/Potential (subconjunto de la anterior).
+  // 2) Nicolas, viendo el numero real de "Active Positions": "no, porque aunque el reclutador
+  //    deba hacer seguimiento eso no cuenta como una posicion activa, esta on hold precisamente"
+  //    -> "Active Positions" NO puede seguir siendo solo "no terminal" (eso incluia Filled, ya sin
+  //    ningun trabajo de reclutamiento pendiente, Y ambos On Hold, pausados por definicion). Ahora
+  //    excluye tambien Filled/On Hold/On Hold-Internal Candidates ademas de TERMINAL — y con eso,
+  //    "Potential Placements" (que solo excluia Filled) queda matematicamente IDENTICO a Active
+  //    Positions, asi que se elimino esa tarjeta en vez de dejar dos numeros iguales con nombres
+  //    distintos. `active` (el set amplio, no-terminal) NO se toco — sigue usandose tal cual en
+  //    el balde "Active" de Total Requisitions (abajo en esta misma funcion) y en Candidates
+  //    Submitted, que son vistas distintas con su propio criterio, no parte de este embudo.
+  const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates"];
+  const activePositions = active.filter(p=>!NOT_ACTIVELY_WORKED.includes(p.status));
   const allPositions = dashboardPositions();
-  const potentialPlacements = active.filter(p=>p.status!=="Filled");
   const actualPlacements = allPositions.filter(p=>p.status==="Hired");
   const funnelStats = [
     {label:"Positions", value:allPositions.length, positions:allPositions,
       desc:"Every requisition ever assigned to this book, in any status."},
-    {label:"Active Positions", value:active.length, positions:active,
-      desc:"Still open — hasn't reached Hired, Cancelled, Fell Through, or an internal hire."},
-    {label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
-      desc:"Open AND no offer accepted yet — the ones that could still go either way."},
+    {label:"Active Positions", value:activePositions.length, positions:activePositions,
+      desc:"Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
   ];
   const outcomeStat = {label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
     desc:"Confirmed hires to date — a running total, not a next step from the number on the left."};
