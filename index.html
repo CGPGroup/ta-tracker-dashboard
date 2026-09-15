@@ -518,9 +518,13 @@
      con su tamaño normal de siempre y su propio scroll — nunca estirado a proposito. */
   .tracking-split { display: flex; align-items: flex-start; }
   .tracking-list-col { flex: none; width: 900px; min-width: 280px; max-width: 940px; }
-  /* Antes ~5-6 filas visibles (300px); mas alto para que se vean mas posiciones sin scrollear —
-     el resto sigue con su propio scroll interno si la lista no alcanza a mostrarse completa. */
-  .tracking-table-scroll { overflow-x: auto; overflow-y: auto; max-height: 480px; }
+  /* height fija (no max-height): con max-height, una lista filtrada corta (ej. 4 posiciones)
+     hacia que la caja se encogiera a su contenido — exactamente lo que Nicolas seguia viendo
+     ("sigue igual de largo... no entiendes? el cuadro... necesito que estires hacia abajo"), el
+     cuadro nunca se veia realmente mas grande salvo que hubiera de sobra para llenar 480px. Con
+     height fija el cuadro SIEMPRE mide esto (espacio vacio abajo si hay pocas filas, scroll
+     interno si hay mas de las que caben) — antes ~5-6 filas visibles con 300px. */
+  .tracking-table-scroll { overflow-x: auto; overflow-y: auto; height: 480px; }
   .tracking-table-scroll thead th { position: sticky; top: 0; background: var(--surface-1); z-index: 1; }
   .tracking-resize-handle {
     width: 14px; flex: none; align-self: stretch; cursor: col-resize;
