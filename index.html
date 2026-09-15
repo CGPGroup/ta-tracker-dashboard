@@ -356,14 +356,28 @@
      dash-grid, mismo tratamiento que "Applications by channel" en KeyStone — titulo+subtitulo
      alineados a la izquierda (igual que cualquier .panel), anillo+leyenda centrados abajo. */
   .panel-ring .donut-wrap { justify-content: center; padding-top: 6px; }
-  /* "Positions & Placements" (Overview, reemplaza el viejo anillo de Active Positions) — 4
-     numeros grandes en linea, de izquierda a derecha, cada uno clickeable (mismo patron de
-     renderAvgTtsChart(): numero + label + openQuickList()). space-between para que ocupen todo
-     el ancho de la tarjeta parejo, sin importar cuantos digitos tenga cada numero. */
-  .positions-summary-strip { display: flex; justify-content: space-between; gap: 16px; padding-top: 10px; }
-  .positions-summary-stat { text-align: center; }
-  .positions-summary-stat .stat-num { font-size: 32px; line-height: 1; }
-  .positions-summary-stat .stat-label { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+  /* "Positions & Placements" (Overview) — REDISEÑADO 2026-09-19: ya no son 4 numeros sueltos sin
+     contexto (Nicolas: "no sabemos a que se refiere nada"). Positions -> Active -> Potential son
+     un embudo real (cada uno subconjunto del anterior), asi que llevan flecha + barra
+     proporcional entre tarjetas para mostrar la relacion, no solo el numero. Actual Placements es
+     un conteo historico acumulado, NO el siguiente paso del embudo — va separado por un divisor
+     vertical para no insinuar una relacion "estos N se van a convertir en esto" que no existe.
+     Cada tarjeta ademas lleva una frase corta (.stat-desc) explicando exactamente que cuenta. */
+  .positions-summary-strip { display: flex; align-items: stretch; gap: 10px; padding-top: 10px; }
+  .ps-stat { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; }
+  .ps-stat .stat-num { font-size: 30px; line-height: 1; }
+  .ps-stat .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text); margin-top: 6px; }
+  .ps-stat .stat-desc { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.35; flex: 1; }
+  .ps-bar { height: 4px; border-radius: 2px; background: var(--surface-2, rgba(127,127,127,0.16)); margin-top: 8px; overflow: hidden; }
+  .ps-bar-fill { height: 100%; border-radius: 2px; }
+  .ps-arrow { align-self: center; margin-top: 22px; font-size: 15px; color: var(--text-muted); }
+  .ps-divider { align-self: stretch; width: 1px; background: var(--border, rgba(127,127,127,0.25)); margin: 2px 4px; }
+  .ps-stat-outcome .stat-num { font-size: 30px; }
+  @media (max-width: 720px) {
+    .positions-summary-strip { flex-wrap: wrap; }
+    .ps-arrow { display: none; }
+    .ps-divider { display: none; }
+  }
   /* Needs Attention comparte fila con Submitted Vs Expected (ver dash-grid, align-items:stretch)
      — sin este limite, una lista larga de banderas estiraria toda la fila a una altura enorme.
      Con el limite + su propio scroll, la fila queda con una altura razonable sin importar
@@ -3112,29 +3126,49 @@ function batchesSubmittedCount(p){
 }
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  // "Positions & Placements": los mismos 4 conceptos que ya muestra el toolbar de Positions
-  // (ver renderPositions()) — Total, Active (no cerrada todavia), Potential Placements (activa
-  // Y todavia sin oferta aceptada — una vez en Filled ya no es "potencial", ver
-  // STATUS_GUIDANCE["Filled"]), Actual Placements (Hired especificamente, nunca Filled). Numeros
-  // grandes en linea en vez del viejo anillo desglosado por etapa (eso ya lo cubre Active
-  // Pipeline By Status en Pipeline) — cada uno clickeable a su propio quick-list, mismo patron
-  // que renderAvgTtsChart().
+  // "Positions & Placements" — REDISEÑADO 2026-09-19 (Nicolas: "no sabemos a que se refiere
+  // nada" con solo un numero + una etiqueta chica). Antes eran 4 numeros sueltos sin nada que
+  // explicara el criterio real de cada uno, ni por que "Active" (15) es mas grande que
+  // "Potential Placements" (11) — sin saber que Potential excluye Filled, esa diferencia se lee
+  // como un bug, no como informacion. Ahora cada tarjeta lleva su propia frase explicando
+  // EXACTAMENTE que cuenta, y las primeras 3 (Positions/Active/Potential) son un embudo real —
+  // cada una es subconjunto de la anterior — asi que llevan flecha + barra proporcional entre
+  // ellas para que la relacion se vea, no solo se lea. Actual Placements NO es "lo que estos 11
+  // se van a convertir" (es un conteo historico acumulado de colocaciones ya confirmadas, ajeno
+  // al embudo de arriba) — por eso va separado por un divisor, no como un cuarto paso del mismo
+  // embudo, para no sugerir una relacion que no existe.
   const allPositions = dashboardPositions();
   const potentialPlacements = active.filter(p=>p.status!=="Filled");
   const actualPlacements = allPositions.filter(p=>p.status==="Hired");
-  const summaryStats = [
-    {label:"Positions", value:allPositions.length, positions:allPositions},
-    {label:"Active Positions", value:active.length, positions:active},
-    {label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements},
-    {label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements},
+  const funnelStats = [
+    {label:"Positions", value:allPositions.length, positions:allPositions,
+      desc:"Every requisition ever assigned to this book, in any status."},
+    {label:"Active Positions", value:active.length, positions:active,
+      desc:"Still open — hasn't reached Hired, Cancelled, Fell Through, or an internal hire."},
+    {label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
+      desc:"Open AND no offer accepted yet — the ones that could still go either way."},
   ];
-  document.getElementById("positionsSummaryStrip").innerHTML = summaryStats.map(s=>`
-    <div class="positions-summary-stat clickable-stat">
+  const outcomeStat = {label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
+    desc:"Confirmed hires to date — a running total, not a next step from the number on the left."};
+  const maxVal = funnelStats[0].value || 1;
+  const allStats = [...funnelStats, outcomeStat];
+  const funnelHtml = funnelStats.map((s,i)=>`
+    <div class="ps-stat clickable-stat" data-i="${i}">
       <div class="stat-num">${s.value}</div>
       <div class="stat-label">${s.label}</div>
-    </div>`).join("");
-  document.querySelectorAll("#positionsSummaryStrip .positions-summary-stat").forEach((el,i)=>{
-    const s = summaryStats[i];
+      <div class="stat-desc">${s.desc}</div>
+      <div class="ps-bar"><div class="ps-bar-fill" style="width:${Math.max(4, s.value/maxVal*100).toFixed(1)}%; background:${gradientFill("var(--brand)")};"></div></div>
+    </div>${i<funnelStats.length-1 ? `<div class="ps-arrow">&rarr;</div>` : ""}`).join("");
+  const outcomeHtml = `
+    <div class="ps-divider"></div>
+    <div class="ps-stat ps-stat-outcome clickable-stat" data-i="${funnelStats.length}">
+      <div class="stat-num" style="color:var(--good);">${outcomeStat.value}</div>
+      <div class="stat-label">${outcomeStat.label}</div>
+      <div class="stat-desc">${outcomeStat.desc}</div>
+    </div>`;
+  document.getElementById("positionsSummaryStrip").innerHTML = funnelHtml + outcomeHtml;
+  document.querySelectorAll("#positionsSummaryStrip .ps-stat").forEach(el=>{
+    const s = allStats[+el.dataset.i];
     el.addEventListener("click", ()=>{
       openQuickList(s.label, `${s.value} position${s.value===1?"":"s"}`, s.positions);
     });
