@@ -4600,20 +4600,19 @@ function renderDetailModal(){
   // (solo en modo edicion, igual que antes).
   // Antes la razon completa (puede ser un parrafo entero, ver caso real de Garima Neema/RD-071)
   // se mostraba como texto gris de 11px pegado bajo el campo — facil de pasar por alto (Nicolas:
-  // "no veo por ningun lado facil por que fue waived"). Primer intento: chip ambar con la razon
-  // solo en el title (hover) — Nicolas lo encontro (asi confirmo que "ya sale el por que"), pero
-  // pidio que no dependiera de pasar el mouse: el chip debe invitar a mirar abajo, y la razon
-  // tiene que estar siempre visible ahi, en un cuadro bien delimitado (no texto suelto) — reusa
-  // el mismo .alert-banner.tier-yellow.compact ya usado para otros avisos de esta tarjeta (ver
-  // "No submission batches logged yet"), en vez de inventar un estilo nuevo.
-  const intakeWaivedChip = ()=> `<span class="sla-chip risk" style="border:1px solid var(--warning);">Waived — reason below</span>`;
-  const intakeWaivedReasonBox = (reason)=> `<div class="alert-banner tier-yellow compact" style="margin:4px 0 0;">${escapeHtml(reason)}</div>`;
+  // "no veo por ningun lado facil por que fue waived"). La razon completa ahora vive en UN solo
+  // lugar (la tarjeta "Request Intake Meeting" dentro de Requisition Completion, ver
+  // completionCards mas abajo) — mostrarla tambien aqui era literalmente el mismo parrafo
+  // duplicado dos veces en la misma pantalla (Nicolas: "no necesito que pongas el comentario,
+  // solo que digas que abajo en requisition completion esta el comentario"). Aqui solo queda el
+  // chip, apuntando a donde esta la razon real.
+  const intakeWaivedChip = ()=> `<span class="sla-chip risk" style="border:1px solid var(--warning);">Waived — see Requisition Completion below</span>`;
   const intakeWaivedNote = (!p.handoffFrom && intakeWaiveStepForTimeline.waived)
-    ? `<div style="margin-top:4px;">${intakeWaivedChip()}${intakeWaivedReasonBox(p.intakeWaivedReason)}</div>`
+    ? `<div style="margin-top:4px;">${intakeWaivedChip()}</div>`
     : "";
   const intakeWaivedExtraHtml = (isView || p.handoffFrom) ? "" :
     intakeWaiveStepForTimeline.waived
-      ? `<div style="margin-top:4px;">${intakeWaivedChip()} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button>${intakeWaivedReasonBox(p.intakeWaivedReason)}</div>`
+      ? `<div style="margin-top:4px;">${intakeWaivedChip()} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
       : intakeWaiveStepForTimeline.status !== "done"
         ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">Intake Meeting Not Needed? Explain Why</button>`
         : "";
