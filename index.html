@@ -969,6 +969,10 @@
   .timeline .tl-badge.status { background: rgba(111,147,201,0.16); color: var(--stage-blue); }
   .timeline .tl-badge.guidance { background: rgba(var(--warning-rgb),0.16); color: var(--warning); }
   .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
+  /* "Up Next" (ver confirmNextStepDone()): una vez confirmado el paso actual, un preview de a
+     donde sigue el pipeline — borde punteado a proposito, para que se lea como sugerencia/preview
+     y no como un hecho ya ocurrido (a diferencia de todos los demas badges de esta lista). */
+  .timeline .tl-badge.upnext { background: var(--surface-2); color: var(--text-secondary); border: 1px dashed var(--border); }
   .timeline .tl-text { flex: 1; }
   /* #modalNextStep reusa el mismo <ul class="timeline"><li>...</li></ul> que Activity (mismo
      badge/texto, mismo look) en vez de inventar un layout aparte — solo se salta el <span
@@ -2169,6 +2173,11 @@
 // no necesita cambios para esto: computeSla() ya devuelve "Not started" en TTS/TTF/TTH
 // mientras el campo Intake Date siga vacio, que es justo el caso en estos 3 statuses.
 const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+// Tramo de STATUS_ORDER que SI tiene un "siguiente" lineal real (Kickoff -> ... -> Hired) — el
+// resto (Filled Internal Hire, Fell Through, On Hold, On Hold Internal, Cancelled) son ramas
+// aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
+// para el preview de "Up Next" (ver ahi).
+const PIPELINE_SEQUENCE = STATUS_ORDER.slice(0, STATUS_ORDER.indexOf("Hired")+1);
 // Aclaracion corta que se muestra debajo del selector de status (no se guarda como parte del
 // valor, para que las tablas/filtros/chips sigan mostrando el nombre corto del status).
 const STATUS_SUBTITLE = {
@@ -5979,6 +5988,23 @@ async function confirmNextStepDone(p){
   renderDetailModal();
   renderTracking();
   renderPositions();
+  // Nicolas: "que obviamente le explique el siguiente paso... de cuando ya envio el kickoff note
+  // por poner un ejemplo" — confirmar el paso actual debe decir que sigue despues, no solo
+  // registrar que ya paso. PIPELINE_SEQUENCE es el unico tramo con un "siguiente" lineal real;
+  // los estados de rama aparte (On Hold, Cancelled, etc) no tienen continuacion obvia, asi que
+  // no se agrega preview para esos. renderDetailModal() ya reconstruyo #modalNextStep desde cero
+  // (via nextStepRowHtml(), que no sabe nada de esto) — el preview se agrega aparte, despues,
+  // directo al DOM, en vez de tener que pasarle este estado a traves de todo el pipeline de
+  // render solo para un mensaje que dura hasta el proximo render real.
+  const curIdx = PIPELINE_SEQUENCE.indexOf(p.status);
+  const nextStatus = curIdx>=0 && curIdx<PIPELINE_SEQUENCE.length-1 ? PIPELINE_SEQUENCE[curIdx+1] : null;
+  const nextStepList = document.getElementById("modalNextStep");
+  if(nextStatus && nextStepList){
+    nextStepList.insertAdjacentHTML("beforeend", `<li>
+      <span class="tl-badge upnext">Up Next</span>
+      <span class="tl-text"><strong>${escapeHtml(statusLabel(nextStatus))}:</strong> ${escapeHtml(STATUS_GUIDANCE[nextStatus] || "")}</span>
+    </li>`);
+  }
   // renderDetailModal() reconstruye #modalNextStep (incluido este span), asi que hay que volver a
   // buscarlo DESPUES de re-renderizar, o el mensaje se pierde en un nodo viejo ya desconectado.
   const msg = document.getElementById("nextStepDoneMsg");
