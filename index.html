@@ -2378,12 +2378,24 @@ function guidanceDeliverableLinksHtml(p){
 // sin importar como se creo o si su status se cambio alguna vez desde la propia UI (a diferencia
 // del guidance viejo, logueado solo al cambiar de status via commitStatusChange(), que se
 // quedaba sin nada para cualquier req cuyo historial vino de una migracion o escritura directa).
-function nextStepRowHtml(p){
+// isView: en modo vista no hay boton "Mark Done" (nadie mas que quien puede editar este req
+// deberia poder dejar un registro de que lo hizo) — mismo criterio de acceso que el resto de
+// botones de accion del modal (ver el `if(!isView)` en renderDetailModal()).
+function nextStepRowHtml(p, isView){
   const text = STATUS_GUIDANCE[p.status];
   if(!text) return "";
+  // Nicolas pidio poder confirmar que ya hizo el Next Step vigente y que quede registrado en
+  // Activity — a diferencia del guidance viejo (ver comentario de arriba, "SIEMPRE EN VIVO,
+  // NUNCA logueado"), esto NO es el sistema re-logueando el texto de guia en cada cambio de
+  // status (eso fue lo que causaba duplicados/staleness); es una confirmacion MANUAL, con fecha y
+  // autor real, de que alguien de verdad hizo ese paso — un evento puntual, no un estado que deba
+  // mantenerse sincronizado. Por eso no intenta "recordar" si ya se confirmo antes ni esconde el
+  // boton despues de usarlo: cada click es su propio registro valido (ej. confirmar cada batch
+  // adicional dentro del mismo status de Sourcing).
+  const doneBtn = isView ? "" : `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button><span class="panel-sub" id="nextStepDoneMsg" style="margin-left:6px; font-size:11px;"></span>`;
   return `<li>
     <span class="tl-badge guidance">${TL_BADGE_LABELS.guidance}</span>
-    <span class="tl-text">${escapeHtml(text)}${guidanceDeliverableLinksHtml(p)}</span>
+    <span class="tl-text">${escapeHtml(text)}${guidanceDeliverableLinksHtml(p)}${doneBtn}</span>
   </li>`;
 }
 // Antes usaba --stage-blue/teal/purple/mauve para las etapas activas: colores sin relacion
@@ -4960,7 +4972,9 @@ function renderDetailModal(){
     });
   }
 
-  document.getElementById("modalNextStep").innerHTML = nextStepRowHtml(p);
+  document.getElementById("modalNextStep").innerHTML = nextStepRowHtml(p, isView);
+  const nextStepDoneBtn = document.getElementById("nextStepDoneBtn");
+  if(nextStepDoneBtn) nextStepDoneBtn.addEventListener("click", ()=> confirmNextStepDone(p));
 
   const timeline = buildTimeline(p).slice().reverse();
   document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
@@ -5948,6 +5962,41 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
   }
   if(document.getElementById("editStatusModal").classList.contains("open")){
     setTimeout(()=>{ document.getElementById("editStatusModal").classList.remove("open"); }, 900);
+  }
+}
+// Confirmacion manual de "ya hice el Next Step vigente" — ver el comentario en nextStepRowHtml()
+// sobre por que esto es un evento puntual (con fecha/autor reales) y no una repeticion del bug
+// viejo de re-loguear el texto de guia en cada cambio de status. Solo escribe a HistorialTable
+// (type "action", igual que "Accepted the assignment.") — a proposito NO toca Last Remark/columna
+// X, eso es una cosa distinta (el ultimo remark libre, ver saveModalRemark()) que esta accion no
+// deberia pisar.
+async function confirmNextStepDone(p){
+  const text = STATUS_GUIDANCE[p.status];
+  if(!text) return;
+  const remarkText = `Next step confirmed: ${text}`;
+  p.extra = p.extra || [];
+  p.extra.push({date: localTodayStr(), type:"action", author: currentAuthorName(), text: remarkText});
+  renderDetailModal();
+  renderTracking();
+  renderPositions();
+  // renderDetailModal() reconstruye #modalNextStep (incluido este span), asi que hay que volver a
+  // buscarlo DESPUES de re-renderizar, o el mensaje se pierde en un nodo viejo ya desconectado.
+  const msg = document.getElementById("nextStepDoneMsg");
+  if(isConnected()){
+    if(msg){ msg.textContent = "Logging…"; msg.style.color = "var(--text-muted)"; }
+    try {
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
+      const freshMsg = document.getElementById("nextStepDoneMsg");
+      if(freshMsg){ freshMsg.textContent = "Logged."; freshMsg.style.color = "var(--good)"; }
+    } catch(err){
+      console.error(err);
+      const freshMsg = document.getElementById("nextStepDoneMsg");
+      if(freshMsg){ freshMsg.textContent = "Could not save: " + err.message; freshMsg.style.color = "var(--critical)"; }
+      alert("Could not save this confirmation. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
+    }
+  } else if(msg){
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
   }
 }
 async function saveModalRemark(){
