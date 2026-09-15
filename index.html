@@ -512,11 +512,18 @@
      nada que el detalle no muestre tambien), pero el ancho real ahora lo decide quien lo usa
      arrastrando el separador, no un ratio fijo — en pantallas muy anchas un ratio fijo dejaba
      espacio muerto sin usar. La preferencia se guarda por navegador (ver trackingSplitInit()). */
-  .tracking-split { display: flex; align-items: flex-start; }
-  .tracking-list-col { flex: none; width: 900px; min-width: 280px; max-width: 940px; }
-  /* Cap la lista de reqs a ~5-6 filas visibles sin scrollear la pagina entera; el resto (mas
-     posiciones, o la Activity de la seleccionada debajo) se ve haciendo scroll solo aqui. */
-  .tracking-table-scroll { overflow-x: auto; overflow-y: auto; max-height: 300px; }
+  /* Nicolas: la columna izquierda (Tracking + Activity) quedaba mucho mas corta que el detalle
+     de la derecha (que crece libre segun cuanto contenido tenga esa posicion), dejando un hueco
+     vacio raro debajo. align-items:stretch (default de flex, ya no forzado a flex-start) hace que
+     .tracking-list-col ocupe la MISMA altura que .tracking-detail-col (su hermano, el mas alto);
+     .tracking-list-col pasa a ser column flex para repartir esa altura entre sus dos paneles:
+     Tracking (mas alto que antes, ver .tracking-table-scroll) y Activity (flex:1, se estira para
+     absorber lo que sobre y terminar alineado con el fondo del panel derecho).*/
+  .tracking-split { display: flex; }
+  .tracking-list-col { flex: none; width: 900px; min-width: 280px; max-width: 940px; display: flex; flex-direction: column; }
+  /* Antes ~5-6 filas visibles (300px); mas alto para que se vean mas posiciones sin scrollear —
+     el resto sigue con su propio scroll interno si la lista no alcanza a mostrarse completa. */
+  .tracking-table-scroll { overflow-x: auto; overflow-y: auto; max-height: 480px; }
   .tracking-table-scroll thead th { position: sticky; top: 0; background: var(--surface-1); z-index: 1; }
   .tracking-resize-handle {
     width: 14px; flex: none; align-self: stretch; cursor: col-resize;
@@ -530,11 +537,21 @@
     background: var(--brand); height: 60px;
   }
   .tracking-detail-col { flex: 1; min-width: 340px; position: sticky; top: 20px; }
+  /* Panel de Activity dentro de .tracking-list-col: flex:1 para estirarse y absorber la
+     altura que .tracking-list-col gana por el stretch de arriba — sin esto, ese espacio extra
+     quedaria como hueco vacio bajo el panel de Tracking en vez de alargar Activity. min-height:0
+     es necesario para que un hijo flex pueda encogerse por debajo de su contenido natural (si no,
+     el <ul class="timeline"> de adentro fuerza al panel a crecer sin limite en vez de scrollear). */
+  .tracking-activity-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; margin-top: 16px; }
+  #trackingSelectedActivityList { flex: 1; min-height: 120px; max-height: none; }
   @media (max-width: 1300px) {
     .tracking-split { flex-direction: column; }
     .tracking-list-col { width: 100%; max-width: none; }
     .tracking-resize-handle { display: none; }
     .tracking-detail-col { width: 100%; max-width: none; min-width: 0; position: static; }
+    /* Sin un hermano estirado que estirar contra, flex:1 aqui no tiene limite real — vuelve a
+       un scroll acotado, como el resto del tracker en pantallas angostas. */
+    #trackingSelectedActivityList { flex: none; max-height: 260px; }
   }
   .modal-overlay.docked {
     position: static; display: block !important; background: none; padding: 0;
@@ -1366,7 +1383,7 @@
             </div>
             <!-- Actividad de la posicion seleccionada a la derecha (no de todas, eso ya lo cubre
                  "Recent Activity" arriba) — se llena en renderTrackingSelectedActivity(). -->
-            <div class="panel" style="margin-top:16px;">
+            <div class="panel tracking-activity-panel">
               <h3 style="margin:0 0 2px;">Activity</h3>
               <div class="panel-sub" id="trackingSelectedActivitySub">Select a requisition on the left to see its history here.</div>
               <ul class="timeline" id="trackingSelectedActivityList"></ul>
@@ -1582,7 +1599,7 @@
             </ul>
             <p style="margin:12px 0 0; font-weight:600; color:var(--text-primary);">Activity badges</p>
             <ul>
-              <li><b>Milestone:</b> generated automatically the moment a Timeline date (Kickoff, Intake Requested, Intake Meeting, Submission, Fill, Hire) is filled in.</li>
+              <li><b>Milestone:</b> generated automatically the moment a Timeline date (Kickoff, Intake Meeting Requested, Intake Meeting, Submission, Fill, Hire) is filled in.</li>
               <li><b>Status Change:</b> generated automatically whenever the requisition's status changes.</li>
               <li><b>Next Step:</b> automatic guidance suggesting what to do next for the current status.</li>
               <li><b>Action:</b> a specific action the recruiter actually took (e.g., accepting an assignment), logged automatically the moment they took it.</li>
@@ -2193,7 +2210,7 @@ function statusLabel(status){
 // en PositionsTable.
 const STATUS_DATE_FIELD = {
   "Kickoff": {key:"kickoff", col:"AA", label:"Kickoff Date"},
-  "Intake Meeting Requested": {key:"intakeRequestedDate", col:"AN", label:"Date You Replied Requesting The Intake"},
+  "Intake Meeting Requested": {key:"intakeRequestedDate", col:"AN", label:"Intake Meeting Requested Date"},
   // Antes pedia "Intake Scheduled For" (una fecha aparte) — Nicolas confirmo que en la
   // practica siempre termina siendo el mismo dia que el Intake Meeting real, asi que se
   // fusionaron en un solo campo: la fecha real de la reunion, la misma que arranca TTS/TTF/TTH.
@@ -2978,7 +2995,15 @@ function computeCompletion(p){
   // intake para 3 headcounts nuevos porque ya tenia el contexto de una req anterior del mismo
   // rol), asi que exigir que "requested" ya estuviera puesto dejaba a este boton inalcanzable
   // justo en el caso para el que se diseño.
-  if(!held && p.intakeWaivedReason){
+  // BUG REAL encontrado 2026-09-19 (Nicolas, viendo el req de Garima Neema/RD-071): esto tenia
+  // un `!held` de mas que stepIntakeRequest (arriba) no tiene — y esa req tiene AMBOS p.intake
+  // (heredado del Kickoff, dato viejo) Y un intakeWaivedReason real. Con el `!held`, step2 nunca
+  // entraba a esta rama (held era verdadero), se quedaba en el default {waived:false}, y la nota
+  // "Waived: <razon>" desaparecia de Timeline por completo — mientras stepIntakeRequest (que SI
+  // ignora held) seguia mostrando "Intake Meeting Waived" en Requisition Completion, dejando la
+  // razon visible solo ahi, no donde el reclutador la busca primero. Igual que stepIntakeRequest:
+  // si hay una razon guardada, esta waived, sin importar si `held` tambien tiene algo.
+  if(p.intakeWaivedReason){
     const elapsed = requested ? bizDaysBetween(requested, today) : (kickoff ? bizDaysBetween(kickoff, today) : null);
     step2 = {status:"done", elapsed, target:COMPLETION_TARGETS.intakeHeld, overdue:false, waived:true};
   } else if(requested){
@@ -4573,19 +4598,26 @@ function renderDetailModal(){
   // guardado), el texto de solo-lectura nunca se armaba fuera de modo edicion. Separado en dos:
   // la nota de solo-lectura (isView, se usa en el facts-grid), y el boton de Editar/Explicar
   // (solo en modo edicion, igual que antes).
+  // Antes la razon completa (puede ser un parrafo entero, ver caso real de Garima Neema/RD-071)
+  // se mostraba como texto gris de 11px pegado bajo el campo — facil de pasar por alto (Nicolas:
+  // "no veo por ningun lado facil por que fue waived"). Ahora es un chip ambar bien visible
+  // (mismo lenguaje visual que sla-chip.risk), con la razon completa en su title (hover) en vez
+  // de forzar el parrafo entero siempre visible inline; en modo edicion, "Edit" sigue abriendo el
+  // modal de siempre, que ya muestra/permite cambiar el texto completo.
+  const intakeWaivedChip = (reason)=> `<span class="sla-chip risk" style="cursor:help;" title="Waived: ${escapeHtml(reason)}">Waived</span>`;
   const intakeWaivedNote = (!p.handoffFrom && intakeWaiveStepForTimeline.waived)
-    ? `<div class="panel-sub" style="margin:2px 0 0; font-size:11px;">Waived: ${escapeHtml(p.intakeWaivedReason)}</div>`
+    ? `<div style="margin-top:4px;">${intakeWaivedChip(p.intakeWaivedReason)}</div>`
     : "";
   const intakeWaivedExtraHtml = (isView || p.handoffFrom) ? "" :
     intakeWaiveStepForTimeline.waived
-      ? `<div class="panel-sub" style="margin:4px 0 0; font-size:11px;">Waived: ${escapeHtml(p.intakeWaivedReason)} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
+      ? `<div style="margin-top:4px;">${intakeWaivedChip(p.intakeWaivedReason)} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
       : intakeWaiveStepForTimeline.status !== "done"
         ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">Intake Meeting Not Needed? Explain Why</button>`
         : "";
   const timelineHtml = isView
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
-        {label:"Intake Requested Date", value:(escapeHtml(p.intakeRequestedDate) || "-") + intakeWaivedNote},
+        {label:"Intake Meeting Requested Date", value:(escapeHtml(p.intakeRequestedDate) || "-") + intakeWaivedNote},
         {label:"Intake Meeting Date", value:escapeHtml(p.intake) || "-"},
         {label:"Submission Date", value:escapeHtml(p.submit) || "-"},
         {label:"Fill Date", value:escapeHtml(p.fill) || "-"},
@@ -4594,8 +4626,8 @@ function renderDetailModal(){
     : `<div class="modal-section-title">Timeline</div>
     <div class="facts-grid">
       ${timelineFieldHtml("Kickoff Date", "editKickoff", p.kickoff, false, "", true)}
-      ${timelineFieldHtml("Intake Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true, intakeWaivedExtraHtml)}
-      ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Requested Date first.", true)}
+      ${timelineFieldHtml("Intake Meeting Requested Date", "editIntakeRequested", p.intakeRequestedDate, !p.kickoff, "Fill in Kickoff Date first.", true, intakeWaivedExtraHtml)}
+      ${timelineFieldHtml("Intake Meeting Date", "editIntake", p.intake, !p.intakeRequestedDate, "Fill in Intake Meeting Requested Date first.", true)}
       ${(p.batches && p.batches.length)
         ? timelineFieldHtml("Submission Date", "editSubmit", p.submit, !p.intake, "Fill in Intake Meeting Date first.", true)
         : `<div>
@@ -4938,7 +4970,7 @@ async function saveModalDates(){
   // ni guardado (asi se reporto el bug).
   const fields = [
     {key:"kickoff", inputId:"editKickoff", col:"AA", label:"Kickoff Date", capToday:true},
-    {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN", label:"Intake Requested Date", capToday:true},
+    {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN", label:"Intake Meeting Requested Date", capToday:true},
     {key:"intake", inputId:"editIntake", col:"H", label:"Intake Meeting Date", capToday:true},
     {key:"submit", inputId:"editSubmit", col:"I", label:"Submission Date", capToday:true},
     {key:"fill", inputId:"editFill", col:"J", label:"Fill Date"},
@@ -4962,7 +4994,7 @@ async function saveModalDates(){
   // un salto de mas de un paso (ej. Fill antes que Kickoff con Submit vacio).
   const PIPELINE_ORDER = [
     {key:"kickoff", label:"Kickoff Date"},
-    {key:"intakeRequestedDate", label:"Intake Requested Date"},
+    {key:"intakeRequestedDate", label:"Intake Meeting Requested Date"},
     {key:"intake", label:"Intake Meeting Date"},
     {key:"submit", label:"Submission Date"},
     {key:"fill", label:"Fill Date"},
