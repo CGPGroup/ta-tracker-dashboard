@@ -1192,7 +1192,7 @@
                    donde tiene mas sentido leerlo. -->
               <div class="panel" style="grid-column: span 6;">
                 <h3>Submitted Vs Expected</h3>
-                <div class="panel-sub">Submitted candidates vs the SLA minimum batch size (3.5 per active position).</div>
+                <div class="panel-sub">Submitted candidates vs how many should exist by today, based on each position's own intake date — not yet due doesn't count against it.</div>
                 <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
               </div>
             </div>
@@ -3261,6 +3261,19 @@ function statusChip(status){
 function batchesSubmittedCount(p){
   return (p.batches || []).reduce((sum,b)=> sum + (Number(b.count) || 0), 0);
 }
+// Cuantos candidatos deberia tener submitted ESTA posicion a la fecha de hoy — usado por
+// "Submitted Vs Expected" (ver renderKpis()). 0 mientras el intake no ha pasado (el TTS ni
+// arranca, ver computeSla().TTS) o sigue dentro de la ventana del primer batch (9 dias habiles,
+// SLA_TARGETS.TTS); una vez se cumple esa ventana, 3.5 (primer batch), +3.5 mas por cada ciclo
+// de 5 dias habiles adicionales — mismo ritmo que ya describe STATUS_GUIDANCE["Sourcing"]
+// ("Follow-up batches every 5 business days").
+const FOLLOWUP_BATCH_INTERVAL_DAYS = 5;
+function expectedSubmittedForPosition(p){
+  const s = computeSla(p).TTS;
+  if(s.elapsed==null || s.elapsed<s.target) return 0;
+  const extraCycles = Math.floor((s.elapsed - s.target) / FOLLOWUP_BATCH_INTERVAL_DAYS);
+  return 3.5 * (1 + extraCycles);
+}
 // Offer out or ya aceptada — lo unico que todavia no es una colocacion confirmada (Hired) pero
 // ya esta lo bastante encaminado para contar como "podria convertirse en colocacion pronto".
 // Nicolas fue explicito: "Potential placements solo debe contar a partir de que estan en offer
@@ -3354,9 +3367,23 @@ function renderKpis(){
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
   // pipeline de submissions: con batches de 3 a 5 candidatos por posicion (promedio 3.5, regla
-  // de Nicolas), N posiciones activas deberian tener un PISO de N*3.5 submitted acumulados.
+  // de Nicolas), cada posicion deberia tener un PISO acumulado de candidatos submitted.
   // Es un minimo, no un rango, mas submitted nunca es malo. Por debajo del minimo es señal
   // real de under-sourcing agregado (complementa, no reemplaza, el TTS por posicion).
+  // BUG REAL encontrado 2026-09-19 (Nicolas: "deberia mostrar el numero pero hasta la fecha...
+  // los reqs que ya deberian estar submitidos"): el "expected" viejo era `active.length * 3.5`
+  // plano — contaba TODAS las posiciones activas por igual, incluida una que tuvo su Kickoff
+  // ayer (el TTS ni siquiera ha arrancado, no hay forma de que ya tenga candidatos) e incluia
+  // Filled/On Hold (que ya no necesitan mas candidatos, ver NOT_ACTIVELY_WORKED). Ahora cada
+  // posicion aporta su propio expected segun cuanto tiempo REAL ha pasado desde su intake
+  // meeting (mismo TTS que ya usa el resto del tracker): 0 mientras el intake no ha pasado o
+  // sigue dentro de la ventana del primer batch (9 dias habiles), 3.5 una vez se cumple esa
+  // ventana, +3.5 mas por cada ciclo de 5 dias habiles adicionales (el mismo ritmo de follow-up
+  // batches que ya describe el guidance de Sourcing) — asi que el numero de arriba ahora es
+  // literalmente "cuantos candidatos deberian existir A ESTA FECHA", no un promedio parejo.
+  const workingPositions = active.filter(p=>!NOT_ACTIVELY_WORKED.includes(p.status));
+  const submittedTotal = workingPositions.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
+  const minExpected = Math.round(workingPositions.reduce((sum,p)=> sum + expectedSubmittedForPosition(p), 0));
   // Barra en vez de anillo (mismo .funnel-row/.funnel-track ya usado en Active Pipeline By
   // Status) — Nicolas la queria como las barras de KeyStone, no como un anillo. El color pasa
   // por 3 tramos segun que tan lejos esta del minimo esperado (no solo bueno/malo binario):
@@ -3364,24 +3391,22 @@ function renderKpis(){
   // verde si ya alcanzo o supero el minimo. El ancho de la barra SI se topa en 100% (una barra
   // que se sale de su contenedor se ve rota), pero el numero de arriba muestra el % real sin
   // topar — pasarse del minimo es bueno, no hay razon para esconderlo.
-  const submittedTotal = active.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
-  const minExpected = Math.round(active.length * 3.5);
   const ratio = minExpected>0 ? submittedTotal/minExpected : null;
   const barColor = ratio===null ? "var(--grid)" : ratio>=1 ? "var(--good)" : ratio>=0.5 ? "var(--warning)" : "var(--critical)";
   const barWidthPct = ratio===null ? 0 : Math.min(100, Math.round(ratio*100));
   const displayPct = ratio===null ? "-" : Math.round(ratio*100)+"%";
   document.getElementById("statBarSubmitted").innerHTML = `
-    <div class="funnel-row${active.length>0 ? " clickable-stat" : ""}">
+    <div class="funnel-row${workingPositions.length>0 ? " clickable-stat" : ""}">
       <div class="funnel-label">Candidates Submitted</div>
       <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${gradientFill(barColor)};"></div></div>
       <div class="funnel-stat">
         <div class="funnel-value">${submittedTotal} / ${minExpected}</div>
-        <div class="funnel-pct">${displayPct} of expected</div>
+        <div class="funnel-pct">${displayPct} of expected to date</div>
       </div>
     </div>`;
-  if(active.length>0){
+  if(workingPositions.length>0){
     document.querySelector("#statBarSubmitted .funnel-row").addEventListener("click", ()=>{
-      openQuickList("Submitted Vs Expected", `${submittedTotal} submitted across ${active.length} active position${active.length===1?"":"s"} &middot; expected at least ${minExpected}`, active);
+      openQuickList("Submitted Vs Expected", `${submittedTotal} submitted &middot; expected at least ${minExpected} to date across ${workingPositions.length} position${workingPositions.length===1?"":"s"}`, workingPositions);
     });
   }
 }
