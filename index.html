@@ -4900,25 +4900,31 @@ function renderDetailModal(){
     // Una sola tarjeta, dos chips adentro (Accept / Request Intake) — quedan juntos porque las dos
     // comparten el mismo target de 1 dia habil y el mismo "Recruiter Owned", separar en 2 tarjetas
     // completas era mas ruido visual del que ameritaba.
+    // Nicolas: la razon del waiver no tiene sentido bajo "Intake Meeting Held" — la reunion
+    // JUSTAMENTE no se sostuvo, decir "Held" (con o sin nota) de algo que nunca paso es
+    // contradictorio. La razon ahora vive bajo "Request Intake Meeting" (la tarjeta que de
+    // verdad representa la decision de no pedirla), y la tarjeta "Intake Meeting Held" completa
+    // desaparece cuando esta waived — ya no hay nada real que "held" pueda describir.
     const completionCards = [
       p.handoffFrom ? null : {label:"Accept Requisition & Request Intake", tag:"Recruiter Owned", chips: [
           {subLabel:"Accept", chip: recruiterChip(c.stepAccept)},
-          {subLabel:"Request Intake", chip: recruiterChip(c.stepIntakeRequest, "Intake Meeting Waived")},
-        ], note: null},
+          {subLabel:"Request Intake Meeting", chip: recruiterChip(c.stepIntakeRequest, "Intake Meeting Waived")},
+        ], note: c.stepIntakeRequest.waived ? p.intakeWaivedReason : null, noteIsWaived: c.stepIntakeRequest.waived},
       p.handoffFrom
         ? {label:"Handoff Context Confirmed", tag:"Follow-Up Only", chip: followUpChip(c.stepHandoff),
             note: c.stepHandoff.status==="waiting" ? `Handed off from ${escapeHtml(p.handoffFrom)}, ${ESCALATION_CONTACT} tracks that context gets confirmed quickly.`
               : c.stepHandoff.status==="done" ? `Confirmed on ${p.handoffAcceptedDate}.` : null}
-        : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2, "Intake Meeting Waived"),
-            note: c.step2.waived ? p.intakeWaivedReason
-              : c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
-              : c.step2.status==="done" ? `Held on ${p.intake}.` : null},
+        : (c.step2.waived ? null : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
+            note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
+              : c.step2.status==="done" ? `Held on ${p.intake}.` : null}),
     ].filter(Boolean);
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
         <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}" title="${TAG_EXPLANATIONS[cc.tag] || ""}">${cc.tag}</span></div>
         ${cc.chips ? `<div class="sla-subchip-row">${cc.chips.map(x=>`<div class="sla-subchip"><span class="sla-subchip-label">${x.subLabel}</span>${x.chip}</div>`).join("")}</div>` : cc.chip}
-        ${cc.note ? `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>` : ""}
+        ${cc.note ? (cc.noteIsWaived
+            ? `<div class="alert-banner tier-yellow compact" style="margin:6px 0 0;">${escapeHtml(cc.note)}</div>`
+            : `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>`) : ""}
       </div>`).join("");
     const alerts = [];
     // Igual que completionCards/completionFlags: una vez la req paso por Handoff, step1 (la
