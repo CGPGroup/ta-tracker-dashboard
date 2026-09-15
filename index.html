@@ -1302,7 +1302,7 @@
               <thead><tr>
                 <th id="positionsSelectAllHeader" style="display:none;"><input type="checkbox" id="positionsSelectAllCheckbox"></th>
                 <th>Position</th><th>Code</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Market Location</th><th>Arrangement</th><th>Status</th><th>Kickoff Date</th>
-                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Activity</th><th>Fill Date</th><th>Hire Date</th><th>Placement</th>
+                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Activity</th><th>Fill Date</th><th title="The candidate's actual start date — logging it moves this requisition to Hired automatically.">Start Date</th><th>Placement</th>
               </tr></thead>
               <tbody></tbody>
             </table>
@@ -2177,6 +2177,15 @@ const STATUS_DATE_FIELD = {
   // practica siempre termina siendo el mismo dia que el Intake Meeting real, asi que se
   // fusionaron en un solo campo: la fecha real de la reunion, la misma que arranca TTS/TTF/TTH.
   "Intake Pending": {key:"intake", col:"H", label:"Intake Meeting Date"},
+  // Agregados 2026-09-19: antes elegir "Filled"/"Hired" desde este dropdown no pedia NINGUNA
+  // fecha (STATUS_DATE_FIELD no tenia entrada para ninguno de los dos), asi que era posible dejar
+  // un req en Hired sin p.hire — y computeSla() usa exactamente esa fecha como cierre de TTF/TTH;
+  // sin ella el SLA queda corriendo contra "hoy" indefinidamente en vez de congelarse, un req ya
+  // colocado hace meses podia seguir viendose "Out Of SLA" y creciendo. Mismo campo que ya usa
+  // Timeline (ver saveModalDates()/DATE_IMPLIES_STATUS) — elegir el status a mano ahora exige la
+  // misma fecha que loguearla en Timeline ya exige el status, cerrando el loop en ambas direcciones.
+  "Filled": {key:"fill", col:"J", label:"Fill Date"},
+  "Hired": {key:"hire", col:"K", label:"Start Date"},
 };
 // Mensaje de "que hacer ahora" por status — Nicolas pidio esto para todos los status, no solo
 // Kickoff. El texto vive centralizado aqui para poder ajustarlo facil si el proceso real cambia.
@@ -2204,8 +2213,8 @@ const STATUS_GUIDANCE = {
   "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch.",
   "Technical Interview": "Candidates are in technical interviews, usually the round before the Hiring Manager Interview. Same rule applies: feedback due within 1-3 business days per candidate, logged in Workable's Review tab.",
   "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
-  "Filled": "An offer was accepted. Log the Fill Date if you haven't already — this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
-  "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Hire Date if you haven't already; this requisition is complete.",
+  "Filled": "An offer was accepted. Log the Fill Date in Timeline if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
+  "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Start Date in Timeline if you haven't already — this requisition moves to Hired automatically once it's logged.",
   "Filled (Internal Hire)": "The client filled this requisition on their own — an internal employee move or an intern conversion — without a Cornerstone placement. This requisition is closed and does not count as a placement or an SLA miss; add a remark noting who filled it and how, if known.",
   "Fell Through": "This requisition fell through. Add a remark explaining what happened — if it reopens, it most likely restarts at Sourcing rather than from scratch.",
   "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
@@ -4516,7 +4525,7 @@ function renderDetailModal(){
         {label:"Intake Meeting Date", value:escapeHtml(p.intake) || "-"},
         {label:"Submission Date", value:escapeHtml(p.submit) || "-"},
         {label:"Fill Date", value:escapeHtml(p.fill) || "-"},
-        {label:"Hire Date", value:escapeHtml(p.hire) || "-"},
+        {label:"Start Date", value:escapeHtml(p.hire) || "-"},
       ])
     : `<div class="modal-section-title">Timeline</div>
     <div class="facts-grid">
@@ -4531,7 +4540,7 @@ function renderDetailModal(){
           </div>`}
       ${pivotSlaFactHtml(p)}
       ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submission Date first.")}
-      ${timelineFieldHtml("Hire Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
+      ${timelineFieldHtml("Start Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
     </div>
     <div style="margin-bottom:24px;">
       <button class="btn primary small" id="modalDatesSave" type="button">Save Dates</button>
@@ -4853,8 +4862,8 @@ async function saveModalDates(){
     {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN", label:"Intake Requested Date", capToday:true},
     {key:"intake", inputId:"editIntake", col:"H", label:"Intake Meeting Date", capToday:true},
     {key:"submit", inputId:"editSubmit", col:"I", label:"Submission Date", capToday:true},
-    {key:"fill", inputId:"editFill", col:"J"},
-    {key:"hire", inputId:"editHire", col:"K"},
+    {key:"fill", inputId:"editFill", col:"J", label:"Fill Date"},
+    {key:"hire", inputId:"editHire", col:"K", label:"Start Date"},
   ].filter(f => document.getElementById(f.inputId));
   // Estos cuatro campos registran algo que ya paso en la realidad (no una fecha planeada a
   // futuro), asi que una fecha posterior a hoy es siempre un error de captura.
@@ -4878,7 +4887,7 @@ async function saveModalDates(){
     {key:"intake", label:"Intake Meeting Date"},
     {key:"submit", label:"Submission Date"},
     {key:"fill", label:"Fill Date"},
-    {key:"hire", label:"Hire Date"},
+    {key:"hire", label:"Start Date"},
   ];
   const rawByKey = {};
   fields.forEach(f=>{ const raw = document.getElementById(f.inputId).value; if(raw) rawByKey[f.key] = raw; });
@@ -4909,11 +4918,47 @@ async function saveModalDates(){
     m.style.color = "var(--text-muted)";
     return;
   }
+  // Loguear Fill Date/Start Date antes solo escribia la fecha — el status (Filled/Hired) era un
+  // campo totalmente aparte que habia que acordarse de cambiar a mano en el dropdown de arriba.
+  // Caso real (Nicolas, RD-011): Start Date ya logueada, Activity mostrando el auto-milestone
+  // "candidate hired", pero el status seguia en "Filled" porque nada los mantenia sincronizados.
+  // REGLA NUEVA: loguear una de estas fechas avanza el status automaticamente — nunca en reversa
+  // (STATUS_ORDER, solo hacia adelante) y nunca sobre un estado especial que es una decision de
+  // negocio explicita (Cancelled/Fell Through/Filled (Internal Hire) no se tocan).
+  const DATE_IMPLIES_STATUS = {fill:"Filled", hire:"Hired"};
+  // Estados que son una decision de negocio explicita, no un paso mas del pipeline lineal — On
+  // Hold puede significar muchas cosas distintas (feedback vencido, pausa del cliente, etc.), asi
+  // que salir de ahi debe ser siempre una eleccion manual en el dropdown, nunca un efecto
+  // secundario silencioso de loguear una fecha. No depender solo del orden de STATUS_ORDER para
+  // esto (On Hold aparece DESPUES de Filled/Hired ahi por razones de layout, no de precedencia).
+  const AUTO_STATUS_LOCKED = ["Cancelled","Fell Through","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates"];
+  // originalStatus (no solo el "from" del ultimo paso) importa cuando Fill Date y Start Date se
+  // logean juntos en el mismo Save: la fila del loop primero avanza a Filled y luego, en la MISMA
+  // pasada, a Hired — sin esto el log terminaria diciendo "Filled -> Hired" y se perderia que en
+  // realidad venia de un status muy anterior (ej. Sourcing).
+  const originalStatus = p.status;
+  const triggeredBy = [];
+  for(const f of changed){
+    const targetStatus = DATE_IMPLIES_STATUS[f.key];
+    if(!targetStatus || !f.value) continue;
+    if(AUTO_STATUS_LOCKED.includes(p.status)) continue;
+    if(STATUS_ORDER.indexOf(targetStatus) <= STATUS_ORDER.indexOf(p.status)) continue;
+    p.status = targetStatus;
+    triggeredBy.push(f.label);
+  }
+  const autoStatusChange = p.status !== originalStatus ? {from: originalStatus, to: p.status} : null;
+  let statusRemarkText = null;
+  if(autoStatusChange){
+    statusRemarkText = `Status changed from ${autoStatusChange.from} to ${autoStatusChange.to} (automatic — ${triggeredBy.join(", ")} logged).`;
+    p.extra = p.extra || [];
+    p.extra.push({date: localTodayStr(), type:"status", author:currentAuthorName(), text: statusRemarkText});
+  }
   renderAll();
   renderDetailModal();
   // renderDetailModal() reconstruye el HTML de modalFacts (incluido este span), asi que hay
   // que volver a buscarlo DESPUES de re-renderizar, o el mensaje se pierde en un nodo viejo.
   const msg = document.getElementById("modalDatesMsg");
+  const savedNote = autoStatusChange ? ` Status moved to ${autoStatusChange.to}.` : "";
   if(isConnected()){
     msg.textContent = "Saving…";
     msg.style.color = "var(--text-muted)";
@@ -4921,7 +4966,11 @@ async function saveModalDates(){
       for(const f of changed){
         await graphUpdatePositionField(p.id, f.col, f.value || "");
       }
-      msg.textContent = "Saved.";
+      if(autoStatusChange){
+        await graphUpdatePositionField(p.id, "G", autoStatusChange.to);
+        await graphAppendHistorial(p.id, p.title, statusRemarkText, currentAuthorName(), "status");
+      }
+      msg.textContent = "Saved." + savedNote;
       msg.style.color = "var(--good)";
     } catch(err){
       console.error(err);
@@ -4929,7 +4978,7 @@ async function saveModalDates(){
       msg.style.color = "var(--critical)";
     }
   } else {
-    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365)." + savedNote;
     msg.style.color = "var(--warning)";
   }
 }
@@ -4997,7 +5046,9 @@ function onStatusOptionClick(p, newStatus){
     pendingStatusChange = newStatus;
     document.getElementById("editStatusModalTitle").textContent = `Confirm Status: ${newStatus}`;
     document.getElementById("modalStatusMsg").textContent = "";
-    updateStatusDateUI("modal", newStatus, null);
+    // Prefill con la fecha que ya exista para este campo (ej. Fill/Start Date logueada antes en
+    // Timeline) en vez de pedirla de nuevo como si nunca se hubiera capturado.
+    updateStatusDateUI("modal", newStatus, p[dateField.key] || null);
     document.getElementById("editStatusModal").classList.add("open");
   } else {
     commitStatusChange(p, newStatus, null, null);
@@ -7513,7 +7564,7 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
   // nunca se pide en este formulario (se confirma despues en Tracking, ver Entregable de
   // Compensation) — los 3 nulls al final son intencionales, no un placeholder temporal.
   return [
-    code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, null, null,
+    code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, fields.fill || null, fields.hire || null,
     null,null,null,null,null,null,null,null,null,null,null,null,
     fields.remark || "", null, "No",
     fields.kickoff,
@@ -7548,6 +7599,12 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   // "Intake Pending" ya no pide una fecha de "scheduled for" aparte, pide directo la fecha real
   // del Intake Meeting (ver STATUS_DATE_FIELD).
   fields.intake = fields.status === "Intake Pending" ? statusDateVal : null;
+  // Filled/Hired se agregaron a STATUS_DATE_FIELD el 2026-09-19 (ver esa constante) — sin este
+  // mapeo, elegir uno de esos dos como Initial Status hacia aparecer el campo de fecha (ahora
+  // requerido) pero la fecha nunca llegaba a fields.fill/fields.hire, asi que se perdia en
+  // silencio al crear la posicion (se pedia, se validaba, y no se guardaba).
+  fields.fill = fields.status === "Filled" ? statusDateVal : null;
+  fields.hire = fields.status === "Hired" ? statusDateVal : null;
   const headcountGroup = document.getElementById("newPosHeadcountGroup").value.trim() || null;
   // Grupo: una req por cada fila de headcount (codigo + su propia Careers Page URL, cada una
   // en su propio par de inputs — ver addHeadcountRow()). Cada headcount es un posting real
