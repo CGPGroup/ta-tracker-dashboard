@@ -1136,7 +1136,7 @@
                    aparezca ahi no rompe la fila de 2. -->
               <div class="panel panel-ring" style="grid-column: span 3;">
                 <h3>Total Requisitions</h3>
-                <div class="panel-sub">Every requisition ever assigned, in any status — active or already closed out.</div>
+                <div class="panel-sub">Every requisition ever assigned — active, or closed out as a real hire, a loss (cancelled/fell through), or filled internally by the client.</div>
                 <div id="statRingTotal"></div>
               </div>
               <div class="panel" id="panelWorkloadByRecruiter" style="grid-column: span 3;">
@@ -1146,25 +1146,19 @@
               </div>
               <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 3;">
                 <h3>Average Time To Submit</h3>
-                <div class="panel-sub">Their own average TTS across active positions where submitting has started, vs the 9 business day target.</div>
+                <div class="panel-sub">Your average TTS across active positions where submitting has started, vs the 9 business day target.</div>
                 <div id="chartAvgTts"></div>
               </div>
-              <!-- Fila 3, dos tarjetas iguales (span 3 de 6 cada una). Needs Attention tiene su
-                   propio scroll interno (#dashboardAttentionZone) para que, si crece mucho,
-                   nunca desalinee la altura de esta fila ni la de Submitted Vs Expected. -->
-              <div class="panel" style="grid-column: span 3;">
+              <!-- Fila 3, a todo lo ancho: Overview se queda con panorama (cuantas, donde estan,
+                   quien las lleva) — el trabajo de "cual necesita atencion ahora" vive en SLA &
+                   Completion (ver panelDashboardAttention mas abajo), justo al lado de SLA
+                   Health, que es el numero agregado del que esta lista es el desglose fila por
+                   fila. Antes competian por la misma fila aqui en Overview; ahora cada uno vive
+                   donde tiene mas sentido leerlo. -->
+              <div class="panel" style="grid-column: span 6;">
                 <h3>Submitted Vs Expected</h3>
                 <div class="panel-sub">Submitted candidates vs the SLA minimum batch size (3.5 per active position).</div>
                 <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
-              </div>
-              <!-- Antes un alert-banner de ancho completo encima de los dash-tabs, visible sin
-                   importar en cual tab estuvieras — Nicolas señalo que eso "spameaba" el Team
-                   Dashboard con un banner grande arriba, cuando ya hay espacio libre en el grid.
-                   Movido adentro de Overview como una tarjeta mas, junto a Submitted Vs Expected. -->
-              <div class="panel" id="panelDashboardAttention" style="grid-column: span 3;">
-                <h3>Needs Attention <span class="panel-details-count" id="dashboardAttentionCount"></span></h3>
-                <div class="panel-sub">Out of SLA or at risk, or falling behind on Kickoff/Intake follow-up, most urgent first.</div>
-                <div id="dashboardAttentionZone"></div>
               </div>
             </div>
           </div>
@@ -1185,6 +1179,18 @@
                   <h3>SLA Health</h3>
                   <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
                   <div id="chartSla"></div>
+                </div>
+                <!-- Antes vivia en Overview, compitiendo por espacio con Submitted Vs Expected —
+                     movido aqui porque esta lista ES el desglose posicion-por-posicion de los 3
+                     numeros de SLA Health justo arriba (mas los casos de Requisition Completion
+                     atrasados, que tambien viven en esta misma tarjeta): "SLA Health dice que 5
+                     estan Out Of SLA en TTF, aqui estan esas 5 exactas." Antes un alert-banner de
+                     ancho completo encima de los dash-tabs, visible sin importar en cual tab
+                     estuvieras — Nicolas señalo que eso "spameaba" el Team Dashboard. -->
+                <div class="panel" id="panelDashboardAttention" style="grid-column: span 6;">
+                  <h3>Needs Attention <span class="panel-details-count" id="dashboardAttentionCount"></span></h3>
+                  <div class="panel-sub">The specific positions behind the SLA Health numbers above (out of SLA or at risk) plus any stuck on Kickoff/Intake follow-up, most urgent first.</div>
+                  <div id="dashboardAttentionZone"></div>
                 </div>
               </div>
             </div>
@@ -2601,11 +2607,14 @@ function setDashboardScope(name, opts){
   main.style.transition = "";
   main.style.opacity = "1";
 }
-// Tarjeta "Needs Attention" dentro de Overview (ver panelDashboardAttention en el HTML) — mismo
-// patron y mismos datos/componente que el panel "Needs Attention" de Tracking (buildAttentionRows
-// + attentionRowsHtml), asi que las banderas se ven identicas en los dos lugares. Corre en Team
-// Workspace y en tu propio workspace por igual (dashboardPositions() ya resuelve el scope
-// correcto en los dos casos).
+// Tarjeta "Needs Attention" dentro de SLA & Completion (ver panelDashboardAttention en el HTML,
+// movida ahi desde Overview — Nicolas pidio repensar que va en cada tab; esta es el desglose
+// posicion-por-posicion de los numeros agregados de SLA Health, justo arriba en el mismo tab, asi
+// que tiene mas sentido vivir ahi que compitiendo por espacio en Overview con Submitted Vs
+// Expected) — mismo patron y mismos datos/componente que el panel "Needs Attention" de Tracking
+// (buildAttentionRows + attentionRowsHtml), asi que las banderas se ven identicas en los dos
+// lugares. Corre en Team Workspace y en tu propio workspace por igual (dashboardPositions() ya
+// resuelve el scope correcto en los dos casos).
 function renderDashboardAttentionBanner(){
   const {slaRows, completionRows} = buildAttentionRows(dashboardPositions());
   const zone = document.getElementById("dashboardAttentionZone");
@@ -3133,12 +3142,20 @@ function renderKpis(){
 
   // Total Requisitions: TODAS las asignadas alguna vez (incluye cerradas), no solo las activas
   // — complementa la tarjeta de arriba mostrando el panorama completo del ciclo de vida en vez
-  // de solo el momento actual. Activas vs Cerradas (Hired/Filled Internal Hire/Cancelled/Fell
-  // Through juntas, sin desglosar el motivo — eso ya vive en el status de cada una).
-  const closedPositions = allPositions.filter(p=>TERMINAL.includes(p.status));
+  // de solo el momento actual. BUG REAL de "informacion relevante" (Nicolas, auditoria de
+  // dashboard 2026-09-17): antes "Closed" mezclaba Hired (una colocacion real) con Cancelled/
+  // Fell Through (una perdida real) y Filled Internal Hire (ni una cosa ni la otra) en un solo
+  // balde gris sin distincion — un vistazo rapido no dejaba ver si lo cerrado fue exito o
+  // fracaso. Desglosado en 3 buckets reales, cada uno con su propio color semantico (mismo good/
+  // critical/neutral que ya usa el resto de la app).
+  const hiredPositions = allPositions.filter(p=>p.status==="Hired");
+  const lostPositions = allPositions.filter(p=>p.status==="Cancelled" || p.status==="Fell Through");
+  const internalHirePositions = allPositions.filter(p=>p.status==="Filled (Internal Hire)");
   const totalRows = [
     {label:"Active", value:active.length, positions:active, color:"var(--brand)"},
-    {label:"Closed", value:closedPositions.length, positions:closedPositions, color:"var(--neutral)"},
+    {label:"Hired", value:hiredPositions.length, positions:hiredPositions, color:"var(--good)"},
+    {label:"Cancelled / Fell Through", value:lostPositions.length, positions:lostPositions, color:"var(--critical)"},
+    {label:"Filled (Internal Hire)", value:internalHirePositions.length, positions:internalHirePositions, color:"var(--neutral)"},
   ].filter(r=>r.value>0);
   const totalRingRows = totalRows.length ? totalRows : [{label:"No requisitions", value:1, realValue:0, color:"var(--grid)"}];
   renderDonut("statRingTotal", totalRingRows, totalRingRows.map(r=>r.color), "Total", 168,
@@ -5903,8 +5920,9 @@ function activateView(view){
   // separadas) y se muestra en las dos — el banner de "Accept" para asignaciones/handoffs nuevos
   // tambien se usa desde Tracking (Nicolas señalo que aceptar una asignacion es justo algo que
   // se hace desde ahi). dashboardAttentionZone ya NO vive aca afuera — ahora es una tarjeta mas
-  // dentro del tab Overview (ver panelDashboardAttention en el HTML), asi que su visibilidad la
-  // maneja el toggle normal de dash-tab-panel/view, sin necesitar este toggle aparte.
+  // dentro del tab SLA & Completion (ver panelDashboardAttention en el HTML), asi que su
+  // visibilidad la maneja el toggle normal de dash-tab-panel/view, sin necesitar este toggle
+  // aparte.
   const dashboardOrTracking = (view === "dashboard" || view === "tracking") ? "" : "none";
   document.getElementById("pendingAssignmentZone").style.display = dashboardOrTracking;
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
