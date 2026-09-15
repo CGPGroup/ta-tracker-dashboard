@@ -3282,16 +3282,31 @@ function batchesSubmittedCount(p){
   return (p.batches || []).reduce((sum,b)=> sum + (Number(b.count) || 0), 0);
 }
 // Cuantos candidatos deberia tener submitted ESTA posicion a la fecha de hoy — usado por
-// "Submitted Vs Expected" (ver renderKpis()). 0 mientras el intake no ha pasado (el TTS ni
-// arranca, ver computeSla().TTS) o sigue dentro de la ventana del primer batch (9 dias habiles,
-// SLA_TARGETS.TTS); una vez se cumple esa ventana, 3.5 (primer batch), +3.5 mas por cada ciclo
-// de 5 dias habiles adicionales — mismo ritmo que ya describe STATUS_GUIDANCE["Sourcing"]
-// ("Follow-up batches every 5 business days").
+// "Submitted Vs Expected" (ver renderKpis()). 0 mientras el intake no ha pasado o sigue dentro
+// de la ventana del primer batch (9 dias habiles, SLA_TARGETS.TTS); una vez se cumple esa
+// ventana, 3.5 (primer batch), +3.5 mas por cada ciclo de 5 dias habiles adicionales — mismo
+// ritmo que ya describe STATUS_GUIDANCE["Sourcing"] ("Follow-up batches every 5 business days").
+// BUG REAL encontrado 2026-09-19 (Nicolas, viendo "23 de 21" y sin entender por que): la primera
+// version reusaba computeSla(p).TTS directo — pero esa metrica se CONGELA en Submission Date una
+// vez existe (asi debe ser PARA el TTS real, que mide "cuanto tardo el primer batch", no "cuanto
+// ha pasado en total"). Reusarla aqui hacia que una posicion ya en Offer Request con 9 candidatos
+// reales enviados (CE-020) mostrara expected=0 (el elapsed se habia congelado hace semanas, bajo
+// el target de 9 dias) — inflando el numerador sin que el denominador lo reflejara. Ahora esta
+// funcion calcula su PROPIO elapsed, siempre hasta HOY (nunca se congela), y una vez la posicion
+// ya paso de la etapa de armar/enviar batches (status >= "Submitted" en STATUS_ORDER), el
+// esperado se congela en lo que YA se envio (ni de mas ni de menos) — no tiene sentido seguir
+// pidiendo mas batches una vez el proceso paso a entrevistas/oferta.
 const FOLLOWUP_BATCH_INTERVAL_DAYS = 5;
 function expectedSubmittedForPosition(p){
-  const s = computeSla(p).TTS;
-  if(s.elapsed==null || s.elapsed<s.target) return 0;
-  const extraCycles = Math.floor((s.elapsed - s.target) / FOLLOWUP_BATCH_INTERVAL_DAYS);
+  const curIdx = STATUS_ORDER.indexOf(p.status);
+  const submittedIdx = STATUS_ORDER.indexOf("Submitted");
+  if(curIdx>=0 && curIdx>=submittedIdx) return batchesSubmittedCount(p);
+  const intake = parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake);
+  if(!intake) return 0;
+  const elapsed = bizDaysBetween(intake, new Date());
+  const target = SLA_TARGETS.TTS;
+  if(elapsed<target) return 0;
+  const extraCycles = Math.floor((elapsed - target) / FOLLOWUP_BATCH_INTERVAL_DAYS);
   return 3.5 * (1 + extraCycles);
 }
 // Offer out or ya aceptada — lo unico que todavia no es una colocacion confirmada (Hired) pero
