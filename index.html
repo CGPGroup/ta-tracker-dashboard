@@ -4055,7 +4055,14 @@ function attentionInfo(p){
 // activo) y la pantalla de entrada al perfil (Profile Gate), que necesita lo mismo pero para
 // un reclutador puntual antes de que activeDashboardScope quede seteado.
 function buildAttentionRows(positions){
-  const active = positions.filter(p=>!TERMINAL.includes(p.status));
+  // Antes solo excluia TERMINAL, asi que una posicion en Filled o en cualquiera de los dos On
+  // Hold (donde ya no hay trabajo de reclutamiento activo pasando, ver NOT_ACTIVELY_WORKED)
+  // seguia generando ruido aqui si su TTH quedaba out-of-SLA o si tenia un completionFlag viejo
+  // sin resolver — Nicolas: "eso de needs attention hace demasiado spam", una vez cerrada la
+  // oferta (o pausada) ya no es algo que el reclutador pueda accionar. Misma fuente de verdad
+  // que Active Positions (NOT_ACTIVELY_WORKED), para que "ya no cuenta como activa" signifique
+  // lo mismo en todo el tracker.
+  const active = positions.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
   const slaRows = active.map(p=>({p, ...attentionInfo(p)})).filter(r=>r.worst==="out"||r.worst==="risk");
   const order = {out:0, risk:1};
   slaRows.sort((a,b)=>{
