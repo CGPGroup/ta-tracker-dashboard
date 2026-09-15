@@ -2172,7 +2172,13 @@
 // negociable del master prompt: nada de sourcing antes del intake meeting). El motor de SLA
 // no necesita cambios para esto: computeSla() ya devuelve "Not started" en TTS/TTF/TTH
 // mientras el campo Intake Date siga vacio, que es justo el caso en estos 3 statuses.
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+// "Submitted" agregado 2026-09-19 (Nicolas: "despues del estado screening, deberia haber un
+// estado que se llame submitted, y de hecho de ahi es de donde podriamos llegar a halar la data
+// de expected vs submitted") — justo despues de Screening, antes de Technical Interview. p.submit
+// (Submission Date) ya existia como campo de Timeline; este status ahora se auto-avanza solo al
+// loguear el primer batch (ver logBatchSave()) o al backdatear Submission Date directo (ver
+// DATE_IMPLIES_STATUS en saveModalDates()) — mismo patron que Fill/Start Date/Intake dates.
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Submitted","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Tramo de STATUS_ORDER que SI tiene un "siguiente" lineal real (Kickoff -> ... -> Hired) — el
 // resto (Filled Internal Hire, Fell Through, On Hold, On Hold Internal, Cancelled) son ramas
 // aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
@@ -2181,13 +2187,13 @@ const PIPELINE_SEQUENCE = STATUS_ORDER.slice(0, STATUS_ORDER.indexOf("Hired")+1)
 // Nicolas: "por que este req sigue en kickoff por tanto tiempo si ya pediste el intake meeting,
 // o por que sigue en intake meeting held si ya pusiste la fecha en la que se tuvo el intake
 // meeting... basado en la logica de negocio" — un chequeo de "los datos ya implican mas progreso
-// del que dice el status" para los primeros pasos del pipeline, donde es facil que alguien llene
-// una fecha en Timeline directamente sin acordarse de tambien mover el dropdown de Status (a
-// diferencia de Fill/Start Date, que ya auto-avanzan el status solos, ver
-// [[project_status_date_sync]] — Intake Requested/Intake Meeting/primer batch no tienen ese mismo
-// auto-avance porque cada uno tiene mas de una razon legitima de state, asi que aqui solo se
-// AVISA, nunca se cambia el status solo). Devuelve null si el status actual ya va acorde a los
-// datos, o {nextStatus, reason} si parece atrasado.
+// del que dice el status" para los primeros pasos del pipeline. Estos 3 campos (Intake Requested/
+// Intake Meeting/primer batch) YA auto-avanzan el status solos desde 2026-09-19 (ver
+// DATE_IMPLIES_STATUS en saveModalDates() y logBatchSave()) — asi que para datos capturados DE
+// AHORA EN ADELANTE, esta funcion nunca deberia encontrar nada. Se deja como red de seguridad
+// para datos que ya quedaron desincronizados ANTES de ese fix (caso real: Garima Neema/RD-071,
+// SE-002 — ver [[project_intake_waived_visibility_bug]]/[[project_activity_chronological_order_fix]]).
+// Devuelve null si el status actual ya va acorde a los datos, o {nextStatus, reason} si no.
 function staleStatusHint(p){
   if(p.handoffFrom) return null;
   if(p.status==="Kickoff" && p.intakeRequestedDate){
@@ -2196,8 +2202,8 @@ function staleStatusHint(p){
   if(p.status==="Intake Meeting Requested" && p.intake){
     return {nextStatus:"Intake Pending", reason:"the Intake Meeting Date is already logged in Timeline"};
   }
-  if(p.status==="Intake Pending" && p.batches && p.batches.length){
-    return {nextStatus:"Sourcing", reason:"a submission batch is already logged"};
+  if((p.status==="Intake Pending" || p.status==="Sourcing" || p.status==="Screening") && p.batches && p.batches.length){
+    return {nextStatus:"Submitted", reason:"a submission batch is already logged"};
   }
   return null;
 }
@@ -2254,6 +2260,9 @@ const STATUS_DATE_FIELD = {
   // misma fecha que loguearla en Timeline ya exige el status, cerrando el loop en ambas direcciones.
   "Filled": {key:"fill", col:"J", label:"Fill Date"},
   "Hired": {key:"hire", col:"K", label:"Start Date"},
+  // "Submitted" (nuevo status, ver STATUS_ORDER) sigue el mismo criterio que Filled/Hired arriba
+  // — elegirlo a mano exige la misma Submission Date que ya usa Timeline/logBatchSave().
+  "Submitted": {key:"submit", col:"I", label:"Submission Date"},
 };
 // Mensaje de "que hacer ahora" por status — Nicolas pidio esto para todos los status, no solo
 // Kickoff. El texto vive centralizado aqui para poder ajustarlo facil si el proceso real cambia.
@@ -2278,6 +2287,7 @@ const STATUS_GUIDANCE = {
   "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
   "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Curate a batch of 3-5 candidates, never more, and get it to the hiring manager within 7-9 business days of the intake meeting.",
   "Screening": "Run Screening Interviews with your sourced candidates before submitting anyone formally. Only candidates you'd genuinely stand behind should move forward — leave your evaluation as a comment on each profile once you're ready to submit them.",
+  "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, move status to Technical Interview or Hiring Manager Interview, whichever comes first for this role.",
   "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch.",
   "Technical Interview": "Candidates are in technical interviews, usually the round before the Hiring Manager Interview. Same rule applies: feedback due within 1-3 business days per candidate, logged in Workable's Review tab.",
   "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
@@ -2448,6 +2458,10 @@ const STAGE_COLORS = {
   "Intake Pending": "var(--seq-300)",
   "Sourcing": "var(--seq-400)",
   "Screening": "var(--seq-500)",
+  // Solo hay --seq-100..600 definidos (Technical Interview, agregado antes, ya tuvo el mismo
+  // problema y reusa brand-dark) — en vez de inventar un septimo tono fijo, un color-mix real
+  // entre las dos rampas vecinas mantiene el mismo espiritu monocromatico sin tocar la paleta.
+  "Submitted": "color-mix(in srgb, var(--seq-500), var(--seq-600))",
   "Hiring Manager Interview": "var(--seq-600)",
   "Technical Interview": "var(--brand-dark)",
   "Offer Request": "var(--warning)",
@@ -2791,6 +2805,12 @@ const TERMINAL = ["Hired","Cancelled","Fell Through","Filled (Internal Hire)"];
 // vista nueva que necesite "esta activa de verdad" debe filtrar contra esta constante, nunca
 // reinventar el filtro localmente.
 const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates"];
+// Estados que son una decision de negocio explicita, no un paso mas del pipeline lineal — nunca
+// se tocan por un efecto secundario silencioso de loguear una fecha/batch (ver DATE_IMPLIES_STATUS
+// en saveModalDates() y el auto-avance de logBatchSave). Hoisted aqui (antes vivia solo dentro de
+// saveModalDates()) para que ambos lugares usen la MISMA lista — el resto de esta sesion fue
+// justo encontrar y arreglar casos de dos copias de la misma regla desincronizandose.
+const AUTO_STATUS_LOCKED = ["Cancelled","Fell Through","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates"];
 
 let RECRUITERS = ["Nicolás Patarroyo"];
 let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
@@ -3554,6 +3574,7 @@ const STAGE_WEIGHT = {
   "Intake Pending": 0.5,
   "Sourcing": 1.0,
   "Screening": 1.0,
+  "Submitted": 0.5,
   "Hiring Manager Interview": 0.5,
   "Technical Interview": 0.5,
   "Offer Request": 0.25,
@@ -5155,13 +5176,10 @@ async function saveModalDates(){
   // campos que ya tenian este problema en el otro extremo del pipeline (ver
   // [[project_stale_status_hint]], que solo avisaba sin corregir) — ahora se corrigen solos, en
   // vez de solo avisar, igual que Fill/Start Date.
-  const DATE_IMPLIES_STATUS = {intakeRequestedDate:"Intake Meeting Requested", intake:"Intake Pending", fill:"Filled", hire:"Hired"};
-  // Estados que son una decision de negocio explicita, no un paso mas del pipeline lineal — On
-  // Hold puede significar muchas cosas distintas (feedback vencido, pausa del cliente, etc.), asi
-  // que salir de ahi debe ser siempre una eleccion manual en el dropdown, nunca un efecto
-  // secundario silencioso de loguear una fecha. No depender solo del orden de STATUS_ORDER para
-  // esto (On Hold aparece DESPUES de Filled/Hired ahi por razones de layout, no de precedencia).
-  const AUTO_STATUS_LOCKED = ["Cancelled","Fell Through","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates"];
+  // "submit" agregado 2026-09-19 junto con Submitted (nuevo status, ver STATUS_ORDER) — el caso
+  // mas comun para esta fecha especifica es logBatchSave() (el primer batch la fija sola, ver
+  // ahi), pero tambien puede backdatearse aqui directo en Timeline, mismo criterio que las demas.
+  const DATE_IMPLIES_STATUS = {intakeRequestedDate:"Intake Meeting Requested", intake:"Intake Pending", submit:"Submitted", fill:"Filled", hire:"Hired"};
   // originalStatus (no solo el "from" del ultimo paso) importa cuando Fill Date y Start Date se
   // logean juntos en el mismo Save: la fila del loop primero avanza a Filled y luego, en la MISMA
   // pasada, a Hired — sin esto el log terminaria diciendo "Filled -> Hired" y se perderia que en
@@ -5247,7 +5265,7 @@ document.addEventListener("click", (e)=>{
 // legitimamente waived (ver p.intakeWaivedReason, "No Meeting Needed? Explain Why") cuenta
 // igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
 // empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
-const REQUIRES_INTAKE_HELD = ["Sourcing", "Screening", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
+const REQUIRES_INTAKE_HELD = ["Sourcing", "Screening", "Submitted", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
@@ -5631,15 +5649,36 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   p.batches.push({ date, type, count: count || null });
   // El primer batch fija Submission Date automaticamente, ese campo queda bloqueado en Timeline
   // hasta que exista al menos un batch (ver timelineFieldHtml() en renderDetailModal()).
-  if(isFirst) p.submit = date;
+  // Nicolas (2026-09-19): loguear el primer batch tambien deberia avanzar el status solo a
+  // "Submitted" — mismo patron de auto-avance que Fill/Start Date/Intake dates (ver
+  // DATE_IMPLIES_STATUS en saveModalDates()), nunca hacia atras ni sobre un status especial.
+  let autoStatusChange = null;
+  if(isFirst){
+    p.submit = date;
+    if(!AUTO_STATUS_LOCKED.includes(p.status) && STATUS_ORDER.indexOf("Submitted") > STATUS_ORDER.indexOf(p.status)){
+      autoStatusChange = {from: p.status, to: "Submitted"};
+      p.status = "Submitted";
+    }
+  }
+  let statusRemarkText = null;
+  if(autoStatusChange){
+    statusRemarkText = `Status changed from ${statusLabel(autoStatusChange.from)} to ${statusLabel(autoStatusChange.to)} (automatic — first batch logged).`;
+    p.extra = p.extra || [];
+    p.extra.push({date: localTodayStr(), type:"status", author: currentAuthorName(), text: statusRemarkText});
+  }
   renderDetailModal();
+  const savedNote = autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "";
   if(isConnected()){
     msg.textContent = "Saving…";
     msg.style.color = "var(--text-muted)";
     try {
       await graphAppendBatch(p.id, date, type, count || "");
       if(isFirst) await graphUpdatePositionField(p.id, "I", date);
-      msg.textContent = "Saved.";
+      if(autoStatusChange){
+        await graphUpdatePositionField(p.id, "G", autoStatusChange.to);
+        await graphAppendHistorial(p.id, p.title, statusRemarkText, currentAuthorName(), "status");
+      }
+      msg.textContent = "Saved." + savedNote;
       msg.style.color = "var(--good)";
     } catch(err){
       console.error(err);
@@ -5648,7 +5687,7 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
       return;
     }
   } else {
-    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365)." + savedNote;
     msg.style.color = "var(--warning)";
   }
   } finally {
