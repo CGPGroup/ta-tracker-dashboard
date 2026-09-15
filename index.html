@@ -749,6 +749,12 @@
   .sla-chip-holiday {
     font-size: 9px; font-weight: 700; opacity: 0.75; margin-left: 1px; cursor: help;
   }
+  /* Marca chica dentro del chip de SLA cuando el reloj arranca en la fecha de aceptacion del
+     handoff en vez del intake original (ver slaFor()'s handoffInfo) — sin esto el numero se ve
+     "demasiado bajo" sin explicar por que. */
+  .sla-chip-handoff {
+    font-size: 9px; font-weight: 700; opacity: 0.75; margin-left: 1px; cursor: help;
+  }
 
   /* ---------- Insert form ---------- */
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
@@ -2968,9 +2974,15 @@ function slaFor(p, key, closeDateStr){
   // debe arrancar cuando esa persona acepto el handoff, no en el intake original del recruiter
   // anterior (que puede haber sido semanas antes) — mismo criterio que ya usa stepHandoff en
   // computeCompletion() para el checklist de Requisition Completion.
+  // BUG REAL de transparencia encontrado 2026-09-19 (Nicolas: "no veo en ninguna parte que esos
+  // roles fueron handed off para saber entonces que si esta en SLA") — la regla de arriba SIEMPRE
+  // fue correcta, pero nada en la UI decia POR QUE el conteo arrancaba en una fecha mas reciente
+  // que el intake real. handoffInfo viaja en el objeto de retorno (mismo patron que
+  // holidaysInWindow) para que slaChip() pueda mostrar un marca+tooltip explicando el cambio.
+  const handoffInfo = p.handoffFrom ? {from: p.handoffFrom, acceptedDate: p.handoffAcceptedDate, originalIntake: p.intake} : null;
   const intake = parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake);
   const baseTarget = SLA_TARGETS[key];
-  if(!intake) return {status:"none", elapsed:null, target:baseTarget};
+  if(!intake) return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
   const start = nextBizDay(intake);
   const close = parseD(closeDateStr);
   const ref = close || new Date();
@@ -2993,7 +3005,7 @@ function slaFor(p, key, closeDateStr){
     // esto se vea en el chip (ver slaChip()) para que un TTS mas bajo de lo esperado no se
     // sienta como un error de conteo cuando en realidad es un feriado real descontado.
     const holidaysInWindow = holidaysBetween(intake, ref);
-    return {status, elapsed, target, holidaysInWindow};
+    return {status, elapsed, target, holidaysInWindow, handoffInfo};
   }
 
   // TTF / TTH: dias calendario desde el mismo start, con el allowance de Pivot SLA sumado al
@@ -3007,7 +3019,7 @@ function slaFor(p, key, closeDateStr){
   // Si ya hay fecha de cierre (fill/hire), el estatus queda fijo segun si se cumplio o no el
   // target (no aplica el margen de "at risk", que solo tiene sentido mientras el reloj corre).
   if(close) status = elapsed<=target ? "within" : "out";
-  return {status, elapsed, target};
+  return {status, elapsed, target, handoffInfo};
 }
 function computeSla(p){
   return { TTS: slaFor(p,"TTS",p.submit), TTF: slaFor(p,"TTF",p.fill), TTH: slaFor(p,"TTH",p.hire) };
@@ -4218,7 +4230,9 @@ function slaChip(s){
   // es un feriado real descontado del conteo de dias habiles.
   const h = s.holidaysInWindow;
   const holidayNote = h ? `<span class="sla-chip-holiday" title="Includes ${h} holiday${h===1?"":"s"} excluded from this business-day count">+${h}h</span>` : "";
-  return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}${holidayNote}</span>`;
+  const ho = s.handoffInfo;
+  const handoffNote = ho ? `<span class="sla-chip-handoff" title="SLA clock restarted at the handoff acceptance date (${ho.acceptedDate || "pending"}) instead of the original intake meeting (${ho.originalIntake || "n/a"}), since this requisition was handed off from ${ho.from}.">⇄</span>` : "";
+  return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}${holidayNote}${handoffNote}</span>`;
 }
 function attentionInfo(p){
   const s = computeSla(p);
