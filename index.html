@@ -609,7 +609,7 @@
   .tag { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; }
   .tag.official { background: var(--brand-wash); color: var(--brand-dark); }
   .tag.internal { background: var(--surface-2); color: var(--text-secondary); }
-  .stackbar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--grid); }
+  .stackbar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--grid); gap: 2px; }
   .stackbar > div { height: 100%; }
   .stackbar-legend { display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--text-secondary); }
   .stackbar-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -3169,7 +3169,7 @@ function renderKpis(){
   document.getElementById("statBarSubmitted").innerHTML = `
     <div class="funnel-row${active.length>0 ? " clickable-stat" : ""}">
       <div class="funnel-label">Candidates Submitted</div>
-      <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${barColor};"></div></div>
+      <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${gradientFill(barColor)};"></div></div>
       <div class="funnel-stat">
         <div class="funnel-value">${submittedTotal} / ${minExpected}</div>
         <div class="funnel-pct">${displayPct} of expected</div>
@@ -3187,7 +3187,7 @@ function renderBarlist(elId, rows, colorVar, onClickRow){
   document.getElementById(elId).innerHTML = rows.map((r,i)=>`
     <div class="barlist-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
       <div class="barlist-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
-      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${colorVar};"></div></div>
+      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill(colorVar)};"></div></div>
       <div class="barlist-value">${r.value}</div>
     </div>`).join("");
   if(onClickRow){
@@ -3213,7 +3213,7 @@ function renderFunnel(elId, rows, onClickRow){
     return `
     <div class="funnel-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
       <div class="funnel-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
-      <div class="funnel-track"><div class="funnel-fill" style="width:${(r.value/top*100).toFixed(1)}%; background:rgba(var(--brand-rgb),${opacity});"></div></div>
+      <div class="funnel-track"><div class="funnel-fill" style="width:${(r.value/top*100).toFixed(1)}%; background:${gradientFill(`rgba(var(--brand-rgb),${opacity})`)};"></div></div>
       <div class="funnel-stat">
         <div class="funnel-value">${r.value}</div>
         <div class="funnel-pct">position${r.value===1?"":"s"}</div>
@@ -3228,6 +3228,15 @@ function renderFunnel(elId, rows, onClickRow){
   }
 }
 
+// Reemplaza un relleno plano de barra por un degradado sutil del MISMO color (nunca un hue
+// nuevo) — Nicolas señalo que los charts se veian "planos, opacos, poco profesionales"; esto es
+// la version en CSS del mismo tratamiento que ya se le dio a los anillos (renderDonut, ver
+// gradDefs mas abajo). color-mix() acepta cualquier expresion de color valida (var(), rgba(),
+// hex), asi que sirve igual para los ~8 lugares que pintan una barra sin importar como esta
+// escrito ese color ahi.
+function gradientFill(color){
+  return `linear-gradient(90deg, color-mix(in srgb, ${color} 75%, white), ${color})`;
+}
 function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onClickRow){
   size = size || 140;
   // realTotal es la suma de verdad (puede ser 0); arcTotal nunca es 0, solo para que la
@@ -3242,13 +3251,22 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
   // "sin datos") no hay vecino del cual separarse, asi que no se le resta nada.
   const visibleCount = rows.filter(row=>row.value>0).length;
   const segGap = visibleCount > 1 ? sw * 0.55 : 0;
+  // Antes cada segmento era un color plano solido — se sentia chato/opaco. Un gradiente sutil
+  // (mismo tono, mas claro en la punta que "entra" y a toda intensidad donde "sale") le da
+  // profundidad real sin inventar un color nuevo ni romper la regla de un solo hue por segmento
+  // (sigue siendo el mismo color, solo con un poco de brillo direccional).
+  const gradDefs = rows.map((row,i)=> row.value>0 ? `
+    <linearGradient id="${elId}-grad-${i}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${colors[i % colors.length]}" stop-opacity="0.72"/>
+      <stop offset="100%" stop-color="${colors[i % colors.length]}" stop-opacity="1"/>
+    </linearGradient>` : "").join("");
   let offset = 0;
   const arcs = rows.map((row,i)=>{
     const frac = row.value/arcTotal;
     const rawDash = frac*circ;
     const dash = Math.max(0, rawDash - segGap);
     const gap = circ-dash;
-    const el = row.value>0 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" ${onClickRow?`class="clickable-stat" data-idx="${i}"`:""}></circle>` : "";
+    const el = row.value>0 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="url(#${elId}-grad-${i})" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" ${onClickRow?`class="clickable-stat" data-idx="${i}"`:""}></circle>` : "";
     offset += rawDash;
     return el;
   }).join("");
@@ -3267,7 +3285,7 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
   document.getElementById(elId).innerHTML = `
     <div class="donut-wrap">
       <div class="donut-svg-wrap" style="width:${size}px; height:${size}px;">
-        <svg viewBox="0 0 120 120">${arcs}</svg>
+        <svg viewBox="0 0 120 120"><defs>${gradDefs}</defs>${arcs}</svg>
         <div class="donut-center">
           <div class="donut-center-value" style="font-size:${valueFontSize}px;">${centerValue}</div>
           <div class="donut-center-label" style="font-size:${labelFontSize}px;">${centerLabel}</div>
@@ -3356,7 +3374,7 @@ function renderReclutadorChart(){
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
       <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
       ${jobTitle ? `<div class="workload-title">${escapeHtml(jobTitle)}</div>` : ""}
-      <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${workloadColor(r.value)};"></div></div>
+      <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.value))};"></div></div>
       <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
       ${slaHtml}
     </div>`;
@@ -3391,7 +3409,7 @@ function renderHiredLocChart(){
     return `
     <div class="barlist-row clickable-stat" data-idx="${i}">
       <div class="barlist-label">${escapeHtml(r.label)}</div>
-      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:var(--seq-400);"></div></div>
+      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div>
       <div class="barlist-value">${r.value}</div>
     </div>`;
   }).join("") : `<div class="panel-sub" style="margin:0;">No active positions.</div>`;
@@ -3417,7 +3435,7 @@ function renderHiredLocChart(){
     return `
     <div class="barlist-row clickable-stat" data-idx="${i}">
       <div class="barlist-label">${escapeHtml(r.label)}</div>
-      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${color};"></div></div>
+      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill(color)};"></div></div>
       <div class="barlist-value">${r.value}</div>
     </div>`;
   }).join("") : `<div class="panel-sub" style="margin:0;">No active positions.</div>`;
@@ -3441,7 +3459,7 @@ function renderSlaChart(){
     const counts = {within:0, risk:0, out:0, none:0};
     active.forEach(p=>{ counts[computeSla(p)[m.key].status]++; });
     const total = active.length || 1;
-    const seg = (k)=> `<div class="clickable-stat" data-metric="${m.key}" data-status="${k}" style="width:${(counts[k]/total*100).toFixed(2)}%; background:${STATUS_META[k].color};"></div>`;
+    const seg = (k)=> `<div class="clickable-stat" data-metric="${m.key}" data-status="${k}" style="width:${(counts[k]/total*100).toFixed(2)}%; background:${gradientFill(STATUS_META[k].color)};"></div>`;
     const part = (k, label)=> counts[k] ? `<span class="clickable-stat" data-metric="${m.key}" data-status="${k}">${counts[k]} ${label}</span>` : "";
     const parts = [part("within","within"), part("risk","at risk"), part("out","out of SLA"), part("none","not started")].filter(Boolean);
     return `
@@ -3664,12 +3682,12 @@ function renderPlacementsMonth(){
     <div class="barlist">
       <div class="barlist-row clickable-stat" data-which="last">
         <div class="barlist-label">${monthNameLast}</div>
-        <div class="barlist-track"><div class="barlist-fill" style="width:${(lastMonthCount/max*100).toFixed(1)}%; background:var(--baseline);"></div></div>
+        <div class="barlist-track"><div class="barlist-fill" style="width:${(lastMonthCount/max*100).toFixed(1)}%; background:${gradientFill("var(--baseline)")};"></div></div>
         <div class="barlist-value">${lastMonthCount}</div>
       </div>
       <div class="barlist-row clickable-stat" data-which="this">
         <div class="barlist-label">${monthNameThis}</div>
-        <div class="barlist-track"><div class="barlist-fill" style="width:${(thisMonthCount/max*100).toFixed(1)}%; background:var(--brand);"></div></div>
+        <div class="barlist-track"><div class="barlist-fill" style="width:${(thisMonthCount/max*100).toFixed(1)}%; background:${gradientFill("var(--brand)")};"></div></div>
         <div class="barlist-value">${thisMonthCount}</div>
       </div>
     </div>`;
