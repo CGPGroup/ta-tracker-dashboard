@@ -2304,6 +2304,13 @@ function kickoffProcessSectionsHtml(){
       <li>Follow-up batches (every 5 business days): 3-5 additional candidates from the pipeline already in progress, without restarting sourcing from scratch. This applies only if the previous batch was declined in full.</li>
     </ul>`;
 }
+// Solo el primer nombre del hiring manager en el saludo de estas notas ("Hi Kyle," no "Hi Kyle
+// Murphy,") — Nicolas pidio esto para las 3 variantes de Kickoff Note por igual (lead o
+// recruiter). El resto del cuerpo (donde se nombra el rol/req) sigue usando el nombre completo si
+// se necesitara en otro lado, esto solo afecta el saludo.
+function firstName(fullName){
+  return (fullName || "").trim().split(/\s+/)[0] || "";
+}
 // Registro de entregables: cada uno sabe construir su propio preview a partir de un req real.
 // title/subtitle van en el header del modal de preview; note (opcional) es la aclaracion de
 // checkpoint que el Master Prompt pide junto al entregable (ej. "asegurate que el Lead ya
@@ -2315,7 +2322,7 @@ const DELIVERABLE_TEMPLATES = {
     subtitle: "You're both the Lead Talent Partner and the recruiter running this requisition day-to-day — one note, sent to the hiring manager, no separate recruiter to introduce.",
     note: null,
     body: `
-      <p>Hi ${escapeHtml(p.hiringManager || "[Hiring Manager]")},</p>
+      <p>Hi ${escapeHtml(firstName(p.hiringManager) || "[Hiring Manager]")},</p>
       <p>My name is Nicolas, I'm the Lead Talent Partner assigned to the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) requisition.</p>
       <p>As part of the RPO partnership between Cornerstone and Irth Solutions, I wanted to reach out to align on how we'll work together, given this requires your ownership as the hiring manager. We'll keep all process documentation and feedback logged directly in Workable throughout.</p>
       ${kickoffProcessSectionsHtml()}
@@ -2326,7 +2333,7 @@ const DELIVERABLE_TEMPLATES = {
     subtitle: `Variant B — ${escapeHtml(p.recruiter || "the assigned recruiter")} owns this requisition day-to-day. This short note just introduces them; it's sent first, before their own Recruiter Kickoff Note.`,
     note: null,
     body: `
-      <p>Hi ${escapeHtml(p.hiringManager || "[Hiring Manager]")},</p>
+      <p>Hi ${escapeHtml(firstName(p.hiringManager) || "[Hiring Manager]")},</p>
       <p>My name is Nicolas, I'm the Lead Talent Partner for the Irth Solutions account. ${escapeHtml(p.recruiter || "[Recruiter]")} is your dedicated Talent Partner for the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) requisition, and will own this search day-to-day. [He/She] will reach out shortly to walk you through how we'll work together.</p>
       <p>I stay closely involved supporting [him/her] on this requisition, so if anything urgent comes up (a calibration call, or anything that can't wait), I'm here to help move things along.</p>
       <p>Looking forward to working with you.</p>`
@@ -2336,7 +2343,7 @@ const DELIVERABLE_TEMPLATES = {
     subtitle: `Sent by ${escapeHtml(p.recruiter || "the assigned recruiter")}, in the same email thread, right after the Lead Kickoff Note above.`,
     note: `Before sending this, make sure ${LEAD_TALENT_PARTNER} has already sent the short Lead Kickoff Note above in this same thread, introducing you to the hiring manager — that's what opens the door for this one. Not a hard blocker if you can't wait, but sending yours first would be out of order.`,
     body: `
-      <p>Hi ${escapeHtml(p.hiringManager || "[Hiring Manager]")},</p>
+      <p>Hi ${escapeHtml(firstName(p.hiringManager) || "[Hiring Manager]")},</p>
       <p>My name is ${escapeHtml(p.recruiter || "[Recruiter]")}, I'll be your dedicated Talent Partner for the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) requisition.</p>
       <p>As part of the RPO partnership between Cornerstone and Irth Solutions, I wanted to reach out to align on how we'll work together, given this requires your ownership as the hiring manager. We'll keep all process documentation and feedback logged directly in Workable throughout.</p>
       ${kickoffProcessSectionsHtml()}
