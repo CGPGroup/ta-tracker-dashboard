@@ -726,6 +726,11 @@
   .pos-title { font-weight: 600; }
   .pos-code { color: var(--text-muted); font-weight: 600; font-size: 11.5px; margin-left: 5px; white-space: nowrap; }
   .pos-pending-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: rgba(var(--warning-rgb),0.16); color: var(--warning); white-space: nowrap; }
+  /* Handoff que YA fue aceptado — a diferencia de pos-pending-badge (que desaparece una vez
+     aceptado), este se queda para siempre en la posicion, para que en Positions/Tracking/Needs
+     Attention/quick lists se vea de una que este req viene de otro reclutador sin tener que
+     abrirla. Color neutro de marca (no warning) porque no es una alerta, es informativo. */
+  .pos-handoff-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--brand-wash); color: var(--brand-dark); white-space: nowrap; cursor: help; }
   td.cell-position { white-space: normal; min-width: 220px; }
   td.cell-code { color: var(--text-muted); font-weight: 600; font-size: 11.5px; white-space: nowrap; }
 
@@ -1824,7 +1829,7 @@
       <div class="form-field full"><label>Work Arrangement</label><select id="reqInfoWorkArrangement"></select></div>
       <div class="form-field full">
         <label>Compensation <span style="font-weight:400; color:var(--text-muted);">(confirmed with the hiring manager)</span></label>
-        <div style="display:grid; grid-template-columns:90px 1fr 1fr; gap:8px;">
+        <div style="display:grid; grid-template-columns:90px 1fr 1fr 80px; gap:8px;">
           <select id="reqInfoSalaryCurrency">
             <option value="">Currency</option>
             <option value="USD">USD</option>
@@ -1833,6 +1838,11 @@
           </select>
           <input type="number" id="reqInfoSalaryMin" placeholder="Min (or flat amount)">
           <input type="number" id="reqInfoSalaryMax" placeholder="Max">
+          <select id="reqInfoSalaryPeriod" title="Rate period">
+            <option value="yr">/yr</option>
+            <option value="mo">/mo</option>
+            <option value="hr">/hr</option>
+          </select>
         </div>
         <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-top:6px;">
           <input type="checkbox" id="reqInfoSalaryFlat" style="width:auto;"> Flat rate (no range)
@@ -3201,8 +3211,11 @@ function posLabel(p, withCode){
   const pendingBadge = notYetAccepted
     ? `<span class="pos-pending-badge" title="${p.handoffFrom ? "Handoff context not confirmed yet" : "Not accepted yet"} — you can open it to view, but editing is locked until then.">${p.handoffFrom ? "Handoff Pending" : "Pending Accept"}</span>`
     : "";
+  const handoffBadge = (p.handoffFrom && p.handoffAcceptedDate)
+    ? `<span class="pos-handoff-badge" title="Handed off from ${escapeHtml(p.handoffFrom)}${p.handoffDate ? " on "+escapeHtml(p.handoffDate) : ""}, accepted ${escapeHtml(p.handoffAcceptedDate)}. The SLA clock restarted at that acceptance date.">⇄ Handed Off</span>`
+    : "";
   const codeSpan = withCode === false ? "" : `<span class="pos-code">${escapeHtml(p.id)}</span>`;
-  return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}`;
+  return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}${handoffBadge}`;
 }
 // Campos como Spott Job ID venian historicamente como un ID crudo (no un link), pero de aqui
 // en adelante deberian guardar la URL completa (pegada tal cual desde la barra de direcciones,
@@ -3250,9 +3263,10 @@ function formatSalary(p){
   const fmt = n => Number(n).toLocaleString("en-US");
   const min = fmt(p.salaryMin);
   const hasMax = p.salaryMax != null && p.salaryMax !== "" && Number(p.salaryMax) !== Number(p.salaryMin);
+  const period = `/${p.salaryPeriod || "yr"}`;
   return hasMax
-    ? `${p.salaryCurrency} $${min}-$${fmt(p.salaryMax)}`
-    : `${p.salaryCurrency} $${min} flat`;
+    ? `${p.salaryCurrency} $${min}-$${fmt(p.salaryMax)}${period}`
+    : `${p.salaryCurrency} $${min}${period} flat`;
 }
 function hasSalaryConfirmed(p){
   return !!(p.salaryCurrency && p.salaryMin != null && p.salaryMin !== "");
@@ -5463,6 +5477,7 @@ function openEditReqInfoModal(){
   const isFlat = p.salaryMin != null && (p.salaryMax == null || Number(p.salaryMax) === Number(p.salaryMin));
   document.getElementById("reqInfoSalaryFlat").checked = isFlat;
   document.getElementById("reqInfoSalaryMax").value = (!isFlat && p.salaryMax != null) ? p.salaryMax : "";
+  document.getElementById("reqInfoSalaryPeriod").value = p.salaryPeriod || "yr";
   toggleSalaryFlatUi();
   document.getElementById("reqInfoMsg").textContent = "";
   document.getElementById("editReqInfoModal").classList.add("open");
@@ -5497,6 +5512,7 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
     {key:"salaryCurrency", header:"Salary Currency", value: document.getElementById("reqInfoSalaryCurrency").value || null},
     {key:"salaryMin", header:"Salary Min", value: salaryMinVal},
     {key:"salaryMax", header:"Salary Max", value: salaryMaxVal},
+    {key:"salaryPeriod", header:"Salary Period", value: document.getElementById("reqInfoSalaryPeriod").value || "yr"},
   ];
   const changed = fields.filter(f => f.value !== (p[f.key] || null));
   if(!changed.length){
@@ -7199,6 +7215,10 @@ function parsePositionsTable(posHeaders, posRows){
       salaryCurrency: r[idx("Salary Currency")] || null,
       salaryMin: r[idx("Salary Min")] != null && r[idx("Salary Min")] !== "" ? r[idx("Salary Min")] : null,
       salaryMax: r[idx("Salary Max")] != null && r[idx("Salary Max")] !== "" ? r[idx("Salary Max")] : null,
+      // Nueva columna/opcional (ver [[project_compensation_field]]): "yr"/"mo"/"hr". Si el Excel
+      // real todavia no tiene la columna o el valor esta vacio, se asume "yr" — asi la data
+      // migrada (todos anuales salvo GA-030) sigue mostrandose igual sin tener que retocarla.
+      salaryPeriod: r[idx("Salary Period")] || "yr",
       sourced: r[idx("Sourced")],
       directApps: r[idx("Direct Apps")],
       submittedCount: r[idx("Submitted")],
@@ -7925,6 +7945,10 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
   // contra el header real de PositionsTable via Graph API antes de este fix. La compensacion
   // nunca se pide en este formulario (se confirma despues en Tracking, ver Entregable de
   // Compensation) — los 3 nulls al final son intencionales, no un placeholder temporal.
+  // Salary Period (ver [[project_compensation_field]]) se agrego DESPUES de Salary Max, como
+  // columna 57 — un 4to null aqui, no 3, o este array vuelve a quedar corto y rompe rows/add
+  // igual que el bug de arriba. Si se agrega cualquier otra columna a PositionsTable en el
+  // futuro, este array tiene que crecer con ella tambien.
   return [
     code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, fields.fill || null, fields.hire || null,
     null,null,null,null,null,null,null,null,null,null,null,null,
@@ -7938,6 +7962,7 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     null, null, null, null, null,
     null, null, null, headcountGroup, null,
     null, null, null,
+    null,
   ];
 }
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
