@@ -1158,7 +1158,7 @@
                    aparezca ahi no rompe la fila de 2. -->
               <div class="panel panel-ring" style="grid-column: span 3;">
                 <h3>Total Requisitions</h3>
-                <div class="panel-sub">Every requisition ever assigned — active, or closed out as a real hire, a loss (cancelled/fell through), or filled internally by the client.</div>
+                <div class="panel-sub">Every requisition ever assigned — active, or closed out as a placement, a loss (cancelled/fell through), or filled internally by the client.</div>
                 <div id="statRingTotal"></div>
               </div>
               <div class="panel" id="panelWorkloadByRecruiter" style="grid-column: span 3;">
@@ -1246,11 +1246,11 @@
                 </div>
                 <div class="panel" style="grid-column: span 3;">
                   <h3>Placements This Month</h3>
-                  <div class="panel-sub">Confirmed hires, this month vs last month</div>
+                  <div class="panel-sub">Confirmed placements, this month vs last month</div>
                   <div id="chartPlacementsMonth"></div>
                 </div>
                 <div class="panel" style="grid-column: span 6;">
-                  <h3 id="hiresTrendTitle">Hires Per Month</h3>
+                  <h3 id="hiresTrendTitle">Placements Per Month</h3>
                   <div class="panel-sub">Confirmed placements per month, year to date. Click a point to see who.</div>
                   <div id="chartHiresTrend"></div>
                 </div>
@@ -3694,7 +3694,7 @@ function renderCompletionChart(){
 function renderHiresTrend(){
   const now = new Date();
   const year = now.getFullYear();
-  document.getElementById("hiresTrendTitle").textContent = `Hires Per Month (${year})`;
+  document.getElementById("hiresTrendTitle").textContent = `Placements Per Month (${year})`;
   const ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const months = ALL_MONTHS.slice(0, now.getMonth() + 1);
   const counts = new Array(months.length).fill(0);
@@ -3744,7 +3744,7 @@ function renderHiresTrend(){
   ).join("");
   // Titulo del eje Y rotado, mismo detalle que trae la referencia de KeyStone AI ("Sessions",
   // "Searches", etc. de lado) en vez de dejar los numeros del eje sin ninguna etiqueta.
-  const yAxisTitle = `<text x="12" y="${((padT+h-padB)/2).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-muted)" transform="rotate(-90 12 ${((padT+h-padB)/2).toFixed(1)})">Hires</text>`;
+  const yAxisTitle = `<text x="12" y="${((padT+h-padB)/2).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-muted)" transform="rotate(-90 12 ${((padT+h-padB)/2).toFixed(1)})">Placements</text>`;
   const xLabels = points.map((p,i)=>
     `<text x="${p.x.toFixed(1)}" y="${h-18}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${months[i]}</text>`
   ).join("");
@@ -3771,7 +3771,7 @@ function renderHiresTrend(){
   document.querySelectorAll('#chartHiresTrend [data-month-i]').forEach(el=>{
     el.addEventListener("click", ()=>{
       const i = Number(el.dataset.monthI);
-      openQuickList(`Hired in ${months[i]} ${year}`, `${counts[i]} position${counts[i]===1?"":"s"}`, positionsByMonth[i]);
+      openQuickList(`Placements in ${months[i]} ${year}`, `${counts[i]} position${counts[i]===1?"":"s"}`, positionsByMonth[i]);
     });
   });
 }
@@ -3810,10 +3810,10 @@ function renderPlacementsMonth(){
       </div>
     </div>`;
   document.querySelector('#chartPlacementsMonth [data-which="last"]').addEventListener("click", ()=>{
-    openQuickList(`Hired in ${monthNameLast}`, `${lastMonthCount} position${lastMonthCount===1?"":"s"}`, lastMonthPositions);
+    openQuickList(`Placements in ${monthNameLast}`, `${lastMonthCount} position${lastMonthCount===1?"":"s"}`, lastMonthPositions);
   });
   document.querySelector('#chartPlacementsMonth [data-which="this"]').addEventListener("click", ()=>{
-    openQuickList(`Hired in ${monthNameThis}`, `${thisMonthCount} position${thisMonthCount===1?"":"s"}`, thisMonthPositions);
+    openQuickList(`Placements in ${monthNameThis}`, `${thisMonthCount} position${thisMonthCount===1?"":"s"}`, thisMonthPositions);
   });
 }
 
