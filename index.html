@@ -2311,8 +2311,8 @@ function kickoffProcessSectionsHtml(){
 // sin convertir — regla explicita del Master Prompt para que el copiado quede listo para pegar).
 const DELIVERABLE_TEMPLATES = {
   leadKickoffA: p => ({
-    title: "Lead Kickoff Note",
-    subtitle: "Variant A — you're both the Lead Talent Partner and the recruiter running this requisition day-to-day. Sent to the hiring manager.",
+    title: "Kickoff Note (You're The Recruiter)",
+    subtitle: "You're both the Lead Talent Partner and the recruiter running this requisition day-to-day — one note, sent to the hiring manager, no separate recruiter to introduce.",
     note: null,
     body: `
       <p>Hi ${escapeHtml(p.hiringManager || "[Hiring Manager]")},</p>
@@ -2348,8 +2348,14 @@ const DELIVERABLE_TEMPLATES = {
 // construya su propio entregable, nunca todos de una sola vez (ver nota arriba).
 function guidanceDeliverablesFor(p){
   if(p.status === "Kickoff"){
+    // El contenido de leadKickoffA ya estaba bien adaptado (un solo correo, en primera persona,
+    // sin presentar a nadie mas) para cuando el Lead Talent Partner es tambien el reclutador
+    // asignado — pero el LABEL del chip seguia diciendo lisa y llanamente "Lead Kickoff Note",
+    // igual que en el otro caso (leadKickoffB), donde SI es un Lead presentando a un reclutador
+    // aparte. Nicolas, viendo su propio req: "esa nota no tiene el nombre correcto" — el label
+    // sugeria la nota equivocada aunque el contenido real ya fuera el correcto.
     return p.recruiter === LEAD_TALENT_PARTNER
-      ? [{id:"leadKickoffA", label:"Lead Kickoff Note"}]
+      ? [{id:"leadKickoffA", label:"Kickoff Note (You're The Recruiter)"}]
       : [{id:"leadKickoffB", label:"Lead Kickoff Note"}, {id:"recruiterKickoff", label:"Recruiter Kickoff Note"}];
   }
   return [];
