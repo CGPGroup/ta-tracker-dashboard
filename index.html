@@ -3440,10 +3440,14 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
 function renderEstadoChart(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const stages = STATUS_ORDER.filter(s=>!TERMINAL.includes(s));
-  const counts = stages.map(s=>({label:s, value: active.filter(p=>p.status===s).length})).filter(r=>r.value>0);
+  // key = status real (para filtrar/hacer match), label = statusLabel(key) (lo que se ve) — antes
+  // usaba el status crudo como label Y como llave a la vez, asi que "Intake Pending" se mostraba
+  // sin pasar por statusLabel() (se veia "Intake Pending" en vez de "Intake Held" en este chart
+  // especifico, encontrado en auditoria 2026-09-19).
+  const counts = stages.map(s=>({key:s, label:statusLabel(s), value: active.filter(p=>p.status===s).length})).filter(r=>r.value>0);
   renderFunnel("chartEstado", counts, (row)=>{
     openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
-      active.filter(p=>p.status===row.label));
+      active.filter(p=>p.status===row.key));
   });
 }
 
@@ -4203,7 +4207,11 @@ function renderTracking(){
   // dashboardPositions() ya viene filtrado al reclutador del perfil activo (Tracking solo se
   // puede ver dentro de un perfil), asi que no hace falta un select de "Recruiter" aparte.
   const rows = dashboardPositions().filter(p=>{
-    if(onlyActive && TERMINAL.includes(p.status)) return false;
+    // "Active Only" usaba solo TERMINAL — dejaba pasar Filled/On Hold/On Hold-Internal, que ya
+    // no cuentan como "activo" en ningun otro lugar del tracker (ver NOT_ACTIVELY_WORKED,
+    // encontrado en auditoria 2026-09-19: este checkbox era el unico lugar que se habia quedado
+    // con la definicion vieja).
+    if(onlyActive && (TERMINAL.includes(p.status) || NOT_ACTIVELY_WORKED.includes(p.status))) return false;
     if(est && p.status!==est) return false;
     if(ttsF || ttfF || tthF){
       const s = computeSla(p);
@@ -6737,7 +6745,7 @@ async function graphSendTrackerLinkEmail(email, siteUrl, name){
     <p>Hi ${greeting},</p>
     <p>You've been given access to the Irth Talent Acquisition Tracker, the team's single
     source of truth for every Irth Solutions requisition Cornerstone is working, from the
-    moment a req is assigned through to hire.</p>
+    moment a req is assigned through to placement.</p>
     <p>Please treat it with care: everything you'll see is live, real recruiting data. Don't
     share this link outside the team, and if you're ever not sure whether something should be
     changed, check with Nicolás first.</p>
