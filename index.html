@@ -376,6 +376,15 @@
      era la opacidad heredada del contenedor. Se anula aqui, especifico a .ps-stat, sin tocar
      .clickable-stat en ningun otro lado del tracker. */
   .ps-stat.clickable-stat:hover { opacity: 1; }
+  /* Nicolas, dibujo a mano: quiere que el numero mismo tambien se vea "envuelto"/resaltado
+     durante el hover — como la base ancha del embudo — para que el numero, el conector y la caja
+     se lean como una sola forma continua, no tres piezas sueltas. */
+  .ps-stat::before {
+    content: ""; position: absolute; top: -8px; left: -10px; right: -10px; bottom: -8px;
+    border-radius: 14px; background: var(--surface-2); opacity: 0;
+    transition: opacity 0.18s ease; pointer-events: none; z-index: -1;
+  }
+  .ps-stat:hover::before, .ps-stat:focus-within::before { opacity: 1; }
   /* BUG REAL encontrado 2026-09-18 (Nicolas: "si algo hover, se alcanza a ver lo que este en el
      fondo y se confunde, no se lee bien"): el popover vive DENTRO de #panelPositionsSummary, un
      grid item de .dash-grid sin z-index propio — su z-index:30 de mas abajo solo gana DENTRO de
@@ -398,21 +407,29 @@
      entre el numero y el texto. */
   .ps-hover-popover {
     position: absolute; top: calc(100% + 18px); left: 50%;
-    transform: translateX(-50%) translateY(-4px);
+    transform-origin: top center;
+    transform: translateX(-50%) translateY(-6px) scaleY(0.85);
     min-width: 190px; max-width: 260px;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 12px; box-shadow: var(--shadow), 0 8px 20px rgba(0,0,0,0.35);
     text-align: left; z-index: 30; pointer-events: none;
-    opacity: 0; visibility: hidden; transition: opacity 0.12s ease, transform 0.12s ease;
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.28s;
   }
   .ps-stat:hover .ps-hover-popover, .ps-stat:focus-within .ps-hover-popover {
-    opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+    opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0) scaleY(1);
   }
   .ps-hover-popover::after {
-    content: ""; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    content: ""; position: absolute; bottom: 100%; left: 50%;
+    transform: translateX(-50%) scaleY(0.3);
     width: 85%; height: 18px; background: var(--surface-1);
     clip-path: polygon(43% 0%, 57% 0%, 100% 100%, 0% 100%);
     filter: drop-shadow(0 -2px 1px rgba(0,0,0,0.18));
+    transform-origin: top center;
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ps-stat:hover .ps-hover-popover::after, .ps-stat:focus-within .ps-hover-popover::after {
+    transform: translateX(-50%) scaleY(1);
   }
   .ps-hover-popover-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
   .ps-hover-popover ul { margin: 0; padding: 0; list-style: none; }
@@ -7677,6 +7694,90 @@ async function connectM365(){
   }
 }
 
+// ============================================================
+// DEMO MODE — 2026-09-18, Nicolas: "necesito ver como quedo todo con mis propios ojos y testear
+// que no haga falta algo o que hay bugs". Nunca toca datos reales: reusa el MISMO fallback
+// "kept in this browser tab only" que ya existe en CADA escritura de este archivo cuando
+// isConnected() es false — demo mode simplemente nunca conecta con Microsoft 365 ni con PIN, asi
+// que ese fallback aplica solo, sin codigo nuevo por cada feature. Vive en el mismo index.html
+// que todo lo demas (no es un archivo ni un deploy aparte) — cualquier cambio futuro al tracker
+// ya queda disponible aqui automaticamente, sin ningun paso extra de sincronizacion.
+// Se activa con ?demo=1 en la URL, ANTES de que arranque el flujo normal de login/Public Access.
+function isDemoModeUrl(){
+  return new URLSearchParams(location.search).get("demo") === "1";
+}
+const DEMO_RECRUITER_NAME = "Sam Rivera";
+// daysAgoStr(0) = hoy — todas las fechas de los reqs de ejemplo se calculan relativas a HOY, no
+// fijas, para que el demo se vea igual de real sin importar cuando se abra.
+function daysAgoStr(n){
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function buildDemoPositions(){
+  return [
+    // DEMO-001: recien asignado, todavia en Kickoff — para probar "Confirm Kickoff Note Sent" y
+    // el Kickoff Note (deliverable) desde cero.
+    {
+      id:"DEMO-001", title:"Backend Engineer (Demo)", client:"Irth Solutions", hiringManager:"Jordan Ellis",
+      recruiter:DEMO_RECRUITER_NAME, status:"Kickoff", country:"United States", workArrangement:"Remote", city:null,
+      spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
+      sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
+      kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:daysAgoStr(0), intake:null, submit:null, fill:null, hire:null,
+      lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
+      calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
+      extra:[], batches:[], batchCandidates:[], remarksHistory:[],
+    },
+    // DEMO-002: kickoff note ya se mando, esperando la fecha del intake — para probar los DOS
+    // caminos desde "Intake Meeting Requested": loguear la fecha real, o waivearlo (con las 4
+    // razones + adjuntar una captura de correo).
+    {
+      id:"DEMO-002", title:"Product Designer (Demo)", client:"Irth Solutions", hiringManager:"Priya Nandan",
+      recruiter:DEMO_RECRUITER_NAME, status:"Intake Meeting Requested", country:"Canada", workArrangement:"Hybrid", city:"Toronto",
+      spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
+      sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
+      kickoff:daysAgoStr(5), intakeRequestedDate:daysAgoStr(5), recruiterAcceptedDate:daysAgoStr(5), intake:null, submit:null, fill:null, hire:null,
+      lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
+      calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
+      extra:[], batches:[], batchCandidates:[], remarksHistory:[],
+    },
+    // DEMO-003: intake ya sostenido, compensacion ya confirmada (para no bloquear Log Batch de
+    // entrada) — para probar Log Batch con nombres + CV, el gate de "no interview sin batch", y
+    // avanzar por el resto del pipeline (Technical Interview -> ... -> Hired).
+    {
+      id:"DEMO-003", title:"Data Analyst (Demo)", client:"Irth Solutions", hiringManager:"Marcus Webb",
+      recruiter:DEMO_RECRUITER_NAME, status:"Sourcing", country:"United States", workArrangement:"Remote", city:null,
+      spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      salaryCurrency:"USD", salaryMin:90000, salaryMax:110000, salaryPeriod:"yr",
+      sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
+      kickoff:daysAgoStr(15), intakeRequestedDate:daysAgoStr(15), recruiterAcceptedDate:daysAgoStr(15), intake:daysAgoStr(10), submit:null, fill:null, hire:null,
+      lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
+      calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
+      extra:[], batches:[], batchCandidates:[], remarksHistory:[],
+    },
+  ];
+}
+async function loadDemoModeAndRender(){
+  publicAccessMode = false;
+  pinModeActive = false;
+  POSITIONS = buildDemoPositions();
+  RECRUITERS = [DEMO_RECRUITER_NAME];
+  RECRUITER_PHOTOS = {}; RECRUITER_TITLES = { [DEMO_RECRUITER_NAME]: "Talent Partner" }; RECRUITER_EMAILS = {};
+  LOCATIONS = [...new Set(POSITIONS.flatMap(p => splitCountries(p.country)))];
+  MY_RECRUITER_NAME = DEMO_RECRUITER_NAME;
+  renderAll();
+  setConnectionUi(false);
+  document.getElementById("demoBanner").innerHTML =
+    "🧪 DEMO MODE — fake requisitions, nothing here saves anywhere. Reload the page to reset back to these 3 examples.";
+  setDashboardScope(DEMO_RECRUITER_NAME);
+  activateView("tracking");
+}
+
 async function trysilentConnect(){
   // Si ya habia una sesion de PIN guardada de antes (localStorage — sobrevive entre pestañas,
   // a diferencia de sessionStorage), restaurarla YA, sin esperar nada de MSAL — quien entra
@@ -8603,7 +8704,7 @@ function hideAppLoadingOverlay(){
   const wait = Math.max(0, APP_LOADING_MIN_MS - (Date.now() - appLoadingStartedAt));
   setTimeout(()=> el.classList.add("hidden"), wait);
 }
-trysilentConnect().finally(hideAppLoadingOverlay);
+(isDemoModeUrl() ? loadDemoModeAndRender() : trysilentConnect()).finally(hideAppLoadingOverlay);
 // Red de seguridad: si algo se cuelga de forma inesperada (conexion lenta, error no
 // capturado en algun punto de la cadena), la pantalla de carga no debe quedar pegada para
 // siempre, a los 12s se revela la app igual, con lo que haya cargado hasta ese momento.
