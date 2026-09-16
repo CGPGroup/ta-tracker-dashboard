@@ -977,6 +977,7 @@
   .timeline li { display: flex; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
   .timeline li:last-child { border-bottom: none; }
   .timeline .tl-date { flex: none; width: 76px; color: var(--text-muted); font-size: 11px; padding-top: 1px; }
+  .timeline .tl-time { font-size: 9.5px; opacity: 0.75; }
   .timeline .tl-badge {
     /* Ancho fijo (no solo flex:none) — sin esto cada tag ocupaba su ancho natural de texto
        ("Status Change" vs "Action" son anchos muy distintos), asi que tl-text arrancaba en una
@@ -2769,7 +2770,7 @@ async function acceptAssignment(positionId){
   // reclutador SI hizo (aceptar la asignacion), asi que lleva su propio tag.
   const remarkText = "Accepted the assignment.";
   p.extra = p.extra || [];
-  p.extra.push({date: today, type:"action", author:currentAuthorName(), text:remarkText});
+  p.extra.push({date: today, time: nowTimeStr(), type:"action", author:currentAuthorName(), text:remarkText});
   acceptedConfirmations.push({id:p.id, title:posLabel(p)});
   renderPendingAssignments();
   if(isConnected()){
@@ -4705,10 +4706,14 @@ function buildTimeline(p){
   });
 }
 const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step" };
+// e.time (opcional/nueva, ver graphAppendHistorial()'s columna Time) — entradas viejas sin hora
+// simplemente no muestran la segunda linea, nunca rompe nada. Nicolas: "no se si podamos agregar
+// en el timestamp la hora para asi poder ver mejor el historial" — sobre todo util para desempatar
+// visualmente varias entradas del mismo dia sin tener que adivinar el orden real.
 function timelineListHtml(timeline, emptyText){
   return timeline.length ? timeline.map(e=>`
     <li>
-      <span class="tl-date">${e.date}</span>
+      <span class="tl-date">${e.date}${e.time ? `<br><span class="tl-time">${escapeHtml(e.time)}</span>` : ""}</span>
       <span class="tl-badge ${e.type}">${TL_BADGE_LABELS[e.type] || "Remark"}</span>
       <span class="tl-text">${escapeHtml(e.text)}${e.author?` <span style="color:var(--text-muted);">(${escapeHtml(displayAuthorName(e.author))})</span>`:""}</span>
     </li>`).join("") : `<li class="tl-text" style="color:var(--text-muted);">${emptyText || "No activity logged yet."}</li>`;
@@ -4722,6 +4727,12 @@ function timelineListHtml(timeline, emptyText){
 function localTodayStr(){
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+// Hora local (HH:MM) de este mismo instante — se guarda junto con cada entrada nueva de Activity
+// (ver graphAppendHistorial()'s columna Time, opcional/aditiva) para que aparezca de una vez en
+// pantalla sin tener que esperar a recargar y volver a leerla desde Excel.
+function nowTimeStr(){
+  return new Date().toTimeString().slice(0,5);
 }
 // Item de Timeline entre Submission Date y Fill Date (no es un campo de fecha, es un boton que
 // abre el mismo Log Batch modal — ver openLogBatchModal()) — su texto refleja el estado real:
@@ -5500,7 +5511,7 @@ async function saveModalDates(){
   if(autoStatusChange){
     statusRemarkText = `Status changed from ${statusLabel(autoStatusChange.from)} to ${statusLabel(autoStatusChange.to)} (automatic — ${triggeredBy.join(", ")} logged).`;
     p.extra = p.extra || [];
-    p.extra.push({date: localTodayStr(), type:"status", author:currentAuthorName(), text: statusRemarkText});
+    p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author:currentAuthorName(), text: statusRemarkText});
   }
   renderAll();
   renderDetailModal();
@@ -5838,7 +5849,7 @@ async function markPivotApproval(p, who){
   if(btn) btn.disabled = true;
   if(who === "lead") p.pivotApprovedByLeadDate = today; else p.pivotConfirmedByImmyDate = today;
   p.extra = p.extra || [];
-  p.extra.push({date: today, type:"action", author:currentAuthorName(), text});
+  p.extra.push({date: today, time: nowTimeStr(), type:"action", author:currentAuthorName(), text});
   renderDetailModal();
   if(isConnected()){
     msg.textContent = "Saving…";
@@ -6130,7 +6141,7 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   if(autoStatusChange){
     statusRemarkText = `Status changed from ${statusLabel(autoStatusChange.from)} to ${statusLabel(autoStatusChange.to)} (automatic — first batch logged).`;
     p.extra = p.extra || [];
-    p.extra.push({date: localTodayStr(), type:"status", author: currentAuthorName(), text: statusRemarkText});
+    p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: statusRemarkText});
   }
   renderDetailModal();
   const savedNote = autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "";
@@ -6181,7 +6192,7 @@ document.getElementById("pivotRequestSave").addEventListener("click", async ()=>
   p.pivotRequestedDate = today;
   p.extra = p.extra || [];
   const remarkText = `Requested Pivot SLA: ${text}`;
-  p.extra.push({date: today, type:"action", author:currentAuthorName(), text: remarkText});
+  p.extra.push({date: today, time: nowTimeStr(), type:"action", author:currentAuthorName(), text: remarkText});
   renderDetailModal();
   if(isConnected()){
     msg.textContent = "Saving…";
@@ -6228,7 +6239,7 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
   p.calibrationCallDate = date;
   const remarkText = `Calibration call held with the hiring manager on ${date}.`;
   p.extra = p.extra || [];
-  p.extra.push({date, type:"action", author:currentAuthorName(), text: remarkText});
+  p.extra.push({date, time: nowTimeStr(), type:"action", author:currentAuthorName(), text: remarkText});
   renderDetailModal();
   if(isConnected()){
     msg.textContent = "Saving…";
@@ -6373,7 +6384,7 @@ document.getElementById("reassignSave").addEventListener("click", async ()=>{
     p.handoffAcceptedDate = null;
     const remarkText = `Handed off from ${oldRecruiter} to ${newRecruiter}.`;
     p.extra = p.extra || [];
-    p.extra.push({date: today, type:"action", author:currentAuthorName(), text: remarkText});
+    p.extra.push({date: today, time: nowTimeStr(), type:"action", author:currentAuthorName(), text: remarkText});
     if(toReassign.length > 1){
       msg.textContent = `Reassigning ${i+1} of ${toReassign.length} (${p.id})…`;
       msg.style.color = "var(--text-muted)";
@@ -6459,7 +6470,7 @@ document.getElementById("acceptHandoffSave").addEventListener("click", async ()=
   p.handoffAcceptedDate = today;
   const remarkText = `Accepted handoff from ${p.handoffFrom}: ${checkedLabels.join(", ")}.`;
   p.extra = p.extra || [];
-  p.extra.push({date: today, type:"action", author:currentAuthorName(), text: remarkText});
+  p.extra.push({date: today, time: nowTimeStr(), type:"action", author:currentAuthorName(), text: remarkText});
   renderPendingAssignments();
   renderDetailModal();
   renderPositions();
@@ -6516,7 +6527,7 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     }
     return;
   }
-  p.extra.push({date: today, type:"status", author:currentAuthorName(), text:remarkText});
+  p.extra.push({date: today, time: nowTimeStr(), type:"status", author:currentAuthorName(), text:remarkText});
   p.status = newStatus;
   if(dateField) p[dateField.key] = dateVal;
   pendingStatusChange = null;
@@ -6564,7 +6575,7 @@ async function confirmNextStepDone(p){
   if(!text) return;
   const remarkText = `Next step confirmed: ${text}`;
   p.extra = p.extra || [];
-  p.extra.push({date: localTodayStr(), type:"action", author: currentAuthorName(), text: remarkText});
+  p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text: remarkText});
   renderDetailModal();
   renderTracking();
   renderPositions();
@@ -6611,7 +6622,7 @@ async function saveModalRemark(){
   const text = document.getElementById("modalRemarkText").value.trim();
   if(!text) return;
   p.extra = p.extra || [];
-  p.extra.push({date: localTodayStr(), type:"manual", author:currentAuthorName(), text});
+  p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"manual", author:currentAuthorName(), text});
   p.lastRemark = text;
   renderDetailModal();
   renderTracking();
@@ -7699,8 +7710,12 @@ function mergeLatestRemarks(positions, histHeaders, histRows){
     const remark = row[hIdx("Remark")];
     const author = row[hIdx("Author")];
     const type = row[hIdx("Type")];
+    // Time es opcional/nueva (ver graphAppendHistorial()) — hIdx da -1 si el Excel real todavia
+    // no tiene la columna, row[-1] es undefined, no rompe nada; entradas viejas simplemente no
+    // tienen hora (timelineListHtml() ya maneja eso, solo muestra la fecha en ese caso).
+    const time = row[hIdx("Time")] || null;
     if(!remark || !dateStr) return;
-    (byPos[pid] = byPos[pid] || []).push({ date: dateStr, text: remark, author, type });
+    (byPos[pid] = byPos[pid] || []).push({ date: dateStr, text: remark, author, type, time });
   });
   positions.forEach(p => {
     const history = (byPos[p.id] || []).sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
@@ -8011,16 +8026,27 @@ async function graphUpdateRecruiterField(name, columnLetter, value){
 // status y mensajes de guia — antes siempre se escribia "manual" ahi, asi que todo el historial
 // pasado se veia como un remark generico sin importar que fuera en realidad (ver
 // mergeLatestRemarks()/buildTimeline()).
+// Time (opcional, ver [[project_activity_chronological_order_fix]]): columna nueva/aditiva en
+// HistorialTable, hora local de cuando se logueo (HH:MM), para desambiguar Activity visualmente
+// cuando varias entradas caen el mismo dia. NUNCA se manda un numero fijo de columnas — rows/add
+// exige el ancho EXACTO de la Tabla real en ese momento (mismo motivo que graphAppendPosition()):
+// si Time todavia no existe en el Excel real, mandar 7 valores contra una tabla de 6 rompe TODO
+// log de Activity (remarks, cambios de status, batches, todo pasa por aqui), no solo la hora — se
+// lee el ancho real justo antes de escribir y se recorta la fila a eso, nunca se asume de antemano.
 async function graphAppendHistorial(positionId, positionTitle, remark, author, type){
   const today = localTodayStr();
+  const time = nowTimeStr();
   // author se ignora del lado del Worker en modo PIN (siempre usa el nombre ya verificado por
   // PIN, nunca lo que mande el cliente) — se sigue pasando aqui solo por si el llamador lo usa
   // para otra cosa, no porque el Worker lo necesite.
-  if(pinModeActive) return workerRecruiterWrite("appendHistorial", {positionId, positionTitle, text: remark, type: type || "manual", date: today});
+  if(pinModeActive) return workerRecruiterWrite("appendHistorial", {positionId, positionTitle, text: remark, type: type || "manual", date: today, time});
+  const headerResp = await graphFetch(`${await workbookBase()}/tables('HistorialTable')/headerRowRange`);
+  const colCount = (headerResp.values && headerResp.values[0] && headerResp.values[0].length) || 6;
+  const fullRow = [positionId, `${positionTitle} ${positionId}`, today, type || "manual", remark, author, time];
   await graphFetch(`${await workbookBase()}/tables('HistorialTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
-      values: [[positionId, `${positionTitle} ${positionId}`, today, type || "manual", remark, author]],
+      values: [fullRow.slice(0, colCount)],
     }),
   });
 }
