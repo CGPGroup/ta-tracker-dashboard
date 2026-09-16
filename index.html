@@ -1955,7 +1955,7 @@
 
 <!-- ======================= ADD/EDIT BATCH CANDIDATE MODAL ======================= -->
 <!-- Un candidato dentro de un batch ya logueado: nombre, CV (adjuntar archivo real, sube a
-     OneDrive via Graph, ver graphUploadCandidateCv()), y su estado inicial. addCandidateBatchDate
+     OneDrive via Graph, ver graphUploadFile()), y su estado inicial. addCandidateBatchDate
      y addCandidateEditId (ver openAddCandidateModal()) distinguen "agregar nuevo" de "editar
      nombre/CV de uno existente" reusando el mismo modal, mismo patron que el resto del archivo. -->
 <div class="modal-overlay" id="addCandidateModal">
@@ -2127,6 +2127,14 @@
         <select id="editFieldModalSelect" style="display:none;"></select>
         <input type="text" id="editFieldModalInput">
         <button type="button" class="fact-edit-link" id="editFieldModalBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
+      </div>
+      <!-- ctx.fileFieldLabel (opcional, ver openEditFieldModal()) — un adjunto real de imagen,
+           ademas del texto (ej. Waive Intake Meeting: captura del correo que sustenta la razon).
+           Sube via graphUploadFile(), igual que el CV de un candidato. Oculto/vacio para todo lo
+           demas que reusa este modal. -->
+      <div class="form-field full" id="editFieldModalFileRow" style="display:none;">
+        <label id="editFieldModalFileLabel"></label>
+        <input type="file" id="editFieldModalFile" accept="image/*">
       </div>
     </div>
     <div class="form-actions">
@@ -4919,7 +4927,9 @@ function renderDetailModal(){
   // duplicado dos veces en la misma pantalla (Nicolas: "no necesito que pongas el comentario,
   // solo que digas que abajo en requisition completion esta el comentario"). Aqui solo queda el
   // chip, apuntando a donde esta la razon real.
-  const intakeWaivedChip = ()=> `<span class="intake-waived-badge" title="${escapeHtml(p.intakeWaivedReason || "")}${p.intakeWaivedReason ? " — " : ""}Full details in Requisition Completion below.">⊘ Intake Waived</span>`;
+  const intakeWaivedChip = ()=> `<span class="intake-waived-badge" title="${escapeHtml(p.intakeWaivedReason || "")}${p.intakeWaivedReason ? " — " : ""}Full details in Requisition Completion below.">⊘ Intake Waived</span>${
+    p.intakeWaivedEvidenceLink ? ` <a href="${escapeHtml(p.intakeWaivedEvidenceLink)}" target="_blank" rel="noopener" class="fact-edit-link" style="font-size:10.5px;">View Email ↗</a>` : ""
+  }`;
   // BUG REAL encontrado 2026-09-15 (Nicolas, RD-019 despues del handoff a David: "estoy seguro
   // que yo puse el comentario... pero no sale por ningun lado"). El `!p.handoffFrom` de aqui (y
   // el de intakeWaivedExtraHtml abajo) se copio sin querer del hecho de que la tarjeta "Request
@@ -5084,6 +5094,10 @@ function renderDetailModal(){
           // antes de escribir algo, mas alla de adivinar por el placeholder de un solo ejemplo.
           // Esto se explica ANTES del campo, no despues, para que no se use como atajo para
           // saltarse una intake meeting real que si hacia falta.
+          // Nicolas, 2026-09-17: agrego 2 razones mas (el HM no tiene tiempo pero confirma un set
+          // de preguntas escritas; o nadie del HM dijo nada pero Irth/el equipo interno ya alineo
+          // el rol y mando todo por correo, como paso con las de Full Stack antes del handoff a
+          // David) — y en esos 2 casos especificos, poder adjuntar la captura del correo real.
           noteHtml: `This should only be used when a real intake meeting genuinely isn't needed for
             this specific requisition — not as a shortcut to skip one that is. Valid reasons:
             <ul style="margin:6px 0 0 18px; padding:0;">
@@ -5091,8 +5105,15 @@ function renderDetailModal(){
                 hiring manager, same requirements).</li>
               <li>The hiring manager confirmed in writing (email, chat) that nothing changed since
                 a previous intake, so a repeat meeting wasn't necessary.</li>
+              <li>The hiring manager said they don't have time for a live meeting — send them a
+                written set of questions covering what's needed to source effectively, and only
+                waive once they've confirmed the answers back in writing.</li>
+              <li>No live meeting happened and the hiring manager never weighed in either way, but
+                Irth's internal team already aligned on the role and sent everything needed to
+                start sourcing by email (e.g. the Full Stack Developer reqs).</li>
             </ul>
-            If neither applies, request the intake meeting instead.`,
+            If none of these apply, request the intake meeting instead. For the last two, attach
+            a screenshot of the email below so there's a real record of what was actually said.`,
           // Si esta req pertenece a un Headcount Group, la misma razon aplica a sus hermanas
           // automaticamente al guardar (ver onSave abajo) — se avisa aqui mismo, antes de
           // escribir, para que no sea una sorpresa cuantas reqs va a afectar.
@@ -5106,7 +5127,8 @@ function renderDetailModal(){
           })(),
           placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
           value: p.intakeWaivedReason,
-          onSave: async (newVal)=>{
+          fileFieldLabel: "Email Screenshot (optional, up to 4MB) — evidence for the written/internal-alignment reasons above",
+          onSave: async (newVal, file)=>{
             p.intakeWaivedReason = newVal;
             // Mismo criterio que la label de arriba: se excluyen hermanas que ya tienen su
             // propia intake meeting real sostenida (no la necesitan) y las que llegaron por
@@ -5115,10 +5137,18 @@ function renderDetailModal(){
               ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.intake && !x.handoffFrom)
               : [];
             siblings.forEach(s=> s.intakeWaivedReason = newVal);
+            let evidenceLink = null;
+            if(file && isConnected()) evidenceLink = await graphUploadFile("Intake Waiver Evidence", p.id, file);
+            if(evidenceLink){
+              p.intakeWaivedEvidenceLink = evidenceLink;
+              siblings.forEach(s=> s.intakeWaivedEvidenceLink = evidenceLink);
+            }
             if(isConnected()){
               await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
+              if(evidenceLink) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Evidence", evidenceLink);
               for(const s of siblings){
                 await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Reason", newVal || "");
+                if(evidenceLink) await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Evidence", evidenceLink);
               }
             }
             renderDetailModal();
@@ -5267,14 +5297,20 @@ function renderDetailModal(){
             note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
               : c.step2.status==="done" ? `Held on ${p.intake}.` : null}),
     ].filter(Boolean);
+    // Enlace a la captura del correo (si se adjunto uno, ver la razon 3/4 del noteHtml de
+    // "Waive Intake Meeting" mas arriba) — se agrega a los 2 banners de razon de waiver, no al
+    // resto de las notas (que no son sobre un waiver).
+    const evidenceLinkHtml = p.intakeWaivedEvidenceLink
+      ? ` <a href="${escapeHtml(p.intakeWaivedEvidenceLink)}" target="_blank" rel="noopener" style="font-weight:600;">View Email ↗</a>`
+      : "";
     document.getElementById("modalCompletionGrid").innerHTML = completionCards.map(cc=>`
       <div class="sla-card">
         <div class="sla-name"><span>${cc.label}</span><span class="tag ${cc.tag==="Recruiter Owned"?"official":"internal"}" title="${TAG_EXPLANATIONS[cc.tag] || ""}">${cc.tag}</span></div>
         ${cc.chips ? `<div class="sla-subchip-row">${cc.chips.map(x=>`<div class="sla-subchip"><span class="sla-subchip-label">${x.subLabel}</span>${x.chip}</div>`).join("")}</div>` : cc.chip}
         ${cc.note ? (cc.noteIsWaived
-            ? `<div class="alert-banner tier-yellow compact" style="margin:6px 0 0;">${escapeHtml(cc.note)}</div>`
+            ? `<div class="alert-banner tier-yellow compact" style="margin:6px 0 0;">${escapeHtml(cc.note)}${evidenceLinkHtml}</div>`
             : `<div class="panel-sub" style="margin:6px 0 0; font-size:11px;">${escapeHtml(cc.note)}</div>`) : ""}
-        ${cc.waivedNote ? `<div class="alert-banner tier-yellow compact" style="margin:6px 0 0;">Intake Meeting Waived: ${escapeHtml(cc.waivedNote)}</div>` : ""}
+        ${cc.waivedNote ? `<div class="alert-banner tier-yellow compact" style="margin:6px 0 0;">Intake Meeting Waived: ${escapeHtml(cc.waivedNote)}${evidenceLinkHtml}</div>` : ""}
       </div>`).join("");
     const alerts = [];
     // Igual que completionCards/completionFlags: una vez la req paso por Handoff, step1 (la
@@ -5922,7 +5958,7 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
       : `${p.id}-${Date.now()}`;
     if(file && isConnected()){
       msg.textContent = "Uploading CV…";
-      cvLink = await graphUploadCandidateCv(p.id, file);
+      cvLink = await graphUploadFile("Candidate CVs", p.id, file);
       await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
     } else if(file){
       msg.textContent = "Not connected — the CV wasn't uploaded, only kept in this browser tab.";
@@ -5954,7 +5990,7 @@ document.getElementById("candidateCvFileInput").addEventListener("change", async
     return;
   }
   try {
-    const cvLink = await graphUploadCandidateCv(p.id, file);
+    const cvLink = await graphUploadFile("Candidate CVs", p.id, file);
     if(isConnected()) await graphUpdateBatchCandidateField(c.id, "CV Link", cvLink);
     c.cvLink = cvLink;
     renderDetailModal();
@@ -7597,6 +7633,11 @@ function parsePositionsTable(posHeaders, posRows){
       // para esta req especifica, con una razon valida (ej. headcount adicional del mismo rol,
       // ya cubierto por el intake original). Presencia de texto = waived; ver computeCompletion().
       intakeWaivedReason: r[idx("Intake Waived Reason")] || null,
+      // Columna nueva/opcional (ver [[project_intake_waived_visibility_bug]]): captura del correo
+      // que sustenta el waiver cuando la razon viene de un correo (HM sin tiempo + preguntas
+      // escritas confirmadas, o alineacion interna de Irth por correo). idx() da -1 si el Excel
+      // real todavia no tiene la columna — no rompe nada, solo no hay nada que mostrar.
+      intakeWaivedEvidenceLink: r[idx("Intake Waived Evidence")] || null,
       extra: [],
       batches: [],
       batchCandidates: [],
@@ -8009,16 +8050,23 @@ async function graphUpdateBatchCandidateField(candidateRowId, headerName, value)
 // "Candidate CVs/{positionId}/" al lado del Excel — nunca adentro del workbook, es un archivo,
 // no una fila. En PIN mode, el Worker hace el mismo PUT con su propia credencial delegada (ver
 // doUploadCandidateCv en el Worker); aqui, con la sesion MSAL real de quien esta conectado.
-async function graphUploadCandidateCv(positionId, file){
+// Genérico (antes graphUploadCandidateCv, solo para CVs) — cualquier archivo que un req necesite
+// adjuntar de verdad (CV de un candidato, la captura de un correo que sustenta un Intake Waived,
+// etc.) sube al mismo tipo de carpeta al lado del Excel, solo cambia el nombre de la carpeta.
+// UPLOAD_FOLDERS es la lista blanca (ver tambien el Worker, ambos lados la validan) — nunca un
+// nombre de carpeta libre, para no poder escribir fuera de donde se espera.
+const UPLOAD_FOLDERS = ["Candidate CVs", "Intake Waiver Evidence"];
+async function graphUploadFile(folder, positionId, file){
+  if(!UPLOAD_FOLDERS.includes(folder)) throw new Error(`Unknown upload folder "${folder}".`);
   if(file.size > 4*1024*1024) throw new Error("File is larger than 4MB — please attach a smaller file.");
   if(pinModeActive){
     const base64 = await fileToBase64(file);
-    const result = await workerRecruiterWrite("uploadCandidateCv", {positionId, fileName: file.name, fileContentBase64: base64});
-    return result.cvLink;
+    const result = await workerRecruiterWrite("uploadFile", {folder, positionId, fileName: file.name, fileContentBase64: base64});
+    return result.fileLink;
   }
   await resolveFileIds();
   const folderPath = EXCEL_FILE_PATH.replace(/\/[^/]+$/, "");
-  const uploadPath = `${folderPath}/Candidate CVs/${positionId}/${file.name}`.split("/").map(encodeURIComponent).join("/");
+  const uploadPath = `${folderPath}/${folder}/${positionId}/${file.name}`.split("/").map(encodeURIComponent).join("/");
   const token = await getGraphToken();
   const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:${uploadPath}:/content`, {
     method: "PUT",
@@ -8657,6 +8705,10 @@ function openEditFieldModal(ctx){
   const noteEl = document.getElementById("editFieldModalNote");
   noteEl.innerHTML = ctx.noteHtml || "";
   noteEl.style.display = ctx.noteHtml ? "" : "none";
+  const fileRow = document.getElementById("editFieldModalFileRow");
+  document.getElementById("editFieldModalFile").value = "";
+  document.getElementById("editFieldModalFileLabel").textContent = ctx.fileFieldLabel || "";
+  fileRow.style.display = ctx.fileFieldLabel ? "" : "none";
   const input = document.getElementById("editFieldModalInput");
   const select = document.getElementById("editFieldModalSelect");
   const backToList = document.getElementById("editFieldModalBackToList");
@@ -8740,7 +8792,8 @@ document.getElementById("editFieldModalSave").addEventListener("click", async ()
   const saveBtn = document.getElementById("editFieldModalSave");
   saveBtn.disabled = true;
   try {
-    await editFieldModalCtx.onSave(newVal);
+    const file = editFieldModalCtx.fileFieldLabel ? (document.getElementById("editFieldModalFile").files[0] || null) : null;
+    await editFieldModalCtx.onSave(newVal, file);
     if(isConnected()){
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
