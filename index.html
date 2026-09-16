@@ -731,6 +731,15 @@
      Attention/quick lists se vea de una que este req viene de otro reclutador sin tener que
      abrirla. Color neutro de marca (no warning) porque no es una alerta, es informativo. */
   .pos-handoff-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--brand-wash); color: var(--brand-dark); white-space: nowrap; cursor: help; }
+  /* Badge del intake waived, distinto del pos-handoff-badge (tono warning, no brand) para que las
+     dos señales nunca se confundan visualmente en una req que resulta ser las dos cosas a la vez
+     (ver RD-019: handoff Y waived). El icono + el tooltip con la razon real puesta ahi mismo (no
+     solo "ver abajo") es lo que Nicolas pidio como "mas visual" — se entiende sin scrollear. */
+  .intake-waived-badge {
+    display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 700; white-space: nowrap; cursor: help;
+    background: rgba(var(--warning-rgb),0.16); color: var(--warning); border: 1px solid rgba(var(--warning-rgb),0.4);
+  }
   td.cell-position { white-space: normal; min-width: 220px; }
   td.cell-code { color: var(--text-muted); font-weight: 600; font-size: 11.5px; white-space: nowrap; }
 
@@ -1840,7 +1849,12 @@
       <div class="form-field full"><label>Work Arrangement</label><select id="reqInfoWorkArrangement"></select></div>
       <div class="form-field full">
         <label>Compensation <span style="font-weight:400; color:var(--text-muted);">(confirmed with the hiring manager)</span></label>
-        <div style="display:grid; grid-template-columns:90px 1fr 1fr 80px; gap:8px;">
+        <!-- min-width:0 en el wrapper + minmax(0,1fr) en las 2 columnas centrales: sin esto, un
+             grid anidado adentro de un flex (.form-field) no se deja encoger por debajo del
+             ancho minimo de su contenido, y la ultima columna (Period) terminaba empujada fuera
+             de la tarjeta del modal — bug real reportado por Nicolas 2026-09-16 ("esa parte
+             quedo como salida del modal"). -->
+        <div style="display:grid; grid-template-columns:90px minmax(0,1fr) minmax(0,1fr) 90px; gap:8px; min-width:0;">
           <select id="reqInfoSalaryCurrency">
             <option value="">Currency</option>
             <option value="USD">USD</option>
@@ -1849,10 +1863,13 @@
           </select>
           <input type="number" id="reqInfoSalaryMin" placeholder="Min (or flat amount)">
           <input type="number" id="reqInfoSalaryMax" placeholder="Max">
+          <!-- Texto completo (no solo "/yr"/"/hr") — Nicolas: poco claro con solo la abreviacion.
+               El valor guardado sigue siendo yr/mo/hr (ver formatSalary()), solo cambia lo que
+               el reclutador ve al elegir. -->
           <select id="reqInfoSalaryPeriod" title="Rate period">
-            <option value="yr">/yr</option>
-            <option value="mo">/mo</option>
-            <option value="hr">/hr</option>
+            <option value="yr">Annual</option>
+            <option value="mo">Monthly</option>
+            <option value="hr">Hourly</option>
           </select>
         </div>
         <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-top:6px;">
@@ -2098,6 +2115,12 @@
       <div><h2 id="editFieldModalTitle" style="margin:0; font-size:16px;"></h2></div>
       <button class="modal-close" id="editFieldModalClose" type="button">&times;</button>
     </div>
+    <!-- ctx.noteHtml (opcional, ver openEditFieldModal()) — bloque explicativo ANTES del campo,
+         para cuando el "por que" no es obvio con solo un placeholder (ej. Waive Intake Meeting:
+         que razones si cuentan). Vacio/oculto para el resto de los ~10 campos que reusan este
+         mismo modal generico (Spott URL, Headcount Group, Placed Candidate, etc.) — no cambia
+         nada para ellos. -->
+    <div class="callout prose" id="editFieldModalNote" style="display:none; margin-bottom:14px;"></div>
     <div class="form-grid">
       <div class="form-field full">
         <label id="editFieldModalLabel"></label>
@@ -4896,7 +4919,7 @@ function renderDetailModal(){
   // duplicado dos veces en la misma pantalla (Nicolas: "no necesito que pongas el comentario,
   // solo que digas que abajo en requisition completion esta el comentario"). Aqui solo queda el
   // chip, apuntando a donde esta la razon real.
-  const intakeWaivedChip = ()=> `<span class="sla-chip risk" style="border:1px solid var(--warning);">Waived — see Requisition Completion below</span>`;
+  const intakeWaivedChip = ()=> `<span class="intake-waived-badge" title="${escapeHtml(p.intakeWaivedReason || "")}${p.intakeWaivedReason ? " — " : ""}Full details in Requisition Completion below.">⊘ Intake Waived</span>`;
   // BUG REAL encontrado 2026-09-15 (Nicolas, RD-019 despues del handoff a David: "estoy seguro
   // que yo puse el comentario... pero no sale por ningun lado"). El `!p.handoffFrom` de aqui (y
   // el de intakeWaivedExtraHtml abajo) se copio sin querer del hecho de que la tarjeta "Request
@@ -4911,7 +4934,7 @@ function renderDetailModal(){
     intakeWaiveStepForTimeline.waived
       ? `<div style="margin-top:4px;">${intakeWaivedChip()} <button class="fact-edit-link" type="button" id="editIntakeWaivedBtn">Edit</button></div>`
       : intakeWaiveStepForTimeline.status !== "done"
-        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">Intake Meeting Not Needed? Explain Why</button>`
+        ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">Waive This Intake Meeting &rarr;</button>`
         : "";
   const timelineHtml = isView
     ? factsSection("Timeline", [
@@ -5057,6 +5080,19 @@ function renderDetailModal(){
       document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=>{
         openEditFieldModal({
           title: "Waive Intake Meeting",
+          // Nicolas + David: el usuario no tiene forma de saber que SI cuenta como razon valida
+          // antes de escribir algo, mas alla de adivinar por el placeholder de un solo ejemplo.
+          // Esto se explica ANTES del campo, no despues, para que no se use como atajo para
+          // saltarse una intake meeting real que si hacia falta.
+          noteHtml: `This should only be used when a real intake meeting genuinely isn't needed for
+            this specific requisition — not as a shortcut to skip one that is. Valid reasons:
+            <ul style="margin:6px 0 0 18px; padding:0;">
+              <li>This is additional headcount for a role you already ran a full intake for (same
+                hiring manager, same requirements).</li>
+              <li>The hiring manager confirmed in writing (email, chat) that nothing changed since
+                a previous intake, so a repeat meeting wasn't necessary.</li>
+            </ul>
+            If neither applies, request the intake meeting instead.`,
           // Si esta req pertenece a un Headcount Group, la misma razon aplica a sus hermanas
           // automaticamente al guardar (ver onSave abajo) — se avisa aqui mismo, antes de
           // escribir, para que no sea una sorpresa cuantas reqs va a afectar.
@@ -8618,6 +8654,9 @@ function openEditFieldModal(ctx){
   editFieldModalCtx = ctx;
   document.getElementById("editFieldModalTitle").textContent = ctx.title;
   document.getElementById("editFieldModalLabel").textContent = ctx.label;
+  const noteEl = document.getElementById("editFieldModalNote");
+  noteEl.innerHTML = ctx.noteHtml || "";
+  noteEl.style.display = ctx.noteHtml ? "" : "none";
   const input = document.getElementById("editFieldModalInput");
   const select = document.getElementById("editFieldModalSelect");
   const backToList = document.getElementById("editFieldModalBackToList");
