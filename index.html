@@ -5755,8 +5755,13 @@ function openWaiveIntakeModal(p){
     // de preguntas escritas; o nadie del HM dijo nada pero Irth/el equipo interno ya alineo
     // el rol y mando todo por correo, como paso con las de Full Stack antes del handoff a
     // David) — y en esos 2 casos especificos, poder adjuntar la captura del correo real.
-    noteHtml: `This should only be used when a real intake meeting genuinely isn't needed for
-      this specific requisition — not as a shortcut to skip one that is. Valid reasons:
+    // Nicolas, 2026-09-19: "isn't needed" no cubria bien los casos 3 y 4 de abajo (el HM no
+    // tiene tiempo, o nunca hay llamada en vivo) — ahi la intake meeting no es que "sobre",
+    // literalmente no se va a dar. Se agrega esa segunda frase explicita para las 2 razones que
+    // son de verdad "no va a pasar", no solo "no hace falta".
+    noteHtml: `This should only be used when a real intake meeting genuinely isn't needed, or
+      genuinely isn't going to take place, for this specific requisition — not as a shortcut to
+      skip one that should still happen. Valid reasons:
       <ul style="margin:6px 0 0 18px; padding:0;">
         <li>This is additional headcount for a role you already ran a full intake for (same
           hiring manager, same requirements).</li>
