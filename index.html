@@ -364,7 +364,35 @@
      vertical para no insinuar una relacion "estos N se van a convertir en esto" que no existe.
      Cada tarjeta ademas lleva una frase corta (.stat-desc) explicando exactamente que cuenta. */
   .positions-summary-strip { display: flex; align-items: stretch; gap: 10px; padding-top: 10px; }
-  .ps-stat { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; }
+  .ps-stat { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; position: relative; }
+  /* Popover de hover (ver statHoverPopoverHtml()) — burbuja con una punta triangular ("forma de T
+     hacia abajo"). Debajo de la tarjeta, no encima: esta fila vive pegada al topbar (ver
+     screenshot de Nicolas), un popover hacia ARRIBA se cortaba contra el borde del viewport en
+     la practica (probado en vivo) — hacia abajo siempre tiene todo el resto de la pagina de
+     sobra. La puntita apunta hacia arriba, hacia el numero que describe. Oculto por
+     opacity+visibility (no display:none) para poder animar la transicion. */
+  .ps-hover-popover {
+    position: absolute; top: calc(100% + 12px); left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    min-width: 190px; max-width: 260px; max-height: 240px; overflow: hidden;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; box-shadow: 0 10px 28px rgba(0,0,0,0.4);
+    text-align: left; z-index: 30; pointer-events: none;
+    opacity: 0; visibility: hidden; transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+  .ps-stat:hover .ps-hover-popover, .ps-stat:focus-within .ps-hover-popover {
+    opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+  }
+  .ps-hover-popover::after {
+    content: ""; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent;
+    border-bottom: 7px solid var(--surface-1); filter: drop-shadow(0 -2px 1px rgba(0,0,0,0.18));
+  }
+  .ps-hover-popover-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
+  .ps-hover-popover ul { margin: 0; padding: 0; list-style: none; max-height: 190px; overflow-y: auto; }
+  .ps-hover-popover li { font-size: 11.5px; line-height: 1.5; padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--text); }
+  .ps-hover-popover li:last-child { border-bottom: none; }
+  .ps-hover-popover li b { color: var(--text-muted); font-weight: 600; }
   .ps-stat .stat-num { font-size: 30px; line-height: 1; }
   .ps-stat .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text); margin-top: 6px; }
   .ps-stat .stat-desc { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.35; flex: 1; }
@@ -3540,6 +3568,20 @@ function expectedSubmittedForPosition(p){
 // identico a Active Positions una vez esta excluyo Filled/On Hold; ver historial abajo). Es su
 // propio concepto, sin relacion con la definicion de Active Positions.
 const POTENTIAL_PLACEMENT_STATUSES = ["Offer Request","Filled"];
+// 2026-09-18, Nicolas: "un hover bonito... con forma de t hacia abajo... con una lista... con
+// bullet points" para ver DE UNA, sin hacer click, cuales reqs componen cada numero de Positions &
+// Placements — el click a openQuickList() ya existia para el detalle completo, esto es el vistazo
+// rapido antes de decidir si vale la pena abrir esa lista. CSS puro (:hover/:focus-within), sin JS
+// — mas simple y sin el parpadeo tipico de un tooltip manejado con mouseenter/mouseleave. Vacio
+// (0 posiciones) no dibuja el popover para nada, no tiene sentido un hover con una lista vacia.
+// pointer-events:none en el popover a proposito: es solo para mirar, no para interactuar — si
+// hay muchos items y no caben, se recortan con overflow en vez de intentar hacerlo scrolleable
+// con el mouse (eso ya lo cubre el click -> openQuickList, que si es interactivo).
+function statHoverPopoverHtml(s){
+  if(!s.positions || !s.positions.length) return "";
+  const items = s.positions.map(p=>`<li><b>${escapeHtml(p.id)}</b> — ${escapeHtml(p.title)}</li>`).join("");
+  return `<div class="ps-hover-popover"><div class="ps-hover-popover-title">${escapeHtml(s.label)}</div><ul>${items}</ul></div>`;
+}
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
@@ -3582,6 +3624,7 @@ function renderKpis(){
       <div class="stat-label">${s.label}</div>
       <div class="stat-desc">${s.desc}</div>
       <div class="ps-bar"><div class="ps-bar-fill" style="width:${Math.max(4, s.value/maxVal*100).toFixed(1)}%; background:${gradientFill("var(--brand)")};"></div></div>
+      ${statHoverPopoverHtml(s)}
     </div>${i<funnelStats.length-1 ? `<div class="ps-arrow">&rarr;</div>` : ""}`).join("");
   const outcomeHtml = `
     <div class="ps-divider"></div>
@@ -3590,6 +3633,7 @@ function renderKpis(){
       <div class="stat-num" style="color:${s.color};">${s.value}</div>
       <div class="stat-label">${s.label}</div>
       <div class="stat-desc">${s.desc}</div>
+      ${statHoverPopoverHtml(s)}
     </div>`).join("")}`;
   document.getElementById("positionsSummaryStrip").innerHTML = funnelHtml + outcomeHtml;
   document.querySelectorAll("#positionsSummaryStrip .ps-stat").forEach(el=>{
@@ -5559,6 +5603,12 @@ document.addEventListener("click", (e)=>{
 // igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
 // empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
 const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
+// 2026-09-18, Nicolas: mismo principio que Compensation->Log Batch — no tiene sentido entrevistar,
+// hacer una oferta, o marcar un placement si nunca se sometio ningun candidato para este req. Solo
+// bloquea transiciones NUEVAS hechas desde la UI (dropdown o Next Step) — datos ya existentes en
+// estos statuses (migrados, escritos directo a Graph) no se tocan retroactivamente, igual que
+// REQUIRES_INTAKE_HELD nunca revisa reqs que ya estan mas adelante.
+const REQUIRES_BATCH_LOGGED = ["Submitted", "Technical Interview", "Hiring Manager Interview", "Offer Request", "Filled", "Hired"];
 // Extraido de renderDetailModal() (antes vivia solo dentro del click listener del boton de
 // Timeline) para poder abrirse tambien desde onStatusOptionClick() — elegir "Intake Meeting
 // Waived" a mano desde el dropdown de status, sin una razon todavia guardada, redirige aqui en
@@ -5688,6 +5738,10 @@ function onStatusOptionClick(p, newStatus){
   }
   if(REQUIRES_INTAKE_HELD.includes(newStatus) && !p.intake && !p.intakeWaivedReason){
     alert(`Can't move to "${statusLabel(newStatus)}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
+    return;
+  }
+  if(REQUIRES_BATCH_LOGGED.includes(newStatus) && !(p.batches && p.batches.length)){
+    alert(`Can't move to "${statusLabel(newStatus)}" yet — no submission batch has been logged for this requisition. There's no candidate to interview, extend an offer to, or place until at least one batch has been submitted.`);
     return;
   }
   // Elegir "Intake Meeting Waived" a mano (dropdown) sin una razon todavia guardada no tiene
