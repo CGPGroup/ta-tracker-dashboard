@@ -365,18 +365,26 @@
      Cada tarjeta ademas lleva una frase corta (.stat-desc) explicando exactamente que cuenta. */
   .positions-summary-strip { display: flex; align-items: stretch; gap: 10px; padding-top: 10px; }
   .ps-stat { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; position: relative; }
+  /* BUG REAL encontrado 2026-09-18 (Nicolas: "si algo hover, se alcanza a ver lo que este en el
+     fondo y se confunde, no se lee bien"): el popover vive DENTRO de #panelPositionsSummary, un
+     grid item de .dash-grid sin z-index propio — su z-index:30 de mas abajo solo gana DENTRO de
+     ese panel, nunca contra el panel vecino de abajo ("Total Requisitions"), que al venir
+     DESPUES en el DOM se pintaba encima de la parte del popover que se salia de su propio panel,
+     aunque visualmente pareciera "detras". Fix: el panel entero sube de stacking context (no solo
+     el popover) para que TODO lo que dibuje, incluido el popover, gane contra sus vecinos. */
+  #panelPositionsSummary { position: relative; z-index: 5; }
   /* Popover de hover (ver statHoverPopoverHtml()) — burbuja con una punta triangular ("forma de T
-     hacia abajo"). Debajo de la tarjeta, no encima: esta fila vive pegada al topbar (ver
-     screenshot de Nicolas), un popover hacia ARRIBA se cortaba contra el borde del viewport en
-     la practica (probado en vivo) — hacia abajo siempre tiene todo el resto de la pagina de
-     sobra. La puntita apunta hacia arriba, hacia el numero que describe. Oculto por
+     hacia abajo"), sin scroll (Nicolas: "sin tener que scrolear" — crece lo que haga falta en vez
+     de recortar con max-height). Debajo de la tarjeta, no encima: esta fila vive pegada al
+     topbar, un popover hacia ARRIBA se cortaba contra el borde del viewport en la practica
+     (probado en vivo). La puntita apunta hacia arriba, hacia el numero que describe. Oculto por
      opacity+visibility (no display:none) para poder animar la transicion. */
   .ps-hover-popover {
     position: absolute; top: calc(100% + 12px); left: 50%;
     transform: translateX(-50%) translateY(-4px);
-    min-width: 190px; max-width: 260px; max-height: 240px; overflow: hidden;
+    min-width: 190px; max-width: 260px;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
-    padding: 10px 12px; box-shadow: 0 10px 28px rgba(0,0,0,0.4);
+    padding: 10px 12px; box-shadow: var(--shadow), 0 8px 20px rgba(0,0,0,0.35);
     text-align: left; z-index: 30; pointer-events: none;
     opacity: 0; visibility: hidden; transition: opacity 0.12s ease, transform 0.12s ease;
   }
@@ -389,7 +397,7 @@
     border-bottom: 7px solid var(--surface-1); filter: drop-shadow(0 -2px 1px rgba(0,0,0,0.18));
   }
   .ps-hover-popover-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
-  .ps-hover-popover ul { margin: 0; padding: 0; list-style: none; max-height: 190px; overflow-y: auto; }
+  .ps-hover-popover ul { margin: 0; padding: 0; list-style: none; }
   .ps-hover-popover li { font-size: 11.5px; line-height: 1.5; padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--text); }
   .ps-hover-popover li:last-child { border-bottom: none; }
   .ps-hover-popover li b { color: var(--text-muted); font-weight: 600; }
