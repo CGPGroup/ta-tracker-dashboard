@@ -8366,9 +8366,10 @@ function mergeBatches(positions, batchHeaders, batchRows){
   });
   positions.forEach(p => p.batches.sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
-// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name |
-// Candidate Email | Status | CV Link | Added By | Added Date. Candidate Row ID es una clave
-// generada del lado del cliente
+// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name | Status |
+// CV Link | Added By | Added Date | Candidate Email (agregada al FINAL de la tabla real, no
+// despues de Candidate Name como se penso al principio — ver graphAppendBatchCandidate()).
+// Candidate Row ID es una clave generada del lado del cliente
 // (no un ID de Excel) porque una posicion puede tener muchos candidatos y necesitamos poder
 // actualizar UNO especifico despues (status/CV) sin ambiguedad — Position ID aqui solo enlaza al
 // req, no identifica la fila (varias filas comparten el mismo Position ID).
@@ -8684,17 +8685,26 @@ async function graphAppendBatch(positionId, date, batchType, candidateCount){
     }),
   });
 }
-// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name |
-// Candidate Email | Status | CV Link | Added By | Added Date. id se genera aqui (no lo asigna
-// Excel) para poder actualizar esta fila especifica despues — ver mergeBatchCandidates() arriba
-// para por que hace falta.
+// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name | Status |
+// CV Link | Added By | Added Date | Candidate Email. id se genera aqui (no lo asigna Excel) para
+// poder actualizar esta fila especifica despues — ver mergeBatchCandidates() arriba para por que
+// hace falta.
+// BUG REAL encontrado 2026-09-19, antes de que esto se usara con datos reales: el codigo asumia
+// que "Candidate Email" quedaria justo despues de "Candidate Name" (mismo orden en que se penso
+// la columna) — pero Nicolas la agrego al FINAL de la tabla real (columna I, despues de Added
+// Date), no en medio. rows/add escribe por POSICION, no por nombre de columna, asi que con el
+// orden viejo el correo se habria escrito en la columna Status, el status en CV Link, y asi
+// corriendo todo lo demas un puesto — el mismo tipo de bug de conteo/orden de columnas que ya
+// paso antes con Salary Period. Confirmado el orden real via lectura directa del Excel
+// (BatchCandidatesTable: ...Candidate Name, Status, CV Link, Added By, Added Date,
+// Candidate Email) antes de escribir ni una fila real con el orden equivocado.
 async function graphAppendBatchCandidate(positionId, batchDate, name, email, status, cvLink, author){
   if(pinModeActive) return (await workerRecruiterWrite("appendBatchCandidate", {positionId, batchDate, name, email: email || "", status, cvLink: cvLink || ""})).id;
   const id = `${positionId}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
   await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
-      values: [[id, positionId, batchDate, name, email || "", status, cvLink || "", author, localTodayStr()]],
+      values: [[id, positionId, batchDate, name, status, cvLink || "", author, localTodayStr(), email || ""]],
     }),
   });
   return id;
