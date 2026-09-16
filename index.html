@@ -2199,10 +2199,6 @@
         <label id="editFieldModalLabel"></label>
         <select id="editFieldModalSelect" style="display:none;"></select>
         <input type="text" id="editFieldModalInput">
-        <!-- ctx.multiline (opcional, ver openEditFieldModal()) — una caja de texto larga en vez
-             del input de una sola linea, para campos como Intake Meeting Notes donde el texto
-             real no cabe en una linea. Oculto para todo lo demas que reusa este modal. -->
-        <textarea id="editFieldModalTextarea" rows="5" style="display:none;"></textarea>
         <button type="button" class="fact-edit-link" id="editFieldModalBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
       </div>
       <!-- ctx.fileFieldLabel (opcional, ver openEditFieldModal()) — un adjunto real de imagen,
@@ -2476,8 +2472,8 @@ const STATUS_GUIDANCE = {
   // ambiguo que dependia de contar hacia atras cual par era.
   "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or, if a live call isn't possible, send written questions instead). Once they confirm a date, log it below to move to Intake Held — or, if it turns out a separate intake meeting genuinely isn't needed, waive it instead. Sourcing can't start until the intake meeting is either held or waived.",
   // Nota: el texto REAL que se muestra para "Intake Pending"/"Intake Meeting Waived" vive en
-  // nextStepGuidanceText() (fecha real + gate de intakeNotes) — estas 2 entradas quedan aqui solo
-  // como referencia estatica/documentacion, nunca se leen directamente para esos 2 statuses.
+  // nextStepGuidanceText() (fecha real + gate de postIntakeNotesSentDate) — estas 2 entradas
+  // quedan aqui solo como referencia estatica/documentacion, nunca se leen directamente.
   "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
   // Rama paralela a "Intake Pending" — mismo punto del proceso, llegado por un camino distinto
   // (ver STATUS_ORDER). El texto es deliberadamente casi identico al de Intake Pending, solo
@@ -2710,49 +2706,42 @@ function nextStepCtaHtml(p){
       <button type="button" class="fact-edit-link" id="nextStepSecondaryBtn" style="margin-top:4px; margin-left:10px; display:inline-block;">Or, Waive This Intake Meeting &rarr;</button>${msg}`;
   }
   if(p.status === "Intake Pending" || p.status === "Intake Meeting Waived"){
-    // Nicolas, 2026-09-19: "eso [preparar el Master JD] solo pasa cuando ya se tienen las notas
-    // del intake meeting" — sin p.intakeNotes todavia, el paso real siguiente es capturarlas, no
-    // saltar directo a prep de sourcing (ver nextStepGuidanceText() para el texto que acompaña
-    // este boton mientras las notas no existen).
-    if(!p.intakeNotes){
-      return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" style="margin-top:4px; display:inline-block;">Log Intake Meeting Notes &rarr;</button>${msg}`;
+    // Nicolas, 2026-09-19, revirtiendo el diseño anterior (loguear notas como texto libre en el
+    // tracker): "no sé si loguear las notas sea bueno, es como triple trabajo... simplemente que
+    // confirme cuando las notas hayan sido enviadas al hiring manager" — escribir el contenido
+    // real de las Post Intake Meeting Notes ya pasa en el chat de Master Prompt y en el correo
+    // mismo; pedirselo UNA VEZ MAS aca adentro era trabajo repetido sin aportar nada nuevo. El
+    // gate ahora es una simple confirmacion (p.postIntakeNotesSentDate, ver
+    // confirmPostIntakeNotesSent()), no texto.
+    if(!p.postIntakeNotesSentDate){
+      return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" style="margin-top:4px; display:inline-block;">Confirm Post Intake Meeting Notes Sent &rarr;</button>${msg}`;
     }
     return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
   }
   return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button>${msg}`;
 }
-// Mismo gate que nextStepCtaHtml() de arriba: sin notas de la intake meeting todavia, el texto de
-// guia no debe decirle al reclutador que vaya a preparar el Master JD/KeyStone — eso viene DESPUES
-// de saber que se hablo de verdad en la reunion (o en el intercambio que reemplazo la reunion, si
-// se waived). STATUS_GUIDANCE se queda como el texto normal (post-notas) para todo lo demas.
-// Nicolas, 2026-09-19, 4 ajustes sobre el texto pre-notas:
-// 1. "before prepping anything" -> tambien cubre sourcear, no solo preparar.
-// 2. Master JD/Sourcing Calibration Questions no siempre pasan como pasos propios — lo concreto
-//    y consistente es crear el Spott Job y el LinkedIn Job Posting en KeyStone AI (ver Master
-//    Prompt seccion 8, "Flujo operativo completo").
-// 3. "(its real date is logged above)" -> mostrar la fecha real ahi mismo, no solo referenciarla.
-// 4. Recordar enviar el correo de Post Intake Meeting Notes (Template 3 del Master Prompt) — es
-//    la referencia objetiva para el Pivot SLA mas adelante, y confirma que el hiring manager esta
-//    de acuerdo con lo capturado. Distinto de p.intakeNotes (que es solo la nota interna del
-//    reclutador en el tracker) — esto es el correo real que se le manda al hiring manager.
+// Mismo gate que nextStepCtaHtml() de arriba: sin confirmar que las Post Intake Meeting Notes ya
+// se enviaron, el texto de guia no debe decirle al reclutador que vaya a crear el Spott
+// Job/LinkedIn Job Posting — eso viene DESPUES de que el hiring manager ya confirmo por correo que
+// esta alineado con lo discutido (o waived).
 function nextStepGuidanceText(p){
   if(p.status === "Intake Pending" || p.status === "Intake Meeting Waived"){
     const isHeld = p.status === "Intake Pending";
-    if(!p.intakeNotes){
-      // "Log what was actually discussed" solo tiene sentido si hubo una conversacion real
-      // (Intake Pending) — Waived nunca tuvo esa llamada, asi que su frase habla de "lo que si
-      // se consiguio" en vez de asumir una discusion que no ocurrio.
-      return p.status === "Intake Pending"
-        ? `The intake meeting already happened (held on ${escapeHtml(p.intake || "")}) — before prepping or sourcing anything, log what was actually discussed (must-haves, nice-to-haves, comp expectations, timeline) so the Spott Job and LinkedIn Job Posting you create in KeyStone AI are built on the real conversation, not guesswork. Once logged, remember to also send the Post Intake Meeting Notes email to the hiring manager — it's what you'll lean on later if the Pivot SLA ever applies, and it confirms they're aligned with what you captured.`
-        : `The intake meeting was waived (see the reason on file above) — before prepping or sourcing anything, log what real requirements you did get from the hiring manager or Irth's internal team, so the Spott Job and LinkedIn Job Posting you create in KeyStone AI are built on that, not guesswork. Once logged, remember to also send the Post Intake Meeting Notes email confirming what was captured — it's what you'll lean on later if the Pivot SLA ever applies.`;
+    if(!p.postIntakeNotesSentDate){
+      // "What was actually discussed" solo tiene sentido si hubo una conversacion real (Intake
+      // Pending) — Waived nunca tuvo esa llamada, asi que su frase habla de "lo que si se
+      // consiguio" en vez de asumir una discusion que no ocurrio.
+      return isHeld
+        ? `The intake meeting already happened (held on ${escapeHtml(p.intake || "")}) — send the Post Intake Meeting Notes email to the hiring manager, covering what was actually discussed (must-haves, nice-to-haves, comp expectations, timeline), then confirm below once it's sent. It's your reference later if the Pivot SLA ever applies, and it confirms the hiring manager is aligned with what was captured.`
+        : `The intake meeting was waived (see the reason on file above) — send the Post Intake Meeting Notes email confirming what real requirements you did get from the hiring manager or Irth's internal team, then confirm below once it's sent. It's your reference later if the Pivot SLA ever applies.`;
     }
-    // Post-notas: mismo ajuste de terminologia (Spott Job/LinkedIn Job Posting en vez de Master
-    // JD/Calibration Questions) — el "held on"/fecha real solo aplica al camino Held, Waived
-    // sigue refiriendo a la razon en archivo, igual que arriba.
+    // Post-confirmacion: mismo ajuste de terminologia (Spott Job/LinkedIn Job Posting en vez de
+    // Master JD/Calibration Questions) — el "held on"/fecha real solo aplica al camino Held,
+    // Waived sigue refiriendo a la razon en archivo, igual que arriba.
     const whatHappened = isHeld
       ? `already happened (held on ${escapeHtml(p.intake || "")})`
       : `was waived (see the reason on file above)`;
-    return `The intake meeting ${whatHappened} — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI (based on the notes you logged), then move status to Sourcing. The first batch is due within 7-9 business days of the intake meeting, not from today.`;
+    return `The intake meeting ${whatHappened} — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI (based on what you covered in the Post Intake Meeting Notes), then move status to Sourcing. The first batch is due within 7-9 business days of the intake meeting, not from today.`;
   }
   return STATUS_GUIDANCE[p.status];
 }
@@ -5563,10 +5552,10 @@ function renderDetailModal(){
   const nextStepDoneBtn = document.getElementById("nextStepDoneBtn");
   if(nextStepDoneBtn) nextStepDoneBtn.addEventListener("click", ()=> confirmNextStepDone(p));
   const nextStepPrimaryBtn = document.getElementById("nextStepPrimaryBtn");
-  // Sin data-target-status (ver nextStepCtaHtml()) el boton primario es "Log Intake Meeting
-  // Notes", no un cambio de status — abre el modal de notas en vez de onStatusOptionClick().
+  // Sin data-target-status (ver nextStepCtaHtml()) el boton primario es "Confirm Post Intake
+  // Meeting Notes Sent", no un cambio de status — confirma directo en vez de onStatusOptionClick().
   if(nextStepPrimaryBtn) nextStepPrimaryBtn.addEventListener("click", ()=>
-    nextStepPrimaryBtn.dataset.targetStatus ? onStatusOptionClick(p, nextStepPrimaryBtn.dataset.targetStatus) : openIntakeNotesModal(p));
+    nextStepPrimaryBtn.dataset.targetStatus ? onStatusOptionClick(p, nextStepPrimaryBtn.dataset.targetStatus) : confirmPostIntakeNotesSent(p));
   const nextStepSecondaryBtn = document.getElementById("nextStepSecondaryBtn");
   if(nextStepSecondaryBtn) nextStepSecondaryBtn.addEventListener("click", ()=> openWaiveIntakeModal(p));
 
@@ -5882,47 +5871,52 @@ function openWaiveIntakeModal(p){
     },
   });
 }
-// Notas reales de la intake meeting (o del intercambio que la reemplazo, si se waived) —
-// capturadas DESPUES de que ya paso, gatean la guia de "prepara el Master JD/KeyStone" en
-// nextStepCtaHtml()/nextStepGuidanceText() porque esa prep no tiene sentido sin saber que se
-// hablo de verdad. Mismo patron de propagacion a hermanas de Headcount Group que
-// openWaiveIntakeModal() de arriba — es la misma reunion para todo el grupo, las notas tambien
-// aplican a todas (salvo una hermana que ya tenga las suyas propias, o que llego por Handoff).
-function openIntakeNotesModal(p){
+// Nicolas, 2026-09-19: "no sé si loguear las notas sea bueno, es como triple trabajo para el
+// reclutador... simplemente que confirme cuando las notas hayan sido enviadas al hiring manager"
+// — reemplaza el diseño anterior (openIntakeNotesModal, texto libre pedido una tercera vez
+// despues del chat de Master Prompt y del correo real) por una simple confirmacion, sin texto,
+// que gatea nextStepCtaHtml()/nextStepGuidanceText() ("crear el Spott Job/LinkedIn Job Posting").
+// Mismo patron de propagacion a hermanas de Headcount Group que openWaiveIntakeModal() — es la
+// misma reunion (o su waiver) para todo el grupo, la confirmacion tambien aplica a todas.
+async function confirmPostIntakeNotesSent(p){
+  const today = localTodayStr();
   const siblings = p.headcountGroup
-    ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.handoffFrom && !x.intakeNotes)
+    ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.handoffFrom && !x.postIntakeNotesSentDate)
     : [];
-  openEditFieldModal({
-    title: "Intake Meeting Notes",
-    label: siblings.length
-      ? `What did the hiring manager (or Irth's internal team) actually say? (also applies to ${siblings.length} other headcount${siblings.length===1?"":"s"} in "${p.headcountGroup}")`
-      : "What did the hiring manager (or Irth's internal team) actually say?",
-    placeholder: "Must-haves, nice-to-haves, comp range confirmed, timeline, anything the Master JD or Sourcing Calibration Questions should reflect…",
-    value: p.intakeNotes || "",
-    multiline: true,
-    onSave: async (newVal)=>{
-      p.intakeNotes = newVal;
-      siblings.forEach(s=> s.intakeNotes = newVal);
-      const remarkText = "Intake meeting notes logged.";
-      p.extra = p.extra || [];
-      p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text: remarkText});
-      siblings.forEach(s=>{
-        s.extra = s.extra || [];
-        s.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text: `Intake meeting notes logged (same meeting as ${p.id}).`});
-      });
-      if(isConnected()){
-        await graphUpdatePositionFieldByHeader(p.id, "Intake Meeting Notes", newVal || "");
-        await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
-        for(const s of siblings){
-          await graphUpdatePositionFieldByHeader(s.id, "Intake Meeting Notes", newVal || "");
-          await graphAppendHistorial(s.id, s.title, `Intake meeting notes logged (same meeting as ${p.id}).`, currentAuthorName(), "action");
-        }
-      }
-      renderDetailModal();
-      renderPositions();
-      renderTracking();
-    },
+  p.postIntakeNotesSentDate = today;
+  siblings.forEach(s=> s.postIntakeNotesSentDate = today);
+  const remarkText = "Post Intake Meeting Notes sent to the hiring manager.";
+  p.extra = p.extra || [];
+  p.extra.push({date: today, time: nowTimeStr(), type:"action", author: currentAuthorName(), text: remarkText});
+  siblings.forEach(s=>{
+    s.extra = s.extra || [];
+    s.extra.push({date: today, time: nowTimeStr(), type:"action", author: currentAuthorName(), text: `Post Intake Meeting Notes sent to the hiring manager (same meeting as ${p.id}).`});
   });
+  renderDetailModal();
+  renderPositions();
+  renderTracking();
+  const msg = document.getElementById("nextStepDoneMsg");
+  if(isConnected()){
+    if(msg){ msg.textContent = "Logging…"; msg.style.color = "var(--text-muted)"; }
+    try {
+      await graphUpdatePositionFieldByHeader(p.id, "Post Intake Meeting Notes Sent Date", today);
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
+      for(const s of siblings){
+        await graphUpdatePositionFieldByHeader(s.id, "Post Intake Meeting Notes Sent Date", today);
+        await graphAppendHistorial(s.id, s.title, `Post Intake Meeting Notes sent to the hiring manager (same meeting as ${p.id}).`, currentAuthorName(), "action");
+      }
+      const freshMsg = document.getElementById("nextStepDoneMsg");
+      if(freshMsg){ freshMsg.textContent = "Logged."; freshMsg.style.color = "var(--good)"; }
+    } catch(err){
+      console.error(err);
+      const freshMsg = document.getElementById("nextStepDoneMsg");
+      if(freshMsg){ freshMsg.textContent = "Could not save: " + err.message; freshMsg.style.color = "var(--critical)"; }
+      alert("Could not save this confirmation. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
+    }
+  } else if(msg){
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
 }
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
@@ -6954,9 +6948,10 @@ const UP_NEXT_OVERRIDE = { "Intake Meeting Requested": "Intake Pending" };
 // agrega preview para esos (indexOf da -1, nextStatus queda null, no-op). Se llama con el status
 // YA ALCANZADO (p.status despues de avanzar, o el status vigente si solo se confirmo el paso sin
 // cambiar de status), nunca con el status anterior.
-// p es la posicion (para poder evaluar el gate de intakeNotes via nextStepGuidanceText si el
-// "siguiente" resulta ser Intake Pending/Intake Meeting Waived, ver mas abajo); reachedStatus es
-// el status YA ALCANZADO (despues de avanzar, o el vigente si solo se confirmo el paso).
+// p es la posicion (para poder evaluar el gate de postIntakeNotesSentDate via
+// nextStepGuidanceText si el "siguiente" resulta ser Intake Pending/Intake Meeting Waived, ver
+// mas abajo); reachedStatus es el status YA ALCANZADO (despues de avanzar, o el vigente si solo
+// se confirmo el paso).
 function showUpNextPreview(p, reachedStatus){
   const nextStatus = UP_NEXT_OVERRIDE[reachedStatus] || (()=>{
     const curIdx = PIPELINE_SEQUENCE.indexOf(reachedStatus);
@@ -6965,8 +6960,9 @@ function showUpNextPreview(p, reachedStatus){
   const nextStepList = document.getElementById("modalNextStep");
   if(nextStatus && nextStepList){
     // Simulacion liviana: si lo que sigue es Intake Pending/Waived, el preview debe reflejar el
-    // gate de notas (ver nextStepGuidanceText()) en vez de siempre asumir que ya se prepara el
-    // Master JD — al llegar ahi de verdad, intakeNotes todavia va a estar vacio.
+    // gate de confirmacion (ver nextStepGuidanceText()) en vez de siempre asumir que ya se
+    // creo el Spott Job/LinkedIn Job Posting — al llegar ahi de verdad, la confirmacion de las
+    // Post Intake Meeting Notes todavia no se habra dado.
     const text = nextStepGuidanceText({...p, status: nextStatus});
     nextStepList.insertAdjacentHTML("beforeend", `<li>
       <span class="tl-badge upnext">Up Next</span>
@@ -7922,7 +7918,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:daysAgoStr(0), intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeNotes:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, postIntakeNotesSentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-002: kickoff note ya se mando, esperando la fecha del intake — para probar los DOS
@@ -7937,7 +7933,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(5), intakeRequestedDate:daysAgoStr(5), recruiterAcceptedDate:daysAgoStr(5), intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeNotes:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, postIntakeNotesSentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-003: intake ya sostenido, compensacion ya confirmada (para no bloquear Log Batch de
@@ -7952,8 +7948,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(15), intakeRequestedDate:daysAgoStr(15), recruiterAcceptedDate:daysAgoStr(15), intake:daysAgoStr(10), submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
-      intakeNotes:"Must-haves: SQL + Python, 3+ yrs. Nice-to-have: dbt experience. Comp confirmed at $90-110k. HM wants first batch within a week, prefers async updates over calls.",
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, postIntakeNotesSentDate:daysAgoStr(9),
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-004: recien asignado, TODAVIA SIN ACEPTAR (recruiterAcceptedDate:null) — para probar
@@ -7968,7 +7963,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:null, intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeNotes:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, postIntakeNotesSentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
   ];
@@ -8169,13 +8164,15 @@ function parsePositionsTable(posHeaders, posRows){
       // escritas confirmadas, o alineacion interna de Irth por correo). idx() da -1 si el Excel
       // real todavia no tiene la columna — no rompe nada, solo no hay nada que mostrar.
       intakeWaivedEvidenceLink: r[idx("Intake Waived Evidence")] || null,
-      // Columna nueva/opcional: lo que realmente se hablo en la intake meeting (must-haves,
-      // nice-to-haves, rango de comp confirmado, timeline, etc.) — capturado DESPUES de que la
-      // reunion ya paso (o se waived), gatea la guia de "prepara el Master JD/KeyStone" en
-      // nextStepCtaHtml() porque esa preparacion no tiene sentido sin las notas reales. Nicolas:
-      // "eso solo pasa cuando ya se tienen las notas del intake meeting". idx() da -1 si el Excel
-      // real todavia no tiene la columna, no rompe nada.
-      intakeNotes: r[idx("Intake Meeting Notes")] || null,
+      // Columna nueva/opcional: fecha en la que se confirmo que el correo de Post Intake Meeting
+      // Notes ya se le mando al hiring manager (Template 3 del Master Prompt) — capturado
+      // DESPUES de que la reunion ya paso (o se waived), gatea la guia de "crea el Spott
+      // Job/LinkedIn Job Posting" en nextStepCtaHtml() porque esa creacion no tiene sentido antes
+      // de que el hiring manager confirme que esta alineado con lo discutido. Es solo una
+      // confirmacion (fecha), no el contenido de las notas — Nicolas: "es como triple trabajo...
+      // simplemente que confirme cuando las notas hayan sido enviadas al hiring manager". idx()
+      // da -1 si el Excel real todavia no tiene la columna, no rompe nada.
+      postIntakeNotesSentDate: excelValToDateStr(r[idx("Post Intake Meeting Notes Sent Date")]),
       extra: [],
       batches: [],
       batchCandidates: [],
@@ -9027,10 +9024,11 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
   // mas CORTO de lo que la tabla real ya tiene no lo es (rows/add exige coincidencia exacta) —
   // por eso agregar el null de una columna nueva aqui apenas se define, ANTES de que Nicolas la
   // cree en el Excel real, es lo seguro: Intake Waived Evidence (columna 58,
-  // [[project_intake_waived_visibility_bug]]) y ahora Intake Meeting Notes (columna 59, ver
-  // nextStepCtaHtml() — notas reales de la intake meeting, requeridas antes de mostrar la guia de
-  // preparar el Master JD) todavia no existen en el archivo real, pero ya tienen su null
-  // reservado aqui para el dia en que existan.
+  // [[project_intake_waived_visibility_bug]]) y ahora Post Intake Meeting Notes Sent Date
+  // (columna 59, ver nextStepCtaHtml()/confirmPostIntakeNotesSent() — fecha en la que se confirmo
+  // que ese correo ya se le mando al hiring manager, requerida antes de mostrar la guia de crear
+  // el Spott Job/LinkedIn Job Posting) todavia no existen en el archivo real, pero ya tienen su
+  // null reservado aqui para el dia en que existan.
   return [
     code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, fields.fill || null, fields.hire || null,
     null,null,null,null,null,null,null,null,null,null,null,null,
@@ -9276,22 +9274,8 @@ function openEditFieldModal(ctx){
   const input = document.getElementById("editFieldModalInput");
   const select = document.getElementById("editFieldModalSelect");
   const backToList = document.getElementById("editFieldModalBackToList");
-  const textarea = document.getElementById("editFieldModalTextarea");
   input.placeholder = ctx.placeholder || "";
-  textarea.placeholder = ctx.placeholder || "";
   document.getElementById("editFieldModalMsg").textContent = "";
-
-  if(ctx.multiline){
-    select.style.display = "none";
-    backToList.style.display = "none";
-    input.style.display = "none";
-    textarea.style.display = "";
-    textarea.value = ctx.value || "";
-    document.getElementById("editFieldModal").classList.add("open");
-    textarea.focus();
-    return;
-  }
-  textarea.style.display = "none";
 
   if(ctx.options && ctx.options.length){
     select.innerHTML = ctx.options.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("")
@@ -9352,10 +9336,8 @@ document.getElementById("editFieldModalSave").addEventListener("click", async ()
   const msg = document.getElementById("editFieldModalMsg");
   const select = document.getElementById("editFieldModalSelect");
   const input = document.getElementById("editFieldModalInput");
-  const textarea = document.getElementById("editFieldModalTextarea");
   const usingSelect = select.style.display !== "none";
-  const usingTextarea = editFieldModalCtx.multiline;
-  const newVal = (usingTextarea ? textarea.value : (usingSelect ? select.value : input.value)).trim() || null;
+  const newVal = (usingSelect ? select.value : input.value).trim() || null;
   // Un codigo corto (ej. el que copia el boton "#" de Spott) no sirve para volver a entrar,
   // asi que estos campos exigen una URL real, nunca lo aceptan a medias.
   if(editFieldModalCtx.requireUrl && newVal && !/^https?:\/\//i.test(newVal)){
