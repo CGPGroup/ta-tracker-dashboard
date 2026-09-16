@@ -846,7 +846,8 @@
   .batch-candidates-block { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
   .batch-candidate-row { display: flex; align-items: center; gap: 7px; padding: 4px 0; font-size: 12px; }
   .batch-candidate-row input[type="checkbox"] { width: auto; margin: 0; }
-  .batch-candidate-name { flex: 1; font-weight: 600; }
+  .batch-candidate-name { font-weight: 600; white-space: nowrap; }
+  .batch-candidate-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 11px; }
   .batch-candidate-cv { font-size: 11px; white-space: nowrap; }
   .batch-candidate-row select { font-size: 11.5px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
   .batch-candidates-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
@@ -2039,9 +2040,11 @@
     </div>
     <div class="form-grid">
       <div class="form-field full"><label>Candidate Name</label><input type="text" id="addCandidateName" placeholder="e.g. Maria Gomez"></div>
+      <div class="form-field full"><label>Candidate Email</label><input type="email" id="addCandidateEmail" placeholder="e.g. maria.gomez@email.com"></div>
       <div class="form-field full">
-        <label>CV <span style="font-weight:400; color:var(--text-muted);">(optional, up to 4MB)</span></label>
+        <label>CV <span style="font-weight:400; color:var(--text-muted);">(optional, up to 4MB — attaching a PDF or Word file also tries to auto-fill the name/email above from it)</span></label>
         <input type="file" id="addCandidateCvFile" accept=".pdf,.doc,.docx">
+        <span class="panel-sub" id="addCandidateCvParseMsg" style="display:block; margin-top:4px;"></span>
       </div>
       <div class="form-field full" id="addCandidateStatusField">
         <label>Status</label>
@@ -3616,11 +3619,15 @@ function candidateRowHtml(c){
   const cvHtml = c.cvLink
     ? `<a href="${escapeHtml(c.cvLink)}" target="_blank" rel="noopener" class="batch-candidate-cv">CV ↗</a>`
     : `<button type="button" class="fact-edit-link candidateAttachCvBtn" data-candidate-id="${escapeHtml(c.id)}">Attach CV</button>`;
+  const emailHtml = c.email
+    ? `<a href="mailto:${escapeHtml(c.email)}" class="batch-candidate-email">${escapeHtml(c.email)}</a>`
+    : `<span class="batch-candidate-email"></span>`;
   return `
     <div class="batch-candidate-row">
       <input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">
       <span class="dot" style="background:${tone.color};"></span>
       <span class="batch-candidate-name">${escapeHtml(c.name)}</span>
+      ${emailHtml}
       ${cvHtml}
       <select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
         ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(s)}</option>`).join("")}
@@ -6335,10 +6342,115 @@ async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
   }
   if(!opts.skipRerender) renderDetailModal();
 }
+// Nicolas: "hay alguna manera de parsear dentro del logueo de batches el nombre y correo del
+// candidato?" — al adjuntar el CV en Add Candidate, se intenta leer el archivo y extraer
+// nombre/correo reales del propio documento. Heuristica, nunca 100% precisa (el formato de un CV
+// varia mucho) — por eso SOLO PRE-LLENA los campos (y nunca pisa lo que el reclutador ya haya
+// escrito a mano), dejandolos editables antes de Save Candidate, nunca los guarda sin que los vea.
+// Librerias cargadas perezosamente desde CDN (esta pagina no tiene build step) — nunca se
+// descargan si el archivo es .doc (formato binario viejo sin libreria confiable del lado del
+// cliente) o si el reclutador nunca adjunta nada.
+function loadScriptOnce(src){
+  return new Promise((resolve, reject) => {
+    if(document.querySelector(`script[src="${src}"]`)){ resolve(); return; }
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Failed to load "+src));
+    document.head.appendChild(s);
+  });
+}
+const PDFJS_VERSION = "3.11.174";
+async function extractTextFromPdf(file){
+  await loadScriptOnce(`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`);
+  if(!window.pdfjsLib.GlobalWorkerOptions.workerSrc){
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+  }
+  const buf = await file.arrayBuffer();
+  const doc = await window.pdfjsLib.getDocument({ data: buf }).promise;
+  let text = "";
+  // Solo las primeras 2 paginas — el nombre/correo casi siempre estan en la primera pagina de un
+  // CV, y parsear el documento completo es mas lento sin aportar nada mas para esto.
+  const maxPages = Math.min(doc.numPages, 2);
+  for(let i=1; i<=maxPages; i++){
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it=>it.str).join(" ") + "\n";
+  }
+  return text;
+}
+async function extractTextFromDocx(file){
+  await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
+  const buf = await file.arrayBuffer();
+  const result = await window.mammoth.extractRawText({ arrayBuffer: buf });
+  return result.value || "";
+}
+// Primera linea que "parece" un nombre real de persona (2-4 palabras capitalizadas, sin digitos
+// ni @, no una de las palabras tipicas de encabezado tipo "Resume"/"Curriculum Vitae") entre las
+// primeras lineas del documento — no es infalible, pero cubre la inmensa mayoria de CVs, donde el
+// nombre encabeza la primera pagina.
+function guessNameFromCvText(text){
+  const nameRe = /^[A-Z][a-zA-Z'.-]+(?:\s+[A-Z][a-zA-Z'.-]+){1,3}$/;
+  const bannedWords = /resume|curriculum|vitae|\bcv\b|profile|summary/i;
+  const lines = text.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+  for(const line of lines.slice(0, 8)){
+    if(line.length > 40 || /[0-9@]/.test(line) || bannedWords.test(line)) continue;
+    if(nameRe.test(line)) return line;
+  }
+  return null;
+}
+async function extractCandidateInfoFromCv(file){
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  let text = "";
+  if(ext === "pdf") text = await extractTextFromPdf(file);
+  else if(ext === "docx") text = await extractTextFromDocx(file);
+  else if(ext === "txt") text = await file.text();
+  else return null;
+  if(!text) return null;
+  const email = (text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/) || [])[0] || null;
+  const name = guessNameFromCvText(text);
+  return (email || name) ? { name, email } : null;
+}
+document.getElementById("addCandidateCvFile").addEventListener("change", async ()=>{
+  const input = document.getElementById("addCandidateCvFile");
+  const file = input.files[0];
+  const parseMsg = document.getElementById("addCandidateCvParseMsg");
+  parseMsg.textContent = "";
+  if(!file) return;
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  if(!["pdf","docx","txt"].includes(ext)){
+    parseMsg.textContent = "Can't auto-read .doc files — enter name/email manually.";
+    parseMsg.style.color = "var(--text-muted)";
+    return;
+  }
+  parseMsg.textContent = "Reading CV…";
+  parseMsg.style.color = "var(--text-muted)";
+  try {
+    const info = await extractCandidateInfoFromCv(file);
+    const nameInput = document.getElementById("addCandidateName");
+    const emailInput = document.getElementById("addCandidateEmail");
+    const found = [];
+    if(info && info.name && !nameInput.value.trim()){ nameInput.value = info.name; found.push("name"); }
+    if(info && info.email && !emailInput.value.trim()){ emailInput.value = info.email; found.push("email"); }
+    if(found.length){
+      parseMsg.textContent = `Auto-filled ${found.join(" and ")} from the CV — please double-check before saving.`;
+      parseMsg.style.color = "var(--good)";
+    } else {
+      parseMsg.textContent = "Couldn't detect name/email automatically — enter them manually.";
+      parseMsg.style.color = "var(--text-muted)";
+    }
+  } catch(err){
+    console.error(err);
+    parseMsg.textContent = "Couldn't read this CV automatically — enter name/email manually.";
+    parseMsg.style.color = "var(--text-muted)";
+  }
+});
 function openAddCandidateModal(p, batchDate){
   document.getElementById("addCandidateModalTitle").textContent = "Add Candidate";
   document.getElementById("addCandidateName").value = "";
+  document.getElementById("addCandidateEmail").value = "";
   document.getElementById("addCandidateCvFile").value = "";
+  document.getElementById("addCandidateCvParseMsg").textContent = "";
   document.getElementById("addCandidateStatus").innerHTML = BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
   document.getElementById("addCandidateMsg").textContent = "";
   document.getElementById("addCandidateModal").dataset.positionId = p.id;
@@ -6358,6 +6470,7 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
   const batchDate = modal.dataset.batchDate;
   const msg = document.getElementById("addCandidateMsg");
   const name = document.getElementById("addCandidateName").value.trim();
+  const email = document.getElementById("addCandidateEmail").value.trim();
   const status = document.getElementById("addCandidateStatus").value;
   const file = document.getElementById("addCandidateCvFile").files[0] || null;
   if(!p || !name){ msg.textContent = "Candidate name is required."; msg.style.color = "var(--critical)"; return; }
@@ -6369,7 +6482,7 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
     const author = currentAuthorName();
     let cvLink = null;
     const id = isConnected()
-      ? await graphAppendBatchCandidate(p.id, batchDate, name, status, null, author)
+      ? await graphAppendBatchCandidate(p.id, batchDate, name, email, status, null, author)
       : `${p.id}-${Date.now()}`;
     if(file && isConnected()){
       msg.textContent = "Uploading CV…";
@@ -6378,7 +6491,7 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
     } else if(file){
       msg.textContent = "Not connected — the CV wasn't uploaded, only kept in this browser tab.";
     }
-    p.batchCandidates.push({ id, batchDate, name, status, cvLink, addedBy: author, addedDate: localTodayStr() });
+    p.batchCandidates.push({ id, batchDate, name, email: email || null, status, cvLink, addedBy: author, addedDate: localTodayStr() });
     if(status === "Placed") await updateCandidateStatus(p, id, "Placed", {skipRerender:true});
     closeAddCandidateModal();
     renderDetailModal();
@@ -8253,8 +8366,9 @@ function mergeBatches(positions, batchHeaders, batchRows){
   });
   positions.forEach(p => p.batches.sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
-// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name | Status |
-// CV Link | Added By | Added Date. Candidate Row ID es una clave generada del lado del cliente
+// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name |
+// Candidate Email | Status | CV Link | Added By | Added Date. Candidate Row ID es una clave
+// generada del lado del cliente
 // (no un ID de Excel) porque una posicion puede tener muchos candidatos y necesitamos poder
 // actualizar UNO especifico despues (status/CV) sin ambiguedad — Position ID aqui solo enlaza al
 // req, no identifica la fila (varias filas comparten el mismo Position ID).
@@ -8277,6 +8391,7 @@ function mergeBatchCandidates(positions, bcHeaders, bcRows){
       id,
       batchDate: excelValToDateStr(row[bIdx("Batch Date")]),
       name,
+      email: row[bIdx("Candidate Email")] || null,
       status: row[bIdx("Status")] || "Active",
       cvLink: row[bIdx("CV Link")] || null,
       addedBy: row[bIdx("Added By")] || null,
@@ -8569,16 +8684,17 @@ async function graphAppendBatch(positionId, date, batchType, candidateCount){
     }),
   });
 }
-// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name | Status |
-// CV Link | Added By | Added Date. id se genera aqui (no lo asigna Excel) para poder actualizar
-// esta fila especifica despues — ver mergeBatchCandidates() arriba para por que hace falta.
-async function graphAppendBatchCandidate(positionId, batchDate, name, status, cvLink, author){
-  if(pinModeActive) return (await workerRecruiterWrite("appendBatchCandidate", {positionId, batchDate, name, status, cvLink: cvLink || ""})).id;
+// BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name |
+// Candidate Email | Status | CV Link | Added By | Added Date. id se genera aqui (no lo asigna
+// Excel) para poder actualizar esta fila especifica despues — ver mergeBatchCandidates() arriba
+// para por que hace falta.
+async function graphAppendBatchCandidate(positionId, batchDate, name, email, status, cvLink, author){
+  if(pinModeActive) return (await workerRecruiterWrite("appendBatchCandidate", {positionId, batchDate, name, email: email || "", status, cvLink: cvLink || ""})).id;
   const id = `${positionId}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
   await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
-      values: [[id, positionId, batchDate, name, status, cvLink || "", author, localTodayStr()]],
+      values: [[id, positionId, batchDate, name, email || "", status, cvLink || "", author, localTodayStr()]],
     }),
   });
   return id;
