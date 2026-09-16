@@ -419,12 +419,13 @@
   .ps-stat:hover .ps-hover-popover, .ps-stat:focus-within .ps-hover-popover {
     opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0) scaleY(1);
   }
+  /* El conector es una T: la barra horizontal es el propio trigger (.ps-stat), este es solo el
+     palo vertical que baja hasta la caja — no un embudo. Se "despliega" (scaleY 0 -> 1, anclado
+     arriba) al mismo tiempo que la caja, como una bandera bajando por un asta. */
   .ps-hover-popover::after {
     content: ""; position: absolute; bottom: 100%; left: 50%;
-    transform: translateX(-50%) scaleY(0.3);
-    width: 85%; height: 18px; background: var(--surface-1);
-    clip-path: polygon(43% 0%, 57% 0%, 100% 100%, 0% 100%);
-    filter: drop-shadow(0 -2px 1px rgba(0,0,0,0.18));
+    transform: translateX(-50%) scaleY(0);
+    width: 2px; height: 18px; background: var(--border);
     transform-origin: top center;
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   }
@@ -7760,6 +7761,21 @@ function buildDemoPositions(){
       intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
+    // DEMO-004: recien asignado, TODAVIA SIN ACEPTAR (recruiterAcceptedDate:null) — para probar
+    // el banner naranja de "You have 1 new assignment waiting on your acceptance" arriba de
+    // Tracking/Dashboard y el boton Accept, antes de que el req se pueda tocar en nada mas.
+    {
+      id:"DEMO-004", title:"Customer Success Manager (Demo)", client:"Irth Solutions", hiringManager:"Devon Cruz",
+      recruiter:DEMO_RECRUITER_NAME, status:"Kickoff", country:"United States", workArrangement:"Remote", city:null,
+      spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
+      sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
+      kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:null, intake:null, submit:null, fill:null, hire:null,
+      lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
+      calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
+      extra:[], batches:[], batchCandidates:[], remarksHistory:[],
+    },
   ];
 }
 async function loadDemoModeAndRender(){
@@ -7773,7 +7789,7 @@ async function loadDemoModeAndRender(){
   renderAll();
   setConnectionUi(false);
   document.getElementById("demoBanner").innerHTML =
-    "🧪 DEMO MODE — fake requisitions, nothing here saves anywhere. Reload the page to reset back to these 3 examples.";
+    "🧪 DEMO MODE — fake requisitions, nothing here saves anywhere. Reload the page to reset back to these 4 examples.";
   setDashboardScope(DEMO_RECRUITER_NAME);
   activateView("tracking");
 }
