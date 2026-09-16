@@ -2269,7 +2269,12 @@
 // (Submission Date) ya existia como campo de Timeline; este status ahora se auto-avanza solo al
 // loguear el primer batch (ver logBatchSave()) o al backdatear Submission Date directo (ver
 // DATE_IMPLIES_STATUS en saveModalDates()) — mismo patron que Fill/Start Date/Intake dates.
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Screening","Submitted","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+// "Screening" existio como status separado hasta 2026-09-17 — Nicolas: "creo que los status de
+// sourcing y screening deberian unirse, porque son casi lo mismo (mientras que estas sourceando,
+// tambien se pueden estar haciendo screenings)". Confirmado que ningun req real estaba en
+// Screening al momento del cambio (nada que migrar). Fusionado en "Sourcing" — ver
+// STATUS_GUIDANCE, que ahora cubre las dos cosas en un solo texto.
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Submitted","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Tramo de STATUS_ORDER que SI tiene un "siguiente" lineal real (Kickoff -> ... -> Hired) — el
 // resto (Filled Internal Hire, Fell Through, On Hold, On Hold Internal, Cancelled) son ramas
 // aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
@@ -2293,7 +2298,7 @@ function staleStatusHint(p){
   if(p.status==="Intake Meeting Requested" && p.intake){
     return {nextStatus:"Intake Pending", reason:"the Intake Meeting Date is already logged in Timeline"};
   }
-  if((p.status==="Intake Pending" || p.status==="Sourcing" || p.status==="Screening") && p.batches && p.batches.length){
+  if((p.status==="Intake Pending" || p.status==="Sourcing") && p.batches && p.batches.length){
     return {nextStatus:"Submitted", reason:"a submission batch is already logged"};
   }
   return null;
@@ -2376,8 +2381,10 @@ const STATUS_GUIDANCE = {
   "Kickoff": "Send the Kickoff email to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting) and confirm you've accepted it. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
   "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or, if a live call isn't possible, send written questions instead). Once they confirm, move the status to Intake Held and log the date — sourcing still can't start until the intake actually happens.",
   "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
-  "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Curate a batch of 3-5 candidates, never more, and get it to the hiring manager within 7-9 business days of the intake meeting.",
-  "Screening": "Run Screening Interviews with your sourced candidates before submitting anyone formally. Only candidates you'd genuinely stand behind should move forward — leave your evaluation as a comment on each profile once you're ready to submit them.",
+  // Sourcing y Screening se fusionaron en un solo status 2026-09-17 (ver STATUS_ORDER) — pasan en
+  // paralelo en la practica, nunca uno despues del otro de forma separada, asi que el texto ahora
+  // cubre las dos cosas en la secuencia real en que pasan.
+  "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Run Screening Interviews with your sourced candidates before submitting anyone formally — only candidates you'd genuinely stand behind should move forward, with your evaluation left as a comment on each profile. Once you've settled on a batch of 3-5 candidates, log them (with names, in Submission Batches) within 7-9 business days of the intake meeting — this moves to Submitted automatically once you do.",
   "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, move status to Technical Interview or Hiring Manager Interview, whichever comes first for this role.",
   "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch.",
   "Technical Interview": "Candidates are in technical interviews, usually the round before the Hiring Manager Interview. Same rule applies: feedback due within 1-3 business days per candidate, logged in Workable's Review tab.",
@@ -2500,9 +2507,15 @@ function guidanceDeliverablesFor(p){
     // igual que en el otro caso (leadKickoffB), donde SI es un Lead presentando a un reclutador
     // aparte. Nicolas, viendo su propio req: "esa nota no tiene el nombre correcto" — el label
     // sugeria la nota equivocada aunque el contenido real ya fuera el correcto.
+    // 2026-09-17, Nicolas: "ahi no es necesario ponerle el lead kickoff note ya que eso es solo
+    // para mi como Lead" — leadKickoffB es un correo que EL manda (presentando al reclutador
+    // asignado), nunca algo que David/otro reclutador tenga que enviar, asi que no pertenece en
+    // el Next Step de SU req — ahi solo importa lo que el reclutador asignado tiene que hacer.
+    // Deferido a proposito (no resuelto aqui): un lugar aparte donde Nicolas pueda ver/gestionar
+    // sus propios Lead Kickoff Notes pendientes para reqs que el no recluta directamente.
     return p.recruiter === LEAD_TALENT_PARTNER
       ? [{id:"leadKickoffA", label:"Kickoff Note (You're The Recruiter)"}]
-      : [{id:"leadKickoffB", label:"Lead Kickoff Note"}, {id:"recruiterKickoff", label:"Recruiter Kickoff Note"}];
+      : [{id:"recruiterKickoff", label:"Recruiter Kickoff Note"}];
   }
   return [];
 }
@@ -2548,11 +2561,10 @@ const STAGE_COLORS = {
   "Intake Meeting Requested": "var(--seq-200)",
   "Intake Pending": "var(--seq-300)",
   "Sourcing": "var(--seq-400)",
-  "Screening": "var(--seq-500)",
-  // Solo hay --seq-100..600 definidos (Technical Interview, agregado antes, ya tuvo el mismo
-  // problema y reusa brand-dark) — en vez de inventar un septimo tono fijo, un color-mix real
-  // entre las dos rampas vecinas mantiene el mismo espiritu monocromatico sin tocar la paleta.
-  "Submitted": "color-mix(in srgb, var(--seq-500), var(--seq-600))",
+  // Screening se fusiono con Sourcing 2026-09-17 (ver STATUS_ORDER), asi que --seq-500 quedo
+  // libre — Submitted (que antes necesitaba un color-mix porque --seq-500 ya estaba tomado por
+  // Screening) ahora lo usa directo, sin necesidad de mezclar dos rampas.
+  "Submitted": "var(--seq-500)",
   "Hiring Manager Interview": "var(--seq-600)",
   "Technical Interview": "var(--brand-dark)",
   "Offer Request": "var(--warning)",
@@ -3764,13 +3776,13 @@ function renderEstadoChart(){
 // no pesa lo mismo que uno en Offer Stage (esperando a Irth) o en On Hold (pausado) — contar
 // solo posiciones brutas sobreestima a quien tiene muchas ya avanzadas y subestima a quien tiene
 // varias en sourcing intensivo. Pesos y limites (10 sweet spot, 12 maximo aceptable) tal cual el
-// Playbook; "Sourcing"/"Screening" ambos pesan 1.0 (construyendo/entregando el batch).
+// Playbook; "Sourcing" (que desde 2026-09-17 incluye Screening, ver STATUS_ORDER) pesa 1.0
+// (construyendo/entregando el batch).
 const STAGE_WEIGHT = {
   "Kickoff": 0.25,
   "Intake Meeting Requested": 0.25,
   "Intake Pending": 0.5,
   "Sourcing": 1.0,
-  "Screening": 1.0,
   "Submitted": 0.5,
   "Hiring Manager Interview": 0.5,
   "Technical Interview": 0.5,
@@ -4639,11 +4651,30 @@ function buildTimeline(p){
   // timelineListHtml() ya se encarga de mostrarlo como "You" si el que esta viendo ahora
   // resulta ser esa misma persona, o el nombre real si es otro.
   if(p.recruiterAcceptedDate && !hasAcceptedAction) entries.push({date:p.recruiterAcceptedDate, type:"action", author:p.recruiter, text:"Accepted the assignment."});
-  if(p.intakeRequestedDate) entries.push({date:p.intakeRequestedDate, type:"auto", text:"Requisition accepted, intake meeting requested."});
-  if(p.intake) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
-  if(p.submit) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
-  if(p.fill)   entries.push({date:p.fill,   type:"auto", text:"Offer accepted, position filled."});
-  if(p.hire)   entries.push({date:p.hire,   type:"auto", text:"Placement confirmed, candidate hired."});
+  // BUG REAL encontrado 2026-09-17 (Nicolas, Data Architect/SE-006: "primero está el milestone...
+  // como si automaticamente se acepta, se hubiese pedido el intake meeting, pero luego se ve un
+  // log de action que dice que el req se acepto"). Estos 5 milestones sinteticos se agregaban
+  // SIEMPRE que la fecha correspondiente existiera, sin este mismo guard que hasAcceptedAction ya
+  // usa arriba — asi que una req cuyo avance de status SI quedo logueado de verdad (via
+  // saveModalDates()/commitStatusChange()/logBatchSave(), un entry type "status" real, con su
+  // propia fecha real en remarksHistory) terminaba con DOS entradas para el mismo hecho: el
+  // milestone sintetico (insertado aqui, siempre temprano en el array) y el status change real
+  // (insertado mas abajo, en su posicion cronologica real dentro de remarksHistory). Mismo dia +
+  // sort estable = el sintetico ganaba el desempate por estar primero en el array, sin importar
+  // que en la vida real la aceptacion paso ANTES que la solicitud del intake. Mismo fix que
+  // hasAcceptedAction: el sintetico solo se agrega si NO hay ya un cambio de status real hacia ese
+  // mismo destino — para datos migrados/viejos sin ese log real, el fallback sigue funcionando
+  // exactamente igual que antes.
+  const hasStatusChangeTo = (targetStatus) => {
+    const marker = `to ${statusLabel(targetStatus)}`;
+    return (p.extra||[]).some(e=>e.type==="status" && e.text.includes(marker))
+      || (p.remarksHistory||[]).some(e=>e.type==="status" && e.text.includes(marker));
+  };
+  if(p.intakeRequestedDate && !hasStatusChangeTo("Intake Meeting Requested")) entries.push({date:p.intakeRequestedDate, type:"auto", text:"Requisition accepted, intake meeting requested."});
+  if(p.intake && !hasStatusChangeTo("Intake Pending")) entries.push({date:p.intake, type:"auto", text:"Intake meeting held."});
+  if(p.submit && !hasStatusChangeTo("Submitted")) entries.push({date:p.submit, type:"auto", text:"Candidate submitted to the hiring manager."});
+  if(p.fill   && !hasStatusChangeTo("Filled")) entries.push({date:p.fill,   type:"auto", text:"Offer accepted, position filled."});
+  if(p.hire   && !hasStatusChangeTo("Hired")) entries.push({date:p.hire,   type:"auto", text:"Placement confirmed, candidate hired."});
   // Remarks de sesiones anteriores (traidos completos de HistorialTable, no solo el ultimo —
   // ver mergeLatestRemarks()), con su fecha real de cuando se escribieron. Filtra filas viejas
   // type="guidance" (el diseño anterior, ver commitStatusChange()) — ya no se escriben nuevas
@@ -5110,7 +5141,7 @@ function renderDetailModal(){
                 waive once they've confirmed the answers back in writing.</li>
               <li>No live meeting happened and the hiring manager never weighed in either way, but
                 Irth's internal team already aligned on the role and sent everything needed to
-                start sourcing by email (e.g. the Full Stack Developer reqs).</li>
+                start sourcing by email.</li>
             </ul>
             If none of these apply, request the intake meeting instead. For the last two, attach
             a screenshot of the email below so there's a real record of what was actually said.`,
@@ -5535,7 +5566,7 @@ document.addEventListener("click", (e)=>{
 // legitimamente waived (ver p.intakeWaivedReason, "No Meeting Needed? Explain Why") cuenta
 // igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
 // empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
-const REQUIRES_INTAKE_HELD = ["Sourcing", "Screening", "Submitted", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
+const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
