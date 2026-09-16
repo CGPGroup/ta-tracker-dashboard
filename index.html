@@ -5995,7 +5995,14 @@ function openEditReqInfoModal(){
   document.getElementById("reqInfoCity").value = p.city || "";
   document.getElementById("reqInfoWorkArrangement").innerHTML = ["Remote","Hybrid","On-site"]
     .map(a=>`<option value="${a}" ${a===(p.workArrangement||"Remote")?"selected":""}>${a}</option>`).join("");
-  document.getElementById("reqInfoSalaryCurrency").value = p.salaryCurrency || "";
+  // BUG REAL reportado por Nicolas 2026-09-16 (demo): entraba un numero en Min, guardaba, pero
+  // Log Batch seguia pidiendo compensacion — porque Currency se quedaba en su placeholder vacio
+  // ("Currency", value=""), facil de no notar ya que se ve como una etiqueta, no como un campo
+  // sin llenar. hasSalaryConfirmed() exige currency Y min juntos (ver ahi), asi que Min solo
+  // nunca era suficiente. Default a "USD" (la moneda real de casi todas las reqs, ver
+  // [[project_compensation_field]]) cuando todavia no hay una guardada, para que quien solo
+  // toca Min ya quede con un valor completo y valido — sigue siendo editable a CAD/AUD.
+  document.getElementById("reqInfoSalaryCurrency").value = p.salaryCurrency || "USD";
   document.getElementById("reqInfoSalaryMin").value = p.salaryMin != null ? p.salaryMin : "";
   const isFlat = p.salaryMin != null && (p.salaryMax == null || Number(p.salaryMax) === Number(p.salaryMin));
   document.getElementById("reqInfoSalaryFlat").checked = isFlat;
