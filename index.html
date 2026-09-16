@@ -2275,7 +2275,13 @@
 // tambien se pueden estar haciendo screenings)". Confirmado que ningun req real estaba en
 // Screening al momento del cambio (nada que migrar). Fusionado en "Sourcing" — ver
 // STATUS_GUIDANCE, que ahora cubre las dos cosas en un solo texto.
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Pending","Sourcing","Submitted","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+// "Intake Meeting Waived" agregado 2026-09-17 — Nicolas: hasta ahora un intake waived reusaba el
+// mismo status "Intake Pending" (mostrado "Intake Held") que un intake que SI paso, lo cual
+// mezclaba dos caminos distintos bajo un mismo nombre. Ahora es su propio status, rama paralela a
+// "Intake Pending" (mismo "nivel" del pipeline, ninguno es prerequisito del otro) — ver
+// STAGE_COLORS/STAGE_WEIGHT (mismo valor que Intake Pending, representan el mismo punto real del
+// proceso por dos caminos distintos) y el auto-avance en el onSave de "Waive Intake Meeting".
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Sourcing","Submitted","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Tramo de STATUS_ORDER que SI tiene un "siguiente" lineal real (Kickoff -> ... -> Hired) — el
 // resto (Filled Internal Hire, Fell Through, On Hold, On Hold Internal, Cancelled) son ramas
 // aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
@@ -2299,7 +2305,10 @@ function staleStatusHint(p){
   if(p.status==="Intake Meeting Requested" && p.intake){
     return {nextStatus:"Intake Pending", reason:"the Intake Meeting Date is already logged in Timeline"};
   }
-  if((p.status==="Intake Pending" || p.status==="Sourcing") && p.batches && p.batches.length){
+  if(p.status==="Intake Meeting Requested" && p.intakeWaivedReason){
+    return {nextStatus:"Intake Meeting Waived", reason:"an Intake Waived reason is already on file"};
+  }
+  if((p.status==="Intake Pending" || p.status==="Intake Meeting Waived" || p.status==="Sourcing") && p.batches && p.batches.length){
     return {nextStatus:"Submitted", reason:"a submission batch is already logged"};
   }
   return null;
@@ -2308,7 +2317,7 @@ function staleStatusHint(p){
 // valor, para que las tablas/filtros/chips sigan mostrando el nombre corto del status).
 const STATUS_SUBTITLE = {
   "Kickoff": "Req Assigned",
-  "Intake Meeting Requested": "Kickoff Email Replied",
+  "Intake Meeting Requested": "Kickoff Note Sent",
 };
 // Nombre que se MUESTRA para un status, cuando es distinto del valor real guardado — Nicolas
 // senalo que "Hired" suena a que ya esta trabajando ahi, cuando en realidad es el termino de
@@ -2379,9 +2388,17 @@ const STATUS_DATE_FIELD = {
 // habian dejado atras. Al mostrarlo siempre en vivo desde p.status, nunca puede faltar ni
 // quedar desactualizado, sin importar como se haya creado o editado el req.
 const STATUS_GUIDANCE = {
-  "Kickoff": "Send the Kickoff email to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting) and confirm you've accepted it. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
-  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or, if a live call isn't possible, send written questions instead). Once they confirm, move the status to Intake Held and log the date — sourcing still can't start until the intake actually happens.",
+  // Terminologia estandarizada (Nicolas, 2026-09-17): "Kickoff Note", nunca solo "Kickoff" a
+  // secas ni "Kickoff email" — mismo nombre exacto que usan los chips/titulos de
+  // guidanceDeliverablesFor() (Recruiter Kickoff Note / Lead Kickoff Note), para que no haya dos
+  // formas distintas de referirse al mismo entregable en pantallas distintas.
+  "Kickoff": "Send the Kickoff Note to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting), then confirm below once it's sent. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
+  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or, if a live call isn't possible, send written questions instead). Once they confirm a date, log it below to move to Intake Held — or, if it turns out a separate intake meeting genuinely isn't needed, waive it instead. Sourcing can't start until one of the two happens.",
   "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
+  // Rama paralela a "Intake Pending" — mismo punto del proceso, llegado por un camino distinto
+  // (ver STATUS_ORDER). El texto es deliberadamente casi identico al de Intake Pending, solo
+  // cambia como se llego hasta aqui, nunca lo que hay que hacer despues.
+  "Intake Meeting Waived": "The intake meeting was waived instead of held (see the reason on file above) — use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone, then move status to Sourcing.",
   // Sourcing y Screening se fusionaron en un solo status 2026-09-17 (ver STATUS_ORDER) — pasan en
   // paralelo en la practica, nunca uno despues del otro de forma separada, asi que el texto ahora
   // cubre las dos cosas en la secuencia real en que pasan.
@@ -2534,6 +2551,29 @@ function guidanceDeliverableLinksHtml(p){
 // isView: en modo vista no hay boton "Mark Done" (nadie mas que quien puede editar este req
 // deberia poder dejar un registro de que lo hizo) — mismo criterio de acceso que el resto de
 // botones de accion del modal (ver el `if(!isView)` en renderDetailModal()).
+// Nicolas, 2026-09-17: el "Mark Done" generico (solo texto, sin fecha, sin cambiar status) tenia
+// friccion real para estos 3 pasos — el reclutador confirmaba el paso y DESPUES tenia que irse
+// hasta Timeline a loguear la fecha y hasta el dropdown a mover el status, dos pasos aparte que
+// deberian ser uno solo. Estos 3 statuses ahora reusan onStatusOptionClick() (el MISMO mecanismo
+// que ya usa el dropdown de status: si el destino tiene una fecha asociada, la pide ahi mismo; si
+// no, avanza directo) disparado desde el Next Step en vez de desde el dropdown — sin duplicar
+// logica, solo un segundo punto de entrada al mismo flujo ya construido y probado. El resto de
+// los statuses (Technical Interview en adelante) no se describieron con este mismo patron, asi
+// que se quedan con el "Mark Done" de siempre (ver confirmNextStepDone()).
+function nextStepCtaHtml(p){
+  const msg = `<span class="panel-sub" id="nextStepDoneMsg" style="margin-left:6px; font-size:11px;"></span>`;
+  if(p.status === "Kickoff"){
+    return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Intake Meeting Requested" style="margin-top:4px; display:inline-block;">Confirm Kickoff Note Sent &rarr; Request Intake Meeting</button>${msg}`;
+  }
+  if(p.status === "Intake Meeting Requested"){
+    return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Intake Pending" style="margin-top:4px; display:inline-block;">Log Intake Meeting Date &rarr; Intake Held</button>
+      <button type="button" class="fact-edit-link" id="nextStepSecondaryBtn" style="margin-top:4px; margin-left:10px; display:inline-block;">Or, Waive This Intake Meeting &rarr;</button>${msg}`;
+  }
+  if(p.status === "Intake Pending" || p.status === "Intake Meeting Waived"){
+    return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
+  }
+  return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button>${msg}`;
+}
 function nextStepRowHtml(p, isView){
   const text = STATUS_GUIDANCE[p.status];
   if(!text) return "";
@@ -2542,13 +2582,11 @@ function nextStepRowHtml(p, isView){
   // NUNCA logueado"), esto NO es el sistema re-logueando el texto de guia en cada cambio de
   // status (eso fue lo que causaba duplicados/staleness); es una confirmacion MANUAL, con fecha y
   // autor real, de que alguien de verdad hizo ese paso — un evento puntual, no un estado que deba
-  // mantenerse sincronizado. Por eso no intenta "recordar" si ya se confirmo antes ni esconde el
-  // boton despues de usarlo: cada click es su propio registro valido (ej. confirmar cada batch
-  // adicional dentro del mismo status de Sourcing).
-  const doneBtn = isView ? "" : `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button><span class="panel-sub" id="nextStepDoneMsg" style="margin-left:6px; font-size:11px;"></span>`;
+  // mantenerse sincronizado.
+  const ctaHtml = isView ? "" : nextStepCtaHtml(p);
   return `<li>
     <span class="tl-badge guidance">${TL_BADGE_LABELS.guidance}</span>
-    <span class="tl-text">${escapeHtml(text)}${guidanceDeliverableLinksHtml(p)}${doneBtn}</span>
+    <span class="tl-text">${escapeHtml(text)}${guidanceDeliverableLinksHtml(p)}${ctaHtml}</span>
   </li>`;
 }
 // Antes usaba --stage-blue/teal/purple/mauve para las etapas activas: colores sin relacion
@@ -2561,6 +2599,9 @@ const STAGE_COLORS = {
   "Kickoff": "var(--seq-100)",
   "Intake Meeting Requested": "var(--seq-200)",
   "Intake Pending": "var(--seq-300)",
+  // Mismo tono que Intake Pending, a proposito — es el mismo punto real del proceso llegado por
+  // otro camino, no una etapa distinta (ver STATUS_ORDER).
+  "Intake Meeting Waived": "var(--seq-300)",
   "Sourcing": "var(--seq-400)",
   // Screening se fusiono con Sourcing 2026-09-17 (ver STATUS_ORDER), asi que --seq-500 quedo
   // libre — Submitted (que antes necesitaba un color-mix porque --seq-500 ya estaba tomado por
@@ -3783,6 +3824,7 @@ const STAGE_WEIGHT = {
   "Kickoff": 0.25,
   "Intake Meeting Requested": 0.25,
   "Intake Pending": 0.5,
+  "Intake Meeting Waived": 0.5,
   "Sourcing": 1.0,
   "Submitted": 0.5,
   "Hiring Manager Interview": 0.5,
@@ -5129,77 +5171,7 @@ function renderDetailModal(){
       });
     });
     if(document.getElementById("editIntakeWaivedBtn")){
-      document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=>{
-        openEditFieldModal({
-          title: "Waive Intake Meeting",
-          // Nicolas + David: el usuario no tiene forma de saber que SI cuenta como razon valida
-          // antes de escribir algo, mas alla de adivinar por el placeholder de un solo ejemplo.
-          // Esto se explica ANTES del campo, no despues, para que no se use como atajo para
-          // saltarse una intake meeting real que si hacia falta.
-          // Nicolas, 2026-09-17: agrego 2 razones mas (el HM no tiene tiempo pero confirma un set
-          // de preguntas escritas; o nadie del HM dijo nada pero Irth/el equipo interno ya alineo
-          // el rol y mando todo por correo, como paso con las de Full Stack antes del handoff a
-          // David) — y en esos 2 casos especificos, poder adjuntar la captura del correo real.
-          noteHtml: `This should only be used when a real intake meeting genuinely isn't needed for
-            this specific requisition — not as a shortcut to skip one that is. Valid reasons:
-            <ul style="margin:6px 0 0 18px; padding:0;">
-              <li>This is additional headcount for a role you already ran a full intake for (same
-                hiring manager, same requirements).</li>
-              <li>The hiring manager confirmed in writing (email, chat) that nothing changed since
-                a previous intake, so a repeat meeting wasn't necessary.</li>
-              <li>The hiring manager said they don't have time for a live meeting — send them a
-                written set of questions covering what's needed to source effectively, and only
-                waive once they've confirmed the answers back in writing.</li>
-              <li>No live meeting happened and the hiring manager never weighed in either way, but
-                Irth's internal team already aligned on the role and sent everything needed to
-                start sourcing by email.</li>
-            </ul>
-            If none of these apply, request the intake meeting instead. For the last two, attach
-            a screenshot of the email below so there's a real record of what was actually said.`,
-          // Si esta req pertenece a un Headcount Group, la misma razon aplica a sus hermanas
-          // automaticamente al guardar (ver onSave abajo) — se avisa aqui mismo, antes de
-          // escribir, para que no sea una sorpresa cuantas reqs va a afectar.
-          label: (()=>{
-            const n = p.headcountGroup
-              ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.intake && !x.handoffFrom).length
-              : 0;
-            return n
-              ? `Why wasn't a separate intake meeting needed? (also applies to ${n} other headcount${n===1?"":"s"} in "${p.headcountGroup}")`
-              : "Why wasn't a separate intake meeting needed?";
-          })(),
-          placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
-          value: p.intakeWaivedReason,
-          fileFieldLabel: "Email Screenshot (optional, up to 4MB) — evidence for the written/internal-alignment reasons above",
-          onSave: async (newVal, file)=>{
-            p.intakeWaivedReason = newVal;
-            // Mismo criterio que la label de arriba: se excluyen hermanas que ya tienen su
-            // propia intake meeting real sostenida (no la necesitan) y las que llegaron por
-            // Handoff (ese flujo tiene su propio mecanismo de confirmacion de contexto).
-            const siblings = p.headcountGroup
-              ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.intake && !x.handoffFrom)
-              : [];
-            siblings.forEach(s=> s.intakeWaivedReason = newVal);
-            let evidenceLink = null;
-            if(file && isConnected()) evidenceLink = await graphUploadFile("Intake Waiver Evidence", p.id, file);
-            if(evidenceLink){
-              p.intakeWaivedEvidenceLink = evidenceLink;
-              siblings.forEach(s=> s.intakeWaivedEvidenceLink = evidenceLink);
-            }
-            if(isConnected()){
-              await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
-              if(evidenceLink) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Evidence", evidenceLink);
-              for(const s of siblings){
-                await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Reason", newVal || "");
-                if(evidenceLink) await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Evidence", evidenceLink);
-              }
-            }
-            renderDetailModal();
-            renderPositions();
-            renderTracking();
-            renderKpis();
-          },
-        });
-      });
+      document.getElementById("editIntakeWaivedBtn").addEventListener("click", ()=> openWaiveIntakeModal(p));
     }
     // Puede no existir si canStartSourcing(p) esta bloqueado ahora mismo (ver urlFactCell()) —
     // sin valor y sin permiso todavia, urlFactCell no dibuja el boton "Add" para nada.
@@ -5387,6 +5359,10 @@ function renderDetailModal(){
   document.getElementById("modalNextStep").innerHTML = nextStepRowHtml(p, isView);
   const nextStepDoneBtn = document.getElementById("nextStepDoneBtn");
   if(nextStepDoneBtn) nextStepDoneBtn.addEventListener("click", ()=> confirmNextStepDone(p));
+  const nextStepPrimaryBtn = document.getElementById("nextStepPrimaryBtn");
+  if(nextStepPrimaryBtn) nextStepPrimaryBtn.addEventListener("click", ()=> onStatusOptionClick(p, nextStepPrimaryBtn.dataset.targetStatus));
+  const nextStepSecondaryBtn = document.getElementById("nextStepSecondaryBtn");
+  if(nextStepSecondaryBtn) nextStepSecondaryBtn.addEventListener("click", ()=> openWaiveIntakeModal(p));
 
   const timeline = buildTimeline(p).slice().reverse();
   document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
@@ -5574,10 +5550,118 @@ document.addEventListener("click", (e)=>{
 // Regla no negociable del Playbook/Master Prompt: el sourcing (y todo lo que viene despues) no
 // puede arrancar hasta que el intake meeting realmente paso — ni siquiera si el rol "parece
 // obvio". Estos son los statuses que representan trabajo activo con candidatos. Un intake
-// legitimamente waived (ver p.intakeWaivedReason, "No Meeting Needed? Explain Why") cuenta
+// legitimamente waived (ver p.intakeWaivedReason, "Waive This Intake Meeting") cuenta
 // igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
 // empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
 const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
+// Extraido de renderDetailModal() (antes vivia solo dentro del click listener del boton de
+// Timeline) para poder abrirse tambien desde onStatusOptionClick() — elegir "Intake Meeting
+// Waived" a mano desde el dropdown de status, sin una razon todavia guardada, redirige aqui en
+// vez de completar un cambio de status vacio sin ninguna razon detras.
+function openWaiveIntakeModal(p){
+  openEditFieldModal({
+    title: "Waive Intake Meeting",
+    // Nicolas + David: el usuario no tiene forma de saber que SI cuenta como razon valida
+    // antes de escribir algo, mas alla de adivinar por el placeholder de un solo ejemplo.
+    // Esto se explica ANTES del campo, no despues, para que no se use como atajo para
+    // saltarse una intake meeting real que si hacia falta.
+    // Nicolas, 2026-09-17: agrego 2 razones mas (el HM no tiene tiempo pero confirma un set
+    // de preguntas escritas; o nadie del HM dijo nada pero Irth/el equipo interno ya alineo
+    // el rol y mando todo por correo, como paso con las de Full Stack antes del handoff a
+    // David) — y en esos 2 casos especificos, poder adjuntar la captura del correo real.
+    noteHtml: `This should only be used when a real intake meeting genuinely isn't needed for
+      this specific requisition — not as a shortcut to skip one that is. Valid reasons:
+      <ul style="margin:6px 0 0 18px; padding:0;">
+        <li>This is additional headcount for a role you already ran a full intake for (same
+          hiring manager, same requirements).</li>
+        <li>The hiring manager confirmed in writing (email, chat) that nothing changed since
+          a previous intake, so a repeat meeting wasn't necessary.</li>
+        <li>The hiring manager said they don't have time for a live meeting — send them a
+          written set of questions covering what's needed to source effectively, and only
+          waive once they've confirmed the answers back in writing.</li>
+        <li>No live meeting happened and the hiring manager never weighed in either way, but
+          Irth's internal team already aligned on the role and sent everything needed to
+          start sourcing by email.</li>
+      </ul>
+      If none of these apply, request the intake meeting instead. For the last two, attach
+      a screenshot of the email below so there's a real record of what was actually said.`,
+    // Si esta req pertenece a un Headcount Group, la misma razon aplica a sus hermanas
+    // automaticamente al guardar (ver onSave abajo) — se avisa aqui mismo, antes de
+    // escribir, para que no sea una sorpresa cuantas reqs va a afectar.
+    label: (()=>{
+      const n = p.headcountGroup
+        ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.intake && !x.handoffFrom).length
+        : 0;
+      return n
+        ? `Why wasn't a separate intake meeting needed? (also applies to ${n} other headcount${n===1?"":"s"} in "${p.headcountGroup}")`
+        : "Why wasn't a separate intake meeting needed?";
+    })(),
+    placeholder: "e.g. Additional headcount for the same role, already covered by the original intake — HM confirmed nothing changed.",
+    value: p.intakeWaivedReason,
+    fileFieldLabel: "Email Screenshot (optional, up to 4MB) — evidence for the written/internal-alignment reasons above",
+    onSave: async (newVal, file)=>{
+      p.intakeWaivedReason = newVal;
+      // Mismo criterio que la label de arriba: se excluyen hermanas que ya tienen su
+      // propia intake meeting real sostenida (no la necesitan) y las que llegaron por
+      // Handoff (ese flujo tiene su propio mecanismo de confirmacion de contexto).
+      const siblings = p.headcountGroup
+        ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.intake && !x.handoffFrom)
+        : [];
+      siblings.forEach(s=> s.intakeWaivedReason = newVal);
+      let evidenceLink = null;
+      if(file && isConnected()) evidenceLink = await graphUploadFile("Intake Waiver Evidence", p.id, file);
+      if(evidenceLink){
+        p.intakeWaivedEvidenceLink = evidenceLink;
+        siblings.forEach(s=> s.intakeWaivedEvidenceLink = evidenceLink);
+      }
+      // 2026-09-17, Nicolas: waivear ahora tambien avanza el status solo a "Intake Meeting
+      // Waived" (su propio status, ver STATUS_ORDER) — mismo patron forward-only/
+      // AUTO_STATUS_LOCKED que el resto de los auto-avances de esta sesion (ver
+      // DATE_IMPLIES_STATUS en saveModalDates()), aplicado tambien a las hermanas de
+      // Headcount Group que comparten la misma razon. Guardar vacio (borrar la razon) nunca
+      // dispara esto.
+      const advanceOne = (pos) => {
+        if(!newVal || AUTO_STATUS_LOCKED.includes(pos.status)) return null;
+        if(STATUS_ORDER.indexOf("Intake Meeting Waived") <= STATUS_ORDER.indexOf(pos.status)) return null;
+        const from = pos.status;
+        pos.status = "Intake Meeting Waived";
+        return from;
+      };
+      const myFrom = advanceOne(p);
+      const siblingChanges = siblings.map(s=>({s, from: advanceOne(s)})).filter(x=>x.from);
+      if(myFrom){
+        const statusRemarkText = `Status changed from ${statusLabel(myFrom)} to Intake Meeting Waived (automatic — intake waived).`;
+        p.extra = p.extra || [];
+        p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: statusRemarkText});
+        if(isConnected()){
+          await graphUpdatePositionField(p.id, "G", "Intake Meeting Waived");
+          await graphAppendHistorial(p.id, p.title, statusRemarkText, currentAuthorName(), "status");
+        }
+      }
+      for(const {s, from} of siblingChanges){
+        const statusRemarkText = `Status changed from ${statusLabel(from)} to Intake Meeting Waived (automatic — intake waived, same reason as ${p.id}).`;
+        s.extra = s.extra || [];
+        s.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: statusRemarkText});
+        if(isConnected()){
+          await graphUpdatePositionField(s.id, "G", "Intake Meeting Waived");
+          await graphAppendHistorial(s.id, s.title, statusRemarkText, currentAuthorName(), "status");
+        }
+      }
+      if(isConnected()){
+        await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
+        if(evidenceLink) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Evidence", evidenceLink);
+        for(const s of siblings){
+          await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Reason", newVal || "");
+          if(evidenceLink) await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Evidence", evidenceLink);
+        }
+      }
+      renderDetailModal();
+      renderPositions();
+      renderTracking();
+      renderKpis();
+    },
+  });
+}
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
@@ -5599,6 +5683,14 @@ function onStatusOptionClick(p, newStatus){
   }
   if(REQUIRES_INTAKE_HELD.includes(newStatus) && !p.intake && !p.intakeWaivedReason){
     alert(`Can't move to "${statusLabel(newStatus)}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
+    return;
+  }
+  // Elegir "Intake Meeting Waived" a mano (dropdown) sin una razon todavia guardada no tiene
+  // sentido — no hay nada que explique POR QUE se waived. openWaiveIntakeModal() ya hace el
+  // cambio de status solo, al guardar la razon (ver ahi) — este caso nunca cae a
+  // commitStatusChange() directo mas abajo.
+  if(newStatus === "Intake Meeting Waived" && !p.intakeWaivedReason){
+    openWaiveIntakeModal(p);
     return;
   }
   const dateField = STATUS_DATE_FIELD[newStatus];
@@ -8525,7 +8617,14 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
   // Salary Period (ver [[project_compensation_field]]) se agrego DESPUES de Salary Max, como
   // columna 57 — un 4to null aqui, no 3, o este array vuelve a quedar corto y rompe rows/add
   // igual que el bug de arriba. Si se agrega cualquier otra columna a PositionsTable en el
-  // futuro, este array tiene que crecer con ella tambien.
+  // futuro, este array tiene que crecer con ella tambien. graphAppendPosition() SI recorta este
+  // array al ancho real de la tabla en vivo (headerRowRange) antes de escribir — asi que un
+  // array mas LARGO de lo que la tabla real todavia tiene es seguro (se recorta solo), pero uno
+  // mas CORTO de lo que la tabla real ya tiene no lo es (rows/add exige coincidencia exacta) —
+  // por eso agregar el null de una columna nueva aqui apenas se define, ANTES de que Nicolas la
+  // cree en el Excel real, es lo seguro: Intake Waived Evidence (columna 58,
+  // [[project_intake_waived_visibility_bug]]) todavia no existe en el archivo real, pero ya tiene
+  // su null reservado aqui para el dia en que exista.
   return [
     code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, fields.fill || null, fields.hire || null,
     null,null,null,null,null,null,null,null,null,null,null,null,
@@ -8539,6 +8638,7 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     null, null, null, null, null,
     null, null, null, headcountGroup, null,
     null, null, null,
+    null,
     null,
   ];
 }
