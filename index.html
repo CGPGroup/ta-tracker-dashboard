@@ -2475,11 +2475,14 @@ const STATUS_GUIDANCE = {
   // Reescrito para nombrar los 2 caminos explicitamente (held/waived) en vez de un pronombre
   // ambiguo que dependia de contar hacia atras cual par era.
   "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or, if a live call isn't possible, send written questions instead). Once they confirm a date, log it below to move to Intake Held — or, if it turns out a separate intake meeting genuinely isn't needed, waive it instead. Sourcing can't start until the intake meeting is either held or waived.",
-  "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
+  // Nota: el texto REAL que se muestra para "Intake Pending"/"Intake Meeting Waived" vive en
+  // nextStepGuidanceText() (fecha real + gate de intakeNotes) — estas 2 entradas quedan aqui solo
+  // como referencia estatica/documentacion, nunca se leen directamente para esos 2 statuses.
+  "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
   // Rama paralela a "Intake Pending" — mismo punto del proceso, llegado por un camino distinto
   // (ver STATUS_ORDER). El texto es deliberadamente casi identico al de Intake Pending, solo
   // cambia como se llego hasta aqui, nunca lo que hay que hacer despues.
-  "Intake Meeting Waived": "The intake meeting was waived instead of held (see the reason on file above) — use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone, then move status to Sourcing.",
+  "Intake Meeting Waived": "The intake meeting was waived instead of held (see the reason on file above) — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI, then move status to Sourcing.",
   // Sourcing y Screening se fusionaron en un solo status 2026-09-17 (ver STATUS_ORDER) — pasan en
   // paralelo en la practica, nunca uno despues del otro de forma separada, asi que el texto ahora
   // cubre las dos cosas en la secuencia real en que pasan.
@@ -2722,11 +2725,34 @@ function nextStepCtaHtml(p){
 // guia no debe decirle al reclutador que vaya a preparar el Master JD/KeyStone — eso viene DESPUES
 // de saber que se hablo de verdad en la reunion (o en el intercambio que reemplazo la reunion, si
 // se waived). STATUS_GUIDANCE se queda como el texto normal (post-notas) para todo lo demas.
+// Nicolas, 2026-09-19, 4 ajustes sobre el texto pre-notas:
+// 1. "before prepping anything" -> tambien cubre sourcear, no solo preparar.
+// 2. Master JD/Sourcing Calibration Questions no siempre pasan como pasos propios — lo concreto
+//    y consistente es crear el Spott Job y el LinkedIn Job Posting en KeyStone AI (ver Master
+//    Prompt seccion 8, "Flujo operativo completo").
+// 3. "(its real date is logged above)" -> mostrar la fecha real ahi mismo, no solo referenciarla.
+// 4. Recordar enviar el correo de Post Intake Meeting Notes (Template 3 del Master Prompt) — es
+//    la referencia objetiva para el Pivot SLA mas adelante, y confirma que el hiring manager esta
+//    de acuerdo con lo capturado. Distinto de p.intakeNotes (que es solo la nota interna del
+//    reclutador en el tracker) — esto es el correo real que se le manda al hiring manager.
 function nextStepGuidanceText(p){
-  if((p.status === "Intake Pending" || p.status === "Intake Meeting Waived") && !p.intakeNotes){
-    return p.status === "Intake Pending"
-      ? "The intake meeting already happened (its real date is logged above) — before prepping anything, log what was actually discussed (must-haves, nice-to-haves, comp expectations, timeline) so the Master JD and Sourcing Calibration Questions are built on the real conversation, not guesswork."
-      : "The intake meeting was waived (see the reason on file above) — if you still got real requirements from the hiring manager or Irth's internal team, log them here first so the Master JD and Sourcing Calibration Questions are built on that, not guesswork.";
+  if(p.status === "Intake Pending" || p.status === "Intake Meeting Waived"){
+    const isHeld = p.status === "Intake Pending";
+    if(!p.intakeNotes){
+      // "Log what was actually discussed" solo tiene sentido si hubo una conversacion real
+      // (Intake Pending) — Waived nunca tuvo esa llamada, asi que su frase habla de "lo que si
+      // se consiguio" en vez de asumir una discusion que no ocurrio.
+      return p.status === "Intake Pending"
+        ? `The intake meeting already happened (held on ${escapeHtml(p.intake || "")}) — before prepping or sourcing anything, log what was actually discussed (must-haves, nice-to-haves, comp expectations, timeline) so the Spott Job and LinkedIn Job Posting you create in KeyStone AI are built on the real conversation, not guesswork. Once logged, remember to also send the Post Intake Meeting Notes email to the hiring manager — it's what you'll lean on later if the Pivot SLA ever applies, and it confirms they're aligned with what you captured.`
+        : `The intake meeting was waived (see the reason on file above) — before prepping or sourcing anything, log what real requirements you did get from the hiring manager or Irth's internal team, so the Spott Job and LinkedIn Job Posting you create in KeyStone AI are built on that, not guesswork. Once logged, remember to also send the Post Intake Meeting Notes email confirming what was captured — it's what you'll lean on later if the Pivot SLA ever applies.`;
+    }
+    // Post-notas: mismo ajuste de terminologia (Spott Job/LinkedIn Job Posting en vez de Master
+    // JD/Calibration Questions) — el "held on"/fecha real solo aplica al camino Held, Waived
+    // sigue refiriendo a la razon en archivo, igual que arriba.
+    const whatHappened = isHeld
+      ? `already happened (held on ${escapeHtml(p.intake || "")})`
+      : `was waived (see the reason on file above)`;
+    return `The intake meeting ${whatHappened} — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI (based on the notes you logged), then move status to Sourcing. The first batch is due within 7-9 business days of the intake meeting, not from today.`;
   }
   return STATUS_GUIDANCE[p.status];
 }
