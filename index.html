@@ -2469,7 +2469,12 @@ const STATUS_GUIDANCE = {
   // guidanceDeliverablesFor() (Recruiter Kickoff Note / Lead Kickoff Note), para que no haya dos
   // formas distintas de referirse al mismo entregable en pantallas distintas.
   "Kickoff": "Send the Kickoff Note to the hiring manager today (introduce yourself, explain how the process works, request the intake meeting), then confirm below once it's sent. Don't start sourcing yet — use the time before the intake for market research and comp analysis, never for candidate outreach.",
-  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or, if a live call isn't possible, send written questions instead). Once they confirm a date, log it below to move to Intake Held — or, if it turns out a separate intake meeting genuinely isn't needed, waive it instead. Sourcing can't start until one of the two happens.",
+  // Nicolas, 2026-09-19: "or, if it turns out... waive it instead. Sourcing can't start until one
+  // of the two happens" confundia — "the two" competia con el OTRO par mencionado justo antes
+  // ("a live call... or written questions"), asi que no quedaba claro a cual "two" se referia.
+  // Reescrito para nombrar los 2 caminos explicitamente (held/waived) en vez de un pronombre
+  // ambiguo que dependia de contar hacia atras cual par era.
+  "Intake Meeting Requested": "Waiting on the hiring manager to reply with their availability for the intake meeting (or, if a live call isn't possible, send written questions instead). Once they confirm a date, log it below to move to Intake Held — or, if it turns out a separate intake meeting genuinely isn't needed, waive it instead. Sourcing can't start until the intake meeting is either held or waived.",
   "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to prepare the Master JD, the Sourcing Calibration Questions, and the Job Creation info in KeyStone, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
   // Rama paralela a "Intake Pending" — mismo punto del proceso, llegado por un camino distinto
   // (ver STATUS_ORDER). El texto es deliberadamente casi identico al de Intake Pending, solo
