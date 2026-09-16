@@ -2199,6 +2199,10 @@
         <label id="editFieldModalLabel"></label>
         <select id="editFieldModalSelect" style="display:none;"></select>
         <input type="text" id="editFieldModalInput">
+        <!-- ctx.multiline (opcional, ver openEditFieldModal()) — una caja de texto larga en vez
+             del input de una sola linea, para campos como Intake Meeting Notes donde el texto
+             real no cabe en una linea. Oculto para todo lo demas que reusa este modal. -->
+        <textarea id="editFieldModalTextarea" rows="5" style="display:none;"></textarea>
         <button type="button" class="fact-edit-link" id="editFieldModalBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
       </div>
       <!-- ctx.fileFieldLabel (opcional, ver openEditFieldModal()) — un adjunto real de imagen,
@@ -2642,12 +2646,31 @@ function nextStepCtaHtml(p){
       <button type="button" class="fact-edit-link" id="nextStepSecondaryBtn" style="margin-top:4px; margin-left:10px; display:inline-block;">Or, Waive This Intake Meeting &rarr;</button>${msg}`;
   }
   if(p.status === "Intake Pending" || p.status === "Intake Meeting Waived"){
+    // Nicolas, 2026-09-19: "eso [preparar el Master JD] solo pasa cuando ya se tienen las notas
+    // del intake meeting" — sin p.intakeNotes todavia, el paso real siguiente es capturarlas, no
+    // saltar directo a prep de sourcing (ver nextStepGuidanceText() para el texto que acompaña
+    // este boton mientras las notas no existen).
+    if(!p.intakeNotes){
+      return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" style="margin-top:4px; display:inline-block;">Log Intake Meeting Notes &rarr;</button>${msg}`;
+    }
     return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
   }
   return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button>${msg}`;
 }
+// Mismo gate que nextStepCtaHtml() de arriba: sin notas de la intake meeting todavia, el texto de
+// guia no debe decirle al reclutador que vaya a preparar el Master JD/KeyStone — eso viene DESPUES
+// de saber que se hablo de verdad en la reunion (o en el intercambio que reemplazo la reunion, si
+// se waived). STATUS_GUIDANCE se queda como el texto normal (post-notas) para todo lo demas.
+function nextStepGuidanceText(p){
+  if((p.status === "Intake Pending" || p.status === "Intake Meeting Waived") && !p.intakeNotes){
+    return p.status === "Intake Pending"
+      ? "The intake meeting already happened (its real date is logged above) — before prepping anything, log what was actually discussed (must-haves, nice-to-haves, comp expectations, timeline) so the Master JD and Sourcing Calibration Questions are built on the real conversation, not guesswork."
+      : "The intake meeting was waived (see the reason on file above) — if you still got real requirements from the hiring manager or Irth's internal team, log them here first so the Master JD and Sourcing Calibration Questions are built on that, not guesswork.";
+  }
+  return STATUS_GUIDANCE[p.status];
+}
 function nextStepRowHtml(p, isView){
-  const text = STATUS_GUIDANCE[p.status];
+  const text = nextStepGuidanceText(p);
   if(!text) return "";
   // Nicolas pidio poder confirmar que ya hizo el Next Step vigente y que quede registrado en
   // Activity — a diferencia del guidance viejo (ver comentario de arriba, "SIEMPRE EN VIVO,
@@ -5453,7 +5476,10 @@ function renderDetailModal(){
   const nextStepDoneBtn = document.getElementById("nextStepDoneBtn");
   if(nextStepDoneBtn) nextStepDoneBtn.addEventListener("click", ()=> confirmNextStepDone(p));
   const nextStepPrimaryBtn = document.getElementById("nextStepPrimaryBtn");
-  if(nextStepPrimaryBtn) nextStepPrimaryBtn.addEventListener("click", ()=> onStatusOptionClick(p, nextStepPrimaryBtn.dataset.targetStatus));
+  // Sin data-target-status (ver nextStepCtaHtml()) el boton primario es "Log Intake Meeting
+  // Notes", no un cambio de status — abre el modal de notas en vez de onStatusOptionClick().
+  if(nextStepPrimaryBtn) nextStepPrimaryBtn.addEventListener("click", ()=>
+    nextStepPrimaryBtn.dataset.targetStatus ? onStatusOptionClick(p, nextStepPrimaryBtn.dataset.targetStatus) : openIntakeNotesModal(p));
   const nextStepSecondaryBtn = document.getElementById("nextStepSecondaryBtn");
   if(nextStepSecondaryBtn) nextStepSecondaryBtn.addEventListener("click", ()=> openWaiveIntakeModal(p));
 
@@ -5758,6 +5784,51 @@ function openWaiveIntakeModal(p){
       renderPositions();
       renderTracking();
       renderKpis();
+      // Solo si de verdad avanzo el status (myFrom truthy) — editar la razon sin que esto
+      // dispare un cambio de status real no deberia mostrar un "Up Next" que no aplica.
+      if(myFrom) showUpNextPreview(p, p.status);
+    },
+  });
+}
+// Notas reales de la intake meeting (o del intercambio que la reemplazo, si se waived) —
+// capturadas DESPUES de que ya paso, gatean la guia de "prepara el Master JD/KeyStone" en
+// nextStepCtaHtml()/nextStepGuidanceText() porque esa prep no tiene sentido sin saber que se
+// hablo de verdad. Mismo patron de propagacion a hermanas de Headcount Group que
+// openWaiveIntakeModal() de arriba — es la misma reunion para todo el grupo, las notas tambien
+// aplican a todas (salvo una hermana que ya tenga las suyas propias, o que llego por Handoff).
+function openIntakeNotesModal(p){
+  const siblings = p.headcountGroup
+    ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.handoffFrom && !x.intakeNotes)
+    : [];
+  openEditFieldModal({
+    title: "Intake Meeting Notes",
+    label: siblings.length
+      ? `What did the hiring manager (or Irth's internal team) actually say? (also applies to ${siblings.length} other headcount${siblings.length===1?"":"s"} in "${p.headcountGroup}")`
+      : "What did the hiring manager (or Irth's internal team) actually say?",
+    placeholder: "Must-haves, nice-to-haves, comp range confirmed, timeline, anything the Master JD or Sourcing Calibration Questions should reflect…",
+    value: p.intakeNotes || "",
+    multiline: true,
+    onSave: async (newVal)=>{
+      p.intakeNotes = newVal;
+      siblings.forEach(s=> s.intakeNotes = newVal);
+      const remarkText = "Intake meeting notes logged.";
+      p.extra = p.extra || [];
+      p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text: remarkText});
+      siblings.forEach(s=>{
+        s.extra = s.extra || [];
+        s.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text: `Intake meeting notes logged (same meeting as ${p.id}).`});
+      });
+      if(isConnected()){
+        await graphUpdatePositionFieldByHeader(p.id, "Intake Meeting Notes", newVal || "");
+        await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
+        for(const s of siblings){
+          await graphUpdatePositionFieldByHeader(s.id, "Intake Meeting Notes", newVal || "");
+          await graphAppendHistorial(s.id, s.title, `Intake meeting notes logged (same meeting as ${p.id}).`, currentAuthorName(), "action");
+        }
+      }
+      renderDetailModal();
+      renderPositions();
+      renderTracking();
     },
   });
 }
@@ -6717,6 +6788,7 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     renderDetailModal();
     renderPositions();
     renderTracking();
+    showUpNextPreview(p, p.status);
     if(document.getElementById("editStatusModal").classList.contains("open")){
       setTimeout(()=>{ document.getElementById("editStatusModal").classList.remove("open"); }, 300);
     }
@@ -6735,6 +6807,12 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
   renderHiredLocChart();
   renderSlaChart();
   renderSlaMeter();
+  // Restaura el "Up Next" que confirmNextStepDone() ya mostraba (ver ahi) — el Confirm & Advance
+  // (Kickoff/Intake Meeting Requested/Intake Pending-Waived, ver nextStepCtaHtml()) avanza el
+  // status DIRECTO por aca, no por confirmNextStepDone(), asi que sin esto el preview
+  // desaparecia para esos 3 pasos especificamente. Nicolas: "tampoco me ha salido lo de up next,
+  // eso era algo que me gustaba mucho porque prepara al usuario para lo que viene."
+  showUpNextPreview(p, p.status);
   const msg = document.getElementById("modalStatusMsg");
   if(isConnected()){
     msg.textContent = "Saving…";
@@ -6765,6 +6843,38 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
 // (type "action", igual que "Accepted the assignment.") — a proposito NO toca Last Remark/columna
 // X, eso es una cosa distinta (el ultimo remark libre, ver saveModalRemark()) que esta accion no
 // deberia pisar.
+// El "siguiente" real despues de "Intake Meeting Requested" en PIPELINE_SEQUENCE es "Intake
+// Meeting Waived" (asi quedo ordenado STATUS_ORDER, ver [[project_confirm_and_advance_next_step]])
+// pero esa es la rama de EXCEPCION, no el camino esperado — el "Up Next" honesto ahi es "Intake
+// Pending" (Intake Held). showUpNextPreview() usa este override en vez del indice+1 crudo.
+const UP_NEXT_OVERRIDE = { "Intake Meeting Requested": "Intake Pending" };
+// Nicolas: "que obviamente le explique el siguiente paso... de cuando ya envio el kickoff note
+// por poner un ejemplo" — confirmar/avanzar el paso actual debe decir que sigue despues, no solo
+// registrar que ya paso. PIPELINE_SEQUENCE es el unico tramo con un "siguiente" lineal real; los
+// estados de rama aparte (On Hold, Cancelled, etc) no tienen continuacion obvia, asi que no se
+// agrega preview para esos (indexOf da -1, nextStatus queda null, no-op). Se llama con el status
+// YA ALCANZADO (p.status despues de avanzar, o el status vigente si solo se confirmo el paso sin
+// cambiar de status), nunca con el status anterior.
+// p es la posicion (para poder evaluar el gate de intakeNotes via nextStepGuidanceText si el
+// "siguiente" resulta ser Intake Pending/Intake Meeting Waived, ver mas abajo); reachedStatus es
+// el status YA ALCANZADO (despues de avanzar, o el vigente si solo se confirmo el paso).
+function showUpNextPreview(p, reachedStatus){
+  const nextStatus = UP_NEXT_OVERRIDE[reachedStatus] || (()=>{
+    const curIdx = PIPELINE_SEQUENCE.indexOf(reachedStatus);
+    return curIdx>=0 && curIdx<PIPELINE_SEQUENCE.length-1 ? PIPELINE_SEQUENCE[curIdx+1] : null;
+  })();
+  const nextStepList = document.getElementById("modalNextStep");
+  if(nextStatus && nextStepList){
+    // Simulacion liviana: si lo que sigue es Intake Pending/Waived, el preview debe reflejar el
+    // gate de notas (ver nextStepGuidanceText()) en vez de siempre asumir que ya se prepara el
+    // Master JD — al llegar ahi de verdad, intakeNotes todavia va a estar vacio.
+    const text = nextStepGuidanceText({...p, status: nextStatus});
+    nextStepList.insertAdjacentHTML("beforeend", `<li>
+      <span class="tl-badge upnext">Up Next</span>
+      <span class="tl-text"><strong>${escapeHtml(statusLabel(nextStatus))}:</strong> ${escapeHtml(text || "")}</span>
+    </li>`);
+  }
+}
 async function confirmNextStepDone(p){
   const text = STATUS_GUIDANCE[p.status];
   if(!text) return;
@@ -6774,25 +6884,10 @@ async function confirmNextStepDone(p){
   renderDetailModal();
   renderTracking();
   renderPositions();
-  // Nicolas: "que obviamente le explique el siguiente paso... de cuando ya envio el kickoff note
-  // por poner un ejemplo" — confirmar el paso actual debe decir que sigue despues, no solo
-  // registrar que ya paso. PIPELINE_SEQUENCE es el unico tramo con un "siguiente" lineal real;
-  // los estados de rama aparte (On Hold, Cancelled, etc) no tienen continuacion obvia, asi que
-  // no se agrega preview para esos. renderDetailModal() ya reconstruyo #modalNextStep desde cero
-  // (via nextStepRowHtml(), que no sabe nada de esto) — el preview se agrega aparte, despues,
-  // directo al DOM, en vez de tener que pasarle este estado a traves de todo el pipeline de
-  // render solo para un mensaje que dura hasta el proximo render real.
-  const curIdx = PIPELINE_SEQUENCE.indexOf(p.status);
-  const nextStatus = curIdx>=0 && curIdx<PIPELINE_SEQUENCE.length-1 ? PIPELINE_SEQUENCE[curIdx+1] : null;
-  const nextStepList = document.getElementById("modalNextStep");
-  if(nextStatus && nextStepList){
-    nextStepList.insertAdjacentHTML("beforeend", `<li>
-      <span class="tl-badge upnext">Up Next</span>
-      <span class="tl-text"><strong>${escapeHtml(statusLabel(nextStatus))}:</strong> ${escapeHtml(STATUS_GUIDANCE[nextStatus] || "")}</span>
-    </li>`);
-  }
-  // renderDetailModal() reconstruye #modalNextStep (incluido este span), asi que hay que volver a
-  // buscarlo DESPUES de re-renderizar, o el mensaje se pierde en un nodo viejo ya desconectado.
+  // renderDetailModal() reconstruye #modalNextStep desde cero (via nextStepRowHtml(), que no sabe
+  // nada de esto) — el preview se agrega aparte, DESPUES de re-renderizar, o el mensaje se pierde
+  // en un nodo viejo ya desconectado.
+  showUpNextPreview(p, p.status);
   const msg = document.getElementById("nextStepDoneMsg");
   if(isConnected()){
     if(msg){ msg.textContent = "Logging…"; msg.style.color = "var(--text-muted)"; }
@@ -7728,7 +7823,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:daysAgoStr(0), intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeNotes:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-002: kickoff note ya se mando, esperando la fecha del intake — para probar los DOS
@@ -7743,7 +7838,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(5), intakeRequestedDate:daysAgoStr(5), recruiterAcceptedDate:daysAgoStr(5), intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeNotes:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-003: intake ya sostenido, compensacion ya confirmada (para no bloquear Log Batch de
@@ -7759,6 +7854,7 @@ function buildDemoPositions(){
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
       intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
+      intakeNotes:"Must-haves: SQL + Python, 3+ yrs. Nice-to-have: dbt experience. Comp confirmed at $90-110k. HM wants first batch within a week, prefers async updates over calls.",
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-004: recien asignado, TODAVIA SIN ACEPTAR (recruiterAcceptedDate:null) — para probar
@@ -7773,7 +7869,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:null, intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null,
+      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeNotes:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
   ];
@@ -7974,6 +8070,13 @@ function parsePositionsTable(posHeaders, posRows){
       // escritas confirmadas, o alineacion interna de Irth por correo). idx() da -1 si el Excel
       // real todavia no tiene la columna — no rompe nada, solo no hay nada que mostrar.
       intakeWaivedEvidenceLink: r[idx("Intake Waived Evidence")] || null,
+      // Columna nueva/opcional: lo que realmente se hablo en la intake meeting (must-haves,
+      // nice-to-haves, rango de comp confirmado, timeline, etc.) — capturado DESPUES de que la
+      // reunion ya paso (o se waived), gatea la guia de "prepara el Master JD/KeyStone" en
+      // nextStepCtaHtml() porque esa preparacion no tiene sentido sin las notas reales. Nicolas:
+      // "eso solo pasa cuando ya se tienen las notas del intake meeting". idx() da -1 si el Excel
+      // real todavia no tiene la columna, no rompe nada.
+      intakeNotes: r[idx("Intake Meeting Notes")] || null,
       extra: [],
       batches: [],
       batchCandidates: [],
@@ -8825,8 +8928,10 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
   // mas CORTO de lo que la tabla real ya tiene no lo es (rows/add exige coincidencia exacta) —
   // por eso agregar el null de una columna nueva aqui apenas se define, ANTES de que Nicolas la
   // cree en el Excel real, es lo seguro: Intake Waived Evidence (columna 58,
-  // [[project_intake_waived_visibility_bug]]) todavia no existe en el archivo real, pero ya tiene
-  // su null reservado aqui para el dia en que exista.
+  // [[project_intake_waived_visibility_bug]]) y ahora Intake Meeting Notes (columna 59, ver
+  // nextStepCtaHtml() — notas reales de la intake meeting, requeridas antes de mostrar la guia de
+  // preparar el Master JD) todavia no existen en el archivo real, pero ya tienen su null
+  // reservado aqui para el dia en que existan.
   return [
     code, fields.title, "Irth Solutions", fields.hm, fields.recruiter, fields.country, fields.status, fields.intake, null, fields.fill || null, fields.hire || null,
     null,null,null,null,null,null,null,null,null,null,null,null,
@@ -8840,6 +8945,7 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     null, null, null, null, null,
     null, null, null, headcountGroup, null,
     null, null, null,
+    null,
     null,
     null,
   ];
@@ -9071,8 +9177,22 @@ function openEditFieldModal(ctx){
   const input = document.getElementById("editFieldModalInput");
   const select = document.getElementById("editFieldModalSelect");
   const backToList = document.getElementById("editFieldModalBackToList");
+  const textarea = document.getElementById("editFieldModalTextarea");
   input.placeholder = ctx.placeholder || "";
+  textarea.placeholder = ctx.placeholder || "";
   document.getElementById("editFieldModalMsg").textContent = "";
+
+  if(ctx.multiline){
+    select.style.display = "none";
+    backToList.style.display = "none";
+    input.style.display = "none";
+    textarea.style.display = "";
+    textarea.value = ctx.value || "";
+    document.getElementById("editFieldModal").classList.add("open");
+    textarea.focus();
+    return;
+  }
+  textarea.style.display = "none";
 
   if(ctx.options && ctx.options.length){
     select.innerHTML = ctx.options.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("")
@@ -9133,8 +9253,10 @@ document.getElementById("editFieldModalSave").addEventListener("click", async ()
   const msg = document.getElementById("editFieldModalMsg");
   const select = document.getElementById("editFieldModalSelect");
   const input = document.getElementById("editFieldModalInput");
+  const textarea = document.getElementById("editFieldModalTextarea");
   const usingSelect = select.style.display !== "none";
-  const newVal = (usingSelect ? select.value : input.value).trim() || null;
+  const usingTextarea = editFieldModalCtx.multiline;
+  const newVal = (usingTextarea ? textarea.value : (usingSelect ? select.value : input.value)).trim() || null;
   // Un codigo corto (ej. el que copia el boton "#" de Spott) no sirve para volver a entrar,
   // asi que estos campos exigen una URL real, nunca lo aceptan a medias.
   if(editFieldModalCtx.requireUrl && newVal && !/^https?:\/\//i.test(newVal)){
