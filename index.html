@@ -2589,10 +2589,50 @@ const DELIVERABLE_TEMPLATES = {
       ${kickoffProcessSectionsHtml()}
       <p>Looking forward to working together.</p>`
   }),
+  // Template 11 del Master Prompt (seccion 15) — a diferencia de Kickoff, el candidato en si nunca
+  // vive en el req a nivel de posicion (solo existe una vez logueado en un batch, ver
+  // [[project_batch_candidates]]), asi que su nombre se deja como placeholder literal "[Candidate
+  // Name]" para reemplazar a mano — exactamente el mismo patron que usa el propio Master Prompt
+  // para contenido generico reutilizable por candidato (ej. Template 12.5, seccion 16.5). El link
+  // de Workable SI es del req (uno por rol, no por candidato) — se resuelve de p.careersUrl si ya
+  // esta cargado.
+  workableInvite: p => ({
+    title: "Workable Application Invite",
+    subtitle: "Sent after a successful Screening Interview — confirms the call went well and asks the candidate to complete their official Workable application so the hiring manager can review their profile.",
+    note: null,
+    body: `
+      <p>Hi [Candidate Name],</p>
+      <p>Thank you for taking the time to speak with me about the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) role — I really enjoyed our conversation, and I think you'd be a great fit.</p>
+      <p>To move you forward to the hiring manager, I need you to complete your official application through Workable, so your profile is visible on their side and the process can continue from there.</p>
+      <p>Here's the link: ${escapeHtml(p.careersUrl || "[Workable Application Link]")}</p>
+      <p>Once you submit it, your profile will show up under our review with the hiring manager, and I'll keep you posted on next steps.</p>
+      <p>Thanks again, and talk soon!</p>`
+  }),
+  // Templates 2 y 7 del Master Prompt (Intake Meeting Script, Screening Interview Script) NO son
+  // templates de verdad — el contenido lo genera un LLM analizando el JD/intake real del rol,
+  // con paginas de reglas de tono, siglas a expandir, etc. (ver secciones 4 y 11 del Master
+  // Prompt). Intentar llenarlos con placeholders geneicos aqui produciria contenido inventado o
+  // vacio, justo lo que este tracker evita en todo lo demas. En vez de fingir el template, estos
+  // 2 "entregables" son un mensaje corto para PEGAR en el chat de Master Prompt de este rol (uno
+  // por rol, ya con el JD cargado) y pedirle a Claude que lo genere ahi, con el contexto real que
+  // ese chat ya tiene — el "note" de cada uno deja esto explicito para que no se confunda con el
+  // script final.
+  intakeScriptTrigger: p => ({
+    title: "Generate Intake Meeting Script",
+    subtitle: "Not a fill-in template — the real script only comes from analyzing this role's actual JD, which only your Master Prompt chat for this requisition can do.",
+    note: "Paste the line below into your existing Master Prompt chat for this role (the one you opened with the JD already pasted in) — it'll generate the real Intake Meeting Script (Template 2) as a .md file, ready before the call.",
+    body: `<p>The Intake Meeting for ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) is now scheduled with ${escapeHtml(p.hiringManager || "[Hiring Manager]")} — please generate the Intake Meeting Script (Template 2).</p>`
+  }),
+  screeningScriptTrigger: p => ({
+    title: "Generate Screening Interview Script",
+    subtitle: "Not a fill-in template — the real script only comes from analyzing this role's actual JD and intake notes, which only your Master Prompt chat for this requisition can do.",
+    note: "Paste the line below into your existing Master Prompt chat for this role — it'll generate the real Screening Interview Script (Template 7), using the JD and intake notes already established in that chat.",
+    body: `<p>I need the Screening Interview Script (Template 7) for the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) role, hiring manager ${escapeHtml(p.hiringManager || "[Hiring Manager]")}. Please generate it based on the JD and intake notes already in this chat.</p>`
+  }),
 };
 // Que entregable(s) mostrar como link clickeable junto al "Next Step" vigente de un req, segun
-// su status actual — hoy solo Kickoff esta mapeado; agregar aqui el siguiente status cuando se
-// construya su propio entregable, nunca todos de una sola vez (ver nota arriba).
+// su status actual — hoy Kickoff, Intake Meeting Requested, y Sourcing estan mapeados; agregar
+// aqui el siguiente status cuando se construya su propio entregable, nunca todos de una sola vez.
 function guidanceDeliverablesFor(p){
   if(p.status === "Kickoff"){
     // El contenido de leadKickoffA ya estaba bien adaptado (un solo correo, en primera persona,
@@ -2610,6 +2650,22 @@ function guidanceDeliverablesFor(p){
     return p.recruiter === LEAD_TALENT_PARTNER
       ? [{id:"leadKickoffA", label:"Kickoff Note (You're The Recruiter)"}]
       : [{id:"recruiterKickoff", label:"Recruiter Kickoff Note"}];
+  }
+  // Master Prompt, Checkpoint 2a (seccion 1): el Script de Intake Meeting se prepara "listo justo
+  // antes de la llamada" una vez el hiring manager confirma fecha/hora — que en este tracker es
+  // exactamente lo que se esta esperando durante "Intake Meeting Requested".
+  if(p.status === "Intake Meeting Requested"){
+    return [{id:"intakeScriptTrigger", label:"Generate Intake Meeting Script"}];
+  }
+  // Sourcing (fusionado con Screening, ver [[project_sourcing_screening_merge]]) es donde en la
+  // practica pasan las 2 cosas que estos entregables cubren: se agendan/corren Screening
+  // Interviews con candidatos, y a los que salen bien se les invita a completar su aplicacion en
+  // Workable (Master Prompt, secciones 11 y 15).
+  if(p.status === "Sourcing"){
+    return [
+      {id:"screeningScriptTrigger", label:"Generate Screening Interview Script"},
+      {id:"workableInvite", label:"Workable Application Invite"},
+    ];
   }
   return [];
 }
