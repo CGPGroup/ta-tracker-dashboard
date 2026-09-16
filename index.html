@@ -4666,7 +4666,12 @@ function buildTimeline(p){
   // req (todo lo demas depende de esto) — antes no tenia su propio milestone, quedaba
   // mezclado dentro del texto de guidance de "Kickoff", lo cual generaba un orden confuso
   // entre "Accepted the assignment" y el guidance en el mismo dia.
-  if(p.kickoff) entries.push({date:p.kickoff, type:"auto", text:`Requisition assigned, waiting on ${p.recruiter || "the recruiter"} to accept.`});
+  // 2026-09-18, Nicolas: Kickoff Date (el que se pone al crear el req en SSOT Management) no es
+  // solo "la fecha en que se asigno" — es la fecha real de un kickoff meeting que YA paso entre
+  // Cornerstone e Immy Nader (Irth's Talent Acquisition Coordinator), distinto del Kickoff Note
+  // que el reclutador asignado le manda despues al hiring manager. El milestone ahora lo dice
+  // explicito, en vez de sonar como si "kickoff" fuera solo una etiqueta de estado.
+  if(p.kickoff) entries.push({date:p.kickoff, type:"auto", text:`Kickoff meeting held with ${ESCALATION_CONTACT} (Irth's Talent Acquisition Coordinator). Requisition assigned, waiting on ${p.recruiter || "the recruiter"} to accept.`});
   // recruiterAcceptedDate normalmente ya queda reflejado por la accion real ("Accepted the
   // assignment.", logueada por acceptAssignment()) — pero si esa escritura se perdio en el
   // camino (misma condicion de carrera que ya se arreglo con la cola de escrituras, pero para
