@@ -1729,13 +1729,16 @@
           <div class="panel" style="margin-bottom:14px;">
             <h3>The Pivot SLA</h3>
             <div class="panel-sub">The one allowance that can extend TTF/TTH, and exactly when it applies</div>
-            <p>If a hiring manager rejects <b>100% of a batch</b>, that may indicate a screening miss on the recruiter's side, or an intake that wasn't tight enough — if it's the latter, it isn't fair to hold the recruiter to the original clock.</p>
+            <div class="callout prose"><b>Updated 2026-09-19</b> — the trigger is no longer "100% of a batch rejected." In practice, a hiring manager can accept candidates from the initial and follow-up batches and still keep asking for more, without rejecting anything outright. The normal cycle is now <b>initial batch (3-5) + one follow-up batch (3-5) = 6-10 candidates total</b>, no allowance needed, no matter how many of those get rejected.</div>
+            <p>The Pivot SLA is evaluated once a <b>third batch (or beyond)</b> is needed for the same requisition — whether that's from full rejection, partial rejection, or simply the hiring manager wanting more — reaching a third batch after a full normal cycle is itself the signal something's misaligned.</p>
             <ul>
+              <li><b>Real requirement before a third batch: a calibration call with the hiring manager.</b> A third batch is never sent blind — recalibrating what's not working comes first. This is required regardless of whether the Pivot SLA ends up approved or not; the calibration call is the real gate, not the approval.</li>
+              <li><b>Sending and logging the third batch itself never waits on Pivot SLA approval</b> (only on the calibration call above) — the recruiter sends the candidates and logs it either way, whether Lead/Immy approve, take a while, or deny it. The approval only decides whether TTF/TTH gets the allowance, never whether the work can continue.</li>
               <li><b>Allowance:</b> +11 to 13 calendar days on TTF/TTH, equivalent to a full new sourcing cycle. Applies once per requisition.</li>
-              <li><b>Attribution is decided against the Intake Summary</b>, the one document that acts as the objective record of what was actually agreed: if the rejected batch matched what was agreed there and the hiring manager rejected it anyway (new criteria, change of mind), the allowance applies. If the batch didn't match what was agreed, the recruiter is attributed and the clock keeps running with no allowance.</li>
+              <li><b>Attribution is decided against the Intake Summary</b>, the one document that acts as the objective record of what was actually agreed: if the batches sent so far matched what was agreed there and a third one is needed anyway, the allowance applies. If the batches didn't match what was agreed, the recruiter is attributed, the clock keeps running with no allowance, and the batch itself was still sent and logged either way.</li>
               <li>If the real issue is a genuinely limited talent pool or uncompetitive approved compensation, Talent Mapping and/or Compensation Market Analysis are used as evidence, both to justify the allowance and to reset expectations with the hiring manager.</li>
-              <li><b>Approval, two layers, deliberately:</b> Nicolás, as Lead Talent Partner, makes the first call, evaluated against the Intake Summary. If another recruiter is working the requisition, they present the case to Nicolás first. But it isn't confirmed until <b>Immy Nader signs off too</b>, on Irth's side, neither side can grant or deny this allowance on their own.</li>
-              <li>This only ever applies once per requisition. If the same batch-rejection pattern repeats after the allowance was already used, that's no longer an alignment problem, it's a deeper issue that needs to be escalated, not another allowance.</li>
+              <li><b>Approval, two layers, deliberately:</b> Nicolás, as Lead Talent Partner, makes the first call, evaluated against the Intake Summary. If another recruiter is working the requisition, they present the case to Nicolás first. But it isn't confirmed until <b>Immy Nader signs off too</b>, on Irth's side — this runs in parallel to the actual work, it never blocks it.</li>
+              <li>This only ever applies once per requisition. If the same pattern repeats after the allowance was already used, that's no longer an alignment problem, it's a deeper issue that needs to be escalated, not another allowance.</li>
             </ul>
           </div>
 
@@ -1744,7 +1747,8 @@
             <div class="panel-sub">Why candidates are delivered in small, deliberate batches</div>
             <ul>
               <li><b>First batch:</b> 3-5 pre-screened candidates, 7-9 business days from the intake meeting.</li>
-              <li><b>Follow-up batches</b> (only if the previous batch was rejected in full): 3-5 more candidates every 5 business days, pulled from the pipeline already in progress, sourcing never restarts from zero.</li>
+              <li><b>Follow-up batch:</b> 3-5 more candidates every 5 business days, pulled from the pipeline already in progress, sourcing never restarts from zero. This is now the normal cycle — <b>it no longer requires the previous batch to have been rejected in full</b>, the hiring manager can simply keep asking for more without having rejected anything.</li>
+              <li><b>A third batch (or beyond)</b> requires a calibration call with the hiring manager first — never sent blind. Once that call happens, the batch is sent and logged like any other, <b>without waiting on Pivot SLA approval</b> (see above) — that approval only decides whether TTF/TTH gets the allowance, never whether work can continue.</li>
               <li><b>Why 3-5 and not more:</b> a small batch is a promise that every profile is worth the hiring manager's time. A batch of 10+ signals the screening wasn't rigorous enough.</li>
               <li>The hiring manager doesn't shortlist, they receive an already-curated batch and only approve or reject each one. Rejection reasons get logged and used to sharpen the next batch.</li>
             </ul>
@@ -1960,10 +1964,11 @@
 
 <!-- ======================= LOG SUBMISSION BATCH MODAL ======================= -->
 <!-- Un batch = un grupo de candidatos (tipicamente 3-5) enviado al hiring manager de una vez.
-     Batch Type ya no se elige a mano: el primero siempre es "Initial" (y fija Submission Date
-     automaticamente), cualquiera despues del primero SOLO existe porque aplica un Pivot SLA
-     (ver "Batch Cadence" en la guia), asi que el modal cambia de estado solo segun
-     isSlaExceptionApproved()/p.batches.length — ver openLogBatchModal(). -->
+     Batch Type ya no se elige a mano: batch #1 = "Initial" (fija Submission Date automaticamente),
+     #2 = "Follow-up" (ciclo normal, sin nada especial), #3+ = "Pivot Follow-up" — pero el gate
+     real para el #3+ es que ya haya pasado una calibration call (p.calibrationCallDate), NUNCA
+     la aprobacion del Pivot SLA (esa solo protege la metrica TTF/TTH, ver "The Pivot SLA" en la
+     guia) — ver openLogBatchModal() para el detalle completo de los 2026-09-19. -->
 <div class="modal-overlay" id="logBatchModal">
   <div class="modal-card" style="max-width:480px;">
     <div class="modal-head">
@@ -5470,7 +5475,7 @@ function renderDetailModal(){
 
   const s = computeSla(p);
   document.getElementById("pivotSlaBadge").innerHTML = isSlaExceptionApproved(p)
-    ? `<span class="tag official" title="Full batch was rejected and attributed to the client per the Intake Summary. TTF/TTH targets get +${PIVOT_SLA_ALLOWANCE_DAYS} calendar days.">Pivot SLA active (+${PIVOT_SLA_ALLOWANCE_DAYS}d)</span>`
+    ? `<span class="tag official" title="A third batch was needed and attributed to the client per the Intake Summary. TTF/TTH targets get +${PIVOT_SLA_ALLOWANCE_DAYS} calendar days.">Pivot SLA active (+${PIVOT_SLA_ALLOWANCE_DAYS}d)</span>`
     : "";
   const slaCards = [
     {key:"TTS", label:"Time To Submit (TTS)", tag:"Official SLA"},
