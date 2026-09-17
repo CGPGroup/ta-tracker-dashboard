@@ -3691,8 +3691,22 @@ function statusChip(status){
 // ese formulario). Log Batch si es real y ya lo usa Nicolas para cada envio, asi que "Submitted
 // Vs Expected" ahora se calcula de la misma fuente en vez de quedar huerfano sin forma de
 // actualizarse.
+// Nicolas, 2026-09-19: "lo que tenemos que hacer es subir el CV de cada candidato y que a partir
+// de cuantos candidatos se suban, tome el count de ahi" — el numero de un batch ya no deberia
+// ser algo tecleado a mano, sino los candidatos reales logueados (Add Candidate) para esa fecha.
+// Aplica SOLO hacia adelante, sin tocar lo ya logueado: si un batch todavia no tiene ningun
+// candidato individual logueado (todos los batches historicos, de antes de que existiera Add
+// Candidate), se queda con el numero manual de siempre — en cuanto se loguea al menos 1
+// candidato real para esa fecha, el conteo pasa a ser ese, automaticamente.
+function batchCandidateCount(p, batchDate){
+  return (p.batchCandidates || []).filter(c => c.batchDate === batchDate).length;
+}
+function effectiveBatchCount(p, b){
+  const live = batchCandidateCount(p, b.date);
+  return live > 0 ? live : (Number(b.count) || 0);
+}
 function batchesSubmittedCount(p){
-  return (p.batches || []).reduce((sum,b)=> sum + (Number(b.count) || 0), 0);
+  return (p.batches || []).reduce((sum,b)=> sum + effectiveBatchCount(p, b), 0);
 }
 // Cuantos candidatos deberia tener submitted ESTA posicion a la fecha de hoy — usado por
 // "Submitted Vs Expected" (ver renderKpis()). 0 mientras el intake no ha pasado o sigue dentro
@@ -5338,7 +5352,11 @@ function renderDetailModal(){
       ${p.batches.slice().reverse().map(b=>`
         <div class="sla-card">
           <div class="sla-name"><span>${escapeHtml(b.date)}</span><span class="tag ${b.type==="Pivot Follow-up" ? "internal" : "official"}">${escapeHtml(b.type)}</span></div>
-          <div style="font-size:13px; font-weight:600;">${b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : "Count not set"}</div>
+          <div style="font-size:13px; font-weight:600;">${(() => {
+            const live = batchCandidateCount(p, b.date);
+            if(live > 0) return `${live} candidate${live===1?"":"s"} logged`;
+            return b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : "Count not set";
+          })()}</div>
           ${batchCandidatesBlockHtml(p, b.date)}
         </div>`).join("")}
     </div>` : (batchesOverdue
@@ -6578,13 +6596,21 @@ document.getElementById("candidateCvFileInput").addEventListener("change", async
     pendingCvPositionId = null;
   }
 });
+// Nicolas, 2026-09-19: "el hiring manager pide mas candidatos, incluso si les enviamos 5 y
+// aceptan a esos 5, piden mas" — el proceso real ya no es "cualquier batch despues del primero
+// = Pivot SLA". El ciclo normal es initial (3-5) + UN follow-up (3-5) = 6-10 candidatos en
+// total, sin necesitar aprobacion — el Pivot SLA ahora solo aplica si hace falta un TERCER
+// batch (o mas) para este req, sin importar si fue por rechazo total o parcial. Reemplaza el
+// "type" fijo en base a isFirst por un numero de batch real.
 function openLogBatchModal(p){
   document.getElementById("logBatchMsg").textContent = "";
-  const isFirst = !(p.batches && p.batches.length);
+  const batchNumber = (p.batches ? p.batches.length : 0) + 1;
+  const isFirst = batchNumber === 1;
   const pivotOk = isSlaExceptionApproved(p);
+  const needsPivotApproval = batchNumber >= 3 && !pivotOk;
   const hasPendingRequest = !!p.pivotRequestedDate && !pivotOk;
   // Compensacion confirmada es requisito para el PRIMER batch (no para follow-ups: si ya se
-  // sourceo una vez con un rango acordado, un pivot follow-up no necesita repetir el chequeo) —
+  // sourceo una vez con un rango acordado, un follow-up no necesita repetir el chequeo) —
   // no tendria sentido estar sourceando candidatos contra un rango que el hiring manager nunca
   // confirmo. Ver formatSalary()/hasSalaryConfirmed().
   const salaryMissing = isFirst && !hasSalaryConfirmed(p);
@@ -6595,12 +6621,12 @@ function openLogBatchModal(p){
   if(salaryMissing){
     document.getElementById("logBatchModalTitle").textContent = "Confirm Compensation First";
     document.getElementById("logBatchSalaryRequiredState").style.display = "";
-  } else if(isFirst || pivotOk){
+  } else if(!needsPivotApproval){
     document.getElementById("logBatchModalTitle").textContent = "Log Submission Batch";
     document.getElementById("logBatchFormState").style.display = "";
     document.getElementById("logBatchDate").value = localTodayStr();
     document.getElementById("logBatchCount").value = "";
-    document.getElementById("logBatchTypeDisplay").textContent = isFirst ? "Initial" : "Pivot Follow-up";
+    document.getElementById("logBatchTypeDisplay").textContent = isFirst ? "Initial" : (batchNumber === 2 ? "Follow-up" : "Pivot Follow-up");
     const formNote = document.getElementById("logBatchFormNote");
     if(isFirst){
       formNote.textContent = "Remember, this triggers the first batch and its corresponding SLAs, this field is what's used for the initial batch.";
@@ -6636,8 +6662,12 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   const msg = document.getElementById("logBatchMsg");
   const date = document.getElementById("logBatchDate").value;
   const count = document.getElementById("logBatchCount").value.trim();
-  const isFirst = !(p.batches && p.batches.length);
-  const type = isFirst ? "Initial" : "Pivot Follow-up";
+  const batchNumber = (p.batches ? p.batches.length : 0) + 1;
+  const isFirst = batchNumber === 1;
+  // Mismo criterio que openLogBatchModal(): solo el batch #3+ es "Pivot Follow-up" de verdad
+  // (el que necesito aprobacion de Pivot SLA para llegar hasta aqui) — el #2 ya es parte del
+  // ciclo normal, no una excepcion.
+  const type = isFirst ? "Initial" : (batchNumber === 2 ? "Follow-up" : "Pivot Follow-up");
   if(!date){
     msg.textContent = "Pick a date for this batch.";
     msg.style.color = "var(--critical)";
