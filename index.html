@@ -8772,6 +8772,15 @@ async function resolveTableRowIndexByColumn(tableName, columnHeader, value){
   }
   return undefined;
 }
+// BUG REAL encontrado 2026-09-17, distinto de los 2 de arriba (y el que de verdad bloqueaba
+// "Attach CV" — la subida del archivo en si SIEMPRE funciono, confirmado leyendo el archivo real
+// ya subido en OneDrive): esta funcion referenciaba la pestaña de Excel como 'BatchCandidates',
+// asumiendo el mismo patron que el resto del archivo (tabla "PositionsTable" vive en la pestaña
+// corta "Positions", "HistorialTable" en "History", etc.) — pero la pestaña real que Nicolas creo
+// para esta tabla se llama 'BatchCandidatesTable' (igual que el nombre de la tabla, no la version
+// corta). worksheets('BatchCandidates') nunca existio, asi que el PATCH de abajo SIEMPRE devolvia
+// 404 ItemNotFound — el mensaje de error generico en el catch de "Attach CV" ("Could not upload
+// this CV") escondia que el problema real pasaba DESPUES de la subida, no en ella.
 async function graphUpdateBatchCandidateField(candidateRowId, headerName, value){
   if(pinModeActive) return workerRecruiterWrite("updateBatchCandidateField", {candidateRowId, header: headerName, value});
   const found = await resolveTableRowIndexByColumn("BatchCandidatesTable", "Candidate Row ID", candidateRowId);
@@ -8780,7 +8789,7 @@ async function graphUpdateBatchCandidateField(candidateRowId, headerName, value)
   if(colIdx < 0) throw new Error(`Column "${headerName}" was not found in BatchCandidatesTable.`);
   const excelRow = found.rowIndex + 2;
   const address = `${excelColumnLetter(colIdx)}${excelRow}`;
-  await graphFetch(`${await workbookBase()}/worksheets('BatchCandidates')/range(address='${address}')`, {
+  await graphFetch(`${await workbookBase()}/worksheets('BatchCandidatesTable')/range(address='${address}')`, {
     method: "PATCH",
     body: JSON.stringify({ values: [[value]] }),
   });
