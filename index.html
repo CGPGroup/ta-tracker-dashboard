@@ -849,6 +849,12 @@
   .batch-candidate-name { font-weight: 600; white-space: nowrap; }
   .batch-candidate-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 11px; }
   .batch-candidate-cv { font-size: 11px; white-space: nowrap; }
+  .candidateDeleteBtn { background: none; border: none; color: var(--text-muted); font-size: 16px; line-height: 1; padding: 2px 4px; cursor: pointer; border-radius: 4px; }
+  .candidateDeleteBtn:hover { color: var(--critical); background: rgba(var(--critical-rgb), 0.12); }
+  .log-batch-cand-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .log-batch-cand-row:last-child { border-bottom: none; }
+  .log-batch-cand-filename { flex: 0 0 110px; font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-batch-cand-row input[type="text"], .log-batch-cand-row input[type="email"] { flex: 1; min-width: 0; font-size: 12.5px; padding: 5px 7px; }
   .batch-candidate-row select { font-size: 11.5px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
   .batch-candidates-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
   .batch-bulk-bar { display: flex; align-items: center; gap: 6px; }
@@ -1987,10 +1993,25 @@
       <div class="panel-sub" id="logBatchFormNote" style="display:none; margin:0 0 10px;"></div>
       <div class="form-grid">
         <div class="form-field"><label>Date</label><input type="date" id="logBatchDate"></div>
-        <div class="form-field"><label>Candidates In This Batch</label><input type="number" id="logBatchCount" min="1" placeholder="e.g. 4"></div>
         <div class="form-field full">
           <label>Batch Type</label>
           <div style="font-size:13px; font-weight:600; padding:6px 0;" id="logBatchTypeDisplay"></div>
+        </div>
+        <!-- Nicolas, 2026-09-19: "que sea que para loguear un batch, debas al menos subir un
+             candidato, si no no te deja crearlo... si tienes a los 5 candidatos, que te deje
+             subirlos en bulk de una" — reemplaza el viejo campo numerico "Candidates In This
+             Batch" (un numero tecleado a mano, sin relacion real con quien de verdad se envio) por
+             adjuntar cada CV de una vez; cada archivo se parsea (mismo extractCandidateInfoFromCv()
+             que Add Candidate) y queda como una fila editable antes de guardar. Save Batch exige
+             al menos 1 fila con nombre. -->
+        <div class="form-field full">
+          <label>Candidates <span style="font-weight:400; color:var(--text-muted);">(attach each CV — at least 1 required to log this batch)</span></label>
+          <input type="file" id="logBatchCvFiles" accept=".pdf,.doc,.docx,.txt" multiple>
+          <span class="panel-sub" id="logBatchCvParseMsg" style="display:block; margin-top:4px;"></span>
+        </div>
+        <div class="form-field full" id="logBatchCandidatesListWrap" style="display:none;">
+          <label>Review before saving</label>
+          <div id="logBatchCandidatesList"></div>
         </div>
       </div>
       <div class="form-actions">
@@ -3640,6 +3661,7 @@ function candidateRowHtml(c){
       <select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
         ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(s)}</option>`).join("")}
       </select>
+      <button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>
     </div>`;
 }
 // Una tarjeta de Submission Batches -> su propia lista de candidatos + "Add Candidate" + una
@@ -5356,7 +5378,10 @@ function renderDetailModal(){
     ${p.batches && p.batches.length ? `<div class="sla-grid">
       ${p.batches.slice().reverse().map(b=>`
         <div class="sla-card">
-          <div class="sla-name"><span>${escapeHtml(b.date)}</span><span class="tag ${b.type==="Pivot Follow-up" ? "internal" : "official"}">${escapeHtml(b.type)}</span></div>
+          <div class="sla-name">
+            <span>${escapeHtml(b.date)}</span><span class="tag ${b.type==="Pivot Follow-up" ? "internal" : "official"}">${escapeHtml(b.type)}</span>
+            <button type="button" class="candidateDeleteBtn deleteBatchBtn" data-batch-date="${escapeHtml(b.date)}" title="Delete this batch — e.g. if it was logged by mistake">&times;</button>
+          </div>
           <div style="font-size:13px; font-weight:600;">${(() => {
             const live = batchCandidateCount(p, b.date);
             if(live > 0) return `${live} candidate${live===1?"":"s"} logged`;
@@ -6295,6 +6320,9 @@ function wireCandidateEvents(p){
   document.querySelectorAll(".addCandidateBtn").forEach(btn=>{
     btn.addEventListener("click", ()=> openAddCandidateModal(p, btn.dataset.batchDate));
   });
+  document.querySelectorAll(".deleteBatchBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=> deleteBatch(p, btn.dataset.batchDate));
+  });
   document.querySelectorAll(".candidateStatusSelect").forEach(sel=>{
     sel.addEventListener("change", ()=> updateCandidateStatus(p, sel.dataset.candidateId, sel.value));
   });
@@ -6304,6 +6332,9 @@ function wireCandidateEvents(p){
       pendingCvPositionId = p.id;
       document.getElementById("candidateCvFileInput").click();
     });
+  });
+  document.querySelectorAll(".candidateDeleteBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=> deleteBatchCandidate(p, btn.dataset.candidateId));
   });
   document.querySelectorAll(".candidateCheck").forEach(chk=>{
     chk.addEventListener("change", ()=>{
@@ -6367,6 +6398,51 @@ async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
     } catch(err){ console.error("Could not save Placed Candidate (non-fatal for the status change itself):", err); }
   }
   if(!opts.skipRerender) renderDetailModal();
+}
+// Nicolas: "en los batches debe estar la opcion de eliminar candidatos por si nos equivocamos de
+// ponerles en el batch que no es o algo asi" — borra la fila del candidato (nunca el CV real ya
+// subido a OneDrive, eso se queda huerfano ahi, inofensivo — no es lo que se pidio limpiar).
+// Mismo patron de confirm() + deshabilitar boton + reload que deleteActivePosition().
+async function deleteBatchCandidate(p, candidateId){
+  const c = (p.batchCandidates||[]).find(x=>x.id===candidateId);
+  if(!c) return;
+  const sure = confirm(`Remove ${c.name} from this batch? This can't be undone from here.`);
+  if(!sure) return;
+  const row = document.querySelector(`.candidateDeleteBtn[data-candidate-id="${cssEscape(candidateId)}"]`);
+  if(row) row.disabled = true;
+  try {
+    if(isConnected()) await graphDeleteBatchCandidate(candidateId);
+    p.batchCandidates = p.batchCandidates.filter(x=>x.id!==candidateId);
+    renderDetailModal();
+  } catch(err){
+    console.error(err);
+    alert("Could not remove this candidate.\n\n"+err.message);
+    if(row) row.disabled = false;
+  }
+}
+// Nicolas: "tanto eliminar candidatos, como eliminar el batch, porque agregue uno de follow up
+// por probar pero no tiene ningun candidato" — borra el batch entero Y en cascada cualquier
+// candidato ya logueado bajo esa fecha (si no, quedarian huerfanos, referenciando un batch que
+// ya no existe). El aviso real (cuantos candidatos se pierden) va en el confirm().
+async function deleteBatch(p, batchDate){
+  const candidateCount = batchCandidateCount(p, batchDate);
+  const warning = candidateCount
+    ? `Delete this batch (${batchDate})? This also removes its ${candidateCount} logged candidate${candidateCount===1?"":"s"}. This can't be undone from here.`
+    : `Delete this batch (${batchDate})? This can't be undone from here.`;
+  const sure = confirm(warning);
+  if(!sure) return;
+  const btn = document.querySelector(`.deleteBatchBtn[data-batch-date="${cssEscape(batchDate)}"]`);
+  if(btn) btn.disabled = true;
+  try {
+    if(isConnected()) await graphDeleteBatch(p.id, batchDate);
+    p.batches = (p.batches||[]).filter(b=>b.date!==batchDate);
+    p.batchCandidates = (p.batchCandidates||[]).filter(c=>c.batchDate!==batchDate);
+    renderDetailModal();
+  } catch(err){
+    console.error(err);
+    alert("Could not delete this batch.\n\n"+err.message);
+    if(btn) btn.disabled = false;
+  }
 }
 // Nicolas: "hay alguna manera de parsear dentro del logueo de batches el nombre y correo del
 // candidato?" — al adjuntar el CV en Add Candidate, se intenta leer el archivo y extraer
@@ -6650,7 +6726,12 @@ function openLogBatchModal(p, opts={}){
     document.getElementById("logBatchModalTitle").textContent = "Log Submission Batch";
     document.getElementById("logBatchFormState").style.display = "";
     document.getElementById("logBatchDate").value = localTodayStr();
-    document.getElementById("logBatchCount").value = "";
+    document.getElementById("logBatchCvFiles").value = "";
+    document.getElementById("logBatchCvParseMsg").textContent = "";
+    // Se reinicia cada vez que se abre el formulario normal (nunca a mitad de una sesion de
+    // agregar archivos) — evita arrastrar candidatos de un batch/apertura anterior del modal.
+    logBatchPendingCandidates = [];
+    renderLogBatchCandidatesList();
     document.getElementById("logBatchTypeDisplay").textContent = isFirst ? "Initial" : (batchNumber === 2 ? "Follow-up" : "Pivot Follow-up");
     const formNote = document.getElementById("logBatchFormNote");
     if(isFirst){
@@ -6676,12 +6757,63 @@ document.getElementById("logBatchGoToSalaryBtn").addEventListener("click", ()=>{
   closeLogBatchModal();
   openEditReqInfoModal();
 });
+// Estado de los candidatos pendientes de guardar en el formulario de Log Batch — cada uno es
+// {file, name, email}, name/email pre-llenados por extractCandidateInfoFromCv() (mismo parseo que
+// Add Candidate) pero editables antes de guardar. Vive fuera de p.batchCandidates a proposito:
+// estos archivos todavia no se han subido a nada, es solo el borrador de lo que se va a crear al
+// darle Save Batch.
+let logBatchPendingCandidates = [];
+function renderLogBatchCandidatesList(){
+  const wrap = document.getElementById("logBatchCandidatesListWrap");
+  const list = document.getElementById("logBatchCandidatesList");
+  wrap.style.display = logBatchPendingCandidates.length ? "" : "none";
+  list.innerHTML = logBatchPendingCandidates.map((c, i) => `
+    <div class="log-batch-cand-row">
+      <span class="log-batch-cand-filename" title="${escapeHtml(c.file.name)}">${escapeHtml(c.file.name)}</span>
+      <input type="text" class="logBatchCandNameInput" data-idx="${i}" value="${escapeHtml(c.name||"")}" placeholder="Candidate name">
+      <input type="email" class="logBatchCandEmailInput" data-idx="${i}" value="${escapeHtml(c.email||"")}" placeholder="Email">
+      <button type="button" class="candidateDeleteBtn logBatchCandRemoveBtn" data-idx="${i}" title="Remove this candidate from the batch">&times;</button>
+    </div>`).join("");
+  list.querySelectorAll(".logBatchCandNameInput").forEach(inp=>{
+    inp.addEventListener("input", ()=>{ logBatchPendingCandidates[Number(inp.dataset.idx)].name = inp.value; });
+  });
+  list.querySelectorAll(".logBatchCandEmailInput").forEach(inp=>{
+    inp.addEventListener("input", ()=>{ logBatchPendingCandidates[Number(inp.dataset.idx)].email = inp.value; });
+  });
+  list.querySelectorAll(".logBatchCandRemoveBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      logBatchPendingCandidates.splice(Number(btn.dataset.idx), 1);
+      renderLogBatchCandidatesList();
+    });
+  });
+}
+document.getElementById("logBatchCvFiles").addEventListener("change", async ()=>{
+  const input = document.getElementById("logBatchCvFiles");
+  const files = Array.from(input.files || []);
+  input.value = "";
+  if(!files.length) return;
+  const parseMsg = document.getElementById("logBatchCvParseMsg");
+  parseMsg.textContent = `Reading ${files.length} file${files.length===1?"":"s"}…`;
+  parseMsg.style.color = "var(--text-muted)";
+  let parsedCount = 0;
+  for(const file of files){
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    let info = null;
+    if(["pdf","docx","txt"].includes(ext)){
+      try { info = await extractCandidateInfoFromCv(file); } catch(err){ console.warn("CV parse failed for "+file.name+":", err); }
+      if(info) parsedCount++;
+    }
+    logBatchPendingCandidates.push({ file, name: (info && info.name) || "", email: (info && info.email) || "" });
+  }
+  renderLogBatchCandidatesList();
+  parseMsg.textContent = `Added ${files.length} candidate${files.length===1?"":"s"}${parsedCount ? ` (auto-filled ${parsedCount} from their CV)` : ""} — double-check names before saving.`;
+  parseMsg.style.color = "var(--good)";
+});
 document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
   const msg = document.getElementById("logBatchMsg");
   const date = document.getElementById("logBatchDate").value;
-  const count = document.getElementById("logBatchCount").value.trim();
   const batchNumber = (p.batches ? p.batches.length : 0) + 1;
   const isFirst = batchNumber === 1;
   // Mismo criterio que openLogBatchModal(): solo el batch #3+ es "Pivot Follow-up" de verdad
@@ -6693,13 +6825,19 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--critical)";
     return;
   }
-  // Batches deben ser de 3-5 candidatos ("calidad sobre cantidad", nunca una lista larga sin
-  // filtrar) — no es un bloqueo duro como lo del intake antes de sourcing, pero si vale la pena
-  // hacer parar y confirmar si alguien intenta loguear un numero fuera de ese rango.
-  const countNum = count ? Number(count) : null;
-  if(countNum != null && (countNum < 3 || countNum > 5)){
-    const proceed = confirm(`Batches should be 3-5 candidates, prioritizing quality over quantity — you entered ${countNum}. Log it anyway?`);
-    if(!proceed) return;
+  // Nicolas, 2026-09-19: "que sea que para loguear un batch, debas al menos subir un candidato,
+  // si no no te deja crearlo" — ya no hay un numero tecleado a mano como salida de emergencia, el
+  // batch necesita al menos 1 candidato real (con nombre) adjuntado arriba.
+  if(!logBatchPendingCandidates.length){
+    msg.textContent = "Add at least one candidate (with their CV) to log this batch.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
+  const missingName = logBatchPendingCandidates.some(c => !c.name.trim());
+  if(missingName){
+    msg.textContent = "Every candidate needs a name before saving — fill in the blank one(s) above.";
+    msg.style.color = "var(--critical)";
+    return;
   }
   // Sin bloquear el boton, un doble clic (o un reintento antes de que "Saved." aparezca)
   // duplicaba el batch entero — mismo patron ya aplicado en reassignSave/Add Position.
@@ -6707,7 +6845,10 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   saveBtn.disabled = true;
   try {
   p.batches = p.batches || [];
-  p.batches.push({ date, type, count: count || null });
+  // count ya no se teclea a mano — siempre se deriva de los candidatos reales logueados abajo
+  // (ver effectiveBatchCount()/batchCandidateCount()), nunca de un numero aparte que se pudiera
+  // desincronizar de la lista real.
+  p.batches.push({ date, type, count: null });
   // El primer batch fija Submission Date automaticamente, ese campo queda bloqueado en Timeline
   // hasta que exista al menos un batch (ver timelineFieldHtml() en renderDetailModal()).
   // Nicolas (2026-09-19): loguear el primer batch tambien deberia avanzar el status solo a
@@ -6728,33 +6869,70 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: statusRemarkText});
   }
   renderDetailModal();
-  const savedNote = autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "";
   if(isConnected()){
-    msg.textContent = "Saving…";
+    msg.textContent = "Saving batch…";
     msg.style.color = "var(--text-muted)";
     try {
-      await graphAppendBatch(p.id, date, type, count || "");
+      await graphAppendBatch(p.id, date, type, "");
       if(isFirst) await graphUpdatePositionField(p.id, "I", date);
       if(autoStatusChange){
         await graphUpdatePositionField(p.id, "G", autoStatusChange.to);
         await graphAppendHistorial(p.id, p.title, statusRemarkText, currentAuthorName(), "status");
       }
-      msg.textContent = "Saved." + savedNote;
-      msg.style.color = "var(--good)";
     } catch(err){
       console.error(err);
-      msg.textContent = "Could not save: " + err.message + " (make sure BatchesTable exists in the shared file)";
+      msg.textContent = "Could not save the batch: " + err.message + " (make sure BatchesTable exists in the shared file)";
       msg.style.color = "var(--critical)";
       return;
     }
+  }
+  // Ahora cada candidato adjuntado arriba, uno por uno — mismo trio de llamadas que Add
+  // Candidate (append -> upload CV -> guardar el link), pero en secuencia y sin abortar todo el
+  // batch si UNO falla (ej. un archivo corrupto) — se reporta al final cuales fallaron en vez de
+  // perder el trabajo de los demas.
+  const total = logBatchPendingCandidates.length;
+  const failed = [];
+  const author = currentAuthorName();
+  for(let i=0; i<total; i++){
+    const cand = logBatchPendingCandidates[i];
+    msg.textContent = `Saving candidate ${i+1} of ${total} (${cand.name})…`;
+    msg.style.color = "var(--text-muted)";
+    try {
+      const id = isConnected()
+        ? await graphAppendBatchCandidate(p.id, date, cand.name, cand.email, "Active", null, author)
+        : `${p.id}-${Date.now()}-${i}`;
+      let cvLink = null;
+      if(isConnected()){
+        cvLink = await graphUploadFile("Candidate CVs", p.id, cand.file);
+        await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
+      }
+      p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Active", cvLink, addedBy: author, addedDate: localTodayStr() });
+    } catch(err){
+      console.error(`Could not save candidate "${cand.name}":`, err);
+      failed.push({ name: cand.name, message: err.message });
+    }
+  }
+  logBatchPendingCandidates = [];
+  renderDetailModal();
+  const savedNote = autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "";
+  if(failed.length){
+    msg.textContent = `Batch logged with ${total - failed.length} of ${total} candidates.${savedNote} Failed: ${failed.map(f=>`${f.name} (${f.message})`).join("; ")} — add ${failed.length===1?"them":"them"} again via "+ Add Candidate".`;
+    msg.style.color = "var(--critical)";
+  } else if(isConnected()){
+    msg.textContent = `Saved — batch and ${total} candidate${total===1?"":"s"} logged.${savedNote}`;
+    msg.style.color = "var(--good)";
   } else {
-    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365)." + savedNote;
+    msg.textContent = `Kept in this browser tab only (not connected to Microsoft 365) — batch and ${total} candidate${total===1?"":"s"} logged locally.${savedNote}`;
     msg.style.color = "var(--warning)";
   }
   } finally {
     saveBtn.disabled = false;
   }
-  setTimeout(closeLogBatchModal, 900);
+  // Solo se cierra solo si todo salio bien — si algo fallo, se queda abierto con el mensaje de
+  // arriba para que quede visible, en vez de desaparecer a los 900ms como el resto de los saves.
+  if(!document.getElementById("logBatchMsg").textContent.startsWith("Batch logged with")){
+    setTimeout(closeLogBatchModal, 900);
+  }
 });
 document.getElementById("pivotRequestSave").addEventListener("click", async ()=>{
   const p = POSITIONS.find(x=>x.id===activeDetailId);
@@ -8792,6 +8970,36 @@ async function graphAppendBatch(positionId, date, batchType, candidateCount){
     }),
   });
 }
+// BatchesTable no tiene un ID propio por fila (a diferencia de BatchCandidatesTable) — se resuelve
+// por Position ID + Date, de atras hacia adelante (mismo patron que graphDeleteRowsForPosition())
+// para que los indices de las filas que faltan por borrar nunca se corran a mitad de camino.
+// Cascada: los candidatos ya logueados bajo ese mismo Position ID + Batch Date tambien se borran,
+// quedarian huerfanos si no (referenciando un batch que ya no existe) — envuelto en try/catch
+// propio porque BatchCandidatesTable es una tabla opcional (puede no existir todavia en algun
+// archivo real), no deberia tumbar el borrado del batch en si si falta.
+async function graphDeleteBatch(positionId, date){
+  if(pinModeActive) return workerRecruiterWrite("deleteBatch", {positionId, date});
+  const resp = await graphFetch(`${await workbookBase()}/tables('BatchesTable')/rows?$select=values`);
+  const rows = resp.value || [];
+  for(let i = rows.length - 1; i >= 0; i--){
+    const v = rows[i].values[0];
+    if(v[0] === positionId && excelValToDateStr(v[1]) === date){
+      await graphFetch(`${await workbookBase()}/tables('BatchesTable')/rows/itemAt(index=${i})`, { method: "DELETE" });
+    }
+  }
+  try {
+    const bcResp = await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows?$select=values`);
+    const bcRows = bcResp.value || [];
+    for(let i = bcRows.length - 1; i >= 0; i--){
+      const v = bcRows[i].values[0];
+      if(v[1] === positionId && excelValToDateStr(v[2]) === date){
+        await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows/itemAt(index=${i})`, { method: "DELETE" });
+      }
+    }
+  } catch(err){
+    console.warn("Could not cascade-delete batch candidates (non-fatal, BatchCandidatesTable may not exist yet):", err);
+  }
+}
 // BatchCandidatesTable: Candidate Row ID | Position ID | Batch Date | Candidate Name | Status |
 // CV Link | Added By | Added Date | Candidate Email. id se genera aqui (no lo asigna Excel) para
 // poder actualizar esta fila especifica despues — ver mergeBatchCandidates() arriba para por que
@@ -8851,6 +9059,18 @@ async function graphUpdateBatchCandidateField(candidateRowId, headerName, value)
   await graphFetch(`${await workbookBase()}/worksheets('BatchCandidatesTable')/range(address='${address}')`, {
     method: "PATCH",
     body: JSON.stringify({ values: [[value]] }),
+  });
+}
+// Borra la fila del candidato (resuelta EN VIVO por Candidate Row ID, igual que
+// graphUpdateBatchCandidateField() de arriba — nunca un indice cacheado, otra pestaña pudo haber
+// agregado/borrado filas desde la ultima vez que se leyo la tabla). Nunca borra el CV real que ya
+// se subio a OneDrive — eso queda huerfano ahi, inofensivo, no es lo que se pidio limpiar.
+async function graphDeleteBatchCandidate(candidateRowId){
+  if(pinModeActive) return workerRecruiterWrite("deleteBatchCandidate", {candidateRowId});
+  const found = await resolveTableRowIndexByColumn("BatchCandidatesTable", "Candidate Row ID", candidateRowId);
+  if(!found) throw new Error("This candidate row no longer exists in the shared file. Reload the data before trying again.");
+  await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows/itemAt(index=${found.rowIndex})`, {
+    method: "DELETE",
   });
 }
 // Sube el CV real (hasta 4MB, de sobra para un PDF/Word de hoja de vida) a una carpeta
