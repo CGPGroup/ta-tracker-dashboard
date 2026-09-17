@@ -6361,6 +6361,41 @@ function loadScriptOnce(src){
   });
 }
 const PDFJS_VERSION = "3.11.174";
+// BUG REAL encontrado 2026-09-19 con un CV real (Ana M. Perez, exportado de LibreOffice): el join
+// ciego de arriba (todo item + " ") convertia el nombre en basura ilegible tipo "AN A M . P E R
+// E Z" — este PDF especifico renderiza el encabezado del nombre con cada letra como su propio
+// glyph run, separadas por caracteres de espacio REALES pero angostos (letter-tracking), no por
+// huecos entre posiciones. reconstructPdfPageText() reconstruye linea por linea usando la
+// posicion (Y) para separar lineas, y el ANCHO REAL de cada caracter de espacio (relativo a la
+// altura de fuente de esa linea) para decidir si es tracking de letras (se descarta) o un
+// espacio real entre palabras (se conserva) — un espacio de palabra real en esta fuente resulto
+// bastante mas ancho que el tracking interno de "PEREZ", aunque no por mucho margen. Probado
+// contra el archivo real: reconstruye "ANA M. PEREZ" correctamente y no rompe el resto del texto
+// normal del CV (parrafos largos siguen leyendose bien).
+function reconstructPdfPageText(items, ratio){
+  const lines = [];
+  let currentLine = [];
+  let lastY = null;
+  for(const item of items){
+    const y = item.transform[5];
+    if(lastY !== null && Math.abs(y - lastY) > 2){ lines.push(currentLine); currentLine = []; }
+    currentLine.push(item);
+    lastY = y;
+  }
+  if(currentLine.length) lines.push(currentLine);
+  return lines.map(lineItems => {
+    const refHeight = Math.max(...lineItems.map(it=>it.height||0), 8);
+    let text = "";
+    for(const item of lineItems){
+      if(item.str.trim() === ""){
+        if(item.width > refHeight * ratio) text += " ";
+      } else {
+        text += item.str;
+      }
+    }
+    return text;
+  }).join("\n");
+}
 async function extractTextFromPdf(file){
   await loadScriptOnce(`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`);
   if(!window.pdfjsLib.GlobalWorkerOptions.workerSrc){
@@ -6375,7 +6410,7 @@ async function extractTextFromPdf(file){
   for(let i=1; i<=maxPages; i++){
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
-    text += content.items.map(it=>it.str).join(" ") + "\n";
+    text += reconstructPdfPageText(content.items, 0.35) + "\n";
   }
   return text;
 }
