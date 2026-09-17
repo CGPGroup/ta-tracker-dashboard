@@ -8805,6 +8805,14 @@ async function graphUploadFile(folder, positionId, file){
   }
   await resolveFileIds();
   const folderPath = EXCEL_FILE_PATH.replace(/\/[^/]+$/, "");
+  // BUG REAL reportado por Nicolas 2026-09-17 (primer CV real subido a un req sin adjuntos
+  // previos): "Graph API error (404): ItemNotFound". El endpoint de subida por path
+  // (PUT .../root:{path}:/content) NO crea las carpetas intermedias que falten — a diferencia de
+  // un `mkdir -p`, si "Candidate CVs/{positionId}" todavia no existe (primer archivo para ese
+  // req), Graph responde 404 en vez de crearla sola. ensureGraphFolder() la crea de antemano,
+  // nivel por nivel, tratando un 409 (ya existe) como exito — nunca "replace" en el conflict
+  // behavior, que borraria una carpeta ya existente con archivos adentro.
+  await ensureGraphFolder(`${folderPath}/${folder}/${positionId}`);
   const uploadPath = `${folderPath}/${folder}/${positionId}/${file.name}`.split("/").map(encodeURIComponent).join("/");
   const token = await getGraphToken();
   const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:${uploadPath}:/content`, {
@@ -8815,6 +8823,34 @@ async function graphUploadFile(folder, positionId, file){
   if(!res.ok) throw new Error(`Graph API error (${res.status}): ${(await res.text()).slice(0,300)}`);
   const item = await res.json();
   return item.webUrl;
+}
+// Se cachea por sesion (Set de paths ya confirmados) para no repetir 2-3 llamadas de sobra en
+// cada subida una vez que la carpeta de un req ya se creo/confirmo una vez.
+const ENSURED_GRAPH_FOLDERS = new Set();
+async function ensureGraphFolder(fullPath){
+  if(ENSURED_GRAPH_FOLDERS.has(fullPath)) return;
+  const segments = fullPath.split("/").filter(Boolean);
+  let currentPath = "";
+  const token = await getGraphToken();
+  for(const seg of segments){
+    currentPath += "/" + seg;
+    if(ENSURED_GRAPH_FOLDERS.has(currentPath)) continue;
+    const parentPath = currentPath.slice(0, currentPath.length - seg.length - 1);
+    const childrenUrl = parentPath
+      ? `https://graph.microsoft.com/v1.0/me/drive/root:${parentPath.split("/").map(encodeURIComponent).join("/")}:/children`
+      : `https://graph.microsoft.com/v1.0/me/drive/root/children`;
+    const res = await fetch(childrenUrl, {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: seg, folder: {}, "@microsoft.graph.conflictBehavior": "fail" }),
+    });
+    // 409 = la carpeta ya existia, eso es exactamente lo que queremos (nunca se toca su
+    // contenido) — cualquier otro error si se propaga.
+    if(!res.ok && res.status !== 409){
+      throw new Error(`Could not create folder "${seg}": Graph API error (${res.status})`);
+    }
+    ENSURED_GRAPH_FOLDERS.add(currentPath);
+  }
 }
 function fileToBase64(file){
   return new Promise((resolve, reject)=>{
