@@ -8812,10 +8812,20 @@ async function graphUploadFile(folder, positionId, file){
   // req), Graph responde 404 en vez de crearla sola. ensureGraphFolder() la crea de antemano,
   // nivel por nivel, tratando un 409 (ya existe) como exito — nunca "replace" en el conflict
   // behavior, que borraria una carpeta ya existente con archivos adentro.
-  await ensureGraphFolder(`${folderPath}/${folder}/${positionId}`);
-  const uploadPath = `${folderPath}/${folder}/${positionId}/${file.name}`.split("/").map(encodeURIComponent).join("/");
+  // SEGUNDO BUG REAL, mismo dia: con la carpeta ya creandose bien, la subida SEGUIA fallando con
+  // el mismo 404 ItemNotFound — demora real de propagacion de OneDrive/SharePoint: la carpeta
+  // recien creada por POST no siempre queda visible de inmediato para una resolucion de PATH
+  // separada desde la raiz (2do request, milisegundos despues). Si ensureGraphFolder() acaba de
+  // CREAR la carpeta mas profunda en esta misma llamada, subimos directo por su item id (ya lo
+  // tenemos del response de creacion) en vez de volver a resolver el path completo desde cero —
+  // eso nunca depende de que la busqueda por path ya haya "visto" la carpeta nueva.
+  const freshFolderId = await ensureGraphFolder(`${folderPath}/${folder}/${positionId}`);
   const token = await getGraphToken();
-  const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:${uploadPath}:/content`, {
+  const encodedFileName = encodeURIComponent(file.name);
+  const uploadUrl = freshFolderId
+    ? `https://graph.microsoft.com/v1.0/me/drive/items/${freshFolderId}:/${encodedFileName}:/content`
+    : `https://graph.microsoft.com/v1.0/me/drive/root:${`${folderPath}/${folder}/${positionId}/${file.name}`.split("/").map(encodeURIComponent).join("/")}:/content`;
+  const res = await fetch(uploadUrl, {
     method: "PUT",
     headers: { "Authorization": "Bearer " + token, "Content-Type": "application/octet-stream" },
     body: file,
@@ -8825,17 +8835,22 @@ async function graphUploadFile(folder, positionId, file){
   return item.webUrl;
 }
 // Se cachea por sesion (Set de paths ya confirmados) para no repetir 2-3 llamadas de sobra en
-// cada subida una vez que la carpeta de un req ya se creo/confirmo una vez.
+// cada subida una vez que la carpeta de un req ya se creo/confirmo una vez. Devuelve el item id
+// de la carpeta mas profunda SOLO si se acaba de crear en esta misma llamada (201) — null si ya
+// existia de antes (409) o si toda la cadena ya estaba confirmada en cache, para que quien llama
+// sepa si debe subir por id (recien creada, riesgo de demora de propagacion) o por path (ya
+// existia hace rato, sin ese riesgo).
 const ENSURED_GRAPH_FOLDERS = new Set();
 async function ensureGraphFolder(fullPath){
-  if(ENSURED_GRAPH_FOLDERS.has(fullPath)) return;
+  if(ENSURED_GRAPH_FOLDERS.has(fullPath)) return null;
   const segments = fullPath.split("/").filter(Boolean);
   let currentPath = "";
   const token = await getGraphToken();
+  let lastCreatedId = null;
   for(const seg of segments){
+    const parentPath = currentPath;
     currentPath += "/" + seg;
-    if(ENSURED_GRAPH_FOLDERS.has(currentPath)) continue;
-    const parentPath = currentPath.slice(0, currentPath.length - seg.length - 1);
+    if(ENSURED_GRAPH_FOLDERS.has(currentPath)){ lastCreatedId = null; continue; }
     const childrenUrl = parentPath
       ? `https://graph.microsoft.com/v1.0/me/drive/root:${parentPath.split("/").map(encodeURIComponent).join("/")}:/children`
       : `https://graph.microsoft.com/v1.0/me/drive/root/children`;
@@ -8846,11 +8861,17 @@ async function ensureGraphFolder(fullPath){
     });
     // 409 = la carpeta ya existia, eso es exactamente lo que queremos (nunca se toca su
     // contenido) — cualquier otro error si se propaga.
-    if(!res.ok && res.status !== 409){
+    if(res.ok){
+      const item = await res.json();
+      lastCreatedId = item.id;
+    } else if(res.status === 409){
+      lastCreatedId = null;
+    } else {
       throw new Error(`Could not create folder "${seg}": Graph API error (${res.status})`);
     }
     ENSURED_GRAPH_FOLDERS.add(currentPath);
   }
+  return lastCreatedId;
 }
 function fileToBase64(file){
   return new Promise((resolve, reject)=>{
