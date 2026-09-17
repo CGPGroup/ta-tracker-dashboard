@@ -1994,7 +1994,7 @@
     </div>
 
     <div id="pivotRequestState" style="display:none;">
-      <div class="panel-sub" style="margin:0 0 10px;">Warning: this sends a request to CGP TA (Nicolás Patarroyo, Lead Talent Partner) and Irth TA (Immy Nader) to approve the Pivot SLA, driven by a calibration call needed with the hiring manager. Explain why below, against the Intake Summary.</div>
+      <div class="panel-sub" style="margin:0 0 10px;">A batch beyond the normal initial + follow-up cycle needs a calibration call with the hiring manager first — sending more candidates blind risks the same result. Explain why below, against the Intake Summary; this also sends a request to CGP TA (Nicolás Patarroyo, Lead Talent Partner) and Irth TA (Immy Nader) to approve the Pivot SLA, which decides separately whether the TTF/TTH allowance applies.</div>
       <div class="form-grid">
         <div class="form-field full"><label>Why is a calibration call needed?</label><textarea id="pivotJustificationInput" rows="4" placeholder="e.g. Hiring manager rejected the full batch, candidates matched the Intake Summary, pool looks genuinely limited at the approved compensation..."></textarea></div>
       </div>
@@ -2004,7 +2004,7 @@
     </div>
 
     <div id="pivotPendingState" style="display:none;">
-      <div class="panel-sub" style="margin:0 0 10px;">Pivot SLA requested <span id="pivotPendingDate"></span>. Not confirmed yet, the batch can't be logged until both approvals are in.</div>
+      <div class="panel-sub" style="margin:0 0 10px;">Pivot SLA requested <span id="pivotPendingDate"></span>. Log the calibration call date below once it happens — that's what unblocks the next batch. The approvals below only decide whether the TTF/TTH allowance applies, they're not a precondition to keep working.</div>
       <div class="callout prose" id="pivotPendingJustification" style="margin-bottom:14px;"></div>
       <div class="facts-grid" style="margin-bottom:14px;">
         <div>
@@ -6601,31 +6601,34 @@ document.getElementById("candidateCvFileInput").addEventListener("change", async
 // = Pivot SLA". El ciclo normal es initial (3-5) + UN follow-up (3-5) = 6-10 candidatos en
 // total, sin necesitar aprobacion — el Pivot SLA ahora solo aplica si hace falta un TERCER
 // batch (o mas) para este req, sin importar si fue por rechazo total o parcial.
-// Correccion del mismo dia, Nicolas: "el 3er batch igual se tiene que enviar, lo unico es que se
-// debe determinar si se aprueba o no el pivot SLA, para que no afecte la metrica" — loguear un
-// batch (lo que de verdad paso, siempre) NUNCA debe depender de una aprobacion pendiente. La
-// aprobacion es un tema aparte, exclusivamente de si la METRICA (TTF/TTH, ver
-// slaFor()/PIVOT_SLA_ALLOWANCE_DAYS) queda protegida o no — nunca un permiso para poder trabajar.
-// Por eso "+ Log Batch"/"Log first batch to set this" siempre llevan al formulario normal, sin
-// importar el numero de batch; opts.pivotView (solo lo usa el trigger dedicado "Pivot SLA" en
-// Timeline, ver pivotSlaFactHtml()) es la UNICA forma de llegar a las pantallas de
-// solicitar/ver el estado del Pivot SLA — una accion aparte, nunca un bloqueo.
+// Correccion, mismo dia: "el 3er batch igual se tiene que enviar, lo unico es que se debe
+// determinar si se aprueba o no el pivot SLA, para que no afecte la metrica" — la APROBACION
+// (Lead + Immy) nunca bloquea el logueo, solo decide si la metrica (TTF/TTH) queda protegida.
+// PERO, otra correccion del mismo dia: "independientemente de si se aprueba o no el pivot SLA,
+// que antes de esto pase el calibration call, por que seria una bobada seguir enviando un 3er
+// batch para que sea rechazado" — el gate real para el batch #3+ SI existe, pero es la
+// calibration call (p.calibrationCallDate), no la aprobacion. Reusa la misma pantalla de
+// Request/Pending Pivot SLA (ya tiene el campo de fecha de calibration call) porque pedir el
+// Pivot SLA es, en la practica, documentar "por que hace falta recalibrar" — pero lo que de
+// verdad desbloquea el formulario de abajo es la fecha de la llamada, nunca las 2 aprobaciones.
 function openLogBatchModal(p, opts={}){
   document.getElementById("logBatchMsg").textContent = "";
   const batchNumber = (p.batches ? p.batches.length : 0) + 1;
   const isFirst = batchNumber === 1;
   const pivotOk = isSlaExceptionApproved(p);
+  const calibrationHeld = !!p.calibrationCallDate;
   const hasPendingRequest = !!p.pivotRequestedDate && !pivotOk;
   // Compensacion confirmada es requisito para el PRIMER batch (no para follow-ups: si ya se
   // sourceo una vez con un rango acordado, un follow-up no necesita repetir el chequeo) —
   // no tendria sentido estar sourceando candidatos contra un rango que el hiring manager nunca
   // confirmo. Ver formatSalary()/hasSalaryConfirmed().
   const salaryMissing = isFirst && !hasSalaryConfirmed(p);
+  const needsCalibration = !opts.pivotView && batchNumber >= 3 && !calibrationHeld;
   document.getElementById("logBatchSalaryRequiredState").style.display = "none";
   document.getElementById("logBatchFormState").style.display = "none";
   document.getElementById("pivotRequestState").style.display = "none";
   document.getElementById("pivotPendingState").style.display = "none";
-  if(opts.pivotView && !pivotOk){
+  if((opts.pivotView && !pivotOk) || needsCalibration){
     if(hasPendingRequest){
       document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
       document.getElementById("pivotPendingState").style.display = "";
@@ -6649,7 +6652,7 @@ function openLogBatchModal(p, opts={}){
       formNote.textContent = "Remember, this triggers the first batch and its corresponding SLAs, this field is what's used for the initial batch.";
       formNote.style.display = "";
     } else if(batchNumber >= 3 && !pivotOk){
-      formNote.textContent = "This is batch #" + batchNumber + " for this requisition — beyond the normal initial + follow-up cycle. Log it now (the work still has to happen), then consider requesting Pivot SLA from the \"Pivot SLA\" field in Timeline to protect the TTF/TTH metric.";
+      formNote.textContent = `This is batch #${batchNumber} — past the calibration call held on ${p.calibrationCallDate}. Consider requesting Pivot SLA from the "Pivot SLA" field in Timeline to protect the TTF/TTH metric.`;
       formNote.style.display = "";
     } else {
       formNote.style.display = "none";
@@ -6835,7 +6838,16 @@ document.getElementById("calibrationCallSave").addEventListener("click", async (
     msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
     msg.style.color = "var(--warning)";
   }
-  renderPivotPendingState(p);
+  // Nicolas: la calibration call es lo que de verdad desbloquea el batch #3+ (ver
+  // openLogBatchModal()) — una vez logueada, saltar directo al formulario normal en vez de
+  // quedarse en esta misma pantalla, para que el reclutador pueda seguir de inmediato.
+  // openLogBatchModal() limpia logBatchMsg de entrada (misma linea siempre) — se guarda y
+  // restaura el mensaje de "Saved."/"Kept in this browser tab" de arriba para que no desaparezca.
+  const savedMsgText = msg.textContent;
+  const savedMsgColor = msg.style.color;
+  openLogBatchModal(p);
+  msg.textContent = savedMsgText;
+  msg.style.color = savedMsgColor;
   } finally {
     calBtn.disabled = false;
   }
