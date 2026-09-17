@@ -2039,13 +2039,16 @@
       <button class="modal-close" id="addCandidateClose" type="button">&times;</button>
     </div>
     <div class="form-grid">
-      <div class="form-field full"><label>Candidate Name</label><input type="text" id="addCandidateName" placeholder="e.g. Maria Gomez"></div>
-      <div class="form-field full"><label>Candidate Email</label><input type="email" id="addCandidateEmail" placeholder="e.g. maria.gomez@email.com"></div>
+      <!-- CV primero, no ultimo: adjuntarlo es lo que auto-llena Nombre/Correo de abajo (ver
+           extractCandidateInfoFromCv()) — ponerlo despues de esos 2 campos no tenia sentido,
+           Nicolas: "no tiene sentido poner el adjuntar la cv de tercer lugar, deberia ser primero". -->
       <div class="form-field full">
-        <label>CV <span style="font-weight:400; color:var(--text-muted);">(optional, up to 4MB — attaching a PDF or Word file also tries to auto-fill the name/email above from it)</span></label>
+        <label>CV <span style="font-weight:400; color:var(--text-muted);">(optional, up to 4MB — attaching a PDF or Word file tries to auto-fill the name/email below from it)</span></label>
         <input type="file" id="addCandidateCvFile" accept=".pdf,.doc,.docx">
         <span class="panel-sub" id="addCandidateCvParseMsg" style="display:block; margin-top:4px;"></span>
       </div>
+      <div class="form-field full"><label>Candidate Name</label><input type="text" id="addCandidateName" placeholder="e.g. Maria Gomez"></div>
+      <div class="form-field full"><label>Candidate Email</label><input type="email" id="addCandidateEmail" placeholder="e.g. maria.gomez@email.com"></div>
       <div class="form-field full" id="addCandidateStatusField">
         <label>Status</label>
         <select id="addCandidateStatus"></select>
@@ -6424,13 +6427,23 @@ async function extractTextFromDocx(file){
 // ni @, no una de las palabras tipicas de encabezado tipo "Resume"/"Curriculum Vitae") entre las
 // primeras lineas del documento — no es infalible, pero cubre la inmensa mayoria de CVs, donde el
 // nombre encabeza la primera pagina.
+// Muchos CVs (y el reconstruido de PDF de arriba) traen el nombre en MAYUSCULAS por diseño del
+// encabezado — un nombre real casi nunca se escribe asi, y "ANA M. PEREZ" pre-llenado se ve mal.
+// Reduce cada corrida de letras a Mayuscula-inicial + resto en minuscula, respetando apostrofes/
+// guiones internos como separadores propios (O'BRIEN -> O'Brien, SMITH-JONES -> Smith-Jones) y
+// dejando iniciales con punto intactas (M. sigue siendo M.). Es best-effort: si el nombre real
+// tenia una mayuscula interna genuina (ej. "McDonald"), eso ya se perdio en el momento en que el
+// PDF lo renderizo todo en mayusculas — no hay forma de recuperarlo de la fuente.
+function toTitleCase(str){
+  return str.replace(/[A-Za-z]+/g, seg => seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase());
+}
 function guessNameFromCvText(text){
   const nameRe = /^[A-Z][a-zA-Z'.-]+(?:\s+[A-Z][a-zA-Z'.-]+){1,3}$/;
   const bannedWords = /resume|curriculum|vitae|\bcv\b|profile|summary/i;
   const lines = text.split(/\n+/).map(l=>l.trim()).filter(Boolean);
   for(const line of lines.slice(0, 8)){
     if(line.length > 40 || /[0-9@]/.test(line) || bannedWords.test(line)) continue;
-    if(nameRe.test(line)) return line;
+    if(nameRe.test(line)) return toTitleCase(line);
   }
   return null;
 }
