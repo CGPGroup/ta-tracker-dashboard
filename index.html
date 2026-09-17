@@ -5362,7 +5362,7 @@ function renderDetailModal(){
     </div>` : (batchesOverdue
         ? `<div class="alert-banner tier-yellow compact">No submission batches logged yet, and it's been ${batchesTts.elapsed} business days since the intake meeting (TTS target: ${batchesTts.target}).</div>`
         : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`)}
-    ${p.pivotRequestedDate && !isSlaExceptionApproved(p) ? `<div class="alert-banner tier-yellow compact">Pivot SLA requested on ${escapeHtml(p.pivotRequestedDate)}, waiting on approval from ${!p.pivotApprovedByLeadDate ? "CGP TA (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"} before the next batch can be logged.</div>` : ""}
+    ${p.pivotRequestedDate && !isSlaExceptionApproved(p) ? `<div class="alert-banner tier-yellow compact">Pivot SLA requested on ${escapeHtml(p.pivotRequestedDate)}, waiting on approval from ${!p.pivotApprovedByLeadDate ? "CGP TA (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"} — this only affects whether the TTF/TTH allowance applies, it doesn't block logging the next batch.</div>` : ""}
     <div style="margin-bottom:22px;">
       <button type="button" class="btn ghost small" id="logBatchBtn">${p.batches && p.batches.length ? "+ Log Follow-up Batch" : "+ Log Batch"}</button>
     </div>`;
@@ -5379,7 +5379,7 @@ function renderDetailModal(){
     wireCandidateEvents(p);
     const submissionTrigger = document.getElementById("submissionDateTrigger");
     if(submissionTrigger) submissionTrigger.addEventListener("click", ()=> openLogBatchModal(p));
-    document.querySelectorAll(".pivotSlaTrigger").forEach(btn=> btn.addEventListener("click", ()=> openLogBatchModal(p)));
+    document.querySelectorAll(".pivotSlaTrigger").forEach(btn=> btn.addEventListener("click", ()=> openLogBatchModal(p, {pivotView:true})));
     document.getElementById("modalDatesSave").addEventListener("click", saveModalDates);
     document.getElementById("editReqInfoBtn").addEventListener("click", openEditReqInfoModal);
     document.getElementById("editHeadcountGroupBtn").addEventListener("click", ()=>{
@@ -6600,14 +6600,21 @@ document.getElementById("candidateCvFileInput").addEventListener("change", async
 // aceptan a esos 5, piden mas" — el proceso real ya no es "cualquier batch despues del primero
 // = Pivot SLA". El ciclo normal es initial (3-5) + UN follow-up (3-5) = 6-10 candidatos en
 // total, sin necesitar aprobacion — el Pivot SLA ahora solo aplica si hace falta un TERCER
-// batch (o mas) para este req, sin importar si fue por rechazo total o parcial. Reemplaza el
-// "type" fijo en base a isFirst por un numero de batch real.
-function openLogBatchModal(p){
+// batch (o mas) para este req, sin importar si fue por rechazo total o parcial.
+// Correccion del mismo dia, Nicolas: "el 3er batch igual se tiene que enviar, lo unico es que se
+// debe determinar si se aprueba o no el pivot SLA, para que no afecte la metrica" — loguear un
+// batch (lo que de verdad paso, siempre) NUNCA debe depender de una aprobacion pendiente. La
+// aprobacion es un tema aparte, exclusivamente de si la METRICA (TTF/TTH, ver
+// slaFor()/PIVOT_SLA_ALLOWANCE_DAYS) queda protegida o no — nunca un permiso para poder trabajar.
+// Por eso "+ Log Batch"/"Log first batch to set this" siempre llevan al formulario normal, sin
+// importar el numero de batch; opts.pivotView (solo lo usa el trigger dedicado "Pivot SLA" en
+// Timeline, ver pivotSlaFactHtml()) es la UNICA forma de llegar a las pantallas de
+// solicitar/ver el estado del Pivot SLA — una accion aparte, nunca un bloqueo.
+function openLogBatchModal(p, opts={}){
   document.getElementById("logBatchMsg").textContent = "";
   const batchNumber = (p.batches ? p.batches.length : 0) + 1;
   const isFirst = batchNumber === 1;
   const pivotOk = isSlaExceptionApproved(p);
-  const needsPivotApproval = batchNumber >= 3 && !pivotOk;
   const hasPendingRequest = !!p.pivotRequestedDate && !pivotOk;
   // Compensacion confirmada es requisito para el PRIMER batch (no para follow-ups: si ya se
   // sourceo una vez con un rango acordado, un follow-up no necesita repetir el chequeo) —
@@ -6618,10 +6625,20 @@ function openLogBatchModal(p){
   document.getElementById("logBatchFormState").style.display = "none";
   document.getElementById("pivotRequestState").style.display = "none";
   document.getElementById("pivotPendingState").style.display = "none";
-  if(salaryMissing){
+  if(opts.pivotView && !pivotOk){
+    if(hasPendingRequest){
+      document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
+      document.getElementById("pivotPendingState").style.display = "";
+      renderPivotPendingState(p);
+    } else {
+      document.getElementById("logBatchModalTitle").textContent = "Request Pivot SLA";
+      document.getElementById("pivotRequestState").style.display = "";
+      document.getElementById("pivotJustificationInput").value = "";
+    }
+  } else if(salaryMissing){
     document.getElementById("logBatchModalTitle").textContent = "Confirm Compensation First";
     document.getElementById("logBatchSalaryRequiredState").style.display = "";
-  } else if(!needsPivotApproval){
+  } else {
     document.getElementById("logBatchModalTitle").textContent = "Log Submission Batch";
     document.getElementById("logBatchFormState").style.display = "";
     document.getElementById("logBatchDate").value = localTodayStr();
@@ -6631,17 +6648,12 @@ function openLogBatchModal(p){
     if(isFirst){
       formNote.textContent = "Remember, this triggers the first batch and its corresponding SLAs, this field is what's used for the initial batch.";
       formNote.style.display = "";
+    } else if(batchNumber >= 3 && !pivotOk){
+      formNote.textContent = "This is batch #" + batchNumber + " for this requisition — beyond the normal initial + follow-up cycle. Log it now (the work still has to happen), then consider requesting Pivot SLA from the \"Pivot SLA\" field in Timeline to protect the TTF/TTH metric.";
+      formNote.style.display = "";
     } else {
       formNote.style.display = "none";
     }
-  } else if(hasPendingRequest){
-    document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
-    document.getElementById("pivotPendingState").style.display = "";
-    renderPivotPendingState(p);
-  } else {
-    document.getElementById("logBatchModalTitle").textContent = "Request Pivot SLA";
-    document.getElementById("pivotRequestState").style.display = "";
-    document.getElementById("pivotJustificationInput").value = "";
   }
   document.getElementById("logBatchModal").classList.add("open");
 }
