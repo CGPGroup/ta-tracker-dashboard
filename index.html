@@ -3327,7 +3327,15 @@ function slaFor(p, key, closeDateStr){
   // bug real, no una regla de negocio.) handoffInfo se conserva solo para que slaChip() explique
   // que el req fue handed off, dejando claro que el conteo NO cambio por eso.
   const handoffInfo = p.handoffFrom ? {from: p.handoffFrom, acceptedDate: p.handoffAcceptedDate, originalIntake: p.intake} : null;
-  const intake = parseD(p.intake);
+  // Nicolas (2026-09-17) atrapo esto antes de que se fuera a produccion: p.intake queda null en
+  // un intake legitimamente waived (openWaiveIntakeModal solo guarda intakeWaivedReason, nunca
+  // una fecha) — sin este fallback, "intake" abajo daba null y el reloj de TTS/TTF/TTH se quedaba
+  // en "none" para siempre en cualquier req waived, aunque el sourcing ya pueda arrancar (ver
+  // canStartSourcing()). Mismo fallback que ya usa computeCompletion()'s step2 para el caso waived
+  // (requested, si no kickoff) — no es una fecha nueva inventada, es la misma referencia que el
+  // resto del tracker ya usa para "desde cuando cuenta este req sin un intake propio".
+  const effectiveIntake = p.intake || (p.intakeWaivedReason ? (p.intakeRequestedDate || p.kickoff) : null);
+  const intake = parseD(effectiveIntake);
   const baseTarget = SLA_TARGETS[key];
   if(!intake) return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
   const start = nextBizDay(intake);
@@ -5875,10 +5883,12 @@ function openWaiveIntakeModal(p){
       skip one that should still happen. Valid reasons:
       <ul style="margin:6px 0 0 18px; padding:0;">
         <li>This is additional headcount for a role you already ran a full intake for (one
-          intake happens per role, not per headcount) — <b>and</b> the hiring manager has
-          reconfirmed in writing (email, chat) that nothing has changed since, no matter how
-          recent or how old that original intake was. Reusing the old intake alone, without this
-          reconfirmation, is never enough on its own.</li>
+          intake happens per role, not per headcount) — <b>and</b> there's a real reconfirmation
+          that nothing has changed since, no matter how recent or how old that original intake
+          was. Ideally the hiring manager confirms it directly in writing (email, chat); if they
+          don't respond, the same internal-alignment-by-email path as the last reason below
+          covers it instead. Reusing the old intake alone, with no reconfirmation of either kind,
+          is never enough on its own.</li>
         <li>The hiring manager said they don't have time for a live meeting — send them a
           written set of questions covering what's needed to source effectively, and only
           waive once they've confirmed the answers back in writing.</li>
