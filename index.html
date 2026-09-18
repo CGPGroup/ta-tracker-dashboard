@@ -3328,13 +3328,11 @@ function slaFor(p, key, closeDateStr){
   // que el req fue handed off, dejando claro que el conteo NO cambio por eso.
   const handoffInfo = p.handoffFrom ? {from: p.handoffFrom, acceptedDate: p.handoffAcceptedDate, originalIntake: p.intake} : null;
   // Nicolas (2026-09-17) atrapo esto antes de que se fuera a produccion: p.intake queda null en
-  // un intake legitimamente waived (openWaiveIntakeModal solo guarda intakeWaivedReason, nunca
-  // una fecha) — sin este fallback, "intake" abajo daba null y el reloj de TTS/TTF/TTH se quedaba
-  // en "none" para siempre en cualquier req waived, aunque el sourcing ya pueda arrancar (ver
-  // canStartSourcing()). Mismo fallback que ya usa computeCompletion()'s step2 para el caso waived
-  // (requested, si no kickoff) — no es una fecha nueva inventada, es la misma referencia que el
-  // resto del tracker ya usa para "desde cuando cuenta este req sin un intake propio".
-  const effectiveIntake = p.intake || (p.intakeWaivedReason ? (p.intakeRequestedDate || p.kickoff) : null);
+  // un intake legitimamente waived — sin un ancla, el reloj de TTS/TTF/TTH se quedaba en "none"
+  // para siempre en cualquier req waived, aunque el sourcing ya pueda arrancar (ver
+  // canStartSourcing()). Ancla real: intakeWaivedDate — la fecha en la que se guardo el waiver en
+  // si (ver openWaiveIntakeModal()), nunca una aproximacion via Intake Requested/Kickoff.
+  const effectiveIntake = p.intake || (p.intakeWaivedReason ? p.intakeWaivedDate : null);
   const intake = parseD(effectiveIntake);
   const baseTarget = SLA_TARGETS[key];
   if(!intake) return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
@@ -5914,13 +5912,23 @@ function openWaiveIntakeModal(p){
     fileFieldLabel: "Email Screenshot (optional, up to 4MB) — evidence for the written/internal-alignment reasons above",
     onSave: async (newVal, file)=>{
       p.intakeWaivedReason = newVal;
+      // Nicolas (2026-09-17): el ancla para SLA (ver slaFor()) debe ser la fecha REAL en la que
+      // se hizo el waive, punto — nada de caer a Intake Requested/Kickoff como aproximacion. Se
+      // fija una sola vez (nunca se pisa en una edicion posterior de la misma razon) y se borra si
+      // la razon se borra (volver a "no waived" no debe dejar una fecha vieja huerfana).
+      if(newVal && !p.intakeWaivedDate) p.intakeWaivedDate = localTodayStr();
+      if(!newVal) p.intakeWaivedDate = null;
       // Mismo criterio que la label de arriba: se excluyen hermanas que ya tienen su
       // propia intake meeting real sostenida (no la necesitan) y las que llegaron por
       // Handoff (ese flujo tiene su propio mecanismo de confirmacion de contexto).
       const siblings = p.headcountGroup
         ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.intake && !x.handoffFrom)
         : [];
-      siblings.forEach(s=> s.intakeWaivedReason = newVal);
+      siblings.forEach(s=> {
+        s.intakeWaivedReason = newVal;
+        if(newVal && !s.intakeWaivedDate) s.intakeWaivedDate = p.intakeWaivedDate;
+        if(!newVal) s.intakeWaivedDate = null;
+      });
       let evidenceLink = null;
       if(file && isConnected()) evidenceLink = await graphUploadFile("Intake Waiver Evidence", p.id, file);
       if(evidenceLink){
@@ -5962,9 +5970,11 @@ function openWaiveIntakeModal(p){
       }
       if(isConnected()){
         await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Reason", newVal || "");
+        await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Date", p.intakeWaivedDate || "");
         if(evidenceLink) await graphUpdatePositionFieldByHeader(p.id, "Intake Waived Evidence", evidenceLink);
         for(const s of siblings){
           await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Reason", newVal || "");
+          await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Date", s.intakeWaivedDate || "");
           if(evidenceLink) await graphUpdatePositionFieldByHeader(s.id, "Intake Waived Evidence", evidenceLink);
         }
       }
@@ -8371,7 +8381,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:daysAgoStr(0), intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
+      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-002: kickoff note ya se mando, esperando la fecha del intake — para probar los DOS
@@ -8386,7 +8396,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(5), intakeRequestedDate:daysAgoStr(5), recruiterAcceptedDate:daysAgoStr(5), intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
+      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-003: intake ya sostenido, compensacion ya confirmada (para no bloquear Log Batch de
@@ -8401,7 +8411,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(15), intakeRequestedDate:daysAgoStr(15), recruiterAcceptedDate:daysAgoStr(15), intake:daysAgoStr(10), submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:daysAgoStr(9),
+      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:daysAgoStr(9),
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-004: recien asignado, TODAVIA SIN ACEPTAR (recruiterAcceptedDate:null) — para probar
@@ -8416,7 +8426,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:null, intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
+      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
   ];
@@ -8612,6 +8622,11 @@ function parsePositionsTable(posHeaders, posRows){
       // para esta req especifica, con una razon valida (ej. headcount adicional del mismo rol,
       // ya cubierto por el intake original). Presencia de texto = waived; ver computeCompletion().
       intakeWaivedReason: r[idx("Intake Waived Reason")] || null,
+      // Fecha REAL en la que se guardo el waiver (no una fecha inventada de "intake meeting" que
+      // nunca paso, ni el kickoff, ni la intake requested date — Nicolas fue explicito: "debe ser
+      // la fecha en la que se hizo el waive del intake y ya"). Unico proposito: servir de ancla
+      // para TTS/TTF/TTH en slaFor() cuando no hay p.intake real.
+      intakeWaivedDate: excelValToDateStr(r[idx("Intake Waived Date")]),
       // Columna nueva/opcional (ver [[project_intake_waived_visibility_bug]]): captura del correo
       // que sustenta el waiver cuando la razon viene de un correo (HM sin tiempo + preguntas
       // escritas confirmadas, o alineacion interna de Irth por correo). idx() da -1 si el Excel
@@ -9621,6 +9636,7 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     null,
     null,
     null,
+    null, // Intake Waived Date (columna 60, ver slaFor()) — mismo patron: reservado antes de que exista en el Excel real.
   ];
 }
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
