@@ -5039,7 +5039,12 @@ function buildTimeline(p){
   // Cornerstone e Immy Nader (Irth's Talent Acquisition Coordinator), distinto del Kickoff Note
   // que el reclutador asignado le manda despues al hiring manager. El milestone ahora lo dice
   // explicito, en vez de sonar como si "kickoff" fuera solo una etiqueta de estado.
-  if(p.kickoff) entries.push({date:p.kickoff, type:"auto", text:`Kickoff meeting held with ${ESCALATION_CONTACT} (Irth's Talent Acquisition Coordinator). Requisition assigned, waiting on ${p.recruiter || "the recruiter"} to accept.`});
+  // Nicolas (2026-09-21), viendo este mismo milestone: "no es necesario mencionar el nombre de
+  // una persona especifica, es mas si algo el rol, o el contexto de lo que paso... me entiendes?"
+  // — texto narrativo/informativo generado por el sistema (a diferencia de una instruccion real
+  // de "escala a X", donde el nombre SI es operacionalmente necesario) no deberia nombrar personas
+  // especificas, solo su rol. Quita tanto ESCALATION_CONTACT como p.recruiter de este texto.
+  if(p.kickoff) entries.push({date:p.kickoff, type:"auto", text:`Requisition successfully kicked off with Irth's Talent Acquisition Coordinator. Assigned and waiting on the recruiter to accept.`});
   // recruiterAcceptedDate normalmente ya queda reflejado por la accion real ("Accepted the
   // assignment.", logueada por acceptAssignment()) — pero si esa escritura se perdio en el
   // camino (misma condicion de carrera que ya se arreglo con la cola de escrituras, pero para
