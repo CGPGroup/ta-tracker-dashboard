@@ -2595,6 +2595,18 @@ function kickoffProcessSectionsHtml(){
 function firstName(fullName){
   return (fullName || "").trim().split(/\s+/)[0] || "";
 }
+// Nicolas (2026-09-21): "me gustaria que se mostrara el nombre del rol, siendo un hipervinculo...
+// para todos los roles. Se ve mas clean y estetico" — reemplaza el link de Workable pegado en
+// texto plano (largo, feo, dificil de leer en un correo) por el nombre del rol como hipervinculo,
+// mismo formato "[Nombre del Rol Job Code](Link)" que el propio Master Prompt ya usa en su
+// plantilla de Template 13 (seccion 17). Reutilizable por cualquier entregable que necesite
+// mostrar el link de Workable de un rol (Template 11 y 13 por ahora).
+function roleWorkableLinkHtml(p){
+  const label = `${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")})`;
+  return p.careersUrl
+    ? `<a href="${escapeHtml(p.careersUrl)}" target="_blank" rel="noopener">${label}</a>`
+    : `${label} — [Workable Application Link]`;
+}
 // Registro de entregables: cada uno sabe construir su propio preview a partir de un req real.
 // title/subtitle van en el header del modal de preview; note (opcional) es la aclaracion de
 // checkpoint que el Master Prompt pide junto al entregable (ej. "asegurate que el Lead ya
@@ -2648,10 +2660,42 @@ const DELIVERABLE_TEMPLATES = {
       <p>Hi [Candidate Name],</p>
       <p>Thank you for taking the time to speak with me about the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) role — I really enjoyed our conversation, and I think you'd be a great fit.</p>
       <p>To move you forward to the hiring manager, I need you to complete your official application through Workable, so your profile is visible on their side and the process can continue from there.</p>
-      <p>Here's the link: ${escapeHtml(p.careersUrl || "[Workable Application Link]")}</p>
+      <p>Here's the link: ${roleWorkableLinkHtml(p)}</p>
       <p>Once you submit it, your profile will show up under our review with the hiring manager, and I'll keep you posted on next steps.</p>
       <p>Thanks again, and talk soon!</p>`
   }),
+  // Template 13 del Master Prompt (seccion 17) — cierra "Submitted" del flujo Sourced -> Screened
+  // -> Invited -> Applied -> Submitted. Nicolas (2026-09-21): "no recuerdo haberlo visto" — tenia
+  // razon, nunca se construyo (guidanceDeliverablesFor() solo llegaba hasta Sourcing). Los nombres
+  // de candidatos se toman del batch mas RECIENTE de p.batches (nunca todos los batches juntos,
+  // el correo es sobre el batch que se acaba de mandar) — si ese batch no tiene candidatos
+  // logueados individualmente todavia (dato viejo, solo el conteo), se avisa en vez de inventar
+  // nombres.
+  submissionNotification: p => {
+    const lastBatch = (p.batches && p.batches.length) ? p.batches[p.batches.length-1] : null;
+    const candidates = lastBatch ? (p.batchCandidates||[]).filter(c=>c.batchDate===lastBatch.date) : [];
+    // Regla del Master Prompt: SLA de feedback de max 3 dias habiles desde el envio — se propone
+    // ese rango real en vez de fechas inventadas o un texto vago sin fechas.
+    const today = new Date();
+    let end = today;
+    for(let i=0;i<3;i++) end = nextBizDay(end);
+    const startStr = today.toISOString().slice(0,10);
+    const endStr = end.toISOString().slice(0,10);
+    return {
+      title: "Submission Notification to Hiring Manager",
+      subtitle: "Sent once a batch has finished its official Workable application — notifies the hiring manager it's ready for review, with the feedback SLA window.",
+      note: candidates.length ? null : "No individual candidates are logged for the most recent batch yet — add them in Submission Batches first (name + CV) so this email lists real names instead of a placeholder.",
+      body: `
+        <p>Hi ${escapeHtml(firstName(p.hiringManager) || "[Hiring Manager]")},</p>
+        <p>I hope you're doing well. I wanted to let you know that I've submitted ${candidates.length || "[number]"} candidate${candidates.length===1?"":"s"} in Workable for your review. You will find them under the "Introduction/First Screen" section in the pipeline.</p>
+        <p>I've also added detailed comments on each profile to provide context around their background, technical stack, and overall fit.</p>
+        <p>You can access them directly here:<br>${roleWorkableLinkHtml(p)}</p>
+        <p>Please find the candidates below:</p>
+        <ul>${candidates.length ? candidates.map(c=>`<li>${escapeHtml(c.name)}</li>`).join("") : "<li>[Candidate names]</li>"}</ul>
+        <p>We are aiming to provide an update to the candidates between ${startStr} and ${endStr}, so I would really appreciate your support in sharing your feedback within this timeframe.</p>
+        <p>Let me know once you've had a chance to review them, or if you'd like to discuss any of the profiles in more detail. You can also leave your comments in each of their profiles.</p>`
+    };
+  },
   // Templates 2 y 7 del Master Prompt (Intake Meeting Script, Screening Interview Script) NO son
   // templates de verdad — el contenido lo genera un LLM analizando el JD/intake real del rol,
   // con paginas de reglas de tono, siglas a expandir, etc. (ver secciones 4 y 11 del Master
@@ -2661,22 +2705,27 @@ const DELIVERABLE_TEMPLATES = {
   // por rol, ya con el JD cargado) y pedirle a Claude que lo genere ahi, con el contexto real que
   // ese chat ya tiene — el "note" de cada uno deja esto explicito para que no se confunda con el
   // script final.
+  // Nicolas (2026-09-21): "mas que decirles: tu master prompt, decirles que lo hagan en el
+  // proyecto que crearon y que lo ideal es que por req, tengan un chat, y esto es en Claude" —
+  // el "note" antes hablaba de un "Master Prompt chat" suelto, sin decir donde vive eso
+  // (proyecto de Claude) ni la practica recomendada (un chat por requisition dentro del proyecto).
   intakeScriptTrigger: p => ({
     title: "Generate Intake Meeting Script",
-    subtitle: "Not a fill-in template — the real script only comes from analyzing this role's actual JD, which only your Master Prompt chat for this requisition can do.",
-    note: "Paste the line below into your existing Master Prompt chat for this role (the one you opened with the JD already pasted in) — it'll generate the real Intake Meeting Script (Template 2) as a .md file, ready before the call.",
+    subtitle: "Not a fill-in template — the real script only comes from analyzing this role's actual JD, which only this requisition's chat inside your Master Prompt project in Claude can do.",
+    note: "Paste the line below into this requisition's chat inside your Master Prompt project in Claude (the one you opened with the JD already pasted in — ideally each requisition gets its own chat within the project) — it'll generate the real Intake Meeting Script (Template 2) as a .md file, ready before the call.",
     body: `<p>The Intake Meeting for ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) is now scheduled with ${escapeHtml(p.hiringManager || "[Hiring Manager]")} — please generate the Intake Meeting Script (Template 2).</p>`
   }),
   screeningScriptTrigger: p => ({
     title: "Generate Screening Interview Script",
-    subtitle: "Not a fill-in template — the real script only comes from analyzing this role's actual JD and intake notes, which only your Master Prompt chat for this requisition can do.",
-    note: "Paste the line below into your existing Master Prompt chat for this role — it'll generate the real Screening Interview Script (Template 7), using the JD and intake notes already established in that chat.",
+    subtitle: "Not a fill-in template — the real script only comes from analyzing this role's actual JD and intake notes, which only this requisition's chat inside your Master Prompt project in Claude can do.",
+    note: "Paste the line below into this requisition's chat inside your Master Prompt project in Claude — ideally each requisition gets its own chat within the project — it'll generate the real Screening Interview Script (Template 7), using the JD and intake notes already established there.",
     body: `<p>I need the Screening Interview Script (Template 7) for the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) role, hiring manager ${escapeHtml(p.hiringManager || "[Hiring Manager]")}. Please generate it based on the JD and intake notes already in this chat.</p>`
   }),
 };
 // Que entregable(s) mostrar como link clickeable junto al "Next Step" vigente de un req, segun
-// su status actual — hoy Kickoff, Intake Meeting Requested, y Sourcing estan mapeados; agregar
-// aqui el siguiente status cuando se construya su propio entregable, nunca todos de una sola vez.
+// su status actual — hoy Kickoff, Intake Meeting Requested, Sourcing, y Submitted estan
+// mapeados; agregar aqui el siguiente status cuando se construya su propio entregable, nunca
+// todos de una sola vez.
 function guidanceDeliverablesFor(p){
   if(p.status === "Kickoff"){
     // El contenido de leadKickoffA ya estaba bien adaptado (un solo correo, en primera persona,
@@ -2710,6 +2759,12 @@ function guidanceDeliverablesFor(p){
       {id:"screeningScriptTrigger", label:"Generate Screening Interview Script"},
       {id:"workableInvite", label:"Workable Application Invite"},
     ];
+  }
+  // Template 13 (seccion 17) cierra Sourced -> Screened -> Invited -> Applied -> Submitted —
+  // Nicolas (2026-09-21): "no recuerdo haberlo visto" — no estaba, esta es la siguiente pieza
+  // incremental de la secuencia (Kickoff -> Intake Requested -> Sourcing -> ahora Submitted).
+  if(p.status === "Submitted"){
+    return [{id:"submissionNotification", label:"Submission Notification to Hiring Manager"}];
   }
   return [];
 }
@@ -3663,13 +3718,14 @@ function canStartSourcing(p){
 // CANDIDATE_STATUS_TO_POSITION_STATUS mas abajo, que usa este mismo valor).
 // "Active" (2026-09-21, Nicolas: "eso no deberiamos quitarlo? por si los otros status ya nos
 // dicen que pasa con el candidato") se quita — era un placeholder generico que no decia nada real
-// sobre el candidato, a diferencia de cada otro valor de esta lista. "Screening" pasa a ser el
-// default real para un candidato recien agregado/logueado (ver openAddCandidateModal()/
+// sobre el candidato, a diferencia de cada otro valor de esta lista. "Screening Interview" (mismo
+// dia, renombrado de "Screening" a secas — Nicolas: "debe llamarse Screening Interview") pasa a
+// ser el default real para un candidato recien agregado/logueado (ver openAddCandidateModal()/
 // logBatchSave() mas abajo) — sigue siendo real y honesto: esta con el hiring manager en revision
 // inicial del batch, todavia no en una ronda de entrevista formal.
-const BATCH_CANDIDATE_STATUSES = ["Screening","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Placed","Rejected","Keep Warm / Hold"];
+const BATCH_CANDIDATE_STATUSES = ["Screening Interview","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Placed","Rejected","Keep Warm / Hold"];
 const BATCH_CANDIDATE_STATUS_TONE = {
-  "Screening": "within", "Technical Interview": "within",
+  "Screening Interview": "within", "Technical Interview": "within",
   "Hiring Manager Interview": "within", "Executive Review": "within", "Offer Request": "within",
   "Placed": "within", "Rejected": "out", "Keep Warm / Hold": "risk",
 };
@@ -7073,14 +7129,14 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--text-muted)";
     try {
       const id = isConnected()
-        ? await graphAppendBatchCandidate(p.id, date, cand.name, cand.email, "Screening", null, author)
+        ? await graphAppendBatchCandidate(p.id, date, cand.name, cand.email, "Screening Interview", null, author)
         : `${p.id}-${Date.now()}-${i}`;
       let cvLink = null;
       if(isConnected()){
         cvLink = await graphUploadFile("Candidate CVs", p.id, cand.file);
         await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
       }
-      p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening", cvLink, addedBy: author, addedDate: localTodayStr() });
+      p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening Interview", cvLink, addedBy: author, addedDate: localTodayStr() });
     } catch(err){
       console.error(`Could not save candidate "${cand.name}":`, err);
       failed.push({ name: cand.name, message: err.message });
@@ -8866,7 +8922,7 @@ function mergeBatchCandidates(positions, bcHeaders, bcRows){
       batchDate: excelValToDateStr(row[bIdx("Batch Date")]),
       name,
       email: row[bIdx("Candidate Email")] || null,
-      status: row[bIdx("Status")] || "Screening",
+      status: row[bIdx("Status")] || "Screening Interview",
       cvLink: row[bIdx("CV Link")] || null,
       addedBy: row[bIdx("Added By")] || null,
       addedDate: excelValToDateStr(row[bIdx("Added Date")]),
