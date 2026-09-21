@@ -4733,14 +4733,22 @@ function slaChip(s){
   const handoffNote = ho ? `<span class="sla-chip-handoff" title="This requisition was handed off from ${ho.from} (accepted ${ho.acceptedDate || "pending"}) — the SLA clock is unaffected by the handoff, it still counts from the original intake meeting (${ho.originalIntake || "n/a"}).">⇄</span>` : "";
   return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}${holidayNote}${handoffNote}</span>`;
 }
+// BUG REAL encontrado 2026-09-21 (Nicolas, RD-071: TTS/TTF/TTH los 3 en Out Of SLA a la vez, pero
+// el chip de Needs Attention solo decia "Time To Submit"): el `>` estricto de abajo se queda con
+// la PRIMERA metrica que alcanza el rank mas alto y nunca la reemplaza por otra empatada en el
+// mismo rank — worstKey terminaba siendo siempre TTS cuando las 3 empataban (es la primera del
+// array), como si TTF/TTH no estuvieran igual de mal. worstKeys ahora guarda TODAS las que
+// empatan en el peor rank, no solo una.
 function attentionInfo(p){
   const s = computeSla(p);
   const rank = {out:3, risk:2, within:1, none:0};
-  let worst = "none", worstKey = null;
+  let worst = "none", worstKeys = [];
   ["TTS","TTF","TTH"].forEach(k=>{
-    if(rank[s[k].status] > rank[worst]){ worst = s[k].status; worstKey = k; }
+    const r = rank[s[k].status];
+    if(r > rank[worst]){ worst = s[k].status; worstKeys = [k]; }
+    else if(r === rank[worst] && r > 0){ worstKeys.push(k); }
   });
-  return {s, worst, worstKey};
+  return {s, worst, worstKey: worstKeys[0] || null, worstKeys};
 }
 // Compartido entre el panel Needs Attention (Tracking, ya filtrado al reclutador del perfil
 // activo) y la pantalla de entrada al perfil (Profile Gate), que necesita lo mismo pero para
@@ -4771,11 +4779,19 @@ function attentionRowsHtml(slaRows, completionRows){
   // texto de abajo podia listar TTF y TTH a la vez — no se podia saber a cual de los dos se
   // referia el numero grande. Ahora el chip nombra el SLA + su estado (ej. "Time To Fill — Out Of
   // SLA"); los dias exactos ya viven en la frase de abajo (slaFlags), sin duplicar ni repetir.
-  const slaHtml = slaRows.map(({p, s, worstKey})=>`
+  const slaHtml = slaRows.map(({p, s, worstKey, worstKeys})=>{
+    // worstKeys puede traer 2 o 3 metricas empatadas en el mismo peor rank (ver attentionInfo) —
+    // nombrarlas todas en vez de solo la primera, o el chip miente por omision cuando TTF/TTH
+    // estan igual de mal que TTS pero no se mencionan.
+    const label = worstKeys.length > 1
+      ? `${worstKeys.length} SLAs — ${STATUS_WORD[s[worstKey].status]}`
+      : `${SLA_FULL_NAME[worstKey]} — ${STATUS_WORD[s[worstKey].status]}`;
+    return `
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px; line-height:1.5;">${slaFlags(p).join("<br>")}</div></div>
-      <span class="sla-chip ${s[worstKey].status}"><span class="dot" style="background:${STATUS_META[s[worstKey].status].color}"></span>${SLA_FULL_NAME[worstKey]} — ${STATUS_WORD[s[worstKey].status]}</span>
-    </div>`).join("");
+      <span class="sla-chip ${s[worstKey].status}" title="${worstKeys.map(k=>SLA_FULL_NAME[k]).join(", ")}"><span class="dot" style="background:${STATUS_META[s[worstKey].status].color}"></span>${label}</span>
+    </div>`;
+  }).join("");
   const completionHtml = completionRows.map(p=>{
     const c = computeCompletion(p);
     const pivotPending = p.pivotRequestedDate && !isSlaExceptionApproved(p);
