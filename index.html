@@ -7440,7 +7440,17 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
 // caminos paralelos al mismo punto, ver STATUS_ORDER) — sin este override, PIPELINE_SEQUENCE (que
 // solo mira la posicion en el array) diria que "lo siguiente" despues de Waived es Intake Pending,
 // lo cual es falso: un req waived salta directo a Sourcing, nunca pasa por Intake Pending.
-const UP_NEXT_OVERRIDE = { "Intake Meeting Requested": "Intake Pending", "Intake Meeting Waived": "Sourcing" };
+// Nicolas (2026-09-21), viendo un caso real (Senior PM, movido a Hiring Manager Interview):
+// "no siempre es el mismo path... no sabemos cual va primero, y por lo tanto [tampoco] podemos
+// asumir cual va despues de esa primera" — el master prompt es explicito en esto (seccion 8:
+// "nunca inventar cuantas etapas hay ni que formato tienen"), asi que ni el numero de rondas ni
+// su orden real es algo que este tracker pueda inferir. Un solo "Up Next" con nombre de status
+// especifico para Technical/Hiring Manager/Executive Review es literalmente adivinar mal la
+// mitad de las veces — mismo criterio que ya llevo a reemplazar "Mark Done" por 3 botones reales
+// en Submitted, aplicado aqui al preview: en vez de nombrar un status, se marca "AMBIGUOUS" y
+// showUpNextPreview() muestra un texto generico, honesto sobre la incertidumbre, en vez de un
+// nombre de status que probablemente esta mal.
+const UP_NEXT_OVERRIDE = { "Intake Meeting Requested": "Intake Pending", "Intake Meeting Waived": "Sourcing", "Technical Interview": "AMBIGUOUS", "Hiring Manager Interview": "AMBIGUOUS", "Executive Review": "AMBIGUOUS" };
 // Nicolas: "que obviamente le explique el siguiente paso... de cuando ya envio el kickoff note
 // por poner un ejemplo" — confirmar/avanzar el paso actual debe decir que sigue despues, no solo
 // registrar que ya paso. PIPELINE_SEQUENCE es el unico tramo con un "siguiente" lineal real; los
@@ -7458,7 +7468,12 @@ function showUpNextPreview(p, reachedStatus){
     return curIdx>=0 && curIdx<PIPELINE_SEQUENCE.length-1 ? PIPELINE_SEQUENCE[curIdx+1] : null;
   })();
   const nextStepList = document.getElementById("modalNextStep");
-  if(nextStatus && nextStepList){
+  if(nextStatus === "AMBIGUOUS" && nextStepList){
+    nextStepList.insertAdjacentHTML("beforeend", `<li>
+      <span class="tl-badge upnext">Up Next</span>
+      <span class="tl-text">Whichever remaining interview round fits this role next (Technical Interview, Hiring Manager Interview, or Executive Review), or Offer Request once interviews are done — pick from the status dropdown, the real order varies by role.</span>
+    </li>`);
+  } else if(nextStatus && nextStepList){
     // Simulacion liviana: si lo que sigue es Intake Pending/Waived, el preview debe reflejar el
     // gate de confirmacion (ver nextStepGuidanceText()) en vez de siempre asumir que ya se
     // creo el Spott Job/LinkedIn Job Posting — al llegar ahi de verdad, el resumen del intake
