@@ -6450,6 +6450,14 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
     msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
     msg.style.color = "var(--warning)";
   }
+  // Nicolas (2026-09-21): mismo hueco que los 5 editableFactCell — Edit Basic Info guardaba
+  // Hiring Manager/Country/City/Work Arrangement/Compensation sin dejar ningun rastro en
+  // Activity. Los 4 campos de salario cuentan como un solo "Compensation" en el log (cambiarlos
+  // juntos es lo normal, no tiene sentido 4 lineas separadas para el mismo ajuste de sueldo).
+  const changedLabels = [...new Set(changed.map(f =>
+    ["salaryCurrency","salaryMin","salaryMax","salaryPeriod"].includes(f.key) ? "Compensation" : f.header))];
+  await logFieldEdit(p, `Basic Info updated: ${changedLabels.join(", ")}.`);
+  renderDetailModal();
   setTimeout(closeEditReqInfoModal, 900);
 });
 
@@ -6673,6 +6681,9 @@ async function deleteBatchCandidate(p, candidateId){
   try {
     if(isConnected()) await graphDeleteBatchCandidate(candidateId);
     p.batchCandidates = p.batchCandidates.filter(x=>x.id!==candidateId);
+    // Nicolas (2026-09-21): borrar un candidato es una accion destructiva, con mas razon debe
+    // quedar registrada que un simple edit de campo.
+    await logFieldEdit(p, `${c.name} removed from the ${c.batchDate} batch.`);
     renderDetailModal();
   } catch(err){
     console.error(err);
@@ -6697,6 +6708,7 @@ async function deleteBatch(p, batchDate){
     if(isConnected()) await graphDeleteBatch(p.id, batchDate);
     p.batches = (p.batches||[]).filter(b=>b.date!==batchDate);
     p.batchCandidates = (p.batchCandidates||[]).filter(c=>c.batchDate!==batchDate);
+    await logFieldEdit(p, `Batch (${batchDate}) deleted${candidateCount ? `, including its ${candidateCount} logged candidate${candidateCount===1?"":"s"}` : ""}.`);
     renderDetailModal();
   } catch(err){
     console.error(err);
@@ -6908,6 +6920,7 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
     }
     p.batchCandidates.push({ id, batchDate, name, email: email || null, status, cvLink, addedBy: author, addedDate: localTodayStr() });
     await advancePositionForCandidateStatus(p, name, status);
+    await logFieldEdit(p, `${name} added to the ${batchDate} batch (${status}).`);
     closeAddCandidateModal();
     renderDetailModal();
   } catch(err){
@@ -7160,6 +7173,7 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   // perder el trabajo de los demas.
   const total = logBatchPendingCandidates.length;
   const failed = [];
+  const succeeded = [];
   const author = currentAuthorName();
   for(let i=0; i<total; i++){
     const cand = logBatchPendingCandidates[i];
@@ -7175,12 +7189,17 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
         await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
       }
       p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening Interview", cvLink, addedBy: author, addedDate: localTodayStr() });
+      succeeded.push(cand.name);
     } catch(err){
       console.error(`Could not save candidate "${cand.name}":`, err);
       failed.push({ name: cand.name, message: err.message });
     }
   }
   logBatchPendingCandidates = [];
+  // Nicolas (2026-09-21): "cualquier cambio que se haga, quede registrado" — un batch de
+  // follow-up (2do, 3ro...) no siempre dispara un cambio de status (ese solo pasa en el primero),
+  // asi que sin esto, loguear un batch entero podia no dejar NINGUN rastro en Activity.
+  if(succeeded.length) await logFieldEdit(p, `Batch logged (${date}, ${type}): ${succeeded.join(", ")}.`);
   renderDetailModal();
   const savedNote = autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "";
   if(failed.length){
