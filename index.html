@@ -3655,17 +3655,17 @@ function canStartSourcing(p){
 // sea ese el que quede como candidate placed." Placed/Rejected/Keep Warm son salidas terminales,
 // las de en medio son el avance normal por el pipeline de un candidato individual (distinto del
 // status de la POSICION en STATUS_ORDER, que es sobre el req completo, no sobre una persona).
-// CORREGIDO 2026-09-21 (Nicolas): "Placed" ya NO es un status de candidato alcanzable desde
-// batches — un candidato aqui llega hasta "Offer Request" ("Offered"), nunca mas alla; el placement
-// real se marca aparte, en el campo "Placed Candidate" del req (su propio Edit/Add UI, ver
-// positionFacts en renderDetailModal()), no auto-escribiendo esto desde el dropdown de un
-// candidato. Se agrega "Executive Review" para que el candidato pueda reflejar esa ronda tambien
-// (ver CANDIDATE_STATUS_TO_POSITION_STATUS mas abajo, que usa este mismo valor).
-const BATCH_CANDIDATE_STATUSES = ["Active","Screening","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Rejected","Keep Warm / Hold"];
+// CORREGIDO 2026-09-21 (Nicolas): "Placed" SI sigue siendo un status de candidato alcanzable desde
+// batches (mi primer intento lo quito por completo, eso no era lo que pedia) — lo que de verdad
+// pidio es que nunca se pueda SALTAR directo a Placed desde una etapa temprana sin antes haber
+// pasado por Offer Request (ver el gate real en updateCandidateStatus()). Se agrega "Executive
+// Review" para que el candidato pueda reflejar esa ronda tambien (ver
+// CANDIDATE_STATUS_TO_POSITION_STATUS mas abajo, que usa este mismo valor).
+const BATCH_CANDIDATE_STATUSES = ["Active","Screening","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Placed","Rejected","Keep Warm / Hold"];
 const BATCH_CANDIDATE_STATUS_TONE = {
   "Active": "none", "Screening": "within", "Technical Interview": "within",
   "Hiring Manager Interview": "within", "Executive Review": "within", "Offer Request": "within",
-  "Rejected": "out", "Keep Warm / Hold": "risk",
+  "Placed": "within", "Rejected": "out", "Keep Warm / Hold": "risk",
 };
 // Mapea el status de un candidato individual al status del REQ que deberia empujar hacia adelante
 // (ver updateCandidateStatus()) — Technical/Hiring/Executive colapsan en un solo "Client Interview"
@@ -6443,10 +6443,16 @@ function wireCandidateEvents(p){
       const checkedIds = [...block.querySelectorAll(".candidateCheck:checked")].map(c=>c.dataset.candidateId);
       const newStatus = block.querySelector(".bulkStatusSelect").value;
       btn.disabled = true;
+      let blockedCount = 0;
       for(const id of checkedIds){
-        await updateCandidateStatus(p, id, newStatus, {skipRerender:true});
+        const r = await updateCandidateStatus(p, id, newStatus, {skipRerender:true});
+        if(r && r.blocked) blockedCount++;
       }
       renderDetailModal();
+      // skipRerender arriba tambien suprime el alert() individual del gate de Placed (ver
+      // updateCandidateStatus) — bulk con varios alert() seguidos seria muy mala UX, un solo
+      // resumen al final en su lugar.
+      if(blockedCount) alert(`${blockedCount} candidate${blockedCount===1?"":"s"} skipped — Placed can only be set from Offer Request, move them there first.`);
     });
   });
 }
@@ -6461,7 +6467,19 @@ function cssEscape(s){
 // del DOM (checkboxes, boton) a mitad del bucle.
 async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
   const c = (p.batchCandidates||[]).find(x=>x.id===candidateId);
-  if(!c) return;
+  if(!c) return {ok:false};
+  // Nicolas (2026-09-21): "nunca se debe mover un candidato a Placed si antes no estuvo en offer
+  // request" — Placed solo es alcanzable justo despues de Offer Request, nunca saltando directo
+  // desde una etapa anterior. No hay historial de cada cambio de status por candidato guardado
+  // aparte, asi que el chequeo real es contra el status ACTUAL (antes de este cambio), que es el
+  // unico predecesor valido de verdad.
+  if(newStatus === "Placed" && c.status !== "Offer Request"){
+    if(!opts.skipRerender){
+      alert(`${c.name} can't be moved to Placed directly from ${c.status} — move them to Offer Request first.`);
+      renderDetailModal();
+    }
+    return {ok:false, blocked:true};
+  }
   const prevStatus = c.status;
   c.status = newStatus;
   try {
@@ -6471,10 +6489,24 @@ async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
     c.status = prevStatus;
     alert("Could not save this candidate's status.\n\n"+err.message);
     if(!opts.skipRerender) renderDetailModal();
-    return;
+    return {ok:false};
+  }
+  // Elegido de este batch = el Placed Candidate de la posicion completa (Nicolas: "si alguno de
+  // ese batch es elegido, que sea ese el que quede como candidate placed"). No revierte al que
+  // estuviera Placed antes (si habia otro) — casos asi son raros y mejor que el reclutador lo
+  // corrija a mano que asumir cual de los dos es el correcto.
+  if(newStatus === "Placed" && p.placedCandidate !== c.name){
+    p.placedCandidate = c.name;
+    try {
+      if(isConnected()){
+        await graphUpdatePositionFieldByHeader(p.id, "Placed Candidate", c.name);
+        await graphAppendHistorial(p.id, p.title, `${c.name} marked as Placed Candidate (from the ${c.batchDate} batch).`, currentAuthorName(), "milestone");
+      }
+    } catch(err){ console.error("Could not save Placed Candidate (non-fatal for the status change itself):", err); }
   }
   await advancePositionForCandidateStatus(p, c.name, newStatus);
   if(!opts.skipRerender) renderDetailModal();
+  return {ok:true};
 }
 // Nicolas (2026-09-21): "más que el req deba moverse a alguno de esos estados [a mano], debe
 // ser el candidato en realidad — si alguno de los candidatos está en esa etapa debemos ponerle
@@ -6723,6 +6755,14 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
   const status = document.getElementById("addCandidateStatus").value;
   const file = document.getElementById("addCandidateCvFile").files[0] || null;
   if(!p || !name){ msg.textContent = "Candidate name is required."; msg.style.color = "var(--critical)"; return; }
+  // Mismo gate que updateCandidateStatus(): un candidato recien agregado no tiene un status
+  // anterior real dentro de este tracker, asi que no puede "venir de" Offer Request — agregarlo
+  // directo como Placed saltaria el mismo chequeo que ya existe para un candidato ya existente.
+  if(status === "Placed"){
+    msg.textContent = "Can't add a candidate directly as Placed — add them at their real current stage, then move them to Placed once they've been through Offer Request.";
+    msg.style.color = "var(--critical)";
+    return;
+  }
   const btn = document.getElementById("addCandidateSave");
   btn.disabled = true;
   msg.style.color = "var(--text-muted)";
