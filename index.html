@@ -5039,12 +5039,18 @@ function buildTimeline(p){
   // Cornerstone e Immy Nader (Irth's Talent Acquisition Coordinator), distinto del Kickoff Note
   // que el reclutador asignado le manda despues al hiring manager. El milestone ahora lo dice
   // explicito, en vez de sonar como si "kickoff" fuera solo una etiqueta de estado.
-  // Nicolas (2026-09-21), viendo este mismo milestone: "no es necesario mencionar el nombre de
-  // una persona especifica, es mas si algo el rol, o el contexto de lo que paso... me entiendes?"
-  // — texto narrativo/informativo generado por el sistema (a diferencia de una instruccion real
-  // de "escala a X", donde el nombre SI es operacionalmente necesario) no deberia nombrar personas
-  // especificas, solo su rol. Quita tanto ESCALATION_CONTACT como p.recruiter de este texto.
-  if(p.kickoff) entries.push({date:p.kickoff, type:"auto", text:`Requisition successfully kicked off with Irth's Talent Acquisition Coordinator. Assigned and waiting on the recruiter to accept.`});
+  // Nicolas (2026-09-21), corrigiendo mi primer intento: la mencion de Immy/su rol aqui era
+  // detalle de contexto que sobra (se quita por completo, ni nombre ni rol) — pero el reclutador
+  // SI debe aparecer con su nombre real, porque esta frase es literalmente sobre a quien esta
+  // asignado el req y quien falta por aceptar; un generico "the recruiter" no dice nada util ahi
+  // ("el nombre del reclutador debe aparecer, no debe ser solo recruiter porque entonces esta
+  // mal"). La leccion real: la regla de "solo rol, no nombre" aplica a detalle tangencial narrado
+  // de pasada (quien organizo el kickoff meeting), no a QUIEN es el dueño real del dato que la
+  // frase esta comunicando.
+  // Sin escapeHtml aqui — timelineListHtml() ya escapa e.text completo una sola vez al renderizar
+  // (ver render mas abajo); escaparlo tambien aqui produciria doble-escape en cualquier nombre con
+  // caracteres especiales (ej. un apostrofe).
+  if(p.kickoff) entries.push({date:p.kickoff, type:"auto", text:`Requisition successfully kicked off. Assigned and waiting on ${p.recruiter || "the recruiter"} to accept.`});
   // recruiterAcceptedDate normalmente ya queda reflejado por la accion real ("Accepted the
   // assignment.", logueada por acceptAssignment()) — pero si esa escritura se perdio en el
   // camino (misma condicion de carrera que ya se arreglo con la cola de escrituras, pero para
