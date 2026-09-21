@@ -3621,11 +3621,15 @@ function escapeHtml(str){
 // Tracking y asumiendo que "poder verla y trabajarla" significaba que ya estaba aceptada.
 function posLabel(p, withCode){
   const notYetAccepted = (p.handoffFrom && !p.handoffAcceptedDate) || (!p.handoffFrom && !p.recruiterAcceptedDate);
+  // Nicolas (2026-09-21), viendo Positions: "ahi deberia salir de quien a quien fue el handoff" —
+  // el nombre de quien lo entrego solo vivia en el title (hover), invisible fila por fila en una
+  // tabla densa. Ahora el badge mismo lo dice (el "a quien" ya esta a la vista, es la columna
+  // Recruiter de la misma fila) — el tooltip se queda con el detalle completo (fecha, aceptacion).
   const pendingBadge = notYetAccepted
-    ? `<span class="pos-pending-badge" title="${p.handoffFrom ? "Handoff context not confirmed yet" : "Not accepted yet"} — you can open it to view, but editing is locked until then.">${p.handoffFrom ? "Handoff Pending" : "Pending Accept"}</span>`
+    ? `<span class="pos-pending-badge" title="${p.handoffFrom ? "Handoff context not confirmed yet" : "Not accepted yet"} — you can open it to view, but editing is locked until then.">${p.handoffFrom ? `Handoff Pending — From ${escapeHtml(p.handoffFrom)}` : "Pending Accept"}</span>`
     : "";
   const handoffBadge = (p.handoffFrom && p.handoffAcceptedDate)
-    ? `<span class="pos-handoff-badge" title="Handed off from ${escapeHtml(p.handoffFrom)}${p.handoffDate ? " on "+escapeHtml(p.handoffDate) : ""}, accepted ${escapeHtml(p.handoffAcceptedDate)}. The SLA clock is unaffected — it still counts from the original intake meeting.">⇄ Handed Off</span>`
+    ? `<span class="pos-handoff-badge" title="Handed off from ${escapeHtml(p.handoffFrom)}${p.handoffDate ? " on "+escapeHtml(p.handoffDate) : ""}, accepted ${escapeHtml(p.handoffAcceptedDate)}. The SLA clock is unaffected — it still counts from the original intake meeting.">⇄ From ${escapeHtml(p.handoffFrom)}</span>`
     : "";
   const codeSpan = withCode === false ? "" : `<span class="pos-code">${escapeHtml(p.id)}</span>`;
   return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}${handoffBadge}`;
