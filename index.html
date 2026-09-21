@@ -1658,7 +1658,7 @@
               <li><b>JD & sourcing prep.</b> With real context from the intake in hand, the recruiter builds three separate things: an internal JD (Cornerstone's own working document, never published anywhere), a public JD for KeyStone/LinkedIn with the client's identity anonymized, and the sourcing criteria fed into KeyStone's AI Sourcing engine. The AI's own auto-generated filters are a starting point, not the final word, the recruiter's own criteria from what was actually agreed in the intake take priority.</li>
               <li><b>Sourcing.</b> Starts only after the intake, never before, see <b>Sourcing Channels</b> below for the three ways a candidate can enter the pipeline.</li>
               <li><b>Screening, batching, submission.</b> Screened candidates get invited to complete their official Workable application, that's what creates the "Submitted" profile the hiring manager actually reviews, in curated batches of 3-5 (see <b>Batch Cadence</b> below).</li>
-              <li><b>Interviews.</b> Candidates who advance go through a Technical Interview first, then a Hiring Manager Interview, the final call usually sits with this second round. Each round runs its own feedback and decision cycle, see <b>Feedback SLA vs. Decision SLA</b> below.</li>
+              <li><b>Interviews.</b> Candidates who advance go through some combination of Technical Interview, Hiring Manager Interview, and Executive Review (HR, board members, or the executive team — not every role reaches this one), Technical is usually first but the real order varies by role. Each round runs its own feedback and decision cycle, see <b>Feedback SLA vs. Decision SLA</b> below.</li>
               <li><b>Offer Stage.</b> Once the hiring manager confirms in firm, it moves to Irth's internal team to process, see <b>Offer Stage Mechanics</b> below for the exact cadence.</li>
               <li><b>Placement.</b> Closes only when the candidate's actual start date arrives, not when they sign the offer, a signed offer can still fall through before day one.</li>
             </ol>
@@ -2384,7 +2384,7 @@
 // "Intake Pending" (mismo "nivel" del pipeline, ninguno es prerequisito del otro) — ver
 // STAGE_COLORS/STAGE_WEIGHT (mismo valor que Intake Pending, representan el mismo punto real del
 // proceso por dos caminos distintos) y el auto-avance en el onSave de "Waive Intake Meeting".
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Sourcing","Submitted","Technical Interview","Hiring Manager Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Sourcing","Submitted","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Tramo de STATUS_ORDER que SI tiene un "siguiente" lineal real (Kickoff -> ... -> Hired) — el
 // resto (Filled Internal Hire, Fell Through, On Hold, On Hold Internal, Cancelled) son ramas
 // aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
@@ -2514,9 +2514,10 @@ const STATUS_GUIDANCE = {
   // paralelo en la practica, nunca uno despues del otro de forma separada, asi que el texto ahora
   // cubre las dos cosas en la secuencia real en que pasan.
   "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Run Screening Interviews with your sourced candidates before submitting anyone formally — only candidates you'd genuinely stand behind should move forward, with your evaluation left as a comment on each profile. Once you've settled on a batch of 3-5 candidates, log them (with names, in Submission Batches) within 7-9 business days of the intake meeting — this moves to Submitted automatically once you do.",
-  "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, move status to Technical Interview or Hiring Manager Interview, whichever comes first for this role.",
-  "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch.",
-  "Technical Interview": "Candidates are in technical interviews, usually the round before the Hiring Manager Interview. Same rule applies: feedback due within 1-3 business days per candidate, logged in Workable's Review tab.",
+  "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, pick whichever stage applies for this role below: Technical Interview, Hiring Manager Interview, or Executive Review (HR, board members, or the executive team) — Technical is usually first, but the real order varies by role.",
+  "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch. Move status to Executive Review if this role needs it, or straight to Offer Request if not.",
+  "Technical Interview": "Candidates are in technical interviews — usually the first round for this stage, though the real order varies by role. Same rule applies: feedback due within 1-3 business days per candidate, logged in Workable's Review tab. Once they want to move forward, move status to whichever comes next for this role: Hiring Manager Interview, Executive Review, or straight to Offer Request.",
+  "Executive Review": "Not every role reaches this stage — candidates are being reviewed by Irth's HR, board members, or the executive team. Same feedback discipline applies: 1-3 business days per candidate, logged in Workable's Review tab. Once approved, move status to Offer Request.",
   "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
   "Filled": "An offer was accepted. Log the Fill Date in Timeline if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
   "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Start Date in Timeline if you haven't already — this requisition moves to Placed automatically once it's logged.",
@@ -2755,6 +2756,18 @@ function nextStepCtaHtml(p){
     }
     return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
   }
+  // Nicolas (2026-09-21): a diferencia del resto del pipeline, lo que sigue despues de Submitted
+  // NO es un solo "siguiente" lineal real — Technical/Hiring Manager/Executive Review pueden pasar
+  // en cualquier orden segun el rol (Technical suele ser primero, pero no siempre). Un "Up Next"
+  // que asuma Technical Interview de una es simplemente incorrecto la mitad de las veces, y el
+  // viejo "Mark Done — Log It" ni siquiera dejaba mover el status desde aqui. Se reemplaza por 3
+  // botones reales (mismo onStatusOptionClick() que ya usa el dropdown), el reclutador elige cual
+  // aplica para este rol en vez de que el sistema le adivine uno solo.
+  if(p.status === "Submitted"){
+    return `<br><button type="button" class="fact-edit-link nextStepStageBtn" data-target-status="Technical Interview" style="margin-top:4px; display:inline-block;">Move to Technical Interview &rarr;</button>
+      <button type="button" class="fact-edit-link nextStepStageBtn" data-target-status="Hiring Manager Interview" style="margin-top:4px; margin-left:10px; display:inline-block;">Move to Hiring Manager Interview &rarr;</button>
+      <button type="button" class="fact-edit-link nextStepStageBtn" data-target-status="Executive Review" style="margin-top:4px; margin-left:10px; display:inline-block;">Move to Executive Review &rarr;</button>${msg}`;
+  }
   return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button>${msg}`;
 }
 // Mismo gate que nextStepCtaHtml() de arriba: sin confirmar que el resumen del intake (Post
@@ -2819,6 +2832,9 @@ const STAGE_COLORS = {
   "Submitted": "var(--seq-500)",
   "Hiring Manager Interview": "var(--seq-600)",
   "Technical Interview": "var(--brand-dark)",
+  // No hay un --seq-700 fijo — mismo criterio ya usado para Submitted antes de que --seq-500
+  // quedara libre: mezclar dos pasos vecinos de la rampa en vez de inventar un hex nuevo.
+  "Executive Review": "color-mix(in srgb, var(--seq-600), var(--warning))",
   "Offer Request": "var(--warning)",
   "Filled": "var(--good)",
   "Hired": "var(--good)",
@@ -4078,6 +4094,7 @@ const STAGE_WEIGHT = {
   "Submitted": 0.5,
   "Hiring Manager Interview": 0.5,
   "Technical Interview": 0.5,
+  "Executive Review": 0.25,
   "Offer Request": 0.25,
   "Filled": 0.1,
   "On Hold": 0.1,
@@ -5627,6 +5644,11 @@ function renderDetailModal(){
     nextStepPrimaryBtn.dataset.targetStatus ? onStatusOptionClick(p, nextStepPrimaryBtn.dataset.targetStatus) : confirmIntakeSummarySent(p));
   const nextStepSecondaryBtn = document.getElementById("nextStepSecondaryBtn");
   if(nextStepSecondaryBtn) nextStepSecondaryBtn.addEventListener("click", ()=> openWaiveIntakeModal(p));
+  // Los 3 botones de Submitted (ver nextStepCtaHtml()) — mismo onStatusOptionClick() del dropdown,
+  // un solo listener delegado por clase ya que son 3 elementos, no 1 solo id.
+  document.querySelectorAll(".nextStepStageBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=> onStatusOptionClick(p, btn.dataset.targetStatus));
+  });
 
   const timeline = buildTimeline(p).slice().reverse();
   document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
@@ -5850,13 +5872,13 @@ document.addEventListener("click", (e)=>{
 // legitimamente waived (ver p.intakeWaivedReason, "Waive This Intake Meeting") cuenta
 // igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
 // empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
-const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Hiring Manager Interview", "Technical Interview", "Offer Request", "Filled", "Hired"];
+const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Hiring Manager Interview", "Technical Interview", "Executive Review", "Offer Request", "Filled", "Hired"];
 // 2026-09-18, Nicolas: mismo principio que Compensation->Log Batch — no tiene sentido entrevistar,
 // hacer una oferta, o marcar un placement si nunca se sometio ningun candidato para este req. Solo
 // bloquea transiciones NUEVAS hechas desde la UI (dropdown o Next Step) — datos ya existentes en
 // estos statuses (migrados, escritos directo a Graph) no se tocan retroactivamente, igual que
 // REQUIRES_INTAKE_HELD nunca revisa reqs que ya estan mas adelante.
-const REQUIRES_BATCH_LOGGED = ["Submitted", "Technical Interview", "Hiring Manager Interview", "Offer Request", "Filled", "Hired"];
+const REQUIRES_BATCH_LOGGED = ["Submitted", "Technical Interview", "Hiring Manager Interview", "Executive Review", "Offer Request", "Filled", "Hired"];
 // Extraido de renderDetailModal() (antes vivia solo dentro del click listener del boton de
 // Timeline) para poder abrirse tambien desde onStatusOptionClick() — elegir "Intake Meeting
 // Waived" a mano desde el dropdown de status, sin una razon todavia guardada, redirige aqui en
