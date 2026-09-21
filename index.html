@@ -5167,6 +5167,21 @@ function localTodayStr(){
 function nowTimeStr(){
   return new Date().toTimeString().slice(0,5);
 }
+// Nicolas (2026-09-21), viendo un edit de Placed Candidate que parecia no haber guardado nada:
+// "esto es un tracker, asi que tiene sentido que cualquier cambio que se haga, quede registrado,
+// cualquiera." Real gap encontrado: los 5 editableFactCell simples (Headcount Group, Spott Job
+// URL, Irth Careers Page URL, LinkedIn Recruiter URL, Placed Candidate) guardaban el campo pero
+// nunca dejaban rastro en Activity — sin ese log, un cambio que si funciono no tiene como
+// distinguirse de uno que se perdio silenciosamente. Se llama DESPUES del write real del campo
+// (nunca antes), para no loguear un "cambio" que en realidad fallo.
+async function logFieldEdit(p, text){
+  p.extra = p.extra || [];
+  p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text});
+  if(isConnected()){
+    try { await graphAppendHistorial(p.id, p.title, text, currentAuthorName(), "action"); }
+    catch(err){ console.error("Could not log this field edit to Activity (non-fatal, the field itself already saved):", err); }
+  }
+}
 // Item de Timeline entre Submission Date y Fill Date (no es un campo de fecha, es un boton que
 // abre el mismo Log Batch modal — ver openLogBatchModal()) — su texto refleja el estado real:
 // bloqueado hasta el primer batch, "Request" si nunca se ha pedido, "Pending" mientras falta
@@ -5561,6 +5576,7 @@ function renderDetailModal(){
         onSave: async (newVal)=>{
           p.headcountGroup = newVal;
           if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Headcount Group", newVal || "");
+          await logFieldEdit(p, newVal ? `Headcount Group set to "${newVal}".` : "Headcount Group cleared.");
           renderDetailModal();
           renderPositions();
           renderTracking();
@@ -5583,6 +5599,7 @@ function renderDetailModal(){
         onSave: async (newVal)=>{
           p.spottJobId = newVal;
           if(isConnected()) await graphUpdatePositionField(p.id, "AM", newVal || "");
+          await logFieldEdit(p, newVal ? "Spott Job URL updated." : "Spott Job URL cleared.");
           renderDetailModal();
           renderPositions();
           renderTracking();
@@ -5599,6 +5616,7 @@ function renderDetailModal(){
         onSave: async (newVal)=>{
           p.careersUrl = newVal;
           if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Irth Careers Page", newVal || "");
+          await logFieldEdit(p, newVal ? "Irth Careers Page URL updated." : "Irth Careers Page URL cleared.");
           renderDetailModal();
           renderPositions();
           renderTracking();
@@ -5615,6 +5633,7 @@ function renderDetailModal(){
         onSave: async (newVal)=>{
           p.linkedinRecruiterUrl = newVal;
           if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "LinkedIn Recruiter URL", newVal || "");
+          await logFieldEdit(p, newVal ? "LinkedIn Recruiter URL updated." : "LinkedIn Recruiter URL cleared.");
           renderDetailModal();
           renderPositions();
           renderTracking();
@@ -5630,6 +5649,7 @@ function renderDetailModal(){
         onSave: async (newVal)=>{
           p.placedCandidate = newVal;
           if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Placed Candidate", newVal || "");
+          await logFieldEdit(p, newVal ? `Placed Candidate set to ${newVal}.` : "Placed Candidate cleared.");
           renderDetailModal();
           renderPositions();
           renderTracking();
