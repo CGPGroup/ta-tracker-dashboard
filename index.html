@@ -2446,6 +2446,10 @@ const STATUS_DISPLAY = {
   // — eso ya es su propio status separado, "Cancelled"). Valor guardado sigue siendo "Fell
   // Through" (mismo patron display-only de siempre, ver comentario de Hired arriba).
   "Fell Through": "Candidate Withdrawn",
+  // Sourcing y Screening pasan en paralelo, un solo status (ver STATUS_ORDER) — el nombre ahora lo
+  // dice explicito en vez de dejarlo solo dentro del parrafo de STATUS_GUIDANCE, mismo patron
+  // display-only de siempre (el valor guardado sigue siendo literal "Sourcing").
+  "Sourcing": "Sourcing/Screening",
 };
 function statusLabel(status){
   return STATUS_DISPLAY[status] || status;
