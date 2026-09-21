@@ -2384,7 +2384,13 @@
 // "Intake Pending" (mismo "nivel" del pipeline, ninguno es prerequisito del otro) — ver
 // STAGE_COLORS/STAGE_WEIGHT (mismo valor que Intake Pending, representan el mismo punto real del
 // proceso por dos caminos distintos) y el auto-avance en el onSave de "Waive Intake Meeting".
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Sourcing","Submitted","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+// CORREGIDO 2026-09-21 (Nicolas): Technical/Hiring Manager/Executive Review NO son 3 statuses
+// separados a nivel de REQ (no hay un orden fijo real entre ellos, ver el comentario mas abajo de
+// UP_NEXT_OVERRIDE) — colapsan en un solo "Client Interview". El detalle de en cual ronda
+// especifica esta cada candidato vive a nivel de CANDIDATO (ver BATCH_CANDIDATE_STATUSES), el req
+// solo refleja "hay al menos un candidato entrevistandose con el cliente" — ver
+// CANDIDATE_STATUS_TO_POSITION_STATUS/updateCandidateStatus() para como se deriva automaticamente.
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Sourcing","Submitted","Client Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Tramo de STATUS_ORDER que SI tiene un "siguiente" lineal real (Kickoff -> ... -> Hired) — el
 // resto (Filled Internal Hire, Fell Through, On Hold, On Hold Internal, Cancelled) son ramas
 // aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
@@ -2518,10 +2524,8 @@ const STATUS_GUIDANCE = {
   // paralelo en la practica, nunca uno despues del otro de forma separada, asi que el texto ahora
   // cubre las dos cosas en la secuencia real en que pasan.
   "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Run Screening Interviews with your sourced candidates before submitting anyone formally — only candidates you'd genuinely stand behind should move forward, with your evaluation left as a comment on each profile. Once you've settled on a batch of 3-5 candidates, log them (with names, in Submission Batches) within 7-9 business days of the intake meeting — this moves to Submitted automatically once you do.",
-  "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, pick whichever stage applies for this role below: Technical Interview, Hiring Manager Interview, or Executive Review (HR, board members, or the executive team) — Technical is usually first, but the real order varies by role.",
-  "Hiring Manager Interview": "Candidates are with the hiring manager for interviews. Feedback is due within 1-3 business days of each one, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch. Move status to Executive Review if this role needs it, or straight to Offer Request if not.",
-  "Technical Interview": "Candidates are in technical interviews — usually the first round for this stage, though the real order varies by role. Same rule applies: feedback due within 1-3 business days per candidate, logged in Workable's Review tab. Once they want to move forward, move status to whichever comes next for this role: Hiring Manager Interview, Executive Review, or straight to Offer Request.",
-  "Executive Review": "Not every role reaches this stage — candidates are being reviewed by Irth's HR, board members, or the executive team. Same feedback discipline applies: 1-3 business days per candidate, logged in Workable's Review tab. Once approved, move status to Offer Request.",
+  "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, update that candidate's own status in Submission Batches (Technical Interview, Hiring Manager Interview, or Executive Review, whichever applies) — this requisition moves to Client Interview automatically as soon as any candidate does.",
+  "Client Interview": "Candidates are interviewing with the client — Technical Interview, Hiring Manager Interview, Executive Review, or some combination, the real order and number of rounds vary by role, so track it per candidate in Submission Batches rather than assuming one fixed sequence here. Feedback is due within 1-3 business days per candidate, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch. Once any candidate moves to Offer Request in Submission Batches, this requisition moves to Offer Request automatically too.",
   "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
   "Filled": "An offer was accepted. Log the Fill Date in Timeline if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
   "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Start Date in Timeline if you haven't already — this requisition moves to Placed automatically once it's logged.",
@@ -2760,18 +2764,13 @@ function nextStepCtaHtml(p){
     }
     return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
   }
-  // Nicolas (2026-09-21): a diferencia del resto del pipeline, lo que sigue despues de Submitted
-  // NO es un solo "siguiente" lineal real — Technical/Hiring Manager/Executive Review pueden pasar
-  // en cualquier orden segun el rol (Technical suele ser primero, pero no siempre). Un "Up Next"
-  // que asuma Technical Interview de una es simplemente incorrecto la mitad de las veces, y el
-  // viejo "Mark Done — Log It" ni siquiera dejaba mover el status desde aqui. Se reemplaza por 3
-  // botones reales (mismo onStatusOptionClick() que ya usa el dropdown), el reclutador elige cual
-  // aplica para este rol en vez de que el sistema le adivine uno solo.
-  if(p.status === "Submitted"){
-    return `<br><button type="button" class="fact-edit-link nextStepStageBtn" data-target-status="Technical Interview" style="margin-top:4px; display:inline-block;">Move to Technical Interview &rarr;</button>
-      <button type="button" class="fact-edit-link nextStepStageBtn" data-target-status="Hiring Manager Interview" style="margin-top:4px; margin-left:10px; display:inline-block;">Move to Hiring Manager Interview &rarr;</button>
-      <button type="button" class="fact-edit-link nextStepStageBtn" data-target-status="Executive Review" style="margin-top:4px; margin-left:10px; display:inline-block;">Move to Executive Review &rarr;</button>${msg}`;
-  }
+  // CORREGIDO 2026-09-21 (Nicolas): lo que sigue despues de Submitted no es una eleccion manual
+  // del reclutador a nivel de REQ (ver el intento anterior de este comentario, con 3 botones —
+  // reemplazado). El req nunca se mueve directo desde aqui; se deriva solo de a que status avanza
+  // cualquier candidato del batch (ver CANDIDATE_STATUS_TO_POSITION_STATUS/updateCandidateStatus()),
+  // asi que Submitted cae al "Mark Done" generico de abajo como cualquier otro status sin un CTA
+  // especial — el texto de STATUS_GUIDANCE ya explica que la accion real es actualizar cada
+  // candidato en Submission Batches, no un boton aqui.
   return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button>${msg}`;
 }
 // Mismo gate que nextStepCtaHtml() de arriba: sin confirmar que el resumen del intake (Post
@@ -2834,11 +2833,7 @@ const STAGE_COLORS = {
   // libre — Submitted (que antes necesitaba un color-mix porque --seq-500 ya estaba tomado por
   // Screening) ahora lo usa directo, sin necesidad de mezclar dos rampas.
   "Submitted": "var(--seq-500)",
-  "Hiring Manager Interview": "var(--seq-600)",
-  "Technical Interview": "var(--brand-dark)",
-  // No hay un --seq-700 fijo — mismo criterio ya usado para Submitted antes de que --seq-500
-  // quedara libre: mezclar dos pasos vecinos de la rampa en vez de inventar un hex nuevo.
-  "Executive Review": "color-mix(in srgb, var(--seq-600), var(--warning))",
+  "Client Interview": "var(--seq-600)",
   "Offer Request": "var(--warning)",
   "Filled": "var(--good)",
   "Hired": "var(--good)",
@@ -3660,11 +3655,28 @@ function canStartSourcing(p){
 // sea ese el que quede como candidate placed." Placed/Rejected/Keep Warm son salidas terminales,
 // las de en medio son el avance normal por el pipeline de un candidato individual (distinto del
 // status de la POSICION en STATUS_ORDER, que es sobre el req completo, no sobre una persona).
-const BATCH_CANDIDATE_STATUSES = ["Active","Screening","Technical Interview","Hiring Manager Interview","Offer Request","Placed","Rejected","Keep Warm / Hold"];
+// CORREGIDO 2026-09-21 (Nicolas): "Placed" ya NO es un status de candidato alcanzable desde
+// batches — un candidato aqui llega hasta "Offer Request" ("Offered"), nunca mas alla; el placement
+// real se marca aparte, en el campo "Placed Candidate" del req (su propio Edit/Add UI, ver
+// positionFacts en renderDetailModal()), no auto-escribiendo esto desde el dropdown de un
+// candidato. Se agrega "Executive Review" para que el candidato pueda reflejar esa ronda tambien
+// (ver CANDIDATE_STATUS_TO_POSITION_STATUS mas abajo, que usa este mismo valor).
+const BATCH_CANDIDATE_STATUSES = ["Active","Screening","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Rejected","Keep Warm / Hold"];
 const BATCH_CANDIDATE_STATUS_TONE = {
   "Active": "none", "Screening": "within", "Technical Interview": "within",
-  "Hiring Manager Interview": "within", "Offer Request": "within", "Placed": "within",
+  "Hiring Manager Interview": "within", "Executive Review": "within", "Offer Request": "within",
   "Rejected": "out", "Keep Warm / Hold": "risk",
+};
+// Mapea el status de un candidato individual al status del REQ que deberia empujar hacia adelante
+// (ver updateCandidateStatus()) — Technical/Hiring/Executive colapsan en un solo "Client Interview"
+// a nivel de req (no hay un orden fijo real entre esas 3, ver STATUS_ORDER), Offer Request es 1:1.
+// Screening/Active/Rejected/Keep Warm no empujan nada (no representan progreso hacia una etapa
+// nueva del req).
+const CANDIDATE_STATUS_TO_POSITION_STATUS = {
+  "Technical Interview": "Client Interview",
+  "Hiring Manager Interview": "Client Interview",
+  "Executive Review": "Client Interview",
+  "Offer Request": "Offer Request",
 };
 function candidateRowHtml(c){
   const tone = STATUS_META[BATCH_CANDIDATE_STATUS_TONE[c.status] || "none"];
@@ -4096,9 +4108,7 @@ const STAGE_WEIGHT = {
   "Intake Meeting Waived": 0.5,
   "Sourcing": 1.0,
   "Submitted": 0.5,
-  "Hiring Manager Interview": 0.5,
-  "Technical Interview": 0.5,
-  "Executive Review": 0.25,
+  "Client Interview": 0.5,
   "Offer Request": 0.25,
   "Filled": 0.1,
   "On Hold": 0.1,
@@ -5648,11 +5658,6 @@ function renderDetailModal(){
     nextStepPrimaryBtn.dataset.targetStatus ? onStatusOptionClick(p, nextStepPrimaryBtn.dataset.targetStatus) : confirmIntakeSummarySent(p));
   const nextStepSecondaryBtn = document.getElementById("nextStepSecondaryBtn");
   if(nextStepSecondaryBtn) nextStepSecondaryBtn.addEventListener("click", ()=> openWaiveIntakeModal(p));
-  // Los 3 botones de Submitted (ver nextStepCtaHtml()) — mismo onStatusOptionClick() del dropdown,
-  // un solo listener delegado por clase ya que son 3 elementos, no 1 solo id.
-  document.querySelectorAll(".nextStepStageBtn").forEach(btn=>{
-    btn.addEventListener("click", ()=> onStatusOptionClick(p, btn.dataset.targetStatus));
-  });
 
   const timeline = buildTimeline(p).slice().reverse();
   document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
@@ -5876,13 +5881,13 @@ document.addEventListener("click", (e)=>{
 // legitimamente waived (ver p.intakeWaivedReason, "Waive This Intake Meeting") cuenta
 // igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
 // empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
-const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Hiring Manager Interview", "Technical Interview", "Executive Review", "Offer Request", "Filled", "Hired"];
+const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Client Interview", "Offer Request", "Filled", "Hired"];
 // 2026-09-18, Nicolas: mismo principio que Compensation->Log Batch — no tiene sentido entrevistar,
 // hacer una oferta, o marcar un placement si nunca se sometio ningun candidato para este req. Solo
 // bloquea transiciones NUEVAS hechas desde la UI (dropdown o Next Step) — datos ya existentes en
 // estos statuses (migrados, escritos directo a Graph) no se tocan retroactivamente, igual que
 // REQUIRES_INTAKE_HELD nunca revisa reqs que ya estan mas adelante.
-const REQUIRES_BATCH_LOGGED = ["Submitted", "Technical Interview", "Hiring Manager Interview", "Executive Review", "Offer Request", "Filled", "Hired"];
+const REQUIRES_BATCH_LOGGED = ["Submitted", "Client Interview", "Offer Request", "Filled", "Hired"];
 // Extraido de renderDetailModal() (antes vivia solo dentro del click listener del boton de
 // Timeline) para poder abrirse tambien desde onStatusOptionClick() — elegir "Intake Meeting
 // Waived" a mano desde el dropdown de status, sin una razon todavia guardada, redirige aqui en
@@ -6468,20 +6473,33 @@ async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
     if(!opts.skipRerender) renderDetailModal();
     return;
   }
-  // Elegido de este batch = el Placed Candidate de la posicion completa (Nicolas: "si alguno de
-  // ese batch es elegido, que sea ese el que quede como candidate placed"). No revierte al que
-  // estuviera Placed antes (si habia otro) — casos asi son raros y mejor que el reclutador lo
-  // corrija a mano que asumir cual de los dos es el correcto.
-  if(newStatus === "Placed" && p.placedCandidate !== c.name){
-    p.placedCandidate = c.name;
-    try {
-      if(isConnected()){
-        await graphUpdatePositionFieldByHeader(p.id, "Placed Candidate", c.name);
-        await graphAppendHistorial(p.id, p.title, `${c.name} marked as Placed Candidate (from the ${c.batchDate} batch).`, currentAuthorName(), "milestone");
-      }
-    } catch(err){ console.error("Could not save Placed Candidate (non-fatal for the status change itself):", err); }
-  }
+  await advancePositionForCandidateStatus(p, c.name, newStatus);
   if(!opts.skipRerender) renderDetailModal();
+}
+// Nicolas (2026-09-21): "más que el req deba moverse a alguno de esos estados [a mano], debe
+// ser el candidato en realidad — si alguno de los candidatos está en esa etapa debemos ponerle
+// ese nombre al status general del req." El status del req ya no se elige a mano entre
+// Technical/Hiring/Executive (esos 3 se colapsaron en un solo "Client Interview" a nivel de req,
+// ver STATUS_ORDER) — se deriva solo de a que status avanza CUALQUIER candidato del batch, sin
+// importar si ese candidato se creo recien (openAddCandidateModal) o ya existia y cambio de
+// status (updateCandidateStatus) — ambos llaman esto mismo. Forward-only/AUTO_STATUS_LOCKED-
+// respeting, mismo patron que cada otro auto-avance de este proyecto (fechas de Fill/Hire, primer
+// batch logueado, etc.) — nunca hacia atras, nunca sobre un status especial que es una decision
+// de negocio explicita.
+async function advancePositionForCandidateStatus(p, candidateName, newStatus){
+  const targetPosStatus = CANDIDATE_STATUS_TO_POSITION_STATUS[newStatus];
+  if(!targetPosStatus || AUTO_STATUS_LOCKED.includes(p.status) || STATUS_ORDER.indexOf(targetPosStatus) <= STATUS_ORDER.indexOf(p.status)) return;
+  const fromStatus = p.status;
+  p.status = targetPosStatus;
+  const remarkText = `Status changed from ${statusLabel(fromStatus)} to ${statusLabel(targetPosStatus)} (automatic — ${candidateName} moved to ${newStatus}).`;
+  p.extra = p.extra || [];
+  p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remarkText});
+  if(isConnected()){
+    try {
+      await graphUpdatePositionField(p.id, "G", targetPosStatus);
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
+    } catch(err){ console.error("Could not save the req's auto status advance (non-fatal for the candidate change itself):", err); }
+  }
 }
 // Nicolas: "en los batches debe estar la opcion de eliminar candidatos por si nos equivocamos de
 // ponerles en el batch que no es o algo asi" — borra la fila del candidato (nunca el CV real ya
@@ -6723,7 +6741,7 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
       msg.textContent = "Not connected — the CV wasn't uploaded, only kept in this browser tab.";
     }
     p.batchCandidates.push({ id, batchDate, name, email: email || null, status, cvLink, addedBy: author, addedDate: localTodayStr() });
-    if(status === "Placed") await updateCandidateStatus(p, id, "Placed", {skipRerender:true});
+    await advancePositionForCandidateStatus(p, name, status);
     closeAddCandidateModal();
     renderDetailModal();
   } catch(err){
@@ -7440,17 +7458,12 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
 // caminos paralelos al mismo punto, ver STATUS_ORDER) — sin este override, PIPELINE_SEQUENCE (que
 // solo mira la posicion en el array) diria que "lo siguiente" despues de Waived es Intake Pending,
 // lo cual es falso: un req waived salta directo a Sourcing, nunca pasa por Intake Pending.
-// Nicolas (2026-09-21), viendo un caso real (Senior PM, movido a Hiring Manager Interview):
-// "no siempre es el mismo path... no sabemos cual va primero, y por lo tanto [tampoco] podemos
-// asumir cual va despues de esa primera" — el master prompt es explicito en esto (seccion 8:
-// "nunca inventar cuantas etapas hay ni que formato tienen"), asi que ni el numero de rondas ni
-// su orden real es algo que este tracker pueda inferir. Un solo "Up Next" con nombre de status
-// especifico para Technical/Hiring Manager/Executive Review es literalmente adivinar mal la
-// mitad de las veces — mismo criterio que ya llevo a reemplazar "Mark Done" por 3 botones reales
-// en Submitted, aplicado aqui al preview: en vez de nombrar un status, se marca "AMBIGUOUS" y
-// showUpNextPreview() muestra un texto generico, honesto sobre la incertidumbre, en vez de un
-// nombre de status que probablemente esta mal.
-const UP_NEXT_OVERRIDE = { "Intake Meeting Requested": "Intake Pending", "Intake Meeting Waived": "Sourcing", "Technical Interview": "AMBIGUOUS", "Hiring Manager Interview": "AMBIGUOUS", "Executive Review": "AMBIGUOUS" };
+// Nicolas (2026-09-21): el problema real de "no sabemos cual entrevista va primero" se resolvio
+// distinto — Technical/Hiring Manager/Executive Review ya no son 3 statuses de REQ separados,
+// colapsan en un solo "Client Interview" (ver STATUS_ORDER/CANDIDATE_STATUS_TO_POSITION_STATUS).
+// Con eso, "lo siguiente" despues de Client Interview vuelve a ser lineal de verdad (Offer
+// Request), asi que ya no hace falta ningun override ahi.
+const UP_NEXT_OVERRIDE = { "Intake Meeting Requested": "Intake Pending", "Intake Meeting Waived": "Sourcing" };
 // Nicolas: "que obviamente le explique el siguiente paso... de cuando ya envio el kickoff note
 // por poner un ejemplo" — confirmar/avanzar el paso actual debe decir que sigue despues, no solo
 // registrar que ya paso. PIPELINE_SEQUENCE es el unico tramo con un "siguiente" lineal real; los
@@ -7468,12 +7481,7 @@ function showUpNextPreview(p, reachedStatus){
     return curIdx>=0 && curIdx<PIPELINE_SEQUENCE.length-1 ? PIPELINE_SEQUENCE[curIdx+1] : null;
   })();
   const nextStepList = document.getElementById("modalNextStep");
-  if(nextStatus === "AMBIGUOUS" && nextStepList){
-    nextStepList.insertAdjacentHTML("beforeend", `<li>
-      <span class="tl-badge upnext">Up Next</span>
-      <span class="tl-text">Whichever remaining interview round fits this role next (Technical Interview, Hiring Manager Interview, or Executive Review), or Offer Request once interviews are done — pick from the status dropdown, the real order varies by role.</span>
-    </li>`);
-  } else if(nextStatus && nextStepList){
+  if(nextStatus && nextStepList){
     // Simulacion liviana: si lo que sigue es Intake Pending/Waived, el preview debe reflejar el
     // gate de confirmacion (ver nextStepGuidanceText()) en vez de siempre asumir que ya se
     // creo el Spott Job/LinkedIn Job Posting — al llegar ahi de verdad, el resumen del intake
