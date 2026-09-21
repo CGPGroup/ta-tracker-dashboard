@@ -6018,6 +6018,13 @@ async function confirmIntakeSummarySent(p){
   renderDetailModal();
   renderPositions();
   renderTracking();
+  // BUG REAL (Nicolas, 2026-09-21): a diferencia de confirmNextStepDone(), esta funcion nunca
+  // llamaba a showUpNextPreview() — el "Up Next" nunca aparecia despues de confirmar. status no
+  // cambia aqui (solo se confirma un paso intermedio), asi que se llama con el status VIGENTE
+  // (p.status), igual que confirmNextStepDone() hace cuando tampoco hay cambio de status real.
+  // renderDetailModal() reconstruye #modalNextStep desde cero, asi que esto va DESPUES o el
+  // preview se pierde en un nodo viejo ya desconectado (mismo comentario ya en confirmNextStepDone()).
+  showUpNextPreview(p, p.status);
   const msg = document.getElementById("nextStepDoneMsg");
   if(isConnected()){
     if(msg){ msg.textContent = "Logging…"; msg.style.color = "var(--text-muted)"; }
@@ -7403,7 +7410,11 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
 // Meeting Waived" (asi quedo ordenado STATUS_ORDER, ver [[project_confirm_and_advance_next_step]])
 // pero esa es la rama de EXCEPCION, no el camino esperado — el "Up Next" honesto ahi es "Intake
 // Pending" (Intake Held). showUpNextPreview() usa este override en vez del indice+1 crudo.
-const UP_NEXT_OVERRIDE = { "Intake Meeting Requested": "Intake Pending" };
+// "Intake Meeting Waived" no es un predecesor lineal de "Intake Pending" en STATUS_ORDER (son 2
+// caminos paralelos al mismo punto, ver STATUS_ORDER) — sin este override, PIPELINE_SEQUENCE (que
+// solo mira la posicion en el array) diria que "lo siguiente" despues de Waived es Intake Pending,
+// lo cual es falso: un req waived salta directo a Sourcing, nunca pasa por Intake Pending.
+const UP_NEXT_OVERRIDE = { "Intake Meeting Requested": "Intake Pending", "Intake Meeting Waived": "Sourcing" };
 // Nicolas: "que obviamente le explique el siguiente paso... de cuando ya envio el kickoff note
 // por poner un ejemplo" — confirmar/avanzar el paso actual debe decir que sigue despues, no solo
 // registrar que ya paso. PIPELINE_SEQUENCE es el unico tramo con un "siguiente" lineal real; los
