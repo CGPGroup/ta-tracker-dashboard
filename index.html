@@ -8759,6 +8759,22 @@ function excelValToDateStr(v){
   }
   return null;
 }
+// BUG REAL encontrado 2026-09-21 (Nicolas, RD-071: la hora salia como "0.513888888889" en vez de
+// "12:20"). Mismo problema que excelValToDateStr() de arriba, pero para Time — Excel reformatea
+// el texto "HH:MM" que graphAppendHistorial() escribe a un valor de tiempo real (fraccion del
+// dia, 0-1) en cuanto detecta que "parece" una hora, y Graph lo devuelve asi, crudo, en vez del
+// string original.
+function excelValToTimeStr(v){
+  if(v === null || v === undefined || v === "") return null;
+  if(typeof v === "string") return v.slice(0,5);
+  if(typeof v === "number"){
+    const totalMinutes = Math.round(v * 24 * 60);
+    const hh = Math.floor(totalMinutes / 60) % 24;
+    const mm = totalMinutes % 60;
+    return String(hh).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+  }
+  return null;
+}
 
 // Convierte filas crudas de PositionsTable (headers + rows, ya "desenvueltas" de la forma
 // {values:[[...]]} que devuelve Graph) en los objetos de posicion que usa el resto de la app.
@@ -8881,7 +8897,7 @@ function mergeLatestRemarks(positions, histHeaders, histRows){
     // Time es opcional/nueva (ver graphAppendHistorial()) — hIdx da -1 si el Excel real todavia
     // no tiene la columna, row[-1] es undefined, no rompe nada; entradas viejas simplemente no
     // tienen hora (timelineListHtml() ya maneja eso, solo muestra la fecha en ese caso).
-    const time = row[hIdx("Time")] || null;
+    const time = excelValToTimeStr(row[hIdx("Time")]);
     if(!remark || !dateStr) return;
     (byPos[pid] = byPos[pid] || []).push({ date: dateStr, text: remark, author, type, time });
   });
