@@ -5118,7 +5118,14 @@ function buildTimeline(p){
   // dentro de `entries`, que ya es cronologico real (los "auto" sinteticos se insertan primero,
   // en un orden razonable, antes de remarksHistory/extra). Por eso el desempate ahora es "0" a
   // proposito — no un bug, es dejar que la estabilidad del sort haga el trabajo correcto.
-  (p.remarksHistory || []).forEach(r => { if(r.type!=="guidance") entries.push({date:r.date, type:r.type || "manual", author:r.author, text:r.text}); });
+  // BUG REAL encontrado 2026-09-21 (Nicolas, hard refresh, entrada de HOY sin hora aunque el
+  // Excel real SI la tenia guardada — confirmado leyendo el archivo directamente): este forEach
+  // reconstruye un objeto nuevo por cada entrada de remarksHistory pero nunca copiaba r.time —
+  // mergeLatestRemarks() SI lo trae del Excel (ver ahi), simplemente se perdia aqui mismo al
+  // convertirlo a entry de timeline. Por eso el tiempo solo sobrevivia dentro de la MISMA sesion
+  // (los recien creados via p.extra.push() sí cargan time desde el principio, nunca pasan por
+  // este forEach) — cualquier recarga real desde Excel volvia a mostrar la hora en blanco.
+  (p.remarksHistory || []).forEach(r => { if(r.type!=="guidance") entries.push({date:r.date, type:r.type || "manual", author:r.author, text:r.text, time:r.time}); });
   (p.extra || []).forEach(e=> entries.push(e));
   return entries.filter(e=>e.date).sort((a,b)=>{
     if(a.date !== b.date) return a.date < b.date ? -1 : 1;
