@@ -4786,9 +4786,19 @@ function attentionRowsHtml(slaRows, completionRows){
     const label = worstKeys.length > 1
       ? `${worstKeys.length} SLAs — ${STATUS_WORD[s[worstKey].status]}`
       : `${SLA_FULL_NAME[worstKey]} — ${STATUS_WORD[s[worstKey].status]}`;
+    // Nicolas (2026-09-21), viendo RD-071 (candidata ya elegida como Placed Candidate, pero Irth
+    // todavia no manda el Offer Request formal): el req debe SEGUIR apareciendo aqui — el TTF/TTH
+    // real frente al cliente no se detiene solo porque ya se eligio a alguien, y ocultarlo perderia
+    // visibilidad de que el atraso ahora es de Irth, justo lo que hay que escalar. Pero el numero
+    // solo, sin contexto, se lee como si el reclutador no hubiera hecho nada — misma logica que el
+    // marcador de Handoff en slaChip(): explicar la anomalia inline en vez de dejar que se
+    // malinterprete un numero que en el fondo esta bien explicado.
+    const placedNote = p.placedCandidate
+      ? `<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">⇄ ${escapeHtml(p.placedCandidate)} already selected — waiting on Irth to send the Offer Request.</div>`
+      : "";
     return `
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px; line-height:1.5;">${slaFlags(p).join("<br>")}</div></div>
+      <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px; line-height:1.5;">${slaFlags(p).join("<br>")}</div>${placedNote}</div>
       <span class="sla-chip ${s[worstKey].status}" title="${worstKeys.map(k=>SLA_FULL_NAME[k]).join(", ")}"><span class="dot" style="background:${STATUS_META[s[worstKey].status].color}"></span>${label}</span>
     </div>`;
   }).join("");
