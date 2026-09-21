@@ -3661,9 +3661,15 @@ function canStartSourcing(p){
 // pasado por Offer Request (ver el gate real en updateCandidateStatus()). Se agrega "Executive
 // Review" para que el candidato pueda reflejar esa ronda tambien (ver
 // CANDIDATE_STATUS_TO_POSITION_STATUS mas abajo, que usa este mismo valor).
-const BATCH_CANDIDATE_STATUSES = ["Active","Screening","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Placed","Rejected","Keep Warm / Hold"];
+// "Active" (2026-09-21, Nicolas: "eso no deberiamos quitarlo? por si los otros status ya nos
+// dicen que pasa con el candidato") se quita — era un placeholder generico que no decia nada real
+// sobre el candidato, a diferencia de cada otro valor de esta lista. "Screening" pasa a ser el
+// default real para un candidato recien agregado/logueado (ver openAddCandidateModal()/
+// logBatchSave() mas abajo) — sigue siendo real y honesto: esta con el hiring manager en revision
+// inicial del batch, todavia no en una ronda de entrevista formal.
+const BATCH_CANDIDATE_STATUSES = ["Screening","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Placed","Rejected","Keep Warm / Hold"];
 const BATCH_CANDIDATE_STATUS_TONE = {
-  "Active": "none", "Screening": "within", "Technical Interview": "within",
+  "Screening": "within", "Technical Interview": "within",
   "Hiring Manager Interview": "within", "Executive Review": "within", "Offer Request": "within",
   "Placed": "within", "Rejected": "out", "Keep Warm / Hold": "risk",
 };
@@ -7041,14 +7047,14 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--text-muted)";
     try {
       const id = isConnected()
-        ? await graphAppendBatchCandidate(p.id, date, cand.name, cand.email, "Active", null, author)
+        ? await graphAppendBatchCandidate(p.id, date, cand.name, cand.email, "Screening", null, author)
         : `${p.id}-${Date.now()}-${i}`;
       let cvLink = null;
       if(isConnected()){
         cvLink = await graphUploadFile("Candidate CVs", p.id, cand.file);
         await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
       }
-      p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Active", cvLink, addedBy: author, addedDate: localTodayStr() });
+      p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening", cvLink, addedBy: author, addedDate: localTodayStr() });
     } catch(err){
       console.error(`Could not save candidate "${cand.name}":`, err);
       failed.push({ name: cand.name, message: err.message });
@@ -8834,7 +8840,7 @@ function mergeBatchCandidates(positions, bcHeaders, bcRows){
       batchDate: excelValToDateStr(row[bIdx("Batch Date")]),
       name,
       email: row[bIdx("Candidate Email")] || null,
-      status: row[bIdx("Status")] || "Active",
+      status: row[bIdx("Status")] || "Screening",
       cvLink: row[bIdx("CV Link")] || null,
       addedBy: row[bIdx("Added By")] || null,
       addedDate: excelValToDateStr(row[bIdx("Added Date")]),
