@@ -6949,6 +6949,7 @@ document.getElementById("candidateCvFileInput").addEventListener("change", async
     const cvLink = await graphUploadFile("Candidate CVs", p.id, file);
     if(isConnected()) await graphUpdateBatchCandidateField(c.id, "CV Link", cvLink);
     c.cvLink = cvLink;
+    await logFieldEdit(p, `CV attached for ${c.name}.`);
     renderDetailModal();
   } catch(err){
     console.error(err);
