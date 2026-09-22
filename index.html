@@ -508,55 +508,28 @@
   /* Separador fino entre etapas consecutivas — ayuda a leer el limite incluso cuando dos tonos
      de la rampa quedan cerca uno del otro. */
   .gantt-seg + .gantt-seg { border-left: 1.5px solid var(--surface-1); }
-  /* Round 4: Nicolas — nada de aura/anillo blanco alrededor, el pulso tiene que sentirse con el
-     MISMO color de la etapa, como un latido real. Sin box-shadow blanco esta vez: solo
-     brightness+saturate (el naranja se ve mas vivo/intenso, nunca se acerca a blanco) mas un
-     scaleY sutil — la barra literalmente "respira" mas gruesa un instante, el mismo gesto visual
-     de un latido, todo en su propio tono. */
-  .gantt-seg[data-current="true"] {
-    animation: gantt-pulse 1.4s ease-in-out infinite;
-    transform-origin: center;
-  }
-  @keyframes gantt-pulse {
-    0%, 100% { filter: brightness(1) saturate(1); transform: scaleY(1); }
-    50% { filter: brightness(1.4) saturate(1.6); transform: scaleY(1.32); }
-  }
-  /* El "late", literal: un punto que hace ping en la punta de la etapa activa — la version sutil
-     (solo brightness en el segmento) no se notaba, Nicolas: "no veo por ningun lado lo del pulse
-     ... que se sintiera como que esta vivo". Esto si se ve a simple vista, sin hover. */
-  /* Blanco a proposito, no --brand: la etapa "actual" puede ser CUALQUIER paso de la rampa
-     naranja (incluida --seq-400, que ES --brand) — un punto del mismo color que el segmento se
-     vuelve invisible ahi mismo. Blanco solido con anillo de marca contrasta contra los 6 tonos. */
+  /* Round 5: de vuelta a lo mas simple, casi la primera version — Nicolas: "el pulse esta muy
+     exagerado... le metiste como un color amarillo... quiero que se vea natural, como el mismo
+     color de la etapa... lo unico que tenias que hacer era que se viera como un breath y ya". Se
+     quita saturate() (el causante del tinte amarillo al combinarse con brightness alto) y el
+     scaleY (que ademas obligaba a contrapesar blip/tooltip para que no se deformaran) — solo
+     brightness, sin nada mas, un respiro simple en el mismo tono. */
+  .gantt-seg[data-current="true"] { animation: gantt-pulse 1.8s ease-in-out infinite; }
+  @keyframes gantt-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+  /* El "late", literal: un punto que hace ping en la punta de la etapa activa. Blanco a proposito,
+     no --brand: la etapa "actual" puede ser CUALQUIER paso de la rampa naranja (incluida
+     --seq-400, que ES --brand) — un punto del mismo color que el segmento se vuelve invisible
+     ahi mismo. Blanco solido con anillo de marca contrasta contra los 6 tonos. */
   .gantt-blip {
     position: absolute; right: -1px; top: 50%; width: 9px; height: 9px; margin-top: -4.5px;
     border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--surface-1); z-index: 5;
-    /* El blip vive DENTRO de .gantt-seg[data-current], que se estira con scaleY() en cada latido
-       — sin contrarrestarlo, el punto blanco se estira igual y se ve como un ovalo (bug real,
-       Nicolas se rio del "ovalo"). gantt-blip-unscale aplica el scaleY inverso, sincronizado
-       misma duracion/curva que el pulso del segmento, para que el circulo se quede circulo. */
-    animation: gantt-blip-ping 1.6s ease-in-out infinite, gantt-blip-unscale 1.4s ease-in-out infinite;
+    animation: gantt-blip-ping 1.6s ease-in-out infinite;
   }
   @keyframes gantt-blip-ping {
     0%, 100% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 0 rgba(var(--brand-rgb),0.6); }
     50% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 7px rgba(var(--brand-rgb),0); }
   }
-  @keyframes gantt-blip-unscale {
-    0%, 100% { transform: scaleY(1); }
-    50% { transform: scaleY(0.758); }
-  }
-  /* Mismo problema, mismo arreglo: el tooltip de hover de la etapa actual TAMBIEN es hijo de
-     .gantt-seg[data-current] y se estiraba junto con el pulso (Nicolas: "el card del hover...
-     tambien hace el mismo efecto del pulse"). Keyframe PROPIO (no el del blip) porque el
-     tooltip ya trae su propio transform:translateX(-50%) para centrarse — la animacion
-     reemplaza el transform completo mientras corre, asi que el contrapeso tiene que incluir ese
-     translateX tambien o el tooltip perderia el centrado apenas empieza a pulsar. */
-  .gantt-seg[data-current="true"] > .gantt-tooltip { animation: gantt-tooltip-unscale 1.4s ease-in-out infinite; }
-  @keyframes gantt-tooltip-unscale {
-    0%, 100% { transform: translateX(-50%) scaleY(1); }
-    50% { transform: translateX(-50%) scaleY(0.758); }
-  }
   @media (prefers-reduced-motion: reduce) {
-    .gantt-seg[data-current="true"] > .gantt-tooltip { animation: none; }
     .gantt-seg[data-current="true"] { animation: none; }
     .gantt-blip { animation: none; }
   }
