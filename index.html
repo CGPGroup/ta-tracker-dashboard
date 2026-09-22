@@ -560,8 +560,13 @@
   .gantt-milestone-shape { display: block; width: 100%; height: 100%; background: var(--text-secondary); border: 1px solid var(--surface-1); border-radius: 1px; transform: rotate(45deg); }
   /* Punteado mas grueso a proposito (2.5px, no 1.5px) — a esta escala tan chica (7px) una linea
      de 1.5px casi no se distinguia como punteada, mucho menos entre TTF y TTH. */
-  .gantt-milestone.target-ttf .gantt-milestone-shape { background: transparent; border: 2.5px dashed var(--brand); }
-  .gantt-milestone.target-tth .gantt-milestone-shape { background: transparent; border: 2.5px dashed var(--good); }
+  /* CSS border-style:dashed a 7px de caja casi no alcanza a mostrar mas de un tramo por lado —
+     se ve como una linea solida (bug real, Nicolas: "los veo como literal una sola linea"). SVG
+     con stroke-dasharray en vez de border: el patron de rayas es explicito en unidades de
+     trazo, no depende de si el navegador alcanza a partir un borde tan chico. */
+  .gantt-milestone-svg { display: block; width: 100%; height: 100%; }
+  .gantt-milestone.target-ttf .gantt-milestone-svg { color: var(--brand); }
+  .gantt-milestone.target-tth .gantt-milestone-svg { color: var(--good); }
   .gantt-milestone.outcome-good { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
   .gantt-milestone.outcome-good .gantt-milestone-shape { background: var(--good); }
   .gantt-milestone.outcome-critical { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
@@ -4464,13 +4469,13 @@ function ganttRowHtml(p, cal){
       const clipTTF = targetDateTTF > cal.rangeEnd ? cal.rangeEnd : targetDateTTF;
       const ttfLeftPct = projWidthPct>0 ? Math.min(100, (cal.pctOf(clipTTF)-projLeftPct)/projWidthPct*100) : 100;
       innerMilestones += `<div class="gantt-milestone target-ttf" style="left:${ttfLeftPct.toFixed(3)}%;">
-        <span class="gantt-milestone-shape"></span>
+        <svg class="gantt-milestone-svg" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.2,1.6"/></svg>
         <div class="gantt-tooltip wide" style="bottom:16px;"><b>Projected Time To Fill target</b><br><span class="muted">Internal goal, ${ttfInfo.target}d from the intake meeting (business-day start) — ${ganttFmtDate(targetDateTTF)} if pace holds${clipTTF<targetDateTTF ? " · beyond this view" : ""}</span></div>
       </div>`;
     }
     if(targetDateTTH){
       innerMilestones += `<div class="gantt-milestone target-tth" style="left:100%;">
-        <span class="gantt-milestone-shape"></span>
+        <svg class="gantt-milestone-svg" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.2,1.6"/></svg>
         <div class="gantt-tooltip wide" style="bottom:16px;"><b>Projected Time To Hire target</b><br><span class="muted">Internal goal, ${tthInfo.target}d from the intake meeting (business-day start) — ${ganttFmtDate(targetDateTTH)} if pace holds${clipEnd<targetDateTTH ? " · beyond this view" : ""}</span></div>
       </div>`;
     }
