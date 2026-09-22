@@ -442,7 +442,7 @@
   .ps-hover-popover li:last-child { border-bottom: none; }
   .ps-hover-popover li b { color: var(--text-muted); font-weight: 600; }
   .ps-stat .stat-num { font-size: 30px; line-height: 1; }
-  .ps-stat .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text); margin-top: 6px; }
+  .ps-stat .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text); margin-top: 6px; display: inline-block; border-bottom: 2px solid transparent; padding-bottom: 3px; }
   .ps-stat .stat-desc { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.35; flex: 1; }
   .ps-bar { height: 4px; border-radius: 2px; background: var(--surface-2, rgba(127,127,127,0.16)); margin-top: 8px; overflow: hidden; }
   .ps-bar-fill { height: 100%; border-radius: 2px; }
@@ -452,7 +452,14 @@
   /* Mismo lenguaje visual que los dash-tab de arriba (Overview/SLA & Completion/...) — una
      subrayado de marca bajo la tarjeta que esta abierta ahora mismo, para responder "en cual
      estoy parado" igual que ya responde el tab de arriba (Nicolas, comparando ambos). */
-  .ps-stat-open { background: var(--surface-1); border-radius: 10px 10px 0 0; border-bottom: 2px solid var(--brand); }
+  /* CORREGIDO 2026-09-22 (Nicolas, comparando con los dash-tab de arriba): el border-bottom en
+     TODA la tarjeta quedaba enterrado debajo de la descripcion y, en "Active Positions"
+     especificamente, se confundia con su propia .ps-bar (que ya es naranja ahi) — no se leia
+     como el mismo "estas parado aqui" que si da el subrayado corto de los dash-tab, justo debajo
+     del texto. Ahora es literalmente lo mismo: un subrayado de 2px pegado al label, via
+     .stat-label de arriba, no un borde de la caja completa. */
+  .ps-stat-open { background: var(--surface-1); border-radius: 10px; }
+  .ps-stat-open .stat-label { border-bottom-color: var(--brand); }
   /* Antes la unica pista de que las tarjetas abren un Gantt era pasar el mouse y notar el
      cursor:pointer — Nicolas: "hay que hacer algun botroncito... para decirle al usuario oye,
      aqui tiene un Gantt chart". Fila propia debajo de las 4 tarjetas, discreta pero real. */
