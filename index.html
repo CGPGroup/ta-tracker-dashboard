@@ -449,7 +449,10 @@
   .ps-arrow { align-self: center; margin-top: 22px; font-size: 15px; color: var(--text-muted); }
   .ps-divider { align-self: stretch; width: 1px; background: var(--border, rgba(127,127,127,0.25)); margin: 2px 4px; }
   .ps-stat-outcome .stat-num { font-size: 30px; }
-  .ps-stat-open { background: var(--surface-1); border-radius: 10px; }
+  /* Mismo lenguaje visual que los dash-tab de arriba (Overview/SLA & Completion/...) — una
+     subrayado de marca bajo la tarjeta que esta abierta ahora mismo, para responder "en cual
+     estoy parado" igual que ya responde el tab de arriba (Nicolas, comparando ambos). */
+  .ps-stat-open { background: var(--surface-1); border-radius: 10px 10px 0 0; border-bottom: 2px solid var(--brand); }
   @media (max-width: 720px) {
     .positions-summary-strip { flex-wrap: wrap; }
     .ps-arrow { display: none; }
