@@ -544,7 +544,19 @@
     0%, 100% { transform: scaleY(1); }
     50% { transform: scaleY(0.758); }
   }
+  /* Mismo problema, mismo arreglo: el tooltip de hover de la etapa actual TAMBIEN es hijo de
+     .gantt-seg[data-current] y se estiraba junto con el pulso (Nicolas: "el card del hover...
+     tambien hace el mismo efecto del pulse"). Keyframe PROPIO (no el del blip) porque el
+     tooltip ya trae su propio transform:translateX(-50%) para centrarse — la animacion
+     reemplaza el transform completo mientras corre, asi que el contrapeso tiene que incluir ese
+     translateX tambien o el tooltip perderia el centrado apenas empieza a pulsar. */
+  .gantt-seg[data-current="true"] > .gantt-tooltip { animation: gantt-tooltip-unscale 1.4s ease-in-out infinite; }
+  @keyframes gantt-tooltip-unscale {
+    0%, 100% { transform: translateX(-50%) scaleY(1); }
+    50% { transform: translateX(-50%) scaleY(0.758); }
+  }
   @media (prefers-reduced-motion: reduce) {
+    .gantt-seg[data-current="true"] > .gantt-tooltip { animation: none; }
     .gantt-seg[data-current="true"] { animation: none; }
     .gantt-blip { animation: none; }
   }
