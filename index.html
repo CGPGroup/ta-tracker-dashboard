@@ -3652,6 +3652,38 @@ function computeSlaPauseInfo(p){
   }
   return {pausedSinceDate, totalPausedCalendarDays, totalPausedBizDays};
 }
+// Busca en el Activity log real (remarksHistory + extra) la fecha del primer "Status changed
+// from X to <toLabel>" — mismo patron que computeSlaPauseInfo, ahora compartido: antes vivia
+// duplicado dentro del Gantt (ganttFindTransitionDate) y aqui NO existia en absoluto, dejando a
+// slaFor() sin este fallback (ver resolveEffectiveIntakeDate abajo). Una sola fuente de verdad.
+function findStatusTransitionDate(p, toLabel){
+  const entries = [...(p.remarksHistory||[]), ...(p.extra||[])]
+    .filter(e => e.type === "status" && typeof e.text === "string" && e.text.startsWith("Status changed from"))
+    .sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  for(const e of entries){
+    const m = e.text.match(/Status changed from .+? to (.+?)(?: \(|\.$|\.)/);
+    if(m && m[1] === toLabel) return e.date;
+  }
+  return null;
+}
+// Ancla real de "cuando el intake quedo listo" (reunion tenida O waiver) — cadena de fallback que
+// NUNCA fabrica una fecha. Nicolas (2026-09-17) ya habia atrapado que p.intake queda null en un
+// intake legitimamente waived, y agrego el ancla intakeWaivedDate — pero para reqs reales como
+// RD-018/019/020 (handoff a Juan David, "core intake ya cubierto por RD-013") ESA columna tambien
+// esta vacia y nunca hubo un "Status changed... to Intake Meeting Waived" en el log — confirmado
+// leyendo el Excel real 2026-09-22, ver [[project_gantt_timeline]]. Sin mas fallback, el reloj de
+// TTS/TTF/TTH de esos 3 reqs se quedaba en "none" para siempre en el tracker real, no solo en el
+// Gantt. Ultimo recurso: la fecha de aceptacion mas antigua que SI tenemos en firme (handoff o
+// asignacion) — sigue siendo una fecha real que paso, nunca una inventada de cero.
+function resolveEffectiveIntakeDate(p){
+  if(p.intake) return p.intake;
+  if(!p.intakeWaivedReason) return null;
+  if(p.intakeWaivedDate) return p.intakeWaivedDate;
+  const logDate = findStatusTransitionDate(p, "Intake Meeting Waived");
+  if(logDate) return logDate;
+  if(p.handoffFrom && p.handoffAcceptedDate) return p.handoffAcceptedDate;
+  return p.recruiterAcceptedDate || null;
+}
 function slaFor(p, key, closeDateStr){
   // CORREGIDO 2026-09-17 (Nicolas): un Handoff NUNCA reinicia el reloj de TTS/TTF/TTH de la req.
   // El req en si es tratado como si un unico reclutador lo hubiera trabajado de principio a fin —
@@ -3661,13 +3693,7 @@ function slaFor(p, key, closeDateStr){
   // bug real, no una regla de negocio.) handoffInfo se conserva solo para que slaChip() explique
   // que el req fue handed off, dejando claro que el conteo NO cambio por eso.
   const handoffInfo = p.handoffFrom ? {from: p.handoffFrom, to: p.recruiter, acceptedDate: p.handoffAcceptedDate, originalIntake: p.intake} : null;
-  // Nicolas (2026-09-17) atrapo esto antes de que se fuera a produccion: p.intake queda null en
-  // un intake legitimamente waived — sin un ancla, el reloj de TTS/TTF/TTH se quedaba en "none"
-  // para siempre en cualquier req waived, aunque el sourcing ya pueda arrancar (ver
-  // canStartSourcing()). Ancla real: intakeWaivedDate — la fecha en la que se guardo el waiver en
-  // si (ver openWaiveIntakeModal()), nunca una aproximacion via Intake Requested/Kickoff.
-  const effectiveIntake = p.intake || (p.intakeWaivedReason ? p.intakeWaivedDate : null);
-  const intake = parseD(effectiveIntake);
+  const intake = parseD(resolveEffectiveIntakeDate(p));
   const baseTarget = SLA_TARGETS[key];
   if(!intake) return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
   // Nicolas (2026-09-21): "la de cancelled es porque literalmente ya no se va a hacer nada en esa
@@ -4269,22 +4295,12 @@ function ganttRenderAxis(cal, granularity){
   }
 }
 
-function ganttFindTransitionDate(p, toLabel){
-  const entries = [...(p.remarksHistory||[]), ...(p.extra||[])]
-    .filter(e => e.type === "status" && typeof e.text === "string" && e.text.startsWith("Status changed from"))
-    .sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
-  for(const e of entries){
-    const m = e.text.match(/Status changed from .+? to (.+?)(?: \(|\.$|\.)/);
-    if(m && m[1] === toLabel) return e.date;
-  }
-  return null;
-}
 function ganttIsTerminal(p){ return TERMINAL.includes(p.status); }
 function ganttIsPaused(p){ return SLA_PAUSING_STATUSES.includes(p.status); }
 function ganttCloseDate(p){
   if(p.status === "Hired") return parseD(p.hire);
   if(p.status === "Cancelled" || p.status === "Filled (Internal Hire)"){
-    const t = ganttFindTransitionDate(p, p.status);
+    const t = findStatusTransitionDate(p, p.status);
     return t ? parseD(t) : new Date();
   }
   return null;
@@ -4310,28 +4326,15 @@ function ganttSegments(p){
   const kickoff = parseD(p.kickoff);
   if(!kickoff) return [];
   const introReq = parseD(p.intakeRequestedDate);
-  const isWaived = !!p.intakeWaivedReason;
-  // Un intake WAIVED es un camino real distinto de uno HELD (STATUS_ORDER trae los dos statuses
-  // por separado) — antes ambos se etiquetaban igual ("Intake Pending"/"Intake Held") sin
-  // importar cual paso de verdad. Bug real reportado por Nicolas: "a otros no se les ve el
-  // waiver". Cadena de fallback para la fecha, SIN fabricar nunca una que no exista: la columna
-  // dedicada -> el log real (mismo patron de siempre) -> la fecha de aceptacion mas antigua que
-  // si tenemos en firme (handoff o asignacion), nunca una fecha inventada de cero. Casos reales
-  // como RD-018/019/020 (handoff de Nicolas a Juan David, "core intake ya cubierto por RD-013")
-  // no tienen NINGUNA fecha de waiver propia guardada — sin este fallback, la barra entera se
-  // quedaba pegada en "Kickoff" durante semanas.
-  let introKey = "Intake Pending";
-  let introDone = p.intake ? parseD(p.intake) : null;
-  if(!introDone && isWaived){
-    introKey = "Intake Meeting Waived";
-    const waivedLogDate = ganttFindTransitionDate(p, "Intake Meeting Waived");
-    introDone = parseD(p.intakeWaivedDate)
-      || (waivedLogDate ? parseD(waivedLogDate) : null)
-      || (p.handoffFrom ? parseD(p.handoffAcceptedDate) : null)
-      || parseD(p.recruiterAcceptedDate);
-  }
+  // Misma fecha-ancla que usa slaFor() para el TTS/TTF/TTH real (resolveEffectiveIntakeDate,
+  // una sola fuente de verdad para los dos) — solo la etiqueta (introKey) es propia del Gantt: un
+  // intake WAIVED es un camino real distinto de uno HELD (STATUS_ORDER trae los dos statuses por
+  // separado), antes ambos se etiquetaban igual "Intake Pending"/"Intake Held" sin importar cual
+  // paso de verdad (bug real reportado por Nicolas: "a otros no se les ve el waiver").
+  const introKey = (!p.intake && p.intakeWaivedReason) ? "Intake Meeting Waived" : "Intake Pending";
+  const introDone = parseD(resolveEffectiveIntakeDate(p));
   const submitDate = parseD(p.submit);
-  const ciDateStr = ganttFindTransitionDate(p, "Client Interview");
+  const ciDateStr = findStatusTransitionDate(p, "Client Interview");
   const ciDateRaw = ciDateStr ? parseD(ciDateStr) : null;
   const ciDate = (ciDateRaw && submitDate && ciDateRaw > submitDate) ? ciDateRaw : null;
   const offerDate = parseD(p.offerRequestDate);
@@ -4389,7 +4392,7 @@ function ganttSegments(p){
   const lastSeg = segs[segs.length-1];
   if(lastSeg && lastSeg.key !== p.status && STAGE_COLORS.hasOwnProperty(p.status)
      && !TERMINAL.includes(p.status) && !SLA_PAUSING_STATUSES.includes(p.status)){
-    const tStr = ganttFindTransitionDate(p, p.status);
+    const tStr = findStatusTransitionDate(p, p.status);
     const tDate = tStr ? parseD(tStr) : null;
     if(tDate && tDate > lastSeg.start && tDate < end){
       lastSeg.stop = tDate;
