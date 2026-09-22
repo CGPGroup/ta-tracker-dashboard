@@ -4310,8 +4310,26 @@ function ganttSegments(p){
   const kickoff = parseD(p.kickoff);
   if(!kickoff) return [];
   const introReq = parseD(p.intakeRequestedDate);
-  const effectiveIntake = p.intake || (p.intakeWaivedReason ? p.intakeWaivedDate : null);
-  const introDone = parseD(effectiveIntake);
+  const isWaived = !!p.intakeWaivedReason;
+  // Un intake WAIVED es un camino real distinto de uno HELD (STATUS_ORDER trae los dos statuses
+  // por separado) — antes ambos se etiquetaban igual ("Intake Pending"/"Intake Held") sin
+  // importar cual paso de verdad. Bug real reportado por Nicolas: "a otros no se les ve el
+  // waiver". Cadena de fallback para la fecha, SIN fabricar nunca una que no exista: la columna
+  // dedicada -> el log real (mismo patron de siempre) -> la fecha de aceptacion mas antigua que
+  // si tenemos en firme (handoff o asignacion), nunca una fecha inventada de cero. Casos reales
+  // como RD-018/019/020 (handoff de Nicolas a Juan David, "core intake ya cubierto por RD-013")
+  // no tienen NINGUNA fecha de waiver propia guardada — sin este fallback, la barra entera se
+  // quedaba pegada en "Kickoff" durante semanas.
+  let introKey = "Intake Pending";
+  let introDone = p.intake ? parseD(p.intake) : null;
+  if(!introDone && isWaived){
+    introKey = "Intake Meeting Waived";
+    const waivedLogDate = ganttFindTransitionDate(p, "Intake Meeting Waived");
+    introDone = parseD(p.intakeWaivedDate)
+      || (waivedLogDate ? parseD(waivedLogDate) : null)
+      || (p.handoffFrom ? parseD(p.handoffAcceptedDate) : null)
+      || parseD(p.recruiterAcceptedDate);
+  }
   const submitDate = parseD(p.submit);
   const ciDateStr = ganttFindTransitionDate(p, "Client Interview");
   const ciDateRaw = ciDateStr ? parseD(ciDateStr) : null;
@@ -4323,10 +4341,10 @@ function ganttSegments(p){
   const checkpoints = [
     {key:"Kickoff", date:kickoff},
     {key:"Intake Meeting Requested", date:introReq},
-    // "Intake Pending" es el status real de STATUS_ORDER (display "Intake Held") — antes se
-    // saltaba directo a "Sourcing" en cuanto habia fecha de intake, asi que un req sentado
-    // literalmente en ese status nunca se veia con su propio color en el Gantt.
-    {key:"Intake Pending", date:introDone},
+    // introKey es "Intake Pending" (display "Intake Held") o "Intake Meeting Waived" segun cual
+    // camino real paso — antes se saltaba directo a "Sourcing" en cuanto habia fecha de intake,
+    // asi que un req sentado literalmente en ese status nunca se veia con su propio color.
+    {key:introKey, date:introDone},
     {key:"Sourcing", date:introDone},
     {key:"Submitted", date:submitDate},
     {key:"Client Interview", date:ciDate},
@@ -4337,12 +4355,12 @@ function ganttSegments(p){
   // (nunca deja que un checkpoint retroceda respecto al anterior).
   let cursor = kickoff;
   checkpoints.forEach(c=>{ if(c.date < cursor) c.date = new Date(cursor); cursor = c.date; });
-  // "Intake Pending" y "Sourcing" comparten la misma fecha real (introDone) a proposito — el
-  // negocio los trata como el mismo momento (sourcing arranca el mismo dia que se tiene el
-  // intake). Si terminan empatados, se colapsan en uno solo (Sourcing, que es el status real que
-  // sigue si nadie se quedo parado en Intake Pending) para no crear un tramo de ancho cero.
+  // introKey y "Sourcing" comparten la misma fecha real (introDone) a proposito — el negocio los
+  // trata como el mismo momento (sourcing arranca el mismo dia que se tiene o se waivea el
+  // intake). Si terminan empatados, se colapsan en uno solo (Sourcing, el status real que sigue)
+  // para no crear un tramo de ancho cero.
   for(let i=checkpoints.length-1;i>0;i--){
-    if(checkpoints[i].date.getTime() === checkpoints[i-1].date.getTime() && checkpoints[i-1].key==="Intake Pending"){
+    if(checkpoints[i].date.getTime() === checkpoints[i-1].date.getTime() && checkpoints[i-1].key===introKey){
       checkpoints.splice(i-1,1);
     }
   }
@@ -4437,6 +4455,26 @@ function ganttRowHtml(p, cal){
       <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.boundaryLabel)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
     </div>`;
   }).join("");
+
+  // "Accepted" (o "Handoff accepted") nunca aparecia en el Gantt — bug real reportado por
+  // Nicolas ("el status de accepted no esta en el gantt... las de Juan David que yo le hice
+  // handoff, esa info debe aparecer"). No es una etapa de STATUS_ORDER (no tiene color propio),
+  // asi que se dibuja como un hito suelto encima de "Kickoff", no como limite de segmento. Con
+  // handoff, la fecha real que manda es handoffAcceptedDate (la que el NUEVO reclutador acepto),
+  // nombrando explicitamente de quien vino — self-contained-text, nunca "aceptado" a secas sin
+  // decir de donde.
+  const acceptedDateStr = p.handoffFrom ? p.handoffAcceptedDate : p.recruiterAcceptedDate;
+  const acceptedDate = acceptedDateStr ? parseD(acceptedDateStr) : null;
+  if(acceptedDate && acceptedDate >= visStart && acceptedDate <= visEnd){
+    const leftPct = (cal.pctOf(acceptedDate) - trackLeftPct) / trackWidthPct * 100;
+    const acceptedLabel = p.handoffFrom
+      ? `Handoff accepted from ${escapeHtml(p.handoffFrom)}`
+      : "Assignment accepted";
+    milestonesHtml += `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
+      <span class="gantt-milestone-shape"></span>
+      <div class="gantt-tooltip" style="bottom:14px;"><b>${acceptedLabel}</b><br><span class="muted">${ganttFmtDate(acceptedDate)}${p.handoffFrom ? ` · now with ${escapeHtml(p.recruiter||"this recruiter")}` : ""}</span></div>
+    </div>`;
+  }
 
   if(terminal && end >= visStart && end <= visEnd){
     // 3 desenlaces reales, 3 colores distintos — Filled (Internal Hire) NO es una perdida como
