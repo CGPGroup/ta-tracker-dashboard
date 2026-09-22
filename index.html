@@ -3396,7 +3396,7 @@ function slaFor(p, key, closeDateStr){
   // comentario decia lo opuesto — arrancar en handoffAcceptedDate — eso quedo confirmado como un
   // bug real, no una regla de negocio.) handoffInfo se conserva solo para que slaChip() explique
   // que el req fue handed off, dejando claro que el conteo NO cambio por eso.
-  const handoffInfo = p.handoffFrom ? {from: p.handoffFrom, acceptedDate: p.handoffAcceptedDate, originalIntake: p.intake} : null;
+  const handoffInfo = p.handoffFrom ? {from: p.handoffFrom, to: p.recruiter, acceptedDate: p.handoffAcceptedDate, originalIntake: p.intake} : null;
   // Nicolas (2026-09-17) atrapo esto antes de que se fuera a produccion: p.intake queda null en
   // un intake legitimamente waived — sin un ancla, el reloj de TTS/TTF/TTH se quedaba en "none"
   // para siempre en cualquier req waived, aunque el sourcing ya pueda arrancar (ver
@@ -3623,13 +3623,18 @@ function posLabel(p, withCode){
   const notYetAccepted = (p.handoffFrom && !p.handoffAcceptedDate) || (!p.handoffFrom && !p.recruiterAcceptedDate);
   // Nicolas (2026-09-21), viendo Positions: "ahi deberia salir de quien a quien fue el handoff" —
   // el nombre de quien lo entrego solo vivia en el title (hover), invisible fila por fila en una
-  // tabla densa. Ahora el badge mismo lo dice (el "a quien" ya esta a la vista, es la columna
-  // Recruiter de la misma fila) — el tooltip se queda con el detalle completo (fecha, aceptacion).
+  // tabla densa. El badge mismo ya lo dice ahora.
+  // Correccion, mismo dia: el tooltip decia "de quien" pero nunca "para quien", asumiendo que se
+  // conectaria mentalmente con la columna Recruiter de al lado — regla explicita de Nicolas para
+  // todo este proyecto de aqui en adelante: "asumir que cualquier persona que use este tracker es
+  // tonta o simplemente no sabe de donde viene la info o como interpretarla" — nunca depender de
+  // que alguien conecte dos piezas de informacion en dos lugares distintos de la pantalla, cada
+  // texto debe explicarse completo por si solo. El tooltip ahora nombra ambos lados explicitos.
   const pendingBadge = notYetAccepted
-    ? `<span class="pos-pending-badge" title="${p.handoffFrom ? "Handoff context not confirmed yet" : "Not accepted yet"} — you can open it to view, but editing is locked until then.">${p.handoffFrom ? `Handoff Pending — From ${escapeHtml(p.handoffFrom)}` : "Pending Accept"}</span>`
+    ? `<span class="pos-pending-badge" title="${p.handoffFrom ? `Handed off from ${escapeHtml(p.handoffFrom)} to ${escapeHtml(p.recruiter||"the new recruiter")} — context not confirmed yet` : "Not accepted yet"} — you can open it to view, but editing is locked until then.">${p.handoffFrom ? `Handoff Pending — From ${escapeHtml(p.handoffFrom)}` : "Pending Accept"}</span>`
     : "";
   const handoffBadge = (p.handoffFrom && p.handoffAcceptedDate)
-    ? `<span class="pos-handoff-badge" title="Handed off from ${escapeHtml(p.handoffFrom)}${p.handoffDate ? " on "+escapeHtml(p.handoffDate) : ""}, accepted ${escapeHtml(p.handoffAcceptedDate)}. The SLA clock is unaffected — it still counts from the original intake meeting.">⇄ From ${escapeHtml(p.handoffFrom)}</span>`
+    ? `<span class="pos-handoff-badge" title="Handed off from ${escapeHtml(p.handoffFrom)} to ${escapeHtml(p.recruiter||"the new recruiter")}${p.handoffDate ? " on "+escapeHtml(p.handoffDate) : ""}, accepted ${escapeHtml(p.handoffAcceptedDate)}. The SLA clock is unaffected — it still counts from the original intake meeting.">⇄ From ${escapeHtml(p.handoffFrom)}</span>`
     : "";
   const codeSpan = withCode === false ? "" : `<span class="pos-code">${escapeHtml(p.id)}</span>`;
   return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}${handoffBadge}`;
@@ -4790,7 +4795,7 @@ function slaChip(s){
   const h = s.holidaysInWindow;
   const holidayNote = h ? `<span class="sla-chip-holiday" title="Includes ${h} holiday${h===1?"":"s"} excluded from this business-day count">+${h}h</span>` : "";
   const ho = s.handoffInfo;
-  const handoffNote = ho ? `<span class="sla-chip-handoff" title="This requisition was handed off from ${ho.from} (accepted ${ho.acceptedDate || "pending"}) — the SLA clock is unaffected by the handoff, it still counts from the original intake meeting (${ho.originalIntake || "n/a"}).">⇄</span>` : "";
+  const handoffNote = ho ? `<span class="sla-chip-handoff" title="This requisition was handed off from ${ho.from} to ${ho.to || "the new recruiter"} (accepted ${ho.acceptedDate || "pending"}) — the SLA clock is unaffected by the handoff, it still counts from the original intake meeting (${ho.originalIntake || "n/a"}).">⇄</span>` : "";
   return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}${holidayNote}${handoffNote}</span>`;
 }
 // BUG REAL encontrado 2026-09-21 (Nicolas, RD-071: TTS/TTF/TTH los 3 en Out Of SLA a la vez, pero
