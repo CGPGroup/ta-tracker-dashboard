@@ -4393,7 +4393,12 @@ function renderGanttGroup(key){
     btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
   });
   panelEl.querySelectorAll(".gantt-row").forEach(rowEl=>{
-    rowEl.addEventListener("click", ()=> openDetailModal(rowEl.dataset.id, "view", isAdmin(), true, true));
+    // "view" a proposito NO — Nicolas: "no tiene sentido si no lo deja editar y lo obliga a
+    // trabajar en tracking... ya que metimos el gantt, tiene que poder trabajarse desde aqui
+    // tambien" — mismo permiso real (trackingCanEdit()) que ya usan Tracking/Positions, Tracking
+    // sigue siendo el menu mas directo si alguien prefiere trabajar ahi, pero el Gantt ya no
+    // obliga a saltar a otra parte solo para editar.
+    rowEl.addEventListener("click", ()=> openDetailModal(rowEl.dataset.id, trackingCanEdit() ? "edit" : "view", isAdmin(), true, true));
   });
 }
 
