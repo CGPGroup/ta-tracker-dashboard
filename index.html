@@ -1291,7 +1291,7 @@
               </div>
               <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 3;">
                 <h3>Average Time To Submit</h3>
-                <div class="panel-sub">Your average TTS across active positions where submitting has started, vs the 9 business day target.</div>
+                <div class="panel-sub">Your average TTS across active positions still waiting on their first submission batch, vs the 9 business day target — business days since the intake meeting, never the Kickoff.</div>
                 <div id="chartAvgTts"></div>
               </div>
               <!-- Fila 3, a todo lo ancho: Overview se queda con panorama (cuantas, donde estan,
@@ -2998,8 +2998,21 @@ function renderSidebarProfile(){
 }
 // Solo tiene sentido dentro de un perfil (panelAvgTts esta oculto en la vista de equipo), pero
 // no cuesta nada calcularlo siempre.
+// BUG REAL encontrado 2026-09-21 (Nicolas: "no entiendo esa metrica... no me da informacion"),
+// 3 problemas reales:
+// 1. El texto decia "from Kickoff to Submitted" — el TTS real arranca el dia habil siguiente al
+//    INTAKE, nunca el Kickoff (regla no negociable de todo este proyecto) — texto simplemente
+//    incorrecto, contradice cada otro lugar de este tracker.
+// 2. El filtro solo excluia TERMINAL, nunca NOT_ACTIVELY_WORKED — un req en On Hold (caso real:
+//    RD-013) seguia contando en el promedio de "relojes de TTS activos" aunque estuviera pausado.
+// 3. "Active TTS Clocks" deberia significar exactamente eso — el reloj SIGUE corriendo, o sea el
+//    primer batch TODAVIA no se logueo (p.submit sigue vacio). El filtro viejo incluia CUALQUIER
+//    posicion con intake sin importar que ya llevara meses en Offer Request con su TTS cerrado
+//    hace rato — de ahi que aparecieran reqs en Client Interview/Offer Request en una lista que
+//    se supone son relojes "activos", sin ningun numero que explicara por que estaban ahi.
 function renderAvgTtsChart(){
-  const positions = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  const positions = dashboardPositions().filter(p=>
+    !TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status) && !p.submit);
   const withTtsPairs = positions.map(p=>({p, s: slaFor(p,"TTS",p.submit)})).filter(x=>x.s.status!=="none");
   const target = SLA_TARGETS.TTS;
   const el = document.getElementById("chartAvgTts");
@@ -3014,10 +3027,22 @@ function renderAvgTtsChart(){
   el.innerHTML = `
     <div class="clickable-stat" style="display:flex; align-items:baseline; gap:10px; cursor:pointer;">
       <div style="font-size:32px; color:${color}; line-height:1;">${avg}d</div>
-      <div style="font-size:11.5px; color:var(--text-muted);">avg vs ${target}d target &middot; ${withTtsPairs.length} position${withTtsPairs.length===1?"":"s"} &middot; business days from Kickoff to Submitted, so far</div>
+      <div style="font-size:11.5px; color:var(--text-muted);">avg vs ${target}d target &middot; ${withTtsPairs.length} position${withTtsPairs.length===1?"":"s"} still waiting on their first batch &middot; business days since the intake meeting, so far</div>
     </div>`;
   el.querySelector(".clickable-stat").addEventListener("click", ()=>{
-    openQuickList("Active TTS Clocks", `${withTtsPairs.length} position${withTtsPairs.length===1?"":"s"} averaging ${avg}d vs the ${target}d target`, withTtsPairs.map(x=>x.p));
+    // Ordenado del mas atrasado al menos — y el subLineFn ahora muestra el numero real de CADA
+    // posicion (elapsed/target), no solo su status — antes el popup listaba las mismas posiciones
+    // sin decir por que estaban ahi ni cuanto llevaba cada una, "no daba ninguna informacion".
+    const sorted = withTtsPairs.slice().sort((a,b)=>(b.s.elapsed||0)-(a.s.elapsed||0));
+    openQuickList(
+      "Active TTS Clocks",
+      `Positions whose intake already happened but haven't logged a first batch yet — ${withTtsPairs.length} position${withTtsPairs.length===1?"":"s"}, averaging ${avg}d vs the ${target}d target, oldest first.`,
+      sorted.map(x=>x.p),
+      p => {
+        const s = slaFor(p, "TTS", p.submit);
+        return `${s.elapsed}d elapsed / ${s.target}d target &middot; ${escapeHtml(p.recruiter)}`;
+      }
+    );
   });
 }
 // Mensajes de confirmacion tras aceptar una asignacion, se muestran hasta que el reclutador
@@ -3392,13 +3417,14 @@ function isSlaExceptionApproved(p){
   const v = p.slaException;
   return v === true || v === "Yes" || v === "yes" || v === "YES";
 }
-// Statuses donde el reloj de TTF/TTH se pausa (2026-09-21, Nicolas, viendo RD-013: "el hold,
-// cancelled o withdrawn... detienen los SLAs, hasta la fecha en que se vuelvan a poner SLAs que
-// hacen que se reactive la req" — la idea de un hold es precisamente que NO afecte el SLA, ya
-// que es por una razon aprobada y veridica). Cancelled nunca se reactiva en la practica, pero
-// usa el mismo mecanismo: si nunca sale de Cancelled, simplemente se queda congelado para siempre,
-// sin necesitar un caso especial aparte.
-const SLA_PAUSING_STATUSES = ["On Hold", "On Hold — Internal Candidates", "Fell Through", "Cancelled"];
+// Statuses donde el reloj de TTF/TTH se PAUSA (se congela, pero sigue mostrando el numero
+// acumulado hasta ese punto, y retoma si se reactiva) — 2026-09-21, Nicolas: "si un req se pone
+// on hold, las metricas no sigan corriendo... si se reactiva, la cuenta comience desde donde
+// estaba". Deliberadamente NO incluye "Cancelled" aqui — Nicolas fue explicito en que Cancelled
+// es distinto: "ahi es porque literalmente ya no se va a hacer nada en esa req... esos statuses
+// ya no deberian seguir aportando a metricas, en nada" — no un numero congelado, directamente
+// SIN dato (ver el chequeo aparte en slaFor() mas abajo).
+const SLA_PAUSING_STATUSES = ["On Hold", "On Hold — Internal Candidates", "Fell Through"];
 // Reconstruye desde el Activity log REAL (remarksHistory + extra, nunca un campo nuevo que
 // alguien tendria que llenar a mano) cuanto lleva pausado un req ahora mismo (si aplica) y cuanto
 // estuvo pausado en el pasado (paradas ya cerradas) — para que esto aplique retroactivo a reqs que
@@ -3456,6 +3482,11 @@ function slaFor(p, key, closeDateStr){
   const intake = parseD(effectiveIntake);
   const baseTarget = SLA_TARGETS[key];
   if(!intake) return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
+  // Nicolas (2026-09-21): "la de cancelled es porque literalmente ya no se va a hacer nada en esa
+  // req... esos statuses ya no deberian seguir aportando a metricas, en nada" — a diferencia de
+  // On Hold/Fell Through (que se congelan pero siguen mostrando un numero, ver
+  // SLA_PAUSING_STATUSES), Cancelled no muestra ningun dato de SLA en absoluto.
+  if(p.status === "Cancelled") return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
   const start = nextBizDay(intake);
   const close = parseD(closeDateStr);
   // Si el req ya esta pausado (On Hold, On Hold - Internal, Fell Through, Cancelled — ver
