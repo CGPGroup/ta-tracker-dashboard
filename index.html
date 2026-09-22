@@ -1155,6 +1155,7 @@
      dejaba una columna vacia y desbalanceada. */
   #modalCompletionGrid { grid-template-columns: repeat(2, 1fr); }
   .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
+  .hg-sibling-card:hover { border-color: var(--brand); background: rgba(var(--brand-rgb),0.06); }
   .sla-card .sla-name { font-size: 10.5px; font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   /* Una tarjeta, 2 chips adentro (ej. Accept Requisition & Request Intake) — cada fila es su
      propio mini-KPI con su label chiquito a la izquierda, en vez de forzar 2 tarjetas completas
@@ -6326,6 +6327,29 @@ function renderDetailModal(){
   // Intake Meeting. Antes de eso, aunque el req ya este en Sourcing, es normal no tener batches
   // todavia (el reclutador sigue dentro de su ventana). Reusa el mismo TTS que ya se ve en la
   // tarjeta de SLA mas abajo, para no tener dos calculos de dias habiles que puedan divergir.
+  // Nicolas: "hacer de manera visible y clara al usuario a cuales otras [reqs] pertenece" un
+  // Headcount Group, "esto tambien aplica para acceso publico" — antes el grupo solo se veia como
+  // un campo de texto suelto ("Full Stack Developer Group"), sin ninguna forma de ver o llegar a
+  // las reqs hermanas desde aqui. SIEMPRE visible (nunca detras de isView) porque es pura
+  // informacion + navegacion, no una accion de edicion — se ve igual en Tracking, en el modal
+  // agrandado del Gantt, y en Public Access de solo lectura. Usa POSITIONS (el global completo),
+  // no dashboardPositions(), para que las hermanas aparezcan aunque sean de otro reclutador o de
+  // otro workspace que el que esta viendo ahora mismo.
+  const groupSiblings = p.headcountGroup ? POSITIONS.filter(x=>x.headcountGroup===p.headcountGroup && x.id!==p.id) : [];
+  const headcountGroupHtml = p.headcountGroup ? `
+    <div class="modal-section-title">Headcount Group — "${escapeHtml(p.headcountGroup)}"</div>
+    <p class="panel-sub" style="margin:0 0 10px;">${groupSiblings.length+1} requisitions share this group — a submission batch logged on any one of them counts for all of them.</p>
+    <div class="sla-grid">
+      <div class="sla-card" style="opacity:.7;">
+        <div class="sla-name"><span>${escapeHtml(p.id)} — ${escapeHtml(p.title)}</span></div>
+        <div style="font-size:11px; color:var(--text-muted);">You're viewing this one</div>
+      </div>
+      ${groupSiblings.map(s=>`
+        <div class="sla-card hg-sibling-card" data-goto-id="${escapeHtml(s.id)}" style="cursor:pointer;">
+          <div class="sla-name"><span>${escapeHtml(s.id)} — ${escapeHtml(s.title)}</span></div>
+          ${statusChip(s.status)}
+        </div>`).join("")}
+    </div>` : "";
   const batchesTts = computeSla(p).TTS;
   const batchesOverdue = batchesTts.status === "out";
   const batchesHtml = isView ? "" : `
@@ -6356,9 +6380,19 @@ function renderDetailModal(){
     factsSection("", positionFacts) +
     basicInfoEditHtml +
     urlFactsHtml +
+    headcountGroupHtml +
     timelineHtml +
     batchesHtml +
     outcomeFactsHtml;
+  // Navegacion entre hermanas de Headcount Group — SIEMPRE conectada (nunca dentro del if(!isView)
+  // de abajo), preserva el mismo modo/tamaño con el que ya estaba abierto este modal (view/edit,
+  // agrandado o no) en vez de resetearlo.
+  document.querySelectorAll(".hg-sibling-card").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const wasExpanded = document.getElementById("detailModal").classList.contains("expanded");
+      openDetailModal(el.dataset.gotoId, activeDetailMode, activeDetailAllowDelete, activeDetailFromDashboard, wasExpanded);
+    });
+  });
   if(!isView){
     document.getElementById("logBatchBtn").addEventListener("click", ()=> openLogBatchModal(p));
     wireCandidateEvents(p);
@@ -7794,6 +7828,15 @@ document.getElementById("candidateCvFileInput").addEventListener("change", async
 // Request/Pending Pivot SLA (ya tiene el campo de fecha de calibration call) porque pedir el
 // Pivot SLA es, en la practica, documentar "por que hace falta recalibrar" — pero lo que de
 // verdad desbloquea el formulario de abajo es la fecha de la llamada, nunca las 2 aprobaciones.
+// Minimo real del batch INICIAL cuando la req pertenece a un Headcount Group — Nicolas: "si es un
+// headcount group de 2, eso quiere decir que debe enviarse como batch inicial, minimo 6
+// candidatos" — 3 por vacante (el mismo minimo de "3-5 candidatos" de una req suelta), multiplicado
+// por cuantas vacantes reales comparten el grupo. null si la req no pertenece a ningun grupo.
+function headcountGroupMinCandidates(p){
+  if(!p.headcountGroup) return null;
+  const groupSize = POSITIONS.filter(x=>x.headcountGroup===p.headcountGroup).length;
+  return groupSize * 3;
+}
 function openLogBatchModal(p, opts={}){
   document.getElementById("logBatchMsg").textContent = "";
   const batchNumber = (p.batches ? p.batches.length : 0) + 1;
@@ -7836,8 +7879,10 @@ function openLogBatchModal(p, opts={}){
     renderLogBatchCandidatesList();
     document.getElementById("logBatchTypeDisplay").textContent = isFirst ? "Initial" : (batchNumber === 2 ? "Follow-up" : "Pivot Follow-up");
     const formNote = document.getElementById("logBatchFormNote");
+    const groupMin = headcountGroupMinCandidates(p);
     if(isFirst){
-      formNote.textContent = "Remember, this triggers the first batch and its corresponding SLAs, this field is what's used for the initial batch.";
+      formNote.textContent = "Remember, this triggers the first batch and its corresponding SLAs, this field is what's used for the initial batch."
+        + (groupMin ? ` This req is part of Headcount Group "${p.headcountGroup}" — this batch counts for the whole group, so the initial batch should have at least ${groupMin} candidates total (3 per open headcount in the group), not just 3-5 for this one req.` : "");
       formNote.style.display = "";
     } else if(batchNumber >= 3 && !pivotOk){
       formNote.textContent = `This is batch #${batchNumber} — past the calibration call held on ${p.calibrationCallDate}. Consider requesting Pivot SLA from the "Pivot SLA" field in Timeline to protect the TTF/TTH metric.`;
@@ -7940,6 +7985,17 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.textContent = "Every candidate needs a name before saving — fill in the blank one(s) above.";
     msg.style.color = "var(--critical)";
     return;
+  }
+  // Advertencia suave, NO bloqueante — Nicolas: "puede loguear menos, pero se le hace la
+  // advertencia que su SLA de average TTS se va a ver afectado". A diferencia de los 2 checks de
+  // arriba (que si detienen el guardado), aqui se deja pasar si el usuario confirma — el batch de
+  // un Headcount Group cubre todas sus vacantes, asi que menos del minimo real (3 por vacante)
+  // reparte menos candidatos de los que el grupo completo necesita, sin que eso sea un error de
+  // captura como los de arriba.
+  const groupMinForSave = isFirst ? headcountGroupMinCandidates(p) : null;
+  if(groupMinForSave && logBatchPendingCandidates.length < groupMinForSave){
+    const proceed = confirm(`This req is part of Headcount Group "${p.headcountGroup}" (${groupMinForSave/3} open headcounts) — a full initial batch for the whole group should have at least ${groupMinForSave} candidates, not ${logBatchPendingCandidates.length}. Logging fewer will make this group's average Time To Submit SLA look worse than it should. Log it anyway?`);
+    if(!proceed) return;
   }
   // Sin bloquear el boton, un doble clic (o un reintento antes de que "Saved." aparezca)
   // duplicaba el batch entero — mismo patron ya aplicado en reassignSave/Add Position.
