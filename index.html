@@ -2390,7 +2390,17 @@
 // especifica esta cada candidato vive a nivel de CANDIDATO (ver BATCH_CANDIDATE_STATUSES), el req
 // solo refleja "hay al menos un candidato entrevistandose con el cliente" — ver
 // CANDIDATE_STATUS_TO_POSITION_STATUS/updateCandidateStatus() para como se deriva automaticamente.
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Sourcing","Submitted","Client Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","Fell Through","On Hold","On Hold — Internal Candidates","Cancelled"];
+// CORREGIDO 2026-09-21 (Nicolas, tras pensarlo bien): "Fell Through"/Candidate Withdrawn se retira
+// como status de REQ — "no nos esta diciendo nada sobre lo que vamos a hacer con el req, sino lo
+// que paso con el pipeline de candidatos". Un candidato que se echa para atras ahora se marca
+// "Withdrawn" a nivel de CANDIDATO (ver BATCH_CANDIDATE_STATUSES), nunca mueve el req a un status
+// aparte. Y sea que otro candidato del mismo batch tome la posta, o que haya que mandar un batch
+// nuevo, o que de verdad no quede pipeline y toque volver a Sourcing — Nicolas fue explicito en
+// que ninguno de esos 3 casos justifica pausar ni resetear el SLA: "no es culpa de nadie, pero el
+// ciclo de vida del req no puede acabarse... ya que lo pienso, sí es más accountability del
+// reclutador (asegurarse que el candidato este firme, revisar si esta en otros procesos) — un
+// reset no es una opcion". El reloj sigue corriendo igual que cualquier otro follow-up batch.
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Sourcing","Submitted","Client Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Tramo de STATUS_ORDER que SI tiene un "siguiente" lineal real (Kickoff -> ... -> Hired) — el
 // resto (Filled Internal Hire, Fell Through, On Hold, On Hold Internal, Cancelled) son ramas
 // aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
@@ -2534,7 +2544,6 @@ const STATUS_GUIDANCE = {
   "Filled": "An offer was accepted. Log the Fill Date in Timeline if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
   "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Start Date in Timeline if you haven't already — this requisition moves to Placed automatically once it's logged.",
   "Filled (Internal Hire)": "The client filled this requisition on their own — an internal employee move or an intern conversion — without a Cornerstone placement. This requisition is closed and does not count as a placement or an SLA miss; add a remark noting who filled it and how, if known.",
-  "Fell Through": "The candidate withdrew. Add a remark explaining what happened — if it reopens, it most likely restarts at Sourcing rather than from scratch.",
   "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
   // Distinto de "On Hold" normal: no es un incumplimiento de SLA, es una razon de negocio
   // legitima (el HM quiere ver el resultado de un proceso interno de Irth antes de decidir sobre
@@ -2897,7 +2906,6 @@ const STAGE_COLORS = {
   "Filled": "var(--good)",
   "Hired": "var(--good)",
   "Filled (Internal Hire)": "var(--neutral)",
-  "Fell Through": "var(--critical)",
   "On Hold": "var(--neutral)",
   "On Hold — Internal Candidates": "var(--neutral)",
   "Cancelled": "var(--neutral)",
@@ -3247,7 +3255,7 @@ function renderRecentReqs(){
     });
   });
 }
-const TERMINAL = ["Hired","Cancelled","Fell Through","Filled (Internal Hire)"];
+const TERMINAL = ["Hired","Cancelled","Filled (Internal Hire)"];
 // Estados NO terminales pero donde no hay trabajo de reclutamiento activo pasando: Filled ya
 // no tiene nada pendiente de Cornerstone (oferta aceptada, ver STATUS_GUIDANCE["Filled"]) y
 // ambos On Hold estan pausados por definicion — Nicolas fue explicito 2026-09-19: que el
@@ -3264,7 +3272,7 @@ const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates
 // en saveModalDates() y el auto-avance de logBatchSave). Hoisted aqui (antes vivia solo dentro de
 // saveModalDates()) para que ambos lugares usen la MISMA lista — el resto de esta sesion fue
 // justo encontrar y arreglar casos de dos copias de la misma regla desincronizandose.
-const AUTO_STATUS_LOCKED = ["Cancelled","Fell Through","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates"];
+const AUTO_STATUS_LOCKED = ["Cancelled","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates"];
 
 let RECRUITERS = ["Nicolás Patarroyo"];
 let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
@@ -3423,8 +3431,11 @@ function isSlaExceptionApproved(p){
 // estaba". Deliberadamente NO incluye "Cancelled" aqui — Nicolas fue explicito en que Cancelled
 // es distinto: "ahi es porque literalmente ya no se va a hacer nada en esa req... esos statuses
 // ya no deberian seguir aportando a metricas, en nada" — no un numero congelado, directamente
-// SIN dato (ver el chequeo aparte en slaFor() mas abajo).
-const SLA_PAUSING_STATUSES = ["On Hold", "On Hold — Internal Candidates", "Fell Through"];
+// SIN dato (ver el chequeo aparte en slaFor() mas abajo). Tampoco incluye "Fell Through" — ese
+// status ya no existe a nivel de req (ver STATUS_ORDER): un candidato que se echa para atras
+// nunca pausa ni resetea nada, Nicolas fue explicito en que es mas accountability del reclutador
+// (verificar que el candidato este firme) que algo que amerite un allowance.
+const SLA_PAUSING_STATUSES = ["On Hold", "On Hold — Internal Candidates"];
 // Reconstruye desde el Activity log REAL (remarksHistory + extra, nunca un campo nuevo que
 // alguien tendria que llenar a mano) cuanto lleva pausado un req ahora mismo (si aplica) y cuanto
 // estuvo pausado en el pasado (paradas ya cerradas) — para que esto aplique retroactivo a reqs que
@@ -3484,14 +3495,14 @@ function slaFor(p, key, closeDateStr){
   if(!intake) return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
   // Nicolas (2026-09-21): "la de cancelled es porque literalmente ya no se va a hacer nada en esa
   // req... esos statuses ya no deberian seguir aportando a metricas, en nada" — a diferencia de
-  // On Hold/Fell Through (que se congelan pero siguen mostrando un numero, ver
-  // SLA_PAUSING_STATUSES), Cancelled no muestra ningun dato de SLA en absoluto.
+  // On Hold (que se congela pero sigue mostrando un numero, ver SLA_PAUSING_STATUSES), Cancelled
+  // no muestra ningun dato de SLA en absoluto.
   if(p.status === "Cancelled") return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
   const start = nextBizDay(intake);
   const close = parseD(closeDateStr);
-  // Si el req ya esta pausado (On Hold, On Hold - Internal, Fell Through, Cancelled — ver
-  // SLA_PAUSING_STATUSES), "ahora" para efectos de este calculo se congela en el momento en que
-  // entro a la pausa, nunca sigue avanzando con el calendario real. Un close real (Fill/Hire)
+  // Si el req ya esta pausado (On Hold / On Hold - Internal, ver SLA_PAUSING_STATUSES), "ahora"
+  // para efectos de este calculo se congela en el momento en que entro a la pausa, nunca sigue
+  // avanzando con el calendario real. Un close real (Fill/Hire)
   // siempre gana — un req ya cerrado no puede estar pausado a la vez.
   const pauseInfo = computeSlaPauseInfo(p);
   const ref = close || pauseInfo.pausedSinceDate || new Date();
@@ -3818,11 +3829,21 @@ function canStartSourcing(p){
 // ser el default real para un candidato recien agregado/logueado (ver openAddCandidateModal()/
 // logBatchSave() mas abajo) — sigue siendo real y honesto: esta con el hiring manager en revision
 // inicial del batch, todavia no en una ronda de entrevista formal.
-const BATCH_CANDIDATE_STATUSES = ["Screening Interview","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Placed","Rejected","Keep Warm / Hold"];
+// "Withdrawn" (2026-09-21, Nicolas) — distinto de "Rejected": Rejected es el cliente
+// descartando al candidato, Withdrawn es el candidato echandose para atras el mismo (declino
+// seguir, acepto otra oferta, etc.). Vive SOLO a nivel de candidato — "Candidate Withdrawn" se
+// retiro por completo como status de REQ (ver STATUS_ORDER), nunca mueve el req a ningun lado por
+// si solo. Si otro candidato del mismo batch sigue avanzando, el req sigue reflejando a ese otro
+// (ver CANDIDATE_STATUS_TO_POSITION_STATUS). Si hace falta un batch nuevo porque nadie del batch
+// actual siguio, eso es un follow-up batch normal, sin tratamiento especial. Y si de verdad no
+// queda pipeline y hay que volver a Sourcing, el reloj de SLA sigue corriendo igual — Nicolas fue
+// explicito en que esto es mas accountability del reclutador que algo que amerite un allowance o
+// un reset.
+const BATCH_CANDIDATE_STATUSES = ["Screening Interview","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Placed","Rejected","Withdrawn","Keep Warm / Hold"];
 const BATCH_CANDIDATE_STATUS_TONE = {
   "Screening Interview": "within", "Technical Interview": "within",
   "Hiring Manager Interview": "within", "Executive Review": "within", "Offer Request": "within",
-  "Placed": "within", "Rejected": "out", "Keep Warm / Hold": "risk",
+  "Placed": "within", "Rejected": "out", "Withdrawn": "out", "Keep Warm / Hold": "risk",
 };
 // Mapea el status de un candidato individual al status del REQ que deberia empujar hacia adelante
 // (ver updateCandidateStatus()) — Technical/Hiring/Executive colapsan en un solo "Client Interview"
