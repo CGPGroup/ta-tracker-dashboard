@@ -508,24 +508,18 @@
   /* Separador fino entre etapas consecutivas — ayuda a leer el limite incluso cuando dos tonos
      de la rampa quedan cerca uno del otro. */
   .gantt-seg + .gantt-seg { border-left: 1.5px solid var(--surface-1); }
-  /* Round 2 de esto: el anillo + brightness de antes seguia sin ser "muchisimo mejor" (Nicolas,
-     literal). Ahora son 3 capas a la vez, ninguna opcional:
-     1) resplandor FIJO hacia afuera (box-shadow sin blur=0, se ve aunque la pagina este quieta),
-     2) brightness que respira mas alto (1.15 a 1.55, nunca cerca de "etapa vieja"),
-     3) un brillo diagonal que BARRE la barra en loop (background-image en vez del shorthand
-     "background" para no chocar con el color inline — ver el cambio a background-color en JS). */
+  /* Round 3: la version anterior ("muchisimo mejor") termino literalmente pintando la barra
+     entera blanca en varias filas — Nicolas, riendose: "ya exageraste demasiado con el brillo...
+     es muy blanco". Se quita el shimmer (era el que mas aportaba a "blanco solido") y se bajan
+     brightness/glow a un punto intermedio entre la v1 (invisible) y la v2 (cegadora). */
   .gantt-seg[data-current="true"] {
-    background-image: linear-gradient(110deg, transparent 15%, rgba(255,255,255,0.7) 45%, rgba(255,255,255,0.7) 55%, transparent 85%);
-    background-size: 220% 100%;
-    background-repeat: no-repeat;
-    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75), 0 0 10px 2px rgba(255,255,255,0.45);
-    animation: gantt-pulse 1.6s ease-in-out infinite, gantt-shimmer 2.4s linear infinite;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45), 0 0 4px 1px rgba(255,255,255,0.25);
+    animation: gantt-pulse 1.8s ease-in-out infinite;
   }
   @keyframes gantt-pulse {
-    0%, 100% { filter: brightness(1.15); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75), 0 0 6px 1px rgba(255,255,255,0.35); }
-    50% { filter: brightness(1.55); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.9), 0 0 14px 3px rgba(255,255,255,0.55); }
+    0%, 100% { filter: brightness(1.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.4), 0 0 3px 1px rgba(255,255,255,0.18); }
+    50% { filter: brightness(1.22); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.55), 0 0 6px 2px rgba(255,255,255,0.32); }
   }
-  @keyframes gantt-shimmer { 0% { background-position: 160% 0; } 100% { background-position: -60% 0; } }
   /* El "late", literal: un punto que hace ping en la punta de la etapa activa — la version sutil
      (solo brightness en el segmento) no se notaba, Nicolas: "no veo por ningun lado lo del pulse
      ... que se sintiera como que esta vivo". Esto si se ve a simple vista, sin hover. */
@@ -571,7 +565,11 @@
   .gantt-chip.neutral { background: rgba(127,127,127,0.16); color: var(--neutral); }
   .gantt-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 10.5px; line-height: 1.5; padding: 7px 9px; border-radius: 8px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 6px 18px rgba(0,0,0,0.35); z-index: 6; }
   .gantt-tooltip .muted { color: var(--text-secondary); }
-  .gantt-seg:hover .gantt-tooltip, .gantt-projected:hover .gantt-tooltip, .gantt-milestone:hover .gantt-tooltip { opacity: 1; }
+  /* .gantt-projected:hover NO va aqui a proposito — con dos diamantes (TTF y TTH) adentro del
+     mismo contenedor punteado, ese selector prendia los DOS tooltips a la vez apenas el mouse
+     tocaba cualquier parte de la barra punteada (bug real: tarjetas encimadas e ilegibles,
+     reportado por Nicolas). Cada milestone ya prende su propio tooltip por su cuenta. */
+  .gantt-seg:hover .gantt-tooltip, .gantt-milestone:hover .gantt-tooltip { opacity: 1; }
   .gantt-empty { padding: 16px 0; color: var(--text-secondary); font-size: 12px; }
   @media (max-width: 720px) {
     .gantt-cal-axis, .gantt-cal-gridlines { display: none; }
