@@ -4186,7 +4186,7 @@ function statHoverPopoverHtml(s){
 // propia columna de fecha).
 let GANTT_DATA = {};
 let ganttOpenKey = null;
-let ganttScope = "quarter";
+let ganttScope = "recent";
 
 function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
 function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
@@ -4198,8 +4198,18 @@ function ganttQuarterBounds(date){
 }
 function ganttYearBounds(date){ return { start: new Date(date.getFullYear(),0,1), end: new Date(date.getFullYear(),11,31) }; }
 function ganttQuarterLabel(date){ return `Q${Math.floor(date.getMonth()/3)+1} ${date.getFullYear()}`; }
+// Ventana movil, no alineada al calendario — soluciona lo que Quarter no resolvia: un trimestre
+// fijo (ej. Jul 1 - Sep 30) sigue siendo ~90 dias de ancho aunque casi todos los reqs realmente
+// activos arrancaron hace solo 2-3 semanas, dejando el eje lleno de espacio vacio a la izquierda
+// (Nicolas, viendolo: "solo se muestren los dias que se deben mostrar... para ahorrar espacio").
+// Nunca comprime ni aproxima fechas (eso le habria quitado precision real a las posiciones, el
+// motivo por el que el Gantt sirve) — simplemente hace la ventana visible mas angosta y pegada a
+// hoy por defecto; los reqs viejos se siguen recortando limpio en el borde, como ya pasa con
+// Quarter/Year/All.
+function ganttRecentBounds(date){ return { start: ganttAddDays(date, -42), end: ganttAddDays(date, 21) }; }
 
 function ganttScopeWindow(scope, data){
+  if(scope === "recent"){ const b = ganttRecentBounds(new Date()); return {...b, label:"the last 6 weeks"}; }
   if(scope === "quarter"){ const b = ganttQuarterBounds(new Date()); return {...b, label:ganttQuarterLabel(new Date())}; }
   if(scope === "year"){ const b = ganttYearBounds(new Date()); return {...b, label:String(new Date().getFullYear())}; }
   if(!data.length) return { start:new Date(), end:new Date(), label:"All time" };
@@ -4533,12 +4543,13 @@ function renderGanttGroup(key){
     <div class="gantt-head">
       <div class="gantt-title">${escapeHtml(group.label)} <span>— ${shown.length} requisition${shown.length===1?"":"s"} in ${win.label}${hiddenCount ? ` (${hiddenCount} outside range, hidden)` : ""}</span></div>
       <div class="gantt-scope-toggle" id="ganttScopeToggle">
+        <button class="gantt-scope-btn" data-scope="recent">Last 6 Weeks</button>
         <button class="gantt-scope-btn" data-scope="quarter">${nowQ}</button>
         <button class="gantt-scope-btn" data-scope="year">${new Date().getFullYear()}</button>
         <button class="gantt-scope-btn" data-scope="all">All time</button>
       </div>
     </div>
-    <p class="gantt-quarter-note">We're in <b>${nowQ}</b> — this view opens here by default.</p>
+    <p class="gantt-quarter-note">Showing <b>${win.label}</b> — this view opens here by default.</p>
     <div class="gantt-legend">
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>${escapeHtml(statusLabel("Kickoff"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-200);"></span>${escapeHtml(statusLabel("Intake Meeting Requested"))}</div>
@@ -4561,7 +4572,7 @@ function renderGanttGroup(key){
       <div class="gantt-rows" id="ganttRows">${shown.length ? shown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
     </div>
   `;
-  ganttRenderAxis(cal, ganttScope === "quarter" ? "week" : "month");
+  ganttRenderAxis(cal, (ganttScope === "quarter" || ganttScope === "recent") ? "week" : "month");
   panelEl.querySelectorAll(".gantt-scope-btn").forEach(btn=>{
     btn.classList.toggle("active", btn.dataset.scope === ganttScope);
     btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
@@ -4588,7 +4599,7 @@ function toggleGanttPanel(key, label, positions){
     return;
   }
   ganttOpenKey = key;
-  ganttScope = "quarter";
+  ganttScope = "recent";
   panelEl.classList.add("show");
   renderGanttGroup(key);
   updateGanttHintBtn();
