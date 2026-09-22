@@ -508,16 +508,24 @@
   /* Separador fino entre etapas consecutivas — ayuda a leer el limite incluso cuando dos tonos
      de la rampa quedan cerca uno del otro. */
   .gantt-seg + .gantt-seg { border-left: 1.5px solid var(--surface-1); }
-  /* Antes solo animaba brightness — en la mitad baja del ciclo (o en una captura de pantalla
-     quieta) quedaba identico a una etapa vieja, Nicolas: "tienes que hacerle algo para que se
-     diferencie mucho". Ahora tiene un anillo blanco FIJO (no depende de la animacion para
-     notarse) mas un brightness que nunca baja a 1 — siempre se ve mas claro que el resto, con o
-     sin movimiento. */
+  /* Round 2 de esto: el anillo + brightness de antes seguia sin ser "muchisimo mejor" (Nicolas,
+     literal). Ahora son 3 capas a la vez, ninguna opcional:
+     1) resplandor FIJO hacia afuera (box-shadow sin blur=0, se ve aunque la pagina este quieta),
+     2) brightness que respira mas alto (1.15 a 1.55, nunca cerca de "etapa vieja"),
+     3) un brillo diagonal que BARRE la barra en loop (background-image en vez del shorthand
+     "background" para no chocar con el color inline — ver el cambio a background-color en JS). */
   .gantt-seg[data-current="true"] {
-    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.65);
-    animation: gantt-pulse 1.8s ease-in-out infinite;
+    background-image: linear-gradient(110deg, transparent 15%, rgba(255,255,255,0.7) 45%, rgba(255,255,255,0.7) 55%, transparent 85%);
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75), 0 0 10px 2px rgba(255,255,255,0.45);
+    animation: gantt-pulse 1.6s ease-in-out infinite, gantt-shimmer 2.4s linear infinite;
   }
-  @keyframes gantt-pulse { 0%, 100% { filter: brightness(1.08); } 50% { filter: brightness(1.4); } }
+  @keyframes gantt-pulse {
+    0%, 100% { filter: brightness(1.15); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75), 0 0 6px 1px rgba(255,255,255,0.35); }
+    50% { filter: brightness(1.55); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.9), 0 0 14px 3px rgba(255,255,255,0.55); }
+  }
+  @keyframes gantt-shimmer { 0% { background-position: 160% 0; } 100% { background-position: -60% 0; } }
   /* El "late", literal: un punto que hace ping en la punta de la etapa activa — la version sutil
      (solo brightness en el segmento) no se notaba, Nicolas: "no veo por ningun lado lo del pulse
      ... que se sintiera como que esta vivo". Esto si se ve a simple vista, sin hover. */
@@ -3281,7 +3289,14 @@ function setDashboardScope(name, opts){
   // excepcion: ahi SI se permite entrar al nombre de otro reclutador para cualquiera, porque no
   // es su Workspace — es su Dashboard, solo lectura (trackingCanEdit() ya bloquea cualquier
   // edicion real comparando MY_RECRUITER_NAME contra activeDashboardScope).
-  if(!readOnly && !isAdmin() && MY_RECRUITER_NAME && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME;
+  // CORREGIDO 2026-09-22 (Nicolas, bug real): exigir "MY_RECRUITER_NAME" en la condicion dejaba
+  // pasar de largo cualquier visitante SIN identidad (Public Access, donde MY_RECRUITER_NAME
+  // nunca se llena) — podia entrar al workspace personal de CUALQUIER reclutador via
+  // modalEditInTrackingBtn u otros atajos. El comentario original ("isAdmin() ya trata sin
+  // conexion como... gente viendo el link publico") es de ANTES de que publicAccessMode existiera
+  // como gate propio (ver isAdmin()) — ya no aplica. Ahora el fallback es MY_RECRUITER_NAME si
+  // existe, o null (Team) si no hay ninguna identidad real detras.
+  if(!readOnly && !isAdmin() && name && name !== MY_RECRUITER_NAME) name = MY_RECRUITER_NAME || null;
   activeDashboardScope = name;
   activeDashboardReadOnly = readOnly && name !== MY_RECRUITER_NAME;
   document.getElementById("navItemTracking").style.display = (name && !activeDashboardReadOnly) ? "" : "none";
@@ -4352,7 +4367,7 @@ function ganttRowHtml(p, cal){
     const realDays = Math.max(1, ganttDaysBetween(seg.start, seg.stop));
     const clipDays = Math.max(0.25, ganttDaysBetween(clipStart, clipStop));
     const widthPct = (clipDays/visibleDays*100).toFixed(3);
-    return `<div class="gantt-seg" data-current="${isCurrent}" style="width:${widthPct}%; background:${color};">
+    return `<div class="gantt-seg" data-current="${isCurrent}" style="width:${widthPct}%; background-color:${color};">
       ${isCurrent ? `<span class="gantt-blip"></span>` : ""}
       <div class="gantt-tooltip"><b>${escapeHtml(seg.label)}</b><br><span class="muted">${ganttFmtDate(seg.start)}–${ganttFmtDate(seg.stop)} · ${realDays}d</span></div>
     </div>`;
@@ -6449,7 +6464,12 @@ function renderDetailModal(){
   // Eliminar una posicion solo es posible desde Positions, nunca desde Tracking ni desde
   // los drill-down del Dashboard, para que no sea algo que se haga sin querer.
   document.getElementById("modalDeleteZone").style.display = activeDetailAllowDelete ? "" : "none";
-  document.getElementById("modalEditInTrackingZone").style.display = activeDetailFromDashboard ? "" : "none";
+  // Antes solo revisaba de donde vino el modal (activeDetailFromDashboard), nunca si la persona
+  // realmente puede editar algo — un visitante de Public Access viendo un req desde el Dashboard
+  // (o desde el Gantt, que tambien abre con fromDashboard=true) veia este boton igual que
+  // cualquier reclutador real. Bug real reportado por Nicolas ("estoy en public access y dice
+  // edit in tracking"). trackingCanEdit() ya es la fuente de verdad que usa el resto del archivo.
+  document.getElementById("modalEditInTrackingZone").style.display = (activeDetailFromDashboard && trackingCanEdit()) ? "" : "none";
 }
 
 async function saveModalDates(){
