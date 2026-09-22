@@ -523,12 +523,17 @@
   .gantt-blip {
     position: absolute; right: -1px; top: 50%; width: 9px; height: 9px; margin-top: -4.5px;
     border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--surface-1); z-index: 5;
-    animation: gantt-blip-ping 1.6s ease-in-out infinite;
+    /* El "breath" del segmento quedo perfecto tal cual — esto es aparte: un pulso chiquito en el
+       PUNTO exacto de donde va el req ahora mismo, apenas perceptible, para que se note cual es
+       la posicion actual sin competir con el breath del segmento. Seguro de animar en el propio
+       punto (sin hijos adentro), a diferencia del segmento — no hay nada que se pueda deformar. */
+    animation: gantt-blip-ping 1.6s ease-in-out infinite, gantt-blip-pulse 1.6s ease-in-out infinite;
   }
   @keyframes gantt-blip-ping {
     0%, 100% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 0 rgba(var(--brand-rgb),0.6); }
     50% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 7px rgba(var(--brand-rgb),0); }
   }
+  @keyframes gantt-blip-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.22); } }
   @media (prefers-reduced-motion: reduce) {
     .gantt-seg[data-current="true"] { animation: none; }
     .gantt-blip { animation: none; }
