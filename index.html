@@ -530,11 +530,19 @@
   .gantt-blip {
     position: absolute; right: -1px; top: 50%; width: 9px; height: 9px; margin-top: -4.5px;
     border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--surface-1); z-index: 5;
-    animation: gantt-blip-ping 1.6s ease-in-out infinite;
+    /* El blip vive DENTRO de .gantt-seg[data-current], que se estira con scaleY() en cada latido
+       — sin contrarrestarlo, el punto blanco se estira igual y se ve como un ovalo (bug real,
+       Nicolas se rio del "ovalo"). gantt-blip-unscale aplica el scaleY inverso, sincronizado
+       misma duracion/curva que el pulso del segmento, para que el circulo se quede circulo. */
+    animation: gantt-blip-ping 1.6s ease-in-out infinite, gantt-blip-unscale 1.4s ease-in-out infinite;
   }
   @keyframes gantt-blip-ping {
     0%, 100% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 0 rgba(var(--brand-rgb),0.6); }
     50% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 7px rgba(var(--brand-rgb),0); }
+  }
+  @keyframes gantt-blip-unscale {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(0.758); }
   }
   @media (prefers-reduced-motion: reduce) {
     .gantt-seg[data-current="true"] { animation: none; }
