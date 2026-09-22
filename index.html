@@ -453,6 +453,12 @@
      subrayado de marca bajo la tarjeta que esta abierta ahora mismo, para responder "en cual
      estoy parado" igual que ya responde el tab de arriba (Nicolas, comparando ambos). */
   .ps-stat-open { background: var(--surface-1); border-radius: 10px 10px 0 0; border-bottom: 2px solid var(--brand); }
+  /* Antes la unica pista de que las tarjetas abren un Gantt era pasar el mouse y notar el
+     cursor:pointer — Nicolas: "hay que hacer algun botroncito... para decirle al usuario oye,
+     aqui tiene un Gantt chart". Fila propia debajo de las 4 tarjetas, discreta pero real. */
+  .gantt-hint-row { display: flex; justify-content: center; margin-top: 12px; }
+  .gantt-hint-btn { display: inline-flex; align-items: center; gap: 7px; }
+  .gantt-hint-btn svg { flex: none; opacity: .8; }
   @media (max-width: 720px) {
     .positions-summary-strip { flex-wrap: wrap; }
     .ps-arrow { display: none; }
@@ -1415,6 +1421,12 @@
                 <h3>Positions &amp; Placements</h3>
                 <div class="panel-sub">Every requisition, broken down by where it stands toward becoming an actual placement.</div>
                 <div class="positions-summary-strip" id="positionsSummaryStrip"></div>
+                <div class="gantt-hint-row">
+                  <button type="button" class="btn ghost small gantt-hint-btn" id="ganttHintBtn">
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 13.5V5M6 13.5V2.5M10 13.5V7M14 13.5V4"/></svg>
+                    <span id="ganttHintBtnText">View timeline (Gantt) for any card above</span>
+                  </button>
+                </div>
                 <div class="gantt-panel" id="ganttPanel"></div>
               </div>
               <!-- Fila 2, dos tarjetas iguales (span 3 de 6 cada una): panorama de requisitions +
@@ -4556,13 +4568,28 @@ function toggleGanttPanel(key, label, positions){
     ganttOpenKey = null;
     panelEl.classList.remove("show");
     panelEl.innerHTML = "";
+    updateGanttHintBtn();
     return;
   }
   ganttOpenKey = key;
   ganttScope = "quarter";
   panelEl.classList.add("show");
   renderGanttGroup(key);
+  updateGanttHintBtn();
 }
+function updateGanttHintBtn(){
+  const textEl = document.getElementById("ganttHintBtnText");
+  if(!textEl) return;
+  textEl.textContent = ganttOpenKey
+    ? `Hide the ${GANTT_DATA[ganttOpenKey].label} timeline`
+    : "View timeline (Gantt) for any card above";
+}
+document.getElementById("ganttHintBtn").addEventListener("click", ()=>{
+  // Sin caja especifica que abrir, el botón por defecto muestra Active Positions — el mismo
+  // toggle que ya usan las tarjetas (si ya hay una abierta, la cierra en vez de pelear con ella).
+  const key = ganttOpenKey || "active";
+  toggleGanttPanel(key, GANTT_DATA[key].label, GANTT_DATA[key].positions);
+});
 
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
