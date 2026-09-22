@@ -558,6 +558,8 @@
   .gantt-milestone.outcome-good .gantt-milestone-shape { background: var(--good); }
   .gantt-milestone.outcome-critical { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
   .gantt-milestone.outcome-critical .gantt-milestone-shape { background: var(--critical); }
+  .gantt-milestone.outcome-neutral { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
+  .gantt-milestone.outcome-neutral .gantt-milestone-shape { background: var(--neutral); }
   .gantt-row-end { width: 150px; flex: none; text-align: right; padding-left: 10px; }
   .gantt-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; max-width: 100%; }
   .gantt-chip .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: currentColor; }
@@ -566,6 +568,7 @@
   .gantt-chip.risk { background: rgba(var(--warning-rgb),0.16); color: var(--warning); }
   .gantt-chip.good { background: rgba(var(--good-rgb),0.16); color: var(--good); }
   .gantt-chip.critical { background: rgba(var(--critical-rgb),0.16); color: var(--critical); }
+  .gantt-chip.neutral { background: rgba(127,127,127,0.16); color: var(--neutral); }
   .gantt-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 10.5px; line-height: 1.5; padding: 7px 9px; border-radius: 8px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 6px 18px rgba(0,0,0,0.35); z-index: 6; }
   .gantt-tooltip .muted { color: var(--text-secondary); }
   .gantt-seg:hover .gantt-tooltip, .gantt-projected:hover .gantt-tooltip, .gantt-milestone:hover .gantt-tooltip { opacity: 1; }
@@ -4382,8 +4385,13 @@ function ganttRowHtml(p, cal){
   }).join("");
 
   if(terminal && end >= visStart && end <= visEnd){
-    const isGood = p.status === "Hired";
-    milestonesHtml += `<div class="gantt-milestone ${isGood ? "outcome-good" : "outcome-critical"}" style="left:100%;">
+    // 3 desenlaces reales, 3 colores distintos — Filled (Internal Hire) NO es una perdida como
+    // Cancelled (el cliente si cubrio la vacante, solo que no fue una colocacion de Irth), asi
+    // que no puede compartir el rojo de "critical" con Cancelled (bug real senalado por Nicolas:
+    // "por que le pones closed - placed y closed - cancelled... no deberia ser solo placed y
+    // cancelled" llevo a revisar el resto de la leyenda y encontrar este tambien).
+    const outcomeClass = p.status==="Hired" ? "outcome-good" : (p.status==="Cancelled" ? "outcome-critical" : "outcome-neutral");
+    milestonesHtml += `<div class="gantt-milestone ${outcomeClass}" style="left:100%;">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:16px;"><b>${escapeHtml(statusLabel(p.status))}</b><br><span class="muted">${ganttFmtDate(end)}</span></div>
     </div>`;
@@ -4436,7 +4444,10 @@ function ganttRowHtml(p, cal){
   const daysToTarget = targetDate ? Math.round((targetDate - now)/86400000) : null;
   let chipClass, chipLabel;
   if(paused){ chipClass = "paused"; chipLabel = `Paused — ${statusLabel(p.status)}`; }
-  else if(terminal){ chipClass = p.status==="Hired" ? "good" : "critical"; chipLabel = `${statusLabel(p.status)} · ${ganttFmtDate(end)}`; }
+  else if(terminal){
+    chipClass = p.status==="Hired" ? "good" : (p.status==="Cancelled" ? "critical" : "neutral");
+    chipLabel = `${statusLabel(p.status)} · ${ganttFmtDate(end)}`;
+  }
   else if(daysToTarget === null){ chipClass = "live"; chipLabel = statusLabel(p.status); }
   else {
     chipClass = (daysToTarget < 5) ? "risk" : "live";
@@ -4492,12 +4503,13 @@ function renderGanttGroup(key){
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>${escapeHtml(statusLabel("Submitted"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>${escapeHtml(statusLabel("Client Interview"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>${escapeHtml(statusLabel("Offer Request"))}</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond"></span>Moved to next stage on this date</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond"></span>Real date a stage began</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected Time To Fill (internal goal)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--good);"></span>Projected Time To Hire (internal goal)</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Closed — Placed</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Closed — Cancelled</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--neutral);"></span>Paused / closed without a placement match</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Placed</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Cancelled</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("Filled (Internal Hire)"))} — client hired without an Irth placement</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("On Hold"))} — paused, clock frozen</div>
     </div>
     <div class="gantt-calendar">
       <div class="gantt-cal-gridlines" id="ganttGridlines"></div>
