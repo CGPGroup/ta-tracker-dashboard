@@ -508,8 +508,16 @@
   /* Separador fino entre etapas consecutivas — ayuda a leer el limite incluso cuando dos tonos
      de la rampa quedan cerca uno del otro. */
   .gantt-seg + .gantt-seg { border-left: 1.5px solid var(--surface-1); }
-  .gantt-seg[data-current="true"] { animation: gantt-pulse 1.8s ease-in-out infinite; }
-  @keyframes gantt-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+  /* Antes solo animaba brightness — en la mitad baja del ciclo (o en una captura de pantalla
+     quieta) quedaba identico a una etapa vieja, Nicolas: "tienes que hacerle algo para que se
+     diferencie mucho". Ahora tiene un anillo blanco FIJO (no depende de la animacion para
+     notarse) mas un brightness que nunca baja a 1 — siempre se ve mas claro que el resto, con o
+     sin movimiento. */
+  .gantt-seg[data-current="true"] {
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.65);
+    animation: gantt-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes gantt-pulse { 0%, 100% { filter: brightness(1.08); } 50% { filter: brightness(1.4); } }
   /* El "late", literal: un punto que hace ping en la punta de la etapa activa — la version sutil
      (solo brightness en el segmento) no se notaba, Nicolas: "no veo por ningun lado lo del pulse
      ... que se sintiera como que esta vivo". Esto si se ve a simple vista, sin hover. */
@@ -529,10 +537,18 @@
     .gantt-seg[data-current="true"] { animation: none; }
     .gantt-blip { animation: none; }
   }
-  .gantt-milestone { position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; margin-left: -3.5px; background: var(--text-secondary); border: 1px solid var(--surface-1); transform: rotate(45deg); border-radius: 1px; z-index: 4; }
-  .gantt-milestone.target { background: transparent; border: 1.5px dashed var(--brand); }
-  .gantt-milestone.outcome-good { background: var(--good); width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
-  .gantt-milestone.outcome-critical { background: var(--critical); width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
+  /* El diamante y su tooltip van SEPARADOS a proposito: .gantt-milestone (el contenedor
+     posicionado, sin rotar) solo ubica el punto; .gantt-milestone-shape (hijo) es quien gira 45deg
+     para verse como diamante. Antes el rotate vivia en el mismo div que el tooltip, asi que el
+     tooltip heredaba ese sistema de coordenadas girado — las tarjetas salian "torcidas" (bug real
+     reportado por Nicolas), un rotate(-45deg) puesto a mano en el tooltip no lo corregia bien. */
+  .gantt-milestone { position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; margin-left: -3.5px; z-index: 4; }
+  .gantt-milestone-shape { display: block; width: 100%; height: 100%; background: var(--text-secondary); border: 1px solid var(--surface-1); border-radius: 1px; transform: rotate(45deg); }
+  .gantt-milestone.target .gantt-milestone-shape { background: transparent; border: 1.5px dashed var(--brand); }
+  .gantt-milestone.outcome-good { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
+  .gantt-milestone.outcome-good .gantt-milestone-shape { background: var(--good); }
+  .gantt-milestone.outcome-critical { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
+  .gantt-milestone.outcome-critical .gantt-milestone-shape { background: var(--critical); }
   .gantt-row-end { width: 150px; flex: none; text-align: right; padding-left: 10px; }
   .gantt-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; max-width: 100%; }
   .gantt-chip .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: currentColor; }
@@ -4233,9 +4249,14 @@ function ganttSegments(p){
   const offerDate = parseD(p.offerRequestDate);
   const close = ganttCloseDate(p);
   const end = ganttEndPoint(p);
+  // boundaryLabel es lo que dice el hito "X empezó" en el limite izquierdo del tramo — separado
+  // de "label" (el nombre que usa el color/leyenda) porque cuando se re-etiqueta el ultimo tramo
+  // mas abajo SIN una fecha real, la fecha de inicio que hereda sigue siendo la del tramo
+  // anterior de verdad conocido — decir ahi "Offer Request empezó" en esa fecha seria una
+  // precision falsa que el dato no respalda.
   const push = (key,label,start,stop)=>{
     if(!start || !stop || stop<=start) return;
-    segs.push({key, label, color:STAGE_COLORS[key]||"var(--seq-400)", start:new Date(start), stop:new Date(stop)});
+    segs.push({key, label, boundaryLabel:label, color:STAGE_COLORS[key]||"var(--seq-400)", start:new Date(start), stop:new Date(stop)});
   };
   push("Kickoff", statusLabel("Kickoff"), kickoff, introReq || introDone || end);
   if(introReq) push("Intake Meeting Requested", statusLabel("Intake Meeting Requested"), introReq, introDone || end);
@@ -4251,6 +4272,31 @@ function ganttSegments(p){
     }
   }
   if(offerDate) push("Offer Request", statusLabel("Offer Request"), offerDate, close || end);
+
+  // El status guardado SIEMPRE manda para la etapa que se muestra como actual — un req puede
+  // estar en un status mas avanzado del que sus fechas conocidas alcanzan a probar (bug real
+  // reportado por Nicolas: reqs ya en Offer Request se seguian viendo como "Submitted" en el
+  // Gantt porque offerRequestDate es una columna nueva, ausente en reqs migrados de antes). Si
+  // hay una fecha real de cuando entro a ese status (log de Activity), se parte el ultimo tramo
+  // ahi; si no existe ninguna fecha que lo respalde, se re-etiqueta el ultimo tramo conocido en
+  // vez de inventar un limite — mismo criterio de "nunca fabricar una fecha" de arriba.
+  const lastSeg = segs[segs.length-1];
+  if(lastSeg && lastSeg.key !== p.status && STAGE_COLORS.hasOwnProperty(p.status)
+     && !TERMINAL.includes(p.status) && !SLA_PAUSING_STATUSES.includes(p.status)){
+    const tStr = ganttFindTransitionDate(p, p.status);
+    const tDate = tStr ? parseD(tStr) : null;
+    if(tDate && tDate > lastSeg.start && tDate < end){
+      lastSeg.stop = tDate;
+      push(p.status, statusLabel(p.status), tDate, end);
+    } else {
+      lastSeg.key = p.status;
+      lastSeg.label = statusLabel(p.status);
+      lastSeg.color = STAGE_COLORS[p.status] || lastSeg.color;
+      lastSeg.stop = end;
+    }
+  } else if(lastSeg && lastSeg.key === p.status && lastSeg.stop < end){
+    lastSeg.stop = end;
+  }
   return segs;
 }
 
@@ -4291,13 +4337,15 @@ function ganttRowHtml(p, cal){
   let milestonesHtml = segs.slice(1).filter(seg=> seg.start >= visStart && seg.start <= visEnd).map(seg=>{
     const leftPct = (cal.pctOf(seg.start) - trackLeftPct) / trackWidthPct * 100;
     return `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
-      <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.label)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
+      <span class="gantt-milestone-shape"></span>
+      <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.boundaryLabel)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
     </div>`;
   }).join("");
 
   if(terminal && end >= visStart && end <= visEnd){
     const isGood = p.status === "Hired";
     milestonesHtml += `<div class="gantt-milestone ${isGood ? "outcome-good" : "outcome-critical"}" style="left:100%;">
+      <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:16px;"><b>${escapeHtml(statusLabel(p.status))}</b><br><span class="muted">${ganttFmtDate(end)}</span></div>
     </div>`;
   }
@@ -4315,6 +4363,7 @@ function ganttRowHtml(p, cal){
     const projWidthPct = Math.max(0, cal.pctOf(clipTarget) - projLeftPct);
     projectedHtml = `<div class="gantt-projected" style="left:${projLeftPct}%; width:${projWidthPct}%;">
       <div class="gantt-milestone target" style="left:100%;">
+        <span class="gantt-milestone-shape"></span>
         <div class="gantt-tooltip" style="bottom:16px;"><b>Projected TTF target</b><br><span class="muted">${ganttFmtDate(targetDate)} if pace holds${clipTarget<targetDate ? " · beyond this view" : ""}</span></div>
       </div>
     </div>`;
