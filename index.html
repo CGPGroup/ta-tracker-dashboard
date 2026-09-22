@@ -7033,8 +7033,16 @@ function onStatusOptionClick(p, newStatus){
     alert(`Can't move to "${statusLabel(newStatus)}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
     return;
   }
-  if(REQUIRES_BATCH_LOGGED.includes(newStatus) && !(p.batches && p.batches.length)){
-    alert(`Can't move to "${statusLabel(newStatus)}" yet — no submission batch has been logged for this requisition. There's no candidate to interview, extend an offer to, or place until at least one batch has been submitted.`);
+  // CORREGIDO 2026-09-22 (Nicolas, bug real): antes solo revisaba p.batches de ESTE req — un
+  // Headcount Group real (ej. RD-018/019/020, mismo rol/HM, un solo batch de candidatos aplica a
+  // las 3 vacantes) se quedaba bloqueado en req 2 y 3 aunque el batch de la req 1 ya cubriera el
+  // grupo entero. "Los batches que se envian obviamente cuentan para ese headcount group, no es
+  // que por req haya que poner un batch." Mismo patron ya usado para Intake (ver
+  // intakeSiblings mas abajo) — un batch logueado en CUALQUIER hermana del mismo grupo cuenta.
+  const hasOwnBatch = p.batches && p.batches.length;
+  const hasGroupBatch = p.headcountGroup && POSITIONS.some(x=> x.headcountGroup===p.headcountGroup && x.batches && x.batches.length);
+  if(REQUIRES_BATCH_LOGGED.includes(newStatus) && !hasOwnBatch && !hasGroupBatch){
+    alert(`Can't move to "${statusLabel(newStatus)}" yet — no submission batch has been logged for this requisition${p.headcountGroup ? ` or for any other requisition in its Headcount Group ("${p.headcountGroup}")` : ""}. There's no candidate to interview, extend an offer to, or place until at least one batch has been submitted.`);
     return;
   }
   // Elegir "Intake Meeting Waived" a mano (dropdown) sin una razon todavia guardada no tiene
