@@ -486,8 +486,13 @@
   .gantt-row-label { width: 220px; flex: none; padding-right: 8px; }
   .gantt-row-title { font-size: 11.5px; font-weight: 600; color: var(--text); line-height: 1.3; }
   .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
-  .gantt-row-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+  .gantt-row-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
   .gantt-row-meta b { color: var(--text); font-weight: 600; }
+  .gantt-avatar {
+    width: 14px; height: 14px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 7px; font-weight: 700; color: #fff; background-size: cover; background-position: center;
+  }
   .gantt-row-canvas { flex: 1; min-width: 0; position: relative; height: 24px; }
   .gantt-track { position: absolute; top: 5px; height: 13px; border-radius: 7px; background: var(--surface-1); display: flex; overflow: visible; }
   .gantt-projected { position: absolute; top: 5px; height: 13px; border-radius: 7px; border: 1.5px dashed rgba(var(--brand-rgb),0.5); background: transparent; }
@@ -4311,11 +4316,16 @@ function ganttRowHtml(p, cal){
     chipLabel = daysToTarget >= 0 ? `${daysToTarget}d to target` : `${-daysToTarget}d past target`;
   }
 
+  const recName = p.recruiter || "";
+  const recPhoto = recName ? RECRUITER_PHOTOS[recName] : null;
+  const avatarStyle = recPhoto ? `background-image:url('${escapeHtml(recPhoto)}');` : `background:${recName?colorForName(recName):"var(--neutral)"};`;
+  const avatarHtml = recName ? `<span class="gantt-avatar" style="${avatarStyle}">${recPhoto ? "" : escapeHtml(initialsFor(recName))}</span>` : "";
+
   return `<div class="gantt-row" data-id="${escapeHtml(p.id)}">
     <div class="gantt-row-label">
       <div class="gantt-row-title">${escapeHtml(p.title||"")}</div>
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
-      <div class="gantt-row-meta"><b>${escapeHtml(p.recruiter||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : "Target "+ganttFmtDate(targetDate)}</div>
+      <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : "Target "+ganttFmtDate(targetDate)}</div>
     </div>
     <div class="gantt-row-canvas">
       <div class="gantt-track" style="left:${trackLeftPct}%; width:${trackWidthPct}%;">${segsHtml}${milestonesHtml}</div>
