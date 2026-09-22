@@ -4378,12 +4378,20 @@ function ganttRowHtml(p, cal){
     const isLast = i === segs.length-1;
     const isCurrent = isLast && !terminal && !paused;
     const color = (paused && isLast) ? "var(--neutral)" : seg.color;
-    const realDays = Math.max(1, ganttDaysBetween(seg.start, seg.stop));
+    // Solo el tramo que de verdad compone el TTS real (Sourcing, o Intake Pending si el req
+    // esta parado justo ahi) cuenta en dias HABILES — igual que TTS Elapsed en el modal de
+    // detalle (bizDaysBetween(intake, ref), nunca calendario). El resto sigue en dias calendario
+    // (no hay ninguna metrica oficial de TTS/TTF/TTH que cubra esos tramos para tener que
+    // cuadrar contra algo). Nicolas, viendo 12 dias de Sourcing cuando el TTS real decia 8/9:
+    // "el Gantt igual debe contar dias habiles nada mas... si no se van a ver numeros que no son".
+    const countsAsTts = seg.key === "Sourcing" || seg.key === "Intake Pending";
+    const realDays = Math.max(1, countsAsTts ? bizDaysBetween(seg.start, seg.stop) : ganttDaysBetween(seg.start, seg.stop));
+    const daysLabel = countsAsTts ? `${realDays} business day${realDays===1?"":"s"}` : `${realDays}d`;
     const clipDays = Math.max(0.25, ganttDaysBetween(clipStart, clipStop));
     const widthPct = (clipDays/visibleDays*100).toFixed(3);
     return `<div class="gantt-seg" data-current="${isCurrent}" style="width:${widthPct}%; background-color:${color};">
       ${isCurrent ? `<span class="gantt-blip"></span>` : ""}
-      <div class="gantt-tooltip"><b>${escapeHtml(seg.label)}</b><br><span class="muted">${ganttFmtDate(seg.start)}–${ganttFmtDate(seg.stop)} · ${realDays}d</span></div>
+      <div class="gantt-tooltip"><b>${escapeHtml(seg.label)}</b><br><span class="muted">${ganttFmtDate(seg.start)}–${ganttFmtDate(seg.stop)} · ${daysLabel}</span></div>
     </div>`;
   }).join("");
 
