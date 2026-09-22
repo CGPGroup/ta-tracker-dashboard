@@ -544,7 +544,8 @@
      reportado por Nicolas), un rotate(-45deg) puesto a mano en el tooltip no lo corregia bien. */
   .gantt-milestone { position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; margin-left: -3.5px; z-index: 4; }
   .gantt-milestone-shape { display: block; width: 100%; height: 100%; background: var(--text-secondary); border: 1px solid var(--surface-1); border-radius: 1px; transform: rotate(45deg); }
-  .gantt-milestone.target .gantt-milestone-shape { background: transparent; border: 1.5px dashed var(--brand); }
+  .gantt-milestone.target-ttf .gantt-milestone-shape { background: transparent; border: 1.5px dashed var(--brand); }
+  .gantt-milestone.target-tth .gantt-milestone-shape { background: transparent; border: 1.5px dashed var(--good); }
   .gantt-milestone.outcome-good { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
   .gantt-milestone.outcome-good .gantt-milestone-shape { background: var(--good); }
   .gantt-milestone.outcome-critical { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
@@ -4199,7 +4200,7 @@ function ganttRenderAxis(cal, granularity){
     const line = document.createElement("div");
     line.className = "gantt-cal-today-line"; line.style.left = pct+"%";
     const label = document.createElement("div");
-    label.className = "gantt-cal-today-label"; label.style.left = pct+"%"; label.textContent = "Today";
+    label.className = "gantt-cal-today-label"; label.style.left = pct+"%"; label.textContent = `Today · ${ganttFmtDate(today)}`;
     gridEl.appendChild(line); gridEl.appendChild(label);
   }
 }
@@ -4234,44 +4235,67 @@ function ganttEndPoint(p){
   return new Date();
 }
 // Segmentos reales por etapa, derivados solo de fechas que ya existen en el modelo — nunca
-// fabrica una fecha que no este guardada. El limite Submitted -> Client Interview es el unico que
+// fabrica una fecha que no este guardada. Construidos como una lista de CHECKPOINTS conocidos, en
+// vez de un push condicional campo-por-campo: si falta una fecha intermedia (dato migrado/
+// incompleto — bug real reportado por Nicolas: "algunos reqs en el gantt ni siquiera tienen
+// todos sus estados"), el tramo anterior simplemente se extiende hasta el siguiente checkpoint
+// que si existe, sin overlaps ni huecos. El limite Submitted -> Client Interview es el unico que
 // nunca tuvo columna propia; se busca en el Activity log real (mismo patron que
-// computeSlaPauseInfo) y si no esta (reqs viejos sin ese log especifico) simplemente no se separa,
-// degradando a un solo tramo "Submitted" en vez de inventar una fecha.
+// computeSlaPauseInfo) y si no esta (reqs viejos sin ese log especifico) simplemente no se separa.
 function ganttSegments(p){
   const kickoff = parseD(p.kickoff);
   if(!kickoff) return [];
-  const segs = [];
   const introReq = parseD(p.intakeRequestedDate);
   const effectiveIntake = p.intake || (p.intakeWaivedReason ? p.intakeWaivedDate : null);
   const introDone = parseD(effectiveIntake);
   const submitDate = parseD(p.submit);
+  const ciDateStr = ganttFindTransitionDate(p, "Client Interview");
+  const ciDateRaw = ciDateStr ? parseD(ciDateStr) : null;
+  const ciDate = (ciDateRaw && submitDate && ciDateRaw > submitDate) ? ciDateRaw : null;
   const offerDate = parseD(p.offerRequestDate);
   const close = ganttCloseDate(p);
   const end = ganttEndPoint(p);
-  // boundaryLabel es lo que dice el hito "X empezó" en el limite izquierdo del tramo — separado
-  // de "label" (el nombre que usa el color/leyenda) porque cuando se re-etiqueta el ultimo tramo
-  // mas abajo SIN una fecha real, la fecha de inicio que hereda sigue siendo la del tramo
-  // anterior de verdad conocido — decir ahi "Offer Request empezó" en esa fecha seria una
-  // precision falsa que el dato no respalda.
-  const push = (key,label,start,stop)=>{
-    if(!start || !stop || stop<=start) return;
-    segs.push({key, label, boundaryLabel:label, color:STAGE_COLORS[key]||"var(--seq-400)", start:new Date(start), stop:new Date(stop)});
-  };
-  push("Kickoff", statusLabel("Kickoff"), kickoff, introReq || introDone || end);
-  if(introReq) push("Intake Meeting Requested", statusLabel("Intake Meeting Requested"), introReq, introDone || end);
-  if(introDone) push("Sourcing", statusLabel("Sourcing"), introDone, submitDate || end);
-  if(submitDate){
-    const ciDateStr = ganttFindTransitionDate(p, "Client Interview");
-    const ciDate = ciDateStr ? parseD(ciDateStr) : null;
-    if(ciDate && ciDate > submitDate){
-      push("Submitted", statusLabel("Submitted"), submitDate, ciDate);
-      push("Client Interview", statusLabel("Client Interview"), ciDate, offerDate || end);
-    } else {
-      push("Submitted", statusLabel("Submitted"), submitDate, offerDate || end);
+
+  const checkpoints = [
+    {key:"Kickoff", date:kickoff},
+    {key:"Intake Meeting Requested", date:introReq},
+    // "Intake Pending" es el status real de STATUS_ORDER (display "Intake Held") — antes se
+    // saltaba directo a "Sourcing" en cuanto habia fecha de intake, asi que un req sentado
+    // literalmente en ese status nunca se veia con su propio color en el Gantt.
+    {key:"Intake Pending", date:introDone},
+    {key:"Sourcing", date:introDone},
+    {key:"Submitted", date:submitDate},
+    {key:"Client Interview", date:ciDate},
+    {key:"Offer Request", date:offerDate},
+  ].filter(c=>c.date);
+
+  // Fuerza orden cronologico monotono por si dos fechas reales quedaron invertidas en los datos
+  // (nunca deja que un checkpoint retroceda respecto al anterior).
+  let cursor = kickoff;
+  checkpoints.forEach(c=>{ if(c.date < cursor) c.date = new Date(cursor); cursor = c.date; });
+  // "Intake Pending" y "Sourcing" comparten la misma fecha real (introDone) a proposito — el
+  // negocio los trata como el mismo momento (sourcing arranca el mismo dia que se tiene el
+  // intake). Si terminan empatados, se colapsan en uno solo (Sourcing, que es el status real que
+  // sigue si nadie se quedo parado en Intake Pending) para no crear un tramo de ancho cero.
+  for(let i=checkpoints.length-1;i>0;i--){
+    if(checkpoints[i].date.getTime() === checkpoints[i-1].date.getTime() && checkpoints[i-1].key==="Intake Pending"){
+      checkpoints.splice(i-1,1);
     }
   }
-  if(offerDate) push("Offer Request", statusLabel("Offer Request"), offerDate, close || end);
+
+  const segs = [];
+  for(let i=0;i<checkpoints.length;i++){
+    const start = checkpoints[i].date;
+    const stop = i+1<checkpoints.length ? checkpoints[i+1].date : (close || end);
+    if(stop<=start) continue;
+    const key = checkpoints[i].key;
+    const label = statusLabel(key);
+    // boundaryLabel es lo que dice el hito "X empezó" en el limite izquierdo del tramo — separado
+    // de "label" (el que usa el color) porque la correccion de abajo puede re-etiquetar el ultimo
+    // tramo SIN una fecha real nueva; decir ahi "Offer Request empezó" en una fecha que en
+    // realidad es de otra etapa seria una precision falsa que el dato no respalda.
+    segs.push({key, label, boundaryLabel:label, color:STAGE_COLORS[key]||"var(--seq-400)", start:new Date(start), stop:new Date(stop)});
+  }
 
   // El status guardado SIEMPRE manda para la etapa que se muestra como actual — un req puede
   // estar en un status mas avanzado del que sus fechas conocidas alcanzan a probar (bug real
@@ -4279,7 +4303,7 @@ function ganttSegments(p){
   // Gantt porque offerRequestDate es una columna nueva, ausente en reqs migrados de antes). Si
   // hay una fecha real de cuando entro a ese status (log de Activity), se parte el ultimo tramo
   // ahi; si no existe ninguna fecha que lo respalde, se re-etiqueta el ultimo tramo conocido en
-  // vez de inventar un limite — mismo criterio de "nunca fabricar una fecha" de arriba.
+  // vez de inventar un limite.
   const lastSeg = segs[segs.length-1];
   if(lastSeg && lastSeg.key !== p.status && STAGE_COLORS.hasOwnProperty(p.status)
      && !TERMINAL.includes(p.status) && !SLA_PAUSING_STATUSES.includes(p.status)){
@@ -4287,7 +4311,7 @@ function ganttSegments(p){
     const tDate = tStr ? parseD(tStr) : null;
     if(tDate && tDate > lastSeg.start && tDate < end){
       lastSeg.stop = tDate;
-      push(p.status, statusLabel(p.status), tDate, end);
+      segs.push({key:p.status, label:statusLabel(p.status), boundaryLabel:statusLabel(p.status), color:STAGE_COLORS[p.status]||"var(--seq-400)", start:new Date(tDate), stop:new Date(end)});
     } else {
       lastSeg.key = p.status;
       lastSeg.label = statusLabel(p.status);
@@ -4350,29 +4374,55 @@ function ganttRowHtml(p, cal){
     </div>`;
   }
 
-  const targetDate = ganttAddDays(kickoff, SLA_TARGETS.TTF);
+  // Misma base real que el resto del tracker usa para TTF/TTH (slaFor(), ver el modal de
+  // detalle) — nunca kickoff: el reloj arranca en el primer dia habil despues del intake
+  // meeting, y el target ya trae sumado el allowance de Pivot SLA si aplica. Antes esto usaba
+  // kickoff+40 a mano, desalineado del numero real que muestra el resto de la app (bug real
+  // reportado por Nicolas: "no entiendo en que se estan basando los TTF"). TTH tampoco se
+  // mostraba nunca — mismo motivo, se agrega ahora junto a TTF.
   const now = new Date();
-  const showProjection = !terminal && !paused && targetDate > now && end < cal.rangeEnd;
+  const effectiveIntakeDate = p.intake || (p.intakeWaivedReason ? p.intakeWaivedDate : null);
+  const intakeD = parseD(effectiveIntakeDate);
+  const slaStart = intakeD ? nextBizDay(intakeD) : null;
+  const ttfInfo = slaFor(p, "TTF", p.fill);
+  const tthInfo = slaFor(p, "TTH", p.hire);
+  const targetDateTTF = (slaStart && ttfInfo.target) ? ganttAddDays(slaStart, ttfInfo.target) : null;
+  const targetDateTTH = (slaStart && tthInfo.target) ? ganttAddDays(slaStart, tthInfo.target) : null;
+  const targetDate = targetDateTTF; // se sigue usando para el chip/meta de la izquierda (TTF)
+
+  const dashEndReal = targetDateTTH || targetDateTTF;
+  const showProjection = !terminal && !paused && dashEndReal && dashEndReal > now && end < cal.rangeEnd;
   let projectedHtml = "";
   if(showProjection){
     // Mismo clamp: la barra punteada nunca dibuja mas alla del borde visible del calendario,
     // aunque el target real caiga meses despues (se sigue viendo el diamante punteado justo en
     // el borde, marcando "sigue mas alla de esta vista", no un numero de ancho inventado).
-    const clipTarget = targetDate > cal.rangeEnd ? cal.rangeEnd : targetDate;
+    const clipEnd = dashEndReal > cal.rangeEnd ? cal.rangeEnd : dashEndReal;
     const projLeftPct = cal.pctOf(end);
-    const projWidthPct = Math.max(0, cal.pctOf(clipTarget) - projLeftPct);
-    projectedHtml = `<div class="gantt-projected" style="left:${projLeftPct}%; width:${projWidthPct}%;">
-      <div class="gantt-milestone target" style="left:100%;">
+    const projWidthPct = Math.max(0, cal.pctOf(clipEnd) - projLeftPct);
+    let innerMilestones = "";
+    if(targetDateTTF){
+      const clipTTF = targetDateTTF > cal.rangeEnd ? cal.rangeEnd : targetDateTTF;
+      const ttfLeftPct = projWidthPct>0 ? Math.min(100, (cal.pctOf(clipTTF)-projLeftPct)/projWidthPct*100) : 100;
+      innerMilestones += `<div class="gantt-milestone target-ttf" style="left:${ttfLeftPct.toFixed(3)}%;">
         <span class="gantt-milestone-shape"></span>
-        <div class="gantt-tooltip" style="bottom:16px;"><b>Projected TTF target</b><br><span class="muted">${ganttFmtDate(targetDate)} if pace holds${clipTarget<targetDate ? " · beyond this view" : ""}</span></div>
-      </div>
-    </div>`;
+        <div class="gantt-tooltip" style="bottom:16px;"><b>Projected Time To Fill target</b><br><span class="muted">Internal goal, ${ttfInfo.target}d from the intake meeting (business-day start) — ${ganttFmtDate(targetDateTTF)} if pace holds${clipTTF<targetDateTTF ? " · beyond this view" : ""}</span></div>
+      </div>`;
+    }
+    if(targetDateTTH){
+      innerMilestones += `<div class="gantt-milestone target-tth" style="left:100%;">
+        <span class="gantt-milestone-shape"></span>
+        <div class="gantt-tooltip" style="bottom:16px;"><b>Projected Time To Hire target</b><br><span class="muted">Internal goal, ${tthInfo.target}d from the intake meeting (business-day start) — ${ganttFmtDate(targetDateTTH)} if pace holds${clipEnd<targetDateTTH ? " · beyond this view" : ""}</span></div>
+      </div>`;
+    }
+    projectedHtml = `<div class="gantt-projected" style="left:${projLeftPct}%; width:${projWidthPct}%;">${innerMilestones}</div>`;
   }
 
-  const daysToTarget = Math.round((targetDate - now)/86400000);
+  const daysToTarget = targetDate ? Math.round((targetDate - now)/86400000) : null;
   let chipClass, chipLabel;
   if(paused){ chipClass = "paused"; chipLabel = `Paused — ${statusLabel(p.status)}`; }
   else if(terminal){ chipClass = p.status==="Hired" ? "good" : "critical"; chipLabel = `${statusLabel(p.status)} · ${ganttFmtDate(end)}`; }
+  else if(daysToTarget === null){ chipClass = "live"; chipLabel = statusLabel(p.status); }
   else {
     chipClass = (daysToTarget < 5) ? "risk" : "live";
     chipLabel = daysToTarget >= 0 ? `${daysToTarget}d to target` : `${-daysToTarget}d past target`;
@@ -4387,7 +4437,7 @@ function ganttRowHtml(p, cal){
     <div class="gantt-row-label">
       <div class="gantt-row-title">${escapeHtml(p.title||"")}</div>
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
-      <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : "Target "+ganttFmtDate(targetDate)}</div>
+      <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet")}</div>
     </div>
     <div class="gantt-row-canvas">
       <div class="gantt-track" style="left:${trackLeftPct}%; width:${trackWidthPct}%;">${segsHtml}${milestonesHtml}</div>
@@ -4420,15 +4470,19 @@ function renderGanttGroup(key){
     </div>
     <p class="gantt-quarter-note">We're in <b>${nowQ}</b> — this view opens here by default.</p>
     <div class="gantt-legend">
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>Kickoff</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>${escapeHtml(statusLabel("Kickoff"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-200);"></span>${escapeHtml(statusLabel("Intake Meeting Requested"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-300);"></span>${escapeHtml(statusLabel("Intake Pending"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-400);"></span>${escapeHtml(statusLabel("Sourcing"))}</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>Submitted</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>Client Interview</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>Offer Request</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>${escapeHtml(statusLabel("Submitted"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>${escapeHtml(statusLabel("Client Interview"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>${escapeHtml(statusLabel("Offer Request"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond"></span>Moved to next stage on this date</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected Time To Fill target</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected Time To Fill (internal goal)</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--good);"></span>Projected Time To Hire (internal goal)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Closed — Placed</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Closed — Cancelled</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--neutral);"></span>Paused / closed without a placement match</div>
     </div>
     <div class="gantt-calendar">
       <div class="gantt-cal-gridlines" id="ganttGridlines"></div>
