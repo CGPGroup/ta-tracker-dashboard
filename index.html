@@ -508,17 +508,18 @@
   /* Separador fino entre etapas consecutivas — ayuda a leer el limite incluso cuando dos tonos
      de la rampa quedan cerca uno del otro. */
   .gantt-seg + .gantt-seg { border-left: 1.5px solid var(--surface-1); }
-  /* Round 3: la version anterior ("muchisimo mejor") termino literalmente pintando la barra
-     entera blanca en varias filas — Nicolas, riendose: "ya exageraste demasiado con el brillo...
-     es muy blanco". Se quita el shimmer (era el que mas aportaba a "blanco solido") y se bajan
-     brightness/glow a un punto intermedio entre la v1 (invisible) y la v2 (cegadora). */
+  /* Round 4: Nicolas — nada de aura/anillo blanco alrededor, el pulso tiene que sentirse con el
+     MISMO color de la etapa, como un latido real. Sin box-shadow blanco esta vez: solo
+     brightness+saturate (el naranja se ve mas vivo/intenso, nunca se acerca a blanco) mas un
+     scaleY sutil — la barra literalmente "respira" mas gruesa un instante, el mismo gesto visual
+     de un latido, todo en su propio tono. */
   .gantt-seg[data-current="true"] {
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45), 0 0 4px 1px rgba(255,255,255,0.25);
-    animation: gantt-pulse 1.8s ease-in-out infinite;
+    animation: gantt-pulse 1.4s ease-in-out infinite;
+    transform-origin: center;
   }
   @keyframes gantt-pulse {
-    0%, 100% { filter: brightness(1.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.4), 0 0 3px 1px rgba(255,255,255,0.18); }
-    50% { filter: brightness(1.22); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.55), 0 0 6px 2px rgba(255,255,255,0.32); }
+    0%, 100% { filter: brightness(1) saturate(1); transform: scaleY(1); }
+    50% { filter: brightness(1.4) saturate(1.6); transform: scaleY(1.32); }
   }
   /* El "late", literal: un punto que hace ping en la punta de la etapa activa — la version sutil
      (solo brightness en el segmento) no se notaba, Nicolas: "no veo por ningun lado lo del pulse
