@@ -368,7 +368,11 @@
      vertical para no insinuar una relacion "estos N se van a convertir en esto" que no existe.
      Cada tarjeta ademas lleva una frase corta (.stat-desc) explicando exactamente que cuenta. */
   .positions-summary-strip { display: flex; align-items: stretch; gap: 10px; padding-top: 10px; }
-  .ps-stat { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; position: relative; }
+  /* padding-top fijo en TODAS las tarjetas (no solo la abierta) a proposito — si solo la abierta
+     tuviera espacio de sobra, el numero saltaria de posicion cada vez que se abre/cierra el
+     Gantt. Le da aire a la franja de acento de arriba para que no se encime con el numero
+     (bug real, Nicolas: "la parte de arriba se sobrepone al numero"). */
+  .ps-stat { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; position: relative; padding-top: 10px; }
   /* EL BUG REAL de fondo/confuso (ver mas abajo), encontrado recien: .ps-stat tambien tiene la
      clase compartida "clickable-stat", que en TODO el resto del tracker atenua la fila entera al
      pasar el mouse (.clickable-stat:hover{opacity:.72}) — un affordance valido para una fila de
