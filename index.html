@@ -1425,7 +1425,7 @@
               <thead><tr>
                 <th id="positionsSelectAllHeader" style="display:none;"><input type="checkbox" id="positionsSelectAllCheckbox"></th>
                 <th>Position</th><th>Code</th><th>Client</th><th>Hiring Manager</th><th>Recruiter</th><th>Market Location</th><th>Arrangement</th><th>Status</th><th>Kickoff Date</th>
-                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th>Last Activity</th><th>Fill Date</th><th title="The candidate's actual start date — logging it moves this requisition to Hired automatically.">Start Date</th><th>Placement</th>
+                <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th title="When the hiring manager asked to move forward with an offer">Offer Request Date</th><th>Fill Date</th><th title="The candidate's actual start date — logging it moves this requisition to Hired automatically.">Start Date</th><th>Placement</th>
               </tr></thead>
               <tbody></tbody>
             </table>
@@ -2482,6 +2482,10 @@ const STATUS_DATE_FIELD = {
   // "Submitted" (nuevo status, ver STATUS_ORDER) sigue el mismo criterio que Filled/Hired arriba
   // — elegirlo a mano exige la misma Submission Date que ya usa Timeline/logBatchSave().
   "Submitted": {key:"submit", col:"I", label:"Submission Date"},
+  // 2026-09-21, Nicolas: "cómo estamos diferenciando el offer del fill?" — antes no habia forma,
+  // "Offer Request" nunca pedia su propia fecha. Columna nueva ("BI", 61, append-only como
+  // siempre) — elegir este status a mano ahora exige esta fecha, igual que Submitted/Filled/Hired.
+  "Offer Request": {key:"offerRequestDate", col:"BI", label:"Offer Request Date"},
 };
 // Mensaje de "que hacer ahora" por status — Nicolas pidio esto para todos los status, no solo
 // Kickoff. El texto vive centralizado aqui para poder ajustarlo facil si el proceso real cambia.
@@ -4696,7 +4700,7 @@ function renderPositions(){
       <td>${statusChip(p.status)}</td>
       <td>${escapeHtml(p.kickoff)||'-'}</td>
       <td>${slaChip(s.TTS)}</td><td>${slaChip(s.TTF)}</td><td>${slaChip(s.TTH)}</td>
-      <td style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(p.lastRemark)}">${escapeHtml(p.lastRemark)||'-'}</td>
+      <td>${escapeHtml(p.offerRequestDate)||'-'}</td>
       <td>${escapeHtml(p.fill)||'-'}</td>
       <td>${escapeHtml(p.hire)||'-'}</td>
       <td>${p.status==="Hired" ? "Yes" : "No"}</td>
@@ -6666,12 +6670,19 @@ async function advancePositionForCandidateStatus(p, candidateName, newStatus){
   if(!targetPosStatus || AUTO_STATUS_LOCKED.includes(p.status) || STATUS_ORDER.indexOf(targetPosStatus) <= STATUS_ORDER.indexOf(p.status)) return;
   const fromStatus = p.status;
   p.status = targetPosStatus;
+  // 2026-09-21: llegar a Offer Request por esta via (un candidato avanzo hasta ahi) tambien debe
+  // fijar la fecha real, igual que si se hubiera elegido a mano desde el dropdown (ver
+  // STATUS_DATE_FIELD["Offer Request"]) — sin esto, un req que llega aqui solo por el candidato
+  // se quedaria sin Offer Request Date, rompiendo la diferenciacion Offer vs Fill que esto existe
+  // para resolver.
+  if(targetPosStatus === "Offer Request" && !p.offerRequestDate) p.offerRequestDate = localTodayStr();
   const remarkText = `Status changed from ${statusLabel(fromStatus)} to ${statusLabel(targetPosStatus)} (automatic — ${candidateName} moved to ${newStatus}).`;
   p.extra = p.extra || [];
   p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remarkText});
   if(isConnected()){
     try {
       await graphUpdatePositionField(p.id, "G", targetPosStatus);
+      if(targetPosStatus === "Offer Request") await graphUpdatePositionField(p.id, "BI", p.offerRequestDate);
       await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
     } catch(err){ console.error("Could not save the req's auto status advance (non-fatal for the candidate change itself):", err); }
   }
@@ -8636,7 +8647,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:daysAgoStr(0), intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
+      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, offerRequestDate:null, intakeSummarySentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-002: kickoff note ya se mando, esperando la fecha del intake — para probar los DOS
@@ -8651,7 +8662,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(5), intakeRequestedDate:daysAgoStr(5), recruiterAcceptedDate:daysAgoStr(5), intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
+      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, offerRequestDate:null, intakeSummarySentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-003: intake ya sostenido, compensacion ya confirmada (para no bloquear Log Batch de
@@ -8666,7 +8677,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(15), intakeRequestedDate:daysAgoStr(15), recruiterAcceptedDate:daysAgoStr(15), intake:daysAgoStr(10), submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:daysAgoStr(9),
+      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, offerRequestDate:null, intakeSummarySentDate:daysAgoStr(9),
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
     // DEMO-004: recien asignado, TODAVIA SIN ACEPTAR (recruiterAcceptedDate:null) — para probar
@@ -8681,7 +8692,7 @@ function buildDemoPositions(){
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:null, intake:null, submit:null, fill:null, hire:null,
       lastRemark:null, slaException:null, pivotJustification:null, pivotRequestedDate:null, pivotApprovedByLeadDate:null, pivotConfirmedByImmyDate:null,
       calibrationCallDate:null, handoffFrom:null, handoffDate:null, handoffAcceptedDate:null, headcountGroup:null,
-      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, intakeSummarySentDate:null,
+      intakeWaivedReason:null, intakeWaivedDate:null, intakeWaivedEvidenceLink:null, offerRequestDate:null, intakeSummarySentDate:null,
       extra:[], batches:[], batchCandidates:[], remarksHistory:[],
     },
   ];
@@ -8913,6 +8924,13 @@ function parsePositionsTable(posHeaders, posRows){
       // cuando las notas hayan sido enviadas al hiring manager". idx() da -1 si el Excel real
       // todavia no tiene la columna, no rompe nada.
       intakeSummarySentDate: excelValToDateStr(r[idx("Intake Summary Sent Date")]),
+      // Columna nueva/opcional (2026-09-21, Nicolas): fecha real en la que el req llego al status
+      // "Offer Request" — sin esto no habia forma de diferenciar "cuando el hiring manager pidio
+      // la oferta" de "Fill Date" (cuando esa oferta se ACEPTA). Mismo patron ya usado para
+      // Submitted/Filled/Hired (ver STATUS_DATE_FIELD): eligiendo el status a mano se pide esta
+      // fecha, y llegar aqui via el candidato mas avanzado (ver
+      // CANDIDATE_STATUS_TO_POSITION_STATUS/advancePositionForCandidateStatus()) tambien la fija.
+      offerRequestDate: excelValToDateStr(r[idx("Offer Request Date")]),
       extra: [],
       batches: [],
       batchCandidates: [],
@@ -9908,6 +9926,7 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     null,
     null,
     null, // Intake Waived Date (columna 60, ver slaFor()) — mismo patron: reservado antes de que exista en el Excel real.
+    null, // Offer Request Date (columna 61, "BI") — mismo patron.
   ];
 }
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
