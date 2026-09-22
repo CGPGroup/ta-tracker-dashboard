@@ -495,6 +495,22 @@
   .gantt-seg:first-child { border-radius: 7px 0 0 7px; }
   .gantt-seg[data-current="true"] { animation: gantt-pulse 1.8s ease-in-out infinite; }
   @keyframes gantt-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+  /* El "late", literal: un punto que hace ping en la punta de la etapa activa — la version sutil
+     (solo brightness en el segmento) no se notaba, Nicolas: "no veo por ningun lado lo del pulse
+     ... que se sintiera como que esta vivo". Esto si se ve a simple vista, sin hover. */
+  .gantt-blip {
+    position: absolute; right: -1px; top: 50%; width: 9px; height: 9px; margin-top: -4.5px;
+    border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 2px var(--surface-1); z-index: 5;
+    animation: gantt-blip-ping 1.8s ease-in-out infinite;
+  }
+  @keyframes gantt-blip-ping {
+    0%, 100% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 0 rgba(var(--brand-rgb),0.55); }
+    50% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 6px rgba(var(--brand-rgb),0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gantt-seg[data-current="true"] { animation: none; }
+    .gantt-blip { animation: none; }
+  }
   .gantt-milestone { position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; margin-left: -3.5px; background: var(--text-secondary); border: 1px solid var(--surface-1); transform: rotate(45deg); border-radius: 1px; z-index: 4; }
   .gantt-milestone.target { background: transparent; border: 1.5px dashed var(--brand); }
   .gantt-milestone.outcome-good { background: var(--good); width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
@@ -1016,6 +1032,10 @@
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .modal-overlay.open .modal-card { transform: translateY(0) scale(1); }
+  /* Abierto desde el Gantt (openDetailModal(..., expanded=true)) — el mismo modal de siempre,
+     mucho mas ancho, para que se sienta como una ventana de trabajo y no un popup angosto. */
+  .modal-overlay.expanded { padding: 24px 20px; }
+  .modal-overlay.expanded .modal-card { max-width: min(1400px, 94vw); }
   @media (prefers-reduced-motion: reduce) {
     .modal-overlay, .modal-card { transition: none; }
   }
@@ -4223,30 +4243,41 @@ function ganttRowHtml(p, cal){
   const end = ganttEndPoint(p);
   const terminal = ganttIsTerminal(p);
   const paused = ganttIsPaused(p) && !terminal;
-  const trackDays = Math.max(1, ganttDaysBetween(kickoff, end));
+
+  // CLAMP a la ventana visible (Quarter/Year) — un req que arranco meses antes del rango que se
+  // esta viendo no puede dibujarse con su ancho REAL sin salirse del carril y taparse con el chip
+  // de la derecha (bug real reportado por Nicolas). Todo el track se dimensiona relativo a la
+  // porcion VISIBLE (visStart..visEnd), nunca a la duracion real completa del req.
+  const visStart = kickoff < cal.rangeStart ? cal.rangeStart : kickoff;
+  const visEnd = end > cal.rangeEnd ? cal.rangeEnd : end;
+  const trackLeftPct = cal.pctOf(visStart);
+  const trackWidthPct = Math.max(0.5, cal.pctOf(visEnd) - trackLeftPct);
+  const visibleDays = Math.max(1, ganttDaysBetween(visStart, visEnd));
 
   const segsHtml = segs.map((seg,i)=>{
+    const clipStart = seg.start < visStart ? visStart : seg.start;
+    const clipStop = seg.stop > visEnd ? visEnd : seg.stop;
+    if(clipStop <= clipStart) return "";
     const isLast = i === segs.length-1;
     const isCurrent = isLast && !terminal && !paused;
     const color = (paused && isLast) ? "var(--neutral)" : seg.color;
-    const days = Math.max(1, ganttDaysBetween(seg.start, seg.stop));
-    const widthPct = (days/trackDays*100).toFixed(3);
+    const realDays = Math.max(1, ganttDaysBetween(seg.start, seg.stop));
+    const clipDays = Math.max(0.25, ganttDaysBetween(clipStart, clipStop));
+    const widthPct = (clipDays/visibleDays*100).toFixed(3);
     return `<div class="gantt-seg" data-current="${isCurrent}" style="width:${widthPct}%; background:${color};">
-      <div class="gantt-tooltip"><b>${escapeHtml(seg.label)}</b><br><span class="muted">${ganttFmtDate(seg.start)}–${ganttFmtDate(seg.stop)} · ${days}d</span></div>
+      ${isCurrent ? `<span class="gantt-blip"></span>` : ""}
+      <div class="gantt-tooltip"><b>${escapeHtml(seg.label)}</b><br><span class="muted">${ganttFmtDate(seg.start)}–${ganttFmtDate(seg.stop)} · ${realDays}d</span></div>
     </div>`;
   }).join("");
 
-  const trackLeftPct = cal.pctOf(kickoff);
-  const trackWidthPct = Math.max(0.5, trackDays/cal.totalDays*100);
-
-  let milestonesHtml = segs.slice(1).map(seg=>{
+  let milestonesHtml = segs.slice(1).filter(seg=> seg.start >= visStart && seg.start <= visEnd).map(seg=>{
     const leftPct = (cal.pctOf(seg.start) - trackLeftPct) / trackWidthPct * 100;
     return `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
       <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.label)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
     </div>`;
   }).join("");
 
-  if(terminal){
+  if(terminal && end >= visStart && end <= visEnd){
     const isGood = p.status === "Hired";
     milestonesHtml += `<div class="gantt-milestone ${isGood ? "outcome-good" : "outcome-critical"}" style="left:100%;">
       <div class="gantt-tooltip" style="bottom:16px;"><b>${escapeHtml(statusLabel(p.status))}</b><br><span class="muted">${ganttFmtDate(end)}</span></div>
@@ -4255,14 +4286,18 @@ function ganttRowHtml(p, cal){
 
   const targetDate = ganttAddDays(kickoff, SLA_TARGETS.TTF);
   const now = new Date();
-  const showProjection = !terminal && !paused && targetDate > now;
+  const showProjection = !terminal && !paused && targetDate > now && end < cal.rangeEnd;
   let projectedHtml = "";
   if(showProjection){
+    // Mismo clamp: la barra punteada nunca dibuja mas alla del borde visible del calendario,
+    // aunque el target real caiga meses despues (se sigue viendo el diamante punteado justo en
+    // el borde, marcando "sigue mas alla de esta vista", no un numero de ancho inventado).
+    const clipTarget = targetDate > cal.rangeEnd ? cal.rangeEnd : targetDate;
     const projLeftPct = cal.pctOf(end);
-    const projWidthPct = (ganttDaysBetween(end, targetDate)/cal.totalDays*100);
+    const projWidthPct = Math.max(0, cal.pctOf(clipTarget) - projLeftPct);
     projectedHtml = `<div class="gantt-projected" style="left:${projLeftPct}%; width:${projWidthPct}%;">
       <div class="gantt-milestone target" style="left:100%;">
-        <div class="gantt-tooltip" style="bottom:16px;"><b>Projected TTF target</b><br><span class="muted">${ganttFmtDate(targetDate)} if pace holds</span></div>
+        <div class="gantt-tooltip" style="bottom:16px;"><b>Projected TTF target</b><br><span class="muted">${ganttFmtDate(targetDate)} if pace holds${clipTarget<targetDate ? " · beyond this view" : ""}</span></div>
       </div>
     </div>`;
   }
@@ -4318,10 +4353,10 @@ function renderGanttGroup(key){
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>Submitted</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>Client Interview</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>Offer Request</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond"></span>Stage change</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected TTF target</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Closed placed</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Cancelled</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond"></span>Moved to next stage on this date</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected Time To Fill target</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Closed — Placed</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Closed — Cancelled</div>
     </div>
     <div class="gantt-calendar">
       <div class="gantt-cal-gridlines" id="ganttGridlines"></div>
@@ -4335,7 +4370,7 @@ function renderGanttGroup(key){
     btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
   });
   panelEl.querySelectorAll(".gantt-row").forEach(rowEl=>{
-    rowEl.addEventListener("click", ()=> openDetailModal(rowEl.dataset.id, "view", isAdmin(), true));
+    rowEl.addEventListener("click", ()=> openDetailModal(rowEl.dataset.id, "view", isAdmin(), true, true));
   });
 }
 
@@ -5712,8 +5747,14 @@ let activeDetailMode = "edit";
 let activeDetailAllowDelete = false;
 let activeDetailFromDashboard = false;
 
-function openDetailModal(id, mode, allowDelete, fromDashboard){
+function openDetailModal(id, mode, allowDelete, fromDashboard, expanded){
   activeDetailId = id;
+  // Abierto desde el Gantt (Req Pulse Timeline): mismo modal real, mismo contenido, mas grande —
+  // Nicolas vio esto en el mockup ("modal casi-pantalla-completa... como una ventana que se
+  // sobrepone") y lo esperaba tal cual, no una version mas chica. Se reusa #detailModal completo
+  // (nunca un modal separado/duplicado) via una sola clase CSS, asi que cualquier otro punto de
+  // entrada (Positions, Tracking, banners) sigue exactamente igual que siempre.
+  document.getElementById("detailModal").classList.toggle("expanded", !!expanded);
   // Sin aceptar la asignacion (o, si vino por Handoff, sin confirmar el contexto), se puede VER
   // la req — hace falta para poder decidir si aceptarla — pero no editar nada. Accept vive en el
   // banner de pendientes (Dashboard/Tracking), no adentro de este modal, asi que esto nunca
@@ -5735,6 +5776,7 @@ function openDetailModal(id, mode, allowDelete, fromDashboard){
 function closeDetailModal(){
   const modal = document.getElementById("detailModal");
   modal.classList.remove("open");
+  modal.classList.remove("expanded");
   document.getElementById("editStatusModal").classList.remove("open");
   document.getElementById("editReqInfoModal").classList.remove("open");
   activeDetailId = null;
