@@ -3392,6 +3392,52 @@ function isSlaExceptionApproved(p){
   const v = p.slaException;
   return v === true || v === "Yes" || v === "yes" || v === "YES";
 }
+// Statuses donde el reloj de TTF/TTH se pausa (2026-09-21, Nicolas, viendo RD-013: "el hold,
+// cancelled o withdrawn... detienen los SLAs, hasta la fecha en que se vuelvan a poner SLAs que
+// hacen que se reactive la req" — la idea de un hold es precisamente que NO afecte el SLA, ya
+// que es por una razon aprobada y veridica). Cancelled nunca se reactiva en la practica, pero
+// usa el mismo mecanismo: si nunca sale de Cancelled, simplemente se queda congelado para siempre,
+// sin necesitar un caso especial aparte.
+const SLA_PAUSING_STATUSES = ["On Hold", "On Hold — Internal Candidates", "Fell Through", "Cancelled"];
+// Reconstruye desde el Activity log REAL (remarksHistory + extra, nunca un campo nuevo que
+// alguien tendria que llenar a mano) cuanto lleva pausado un req ahora mismo (si aplica) y cuanto
+// estuvo pausado en el pasado (paradas ya cerradas) — para que esto aplique retroactivo a reqs que
+// ya estan pausados hoy (ej. RD-013), usando la fecha real en que el status cambio, en vez de
+// inventar una fecha o depender de que alguien la escriba a mano.
+function computeSlaPauseInfo(p){
+  const isPausingLabel = (label) => SLA_PAUSING_STATUSES.some(s => statusLabel(s) === label);
+  const entries = [...(p.remarksHistory||[]), ...(p.extra||[])]
+    .filter(e => e.type === "status" && typeof e.text === "string" && e.text.startsWith("Status changed from"))
+    .map(e => {
+      const m = e.text.match(/Status changed from .+? to (.+?)(?: \(|\.$|\.)/);
+      return m ? {date: e.date, toLabel: m[1]} : null;
+    })
+    .filter(Boolean)
+    .sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  let pausedSinceDate = null;
+  let totalPausedCalendarDays = 0;
+  let totalPausedBizDays = 0;
+  entries.forEach(e => {
+    const d = parseD(e.date);
+    if(!d) return;
+    const pausing = isPausingLabel(e.toLabel);
+    if(pausing && !pausedSinceDate){
+      pausedSinceDate = d;
+    } else if(!pausing && pausedSinceDate){
+      totalPausedCalendarDays += (calendarDaysBetween(pausedSinceDate, d) || 0);
+      totalPausedBizDays += (bizDaysBetween(pausedSinceDate, d) || 0);
+      pausedSinceDate = null;
+    }
+  });
+  // El status ACTUAL es pausante pero nada en el log lo confirma (dato migrado/escrito directo,
+  // sin ningun "Status changed" real) — no hay forma de saber desde cuando esta pausado de
+  // verdad. Se usa hoy como aproximacion: congela el numero de aqui en adelante, aunque no
+  // corrige retroactivamente lo que ya estaba inflado para este caso especifico sin log.
+  if(!pausedSinceDate && isPausingLabel(statusLabel(p.status))){
+    pausedSinceDate = new Date();
+  }
+  return {pausedSinceDate, totalPausedCalendarDays, totalPausedBizDays};
+}
 function slaFor(p, key, closeDateStr){
   // CORREGIDO 2026-09-17 (Nicolas): un Handoff NUNCA reinicia el reloj de TTS/TTF/TTH de la req.
   // El req en si es tratado como si un unico reclutador lo hubiera trabajado de principio a fin —
@@ -3412,7 +3458,12 @@ function slaFor(p, key, closeDateStr){
   if(!intake) return {status:"none", elapsed:null, target:baseTarget, handoffInfo};
   const start = nextBizDay(intake);
   const close = parseD(closeDateStr);
-  const ref = close || new Date();
+  // Si el req ya esta pausado (On Hold, On Hold - Internal, Fell Through, Cancelled — ver
+  // SLA_PAUSING_STATUSES), "ahora" para efectos de este calculo se congela en el momento en que
+  // entro a la pausa, nunca sigue avanzando con el calendario real. Un close real (Fill/Hire)
+  // siempre gana — un req ya cerrado no puede estar pausado a la vez.
+  const pauseInfo = computeSlaPauseInfo(p);
+  const ref = close || pauseInfo.pausedSinceDate || new Date();
 
   if(key === "TTS"){
     // Dias habiles, umbral de riesgo como % del target (comportamiento ya validado).
@@ -3421,7 +3472,7 @@ function slaFor(p, key, closeDateStr){
     // vez, saltandose por completo el primer dia habil real del reloj de TTS y subcontando
     // siempre en exactamente 1 dia habil. Pasando el intake crudo, el propio +1 interno de
     // bizDaysBetween produce el arranque correcto (el dia habil siguiente al intake).
-    const elapsed = bizDaysBetween(intake, ref);
+    const elapsed = Math.max(0, bizDaysBetween(intake, ref) - (close ? 0 : pauseInfo.totalPausedBizDays));
     const target = baseTarget;
     let status;
     if(close){ status = elapsed<=target ? "within" : "out"; }
@@ -3438,7 +3489,7 @@ function slaFor(p, key, closeDateStr){
   // TTF / TTH: dias calendario desde el mismo start, con el allowance de Pivot SLA sumado al
   // target si aplica, y estatus por margen fijo de dias (buckets de salud del master prompt).
   const target = baseTarget + (isSlaExceptionApproved(p) ? PIVOT_SLA_ALLOWANCE_DAYS : 0);
-  const elapsed = calendarDaysBetween(start, ref);
+  const elapsed = Math.max(0, calendarDaysBetween(start, ref) - (close ? 0 : pauseInfo.totalPausedCalendarDays));
   let status;
   if(elapsed <= target) status = "within";
   else if(elapsed <= target + CALENDAR_RISK_MARGIN_DAYS) status = "risk";
