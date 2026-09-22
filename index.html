@@ -445,10 +445,77 @@
   .ps-arrow { align-self: center; margin-top: 22px; font-size: 15px; color: var(--text-muted); }
   .ps-divider { align-self: stretch; width: 1px; background: var(--border, rgba(127,127,127,0.25)); margin: 2px 4px; }
   .ps-stat-outcome .stat-num { font-size: 30px; }
+  .ps-stat-open { background: var(--surface-1); border-radius: 10px; }
   @media (max-width: 720px) {
     .positions-summary-strip { flex-wrap: wrap; }
     .ps-arrow { display: none; }
     .ps-divider { display: none; }
+  }
+  /* Req Pulse Timeline — Gantt real por requisicion, se abre al hacer click en cualquiera de las
+     4 tarjetas de arriba (Positions/Active/Potential/Actual). Disenado como mockup primero (ver
+     historial), aprobado por Nicolas y llevado aqui 2026-09-22. Reusa STAGE_COLORS/--seq-* que ya
+     existen (nunca colores nuevos) y --text-secondary (no --text-muted) para las fechas del eje —
+     Nicolas: "letras como grises y casi no identifico esa info a que periodo pertenecia". */
+  .gantt-panel { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; display: none; }
+  .gantt-panel.show { display: block; }
+  .gantt-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 2px; }
+  .gantt-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .gantt-title span { color: var(--text-secondary); font-weight: 400; }
+  .gantt-quarter-note { font-size: 11px; color: var(--text-secondary); margin: 0 0 4px; user-select: none; }
+  .gantt-quarter-note b { color: var(--brand); font-weight: 700; }
+  .gantt-range-note { font-size: 10.5px; color: var(--text-secondary); margin: 0 0 12px; }
+  .gantt-scope-toggle { display: flex; gap: 4px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 3px; user-select: none; }
+  .gantt-scope-btn { border: none; background: transparent; color: var(--text-secondary); font-family: inherit; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+  .gantt-scope-btn:hover { color: var(--text); }
+  .gantt-scope-btn.active { background: var(--brand); color: #fff; }
+  .gantt-legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
+  .gantt-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-secondary); }
+  .gantt-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .gantt-legend-diamond { width: 7px; height: 7px; flex: none; background: var(--text-secondary); transform: rotate(45deg); border-radius: 1px; }
+  .gantt-calendar { position: relative; }
+  .gantt-cal-axis { display: flex; margin-left: 220px; margin-right: 150px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 2px; position: relative; height: 15px; }
+  .gantt-cal-tick { position: absolute; font-size: 10px; font-weight: 600; color: var(--text-secondary); transform: translateX(-50%); white-space: nowrap; }
+  .gantt-cal-gridlines { position: absolute; top: 0; bottom: 0; left: 220px; right: 150px; pointer-events: none; }
+  .gantt-cal-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: .6; }
+  .gantt-cal-today-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--brand); z-index: 3; }
+  .gantt-cal-today-label { position: absolute; top: -14px; font-size: 10px; font-weight: 700; color: var(--brand); transform: translateX(-50%); white-space: nowrap; }
+  .gantt-rows { position: relative; }
+  .gantt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); position: relative; cursor: pointer; border-radius: 6px; user-select: none; }
+  .gantt-row:hover { background: rgba(127,127,127,0.06); }
+  .gantt-row:last-child { border-bottom: none; }
+  .gantt-row-label { width: 220px; flex: none; padding-right: 8px; }
+  .gantt-row-title { font-size: 11.5px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
+  .gantt-row-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+  .gantt-row-meta b { color: var(--text); font-weight: 600; }
+  .gantt-row-canvas { flex: 1; min-width: 0; position: relative; height: 24px; }
+  .gantt-track { position: absolute; top: 5px; height: 13px; border-radius: 7px; background: var(--surface-1); display: flex; overflow: visible; }
+  .gantt-projected { position: absolute; top: 5px; height: 13px; border-radius: 7px; border: 1.5px dashed rgba(var(--brand-rgb),0.5); background: transparent; }
+  .gantt-seg { height: 100%; position: relative; }
+  .gantt-seg:first-child { border-radius: 7px 0 0 7px; }
+  .gantt-seg[data-current="true"] { animation: gantt-pulse 1.8s ease-in-out infinite; }
+  @keyframes gantt-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+  .gantt-milestone { position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; margin-left: -3.5px; background: var(--text-secondary); border: 1px solid var(--surface-1); transform: rotate(45deg); border-radius: 1px; z-index: 4; }
+  .gantt-milestone.target { background: transparent; border: 1.5px dashed var(--brand); }
+  .gantt-milestone.outcome-good { background: var(--good); width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
+  .gantt-milestone.outcome-critical { background: var(--critical); width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
+  .gantt-row-end { width: 150px; flex: none; text-align: right; padding-left: 10px; }
+  .gantt-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; max-width: 100%; }
+  .gantt-chip .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: currentColor; }
+  .gantt-chip.live { background: rgba(var(--brand-rgb),0.16); color: var(--brand); }
+  .gantt-chip.paused { background: rgba(127,127,127,0.14); color: var(--text-secondary); }
+  .gantt-chip.risk { background: rgba(var(--warning-rgb),0.16); color: var(--warning); }
+  .gantt-chip.good { background: rgba(var(--good-rgb),0.16); color: var(--good); }
+  .gantt-chip.critical { background: rgba(var(--critical-rgb),0.16); color: var(--critical); }
+  .gantt-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 10.5px; line-height: 1.5; padding: 7px 9px; border-radius: 8px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 6px 18px rgba(0,0,0,0.35); z-index: 6; }
+  .gantt-tooltip .muted { color: var(--text-secondary); }
+  .gantt-seg:hover .gantt-tooltip, .gantt-projected:hover .gantt-tooltip, .gantt-milestone:hover .gantt-tooltip { opacity: 1; }
+  .gantt-empty { padding: 16px 0; color: var(--text-secondary); font-size: 12px; }
+  @media (max-width: 720px) {
+    .gantt-cal-axis, .gantt-cal-gridlines { display: none; }
+    .gantt-row { flex-wrap: wrap; }
+    .gantt-row-label { width: 100%; }
+    .gantt-row-end { width: auto; margin-left: auto; padding-left: 0; }
   }
   /* Needs Attention comparte fila con Submitted Vs Expected (ver dash-grid, align-items:stretch)
      — sin este limite, una lista larga de banderas estiraria toda la fila a una altura enorme.
@@ -1273,6 +1340,7 @@
                 <h3>Positions &amp; Placements</h3>
                 <div class="panel-sub">Every requisition, broken down by where it stands toward becoming an actual placement.</div>
                 <div class="positions-summary-strip" id="positionsSummaryStrip"></div>
+                <div class="gantt-panel" id="ganttPanel"></div>
               </div>
               <!-- Fila 2, dos tarjetas iguales (span 3 de 6 cada una): panorama de requisitions +
                    carga del equipo. Active Workload By Recruiter / Average Time To Submit ocupan
@@ -3997,6 +4065,295 @@ function statHoverPopoverHtml(s){
   const items = s.positions.map(p=>`<li><b>${escapeHtml(p.id)}</b> — ${escapeHtml(p.title)}</li>`).join("");
   return `<div class="ps-hover-popover"><div class="ps-hover-popover-title">${escapeHtml(s.label)}</div><ul>${items}</ul></div>`;
 }
+
+// ===== Req Pulse Timeline — Gantt real por requisicion =====
+// Disenado primero como mockup standalone (structure -> explain -> show -> decide, pedido
+// explicito de Nicolas), aprobado y llevado aqui 2026-09-22. Reemplaza el openQuickList() de las
+// 4 tarjetas de Positions & Placements: el Gantt ya deja ver/clickear cada req individual, un
+// listado plano aparte quedaria redundante. Nunca inventa fechas ni columnas nuevas — todo sale de
+// campos que ya existen (kickoff, intakeRequestedDate, intake, submit, offerRequestDate, fill,
+// hire) mas el mismo Activity log que ya usa computeSlaPauseInfo() para lo que esos campos no
+// alcanzan a distinguir (el limite real entre Submitted y Client Interview, que nunca tuvo su
+// propia columna de fecha).
+let GANTT_DATA = {};
+let ganttOpenKey = null;
+let ganttScope = "quarter";
+
+function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
+function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
+function ganttDaysBetween(a,b){ return Math.max(0, Math.round((b-a)/86400000)); }
+
+function ganttQuarterBounds(date){
+  const q = Math.floor(date.getMonth()/3);
+  return { start: new Date(date.getFullYear(), q*3, 1), end: new Date(date.getFullYear(), q*3+3, 0) };
+}
+function ganttYearBounds(date){ return { start: new Date(date.getFullYear(),0,1), end: new Date(date.getFullYear(),11,31) }; }
+function ganttQuarterLabel(date){ return `Q${Math.floor(date.getMonth()/3)+1} ${date.getFullYear()}`; }
+
+function ganttScopeWindow(scope, data){
+  if(scope === "quarter"){ const b = ganttQuarterBounds(new Date()); return {...b, label:ganttQuarterLabel(new Date())}; }
+  if(scope === "year"){ const b = ganttYearBounds(new Date()); return {...b, label:String(new Date().getFullYear())}; }
+  if(!data.length) return { start:new Date(), end:new Date(), label:"All time" };
+  const earliest = data.reduce((min,p)=>{ const k=parseD(p.kickoff); return k && (!min || k<min) ? k : min; }, null) || new Date();
+  const latest = data.reduce((max,p)=>{
+    const proj = ganttCloseDate(p) || ganttAddDays(parseD(p.kickoff)||new Date(), SLA_TARGETS.TTF);
+    return proj > max ? proj : max;
+  }, new Date());
+  return { start: ganttAddDays(earliest,-2), end: ganttAddDays(latest,3), label:"All time" };
+}
+function ganttInWindow(p, start, end){
+  const kickoff = parseD(p.kickoff);
+  if(!kickoff) return false;
+  const e = ganttEndPoint(p);
+  return !(e < start || kickoff > end);
+}
+function ganttBuildCalendar(win){
+  const totalDays = Math.max(1, ganttDaysBetween(win.start, win.end));
+  const pctOf = (dt) => Math.max(0, Math.min(100, ganttDaysBetween(win.start, dt) / totalDays * 100));
+  return { rangeStart:win.start, rangeEnd:win.end, totalDays, pctOf };
+}
+function ganttRenderAxis(cal, granularity){
+  const axisEl = document.getElementById("ganttAxis");
+  const gridEl = document.getElementById("ganttGridlines");
+  if(!axisEl || !gridEl) return;
+  axisEl.innerHTML = ""; gridEl.innerHTML = "";
+  const addTick = (date,label)=>{
+    const pct = cal.pctOf(date);
+    const tick = document.createElement("div");
+    tick.className = "gantt-cal-tick"; tick.style.left = pct+"%"; tick.textContent = label;
+    axisEl.appendChild(tick);
+    const line = document.createElement("div");
+    line.className = "gantt-cal-gridline"; line.style.left = pct+"%";
+    gridEl.appendChild(line);
+  };
+  if(granularity === "week"){
+    let cursor = new Date(cal.rangeStart);
+    while(cursor.getDay() !== 1) cursor = ganttAddDays(cursor,1);
+    while(cursor <= cal.rangeEnd){ addTick(cursor, ganttFmtDate(cursor)); cursor = ganttAddDays(cursor,7); }
+  } else {
+    let cursor = new Date(cal.rangeStart.getFullYear(), cal.rangeStart.getMonth(), 1);
+    const spansYears = cal.rangeStart.getFullYear() !== cal.rangeEnd.getFullYear();
+    while(cursor <= cal.rangeEnd){
+      const label = cursor.toLocaleDateString("en-US",{month:"short"}) + (spansYears ? " '"+String(cursor.getFullYear()).slice(2) : "");
+      addTick(cursor, label);
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
+    }
+  }
+  const today = new Date();
+  if(today >= cal.rangeStart && today <= cal.rangeEnd){
+    const pct = cal.pctOf(today);
+    const line = document.createElement("div");
+    line.className = "gantt-cal-today-line"; line.style.left = pct+"%";
+    const label = document.createElement("div");
+    label.className = "gantt-cal-today-label"; label.style.left = pct+"%"; label.textContent = "Today";
+    gridEl.appendChild(line); gridEl.appendChild(label);
+  }
+}
+
+function ganttFindTransitionDate(p, toLabel){
+  const entries = [...(p.remarksHistory||[]), ...(p.extra||[])]
+    .filter(e => e.type === "status" && typeof e.text === "string" && e.text.startsWith("Status changed from"))
+    .sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  for(const e of entries){
+    const m = e.text.match(/Status changed from .+? to (.+?)(?: \(|\.$|\.)/);
+    if(m && m[1] === toLabel) return e.date;
+  }
+  return null;
+}
+function ganttIsTerminal(p){ return TERMINAL.includes(p.status); }
+function ganttIsPaused(p){ return SLA_PAUSING_STATUSES.includes(p.status); }
+function ganttCloseDate(p){
+  if(p.status === "Hired") return parseD(p.hire);
+  if(p.status === "Cancelled" || p.status === "Filled (Internal Hire)"){
+    const t = ganttFindTransitionDate(p, p.status);
+    return t ? parseD(t) : new Date();
+  }
+  return null;
+}
+function ganttEndPoint(p){
+  const close = ganttCloseDate(p);
+  if(close) return close;
+  if(ganttIsPaused(p)){
+    const info = computeSlaPauseInfo(p);
+    if(info.pausedSinceDate) return info.pausedSinceDate;
+  }
+  return new Date();
+}
+// Segmentos reales por etapa, derivados solo de fechas que ya existen en el modelo — nunca
+// fabrica una fecha que no este guardada. El limite Submitted -> Client Interview es el unico que
+// nunca tuvo columna propia; se busca en el Activity log real (mismo patron que
+// computeSlaPauseInfo) y si no esta (reqs viejos sin ese log especifico) simplemente no se separa,
+// degradando a un solo tramo "Submitted" en vez de inventar una fecha.
+function ganttSegments(p){
+  const kickoff = parseD(p.kickoff);
+  if(!kickoff) return [];
+  const segs = [];
+  const introReq = parseD(p.intakeRequestedDate);
+  const effectiveIntake = p.intake || (p.intakeWaivedReason ? p.intakeWaivedDate : null);
+  const introDone = parseD(effectiveIntake);
+  const submitDate = parseD(p.submit);
+  const offerDate = parseD(p.offerRequestDate);
+  const close = ganttCloseDate(p);
+  const end = ganttEndPoint(p);
+  const push = (key,label,start,stop)=>{
+    if(!start || !stop || stop<=start) return;
+    segs.push({key, label, color:STAGE_COLORS[key]||"var(--seq-400)", start:new Date(start), stop:new Date(stop)});
+  };
+  push("Kickoff", statusLabel("Kickoff"), kickoff, introReq || introDone || end);
+  if(introReq) push("Intake Meeting Requested", statusLabel("Intake Meeting Requested"), introReq, introDone || end);
+  if(introDone) push("Sourcing", statusLabel("Sourcing"), introDone, submitDate || end);
+  if(submitDate){
+    const ciDateStr = ganttFindTransitionDate(p, "Client Interview");
+    const ciDate = ciDateStr ? parseD(ciDateStr) : null;
+    if(ciDate && ciDate > submitDate){
+      push("Submitted", statusLabel("Submitted"), submitDate, ciDate);
+      push("Client Interview", statusLabel("Client Interview"), ciDate, offerDate || end);
+    } else {
+      push("Submitted", statusLabel("Submitted"), submitDate, offerDate || end);
+    }
+  }
+  if(offerDate) push("Offer Request", statusLabel("Offer Request"), offerDate, close || end);
+  return segs;
+}
+
+function ganttRowHtml(p, cal){
+  const segs = ganttSegments(p);
+  if(!segs.length) return "";
+  const kickoff = segs[0].start;
+  const end = ganttEndPoint(p);
+  const terminal = ganttIsTerminal(p);
+  const paused = ganttIsPaused(p) && !terminal;
+  const trackDays = Math.max(1, ganttDaysBetween(kickoff, end));
+
+  const segsHtml = segs.map((seg,i)=>{
+    const isLast = i === segs.length-1;
+    const isCurrent = isLast && !terminal && !paused;
+    const color = (paused && isLast) ? "var(--neutral)" : seg.color;
+    const days = Math.max(1, ganttDaysBetween(seg.start, seg.stop));
+    const widthPct = (days/trackDays*100).toFixed(3);
+    return `<div class="gantt-seg" data-current="${isCurrent}" style="width:${widthPct}%; background:${color};">
+      <div class="gantt-tooltip"><b>${escapeHtml(seg.label)}</b><br><span class="muted">${ganttFmtDate(seg.start)}–${ganttFmtDate(seg.stop)} · ${days}d</span></div>
+    </div>`;
+  }).join("");
+
+  const trackLeftPct = cal.pctOf(kickoff);
+  const trackWidthPct = Math.max(0.5, trackDays/cal.totalDays*100);
+
+  let milestonesHtml = segs.slice(1).map(seg=>{
+    const leftPct = (cal.pctOf(seg.start) - trackLeftPct) / trackWidthPct * 100;
+    return `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
+      <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.label)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
+    </div>`;
+  }).join("");
+
+  if(terminal){
+    const isGood = p.status === "Hired";
+    milestonesHtml += `<div class="gantt-milestone ${isGood ? "outcome-good" : "outcome-critical"}" style="left:100%;">
+      <div class="gantt-tooltip" style="bottom:16px;"><b>${escapeHtml(statusLabel(p.status))}</b><br><span class="muted">${ganttFmtDate(end)}</span></div>
+    </div>`;
+  }
+
+  const targetDate = ganttAddDays(kickoff, SLA_TARGETS.TTF);
+  const now = new Date();
+  const showProjection = !terminal && !paused && targetDate > now;
+  let projectedHtml = "";
+  if(showProjection){
+    const projLeftPct = cal.pctOf(end);
+    const projWidthPct = (ganttDaysBetween(end, targetDate)/cal.totalDays*100);
+    projectedHtml = `<div class="gantt-projected" style="left:${projLeftPct}%; width:${projWidthPct}%;">
+      <div class="gantt-milestone target" style="left:100%;">
+        <div class="gantt-tooltip" style="bottom:16px;"><b>Projected TTF target</b><br><span class="muted">${ganttFmtDate(targetDate)} if pace holds</span></div>
+      </div>
+    </div>`;
+  }
+
+  const daysToTarget = Math.round((targetDate - now)/86400000);
+  let chipClass, chipLabel;
+  if(paused){ chipClass = "paused"; chipLabel = `Paused — ${statusLabel(p.status)}`; }
+  else if(terminal){ chipClass = p.status==="Hired" ? "good" : "critical"; chipLabel = `${statusLabel(p.status)} · ${ganttFmtDate(end)}`; }
+  else {
+    chipClass = (daysToTarget < 5) ? "risk" : "live";
+    chipLabel = daysToTarget >= 0 ? `${daysToTarget}d to target` : `${-daysToTarget}d past target`;
+  }
+
+  return `<div class="gantt-row" data-id="${escapeHtml(p.id)}">
+    <div class="gantt-row-label">
+      <div class="gantt-row-title">${escapeHtml(p.title||"")}</div>
+      <div class="gantt-row-code">${escapeHtml(p.id)}</div>
+      <div class="gantt-row-meta"><b>${escapeHtml(p.recruiter||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : "Target "+ganttFmtDate(targetDate)}</div>
+    </div>
+    <div class="gantt-row-canvas">
+      <div class="gantt-track" style="left:${trackLeftPct}%; width:${trackWidthPct}%;">${segsHtml}${milestonesHtml}</div>
+      ${projectedHtml}
+    </div>
+    <div class="gantt-row-end">
+      <div class="gantt-chip ${chipClass}"><span class="dot"></span>${escapeHtml(chipLabel)}</div>
+    </div>
+  </div>`;
+}
+
+function renderGanttGroup(key){
+  const group = GANTT_DATA[key];
+  const panelEl = document.getElementById("ganttPanel");
+  if(!group || !panelEl) return;
+  const data = group.positions;
+  const win = ganttScopeWindow(ganttScope, data);
+  const shown = ganttScope === "all" ? data : data.filter(p=> ganttInWindow(p, win.start, win.end));
+  const cal = ganttBuildCalendar(win);
+  const hiddenCount = data.length - shown.length;
+  const nowQ = ganttQuarterLabel(new Date());
+  panelEl.innerHTML = `
+    <div class="gantt-head">
+      <div class="gantt-title">${escapeHtml(group.label)} <span>— ${shown.length} requisition${shown.length===1?"":"s"} in ${win.label}${hiddenCount ? ` (${hiddenCount} outside range, hidden)` : ""}</span></div>
+      <div class="gantt-scope-toggle" id="ganttScopeToggle">
+        <button class="gantt-scope-btn" data-scope="quarter">${nowQ}</button>
+        <button class="gantt-scope-btn" data-scope="year">${new Date().getFullYear()}</button>
+        <button class="gantt-scope-btn" data-scope="all">All time</button>
+      </div>
+    </div>
+    <p class="gantt-quarter-note">We're in <b>${nowQ}</b> — this view opens here by default.</p>
+    <div class="gantt-legend">
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>Kickoff</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-400);"></span>${escapeHtml(statusLabel("Sourcing"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>Submitted</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>Client Interview</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>Offer Request</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond"></span>Stage change</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected TTF target</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Closed placed</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Cancelled</div>
+    </div>
+    <div class="gantt-calendar">
+      <div class="gantt-cal-gridlines" id="ganttGridlines"></div>
+      <div class="gantt-cal-axis" id="ganttAxis"></div>
+      <div class="gantt-rows" id="ganttRows">${shown.length ? shown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
+    </div>
+  `;
+  ganttRenderAxis(cal, ganttScope === "quarter" ? "week" : "month");
+  panelEl.querySelectorAll(".gantt-scope-btn").forEach(btn=>{
+    btn.classList.toggle("active", btn.dataset.scope === ganttScope);
+    btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
+  });
+  panelEl.querySelectorAll(".gantt-row").forEach(rowEl=>{
+    rowEl.addEventListener("click", ()=> openDetailModal(rowEl.dataset.id, "view", isAdmin(), true));
+  });
+}
+
+function toggleGanttPanel(key, label, positions){
+  GANTT_DATA[key] = {label, positions};
+  const panelEl = document.getElementById("ganttPanel");
+  if(ganttOpenKey === key){
+    ganttOpenKey = null;
+    panelEl.classList.remove("show");
+    panelEl.innerHTML = "";
+    return;
+  }
+  ganttOpenKey = key;
+  ganttScope = "quarter";
+  panelEl.classList.add("show");
+  renderGanttGroup(key);
+}
+
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
@@ -4020,21 +4377,21 @@ function renderKpis(){
   const potentialPlacements = allPositions.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
   const actualPlacements = allPositions.filter(p=>p.status==="Hired");
   const funnelStats = [
-    {label:"Positions", value:allPositions.length, positions:allPositions,
+    {key:"positions", label:"Positions", value:allPositions.length, positions:allPositions,
       desc:"Every requisition ever assigned to this book, in any status."},
-    {label:"Active Positions", value:activePositions.length, positions:activePositions,
+    {key:"active", label:"Active Positions", value:activePositions.length, positions:activePositions,
       desc:"Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
   ];
   const outcomeStats = [
-    {label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
+    {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc:"At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
-    {label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
+    {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc:"Confirmed hires to date — a running total, not a next step from the numbers on the left."},
   ];
   const maxVal = funnelStats[0].value || 1;
   const allStats = [...funnelStats, ...outcomeStats];
   const funnelHtml = funnelStats.map((s,i)=>`
-    <div class="ps-stat clickable-stat" data-i="${i}">
+    <div class="ps-stat clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${i}">
       <div class="stat-num">${s.value}</div>
       <div class="stat-label">${s.label}</div>
       <div class="stat-desc">${s.desc}</div>
@@ -4044,7 +4401,7 @@ function renderKpis(){
   const outcomeHtml = `
     <div class="ps-divider"></div>
     ${outcomeStats.map((s,i)=>`
-    <div class="ps-stat ps-stat-outcome clickable-stat" data-i="${funnelStats.length+i}">
+    <div class="ps-stat ps-stat-outcome clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${funnelStats.length+i}">
       <div class="stat-num" style="color:${s.color};">${s.value}</div>
       <div class="stat-label">${s.label}</div>
       <div class="stat-desc">${s.desc}</div>
@@ -4053,10 +4410,12 @@ function renderKpis(){
   document.getElementById("positionsSummaryStrip").innerHTML = funnelHtml + outcomeHtml;
   document.querySelectorAll("#positionsSummaryStrip .ps-stat").forEach(el=>{
     const s = allStats[+el.dataset.i];
-    el.addEventListener("click", ()=>{
-      openQuickList(s.label, `${s.value} position${s.value===1?"":"s"}`, s.positions);
-    });
+    el.addEventListener("click", ()=> toggleGanttPanel(s.key, s.label, s.positions));
   });
+  // Mantiene el Gantt abierto sincronizado con datos frescos (mismo patron que el resto del
+  // dashboard: renderKpis() se re-ejecuta en cada reload/refresh).
+  allStats.forEach(s=> GANTT_DATA[s.key] = {label:s.label, positions:s.positions});
+  if(ganttOpenKey) renderGanttGroup(ganttOpenKey);
 
   // Total Requisitions: TODAS las asignadas alguna vez (incluye cerradas), no solo las activas
   // — complementa la tarjeta de arriba mostrando el panorama completo del ciclo de vida en vez
