@@ -1708,7 +1708,13 @@
               </div>
               <div class="form-field full" id="newPosCareersUrlWrap"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
-              <div class="form-field"><label>Hiring Manager</label><input type="text" id="newPosHM" placeholder="e.g. Jane Doe"></div>
+              <div class="form-field">
+                <label>Hiring Manager</label>
+                <select id="newPosHMSelect"></select>
+                <input type="text" id="newPosHMInput" placeholder="Type the hiring manager's name">
+                <button type="button" class="fact-edit-link" id="newPosHMBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
+                <div class="panel-sub" style="margin-top:4px;">List shows hiring managers we've already worked with (Organic) — not in the list means they're New.</div>
+              </div>
               <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"></select></div>
               <div class="panel-sub full" id="newPosCapacityHint" style="margin:-6px 0 0;"></div>
               <div class="form-field full">
@@ -6153,13 +6159,23 @@ document.getElementById("quickListModal").addEventListener("click", (e)=>{
 // "New" vs "Organic" hiring manager — Nicolas, 2026-09-23: el Lead Kickoff Note nuevo (master
 // prompt Patch 28.0) arranca asumiendo primer contacto ("I wanted to reach out to get us
 // started"), lo que no calza si ya trabajaste con ese hiring manager antes. "Organic" = "un
-// hiring manager con el que ya hemos trabajado" (definicion suya, 2026-09-23) — se deriva solo
-// de si su nombre ya aparece en OTRO req del tracker, nunca un campo manual nuevo que se pueda
-// desactualizar — el tracker ya tiene ese historial.
+// hiring manager con el que ya hemos trabajado" (definicion suya, 2026-09-23) — nunca un campo
+// manual nuevo que se pueda desactualizar, se deriva del historial real que el tracker ya tiene:
+// un hiring manager pasa a la lista de organicos en cuanto CUALQUIER req suyo tiene su assignment
+// aceptado por el reclutador (recruiterAcceptedDate) — antes de eso, aunque su nombre ya aparezca
+// en otro req sin aceptar todavia, sigue contando como New.
+function organicHiringManagerNames(excludeId){
+  const names = new Set();
+  POSITIONS.forEach(x=>{
+    if(excludeId && x.id===excludeId) return;
+    if(x.hiringManager && x.hiringManager.trim() && x.recruiterAcceptedDate) names.add(x.hiringManager.trim());
+  });
+  return [...names].sort();
+}
 function hiringManagerPriorReq(p){
   if(!p.hiringManager || !p.hiringManager.trim()) return null;
-  const name = p.hiringManager.trim().toLowerCase();
-  return POSITIONS.find(x=> x.id!==p.id && x.hiringManager && x.hiringManager.trim().toLowerCase()===name) || null;
+  const name = p.hiringManager.trim();
+  return POSITIONS.find(x=> x.id!==p.id && x.hiringManager && x.hiringManager.trim()===name && x.recruiterAcceptedDate) || null;
 }
 function hiringManagerRelationshipChip(p){
   if(!p.hiringManager || !p.hiringManager.trim()) return "";
@@ -7197,6 +7213,7 @@ function wireAddNewSelect(selectId, inputId, backBtnId){
   });
 }
 wireAddNewSelect("reqInfoHmSelect", "reqInfoHmInput", "reqInfoHmBackToList");
+wireAddNewSelect("newPosHMSelect", "newPosHMInput", "newPosHMBackToList");
 // Country ya no es un solo valor de texto libre: se restringe a los mercados reales donde
 // reclutamos (algunas busquedas cubren mas de uno a la vez, ej. US+Canada o AU+NZ), asi que es
 // un set fijo de checkboxes en vez del patron select/"add new" que usan Hiring Manager y demas
@@ -9152,8 +9169,22 @@ function updateManageNavVisibility(){
   const show = isConnected() && isAdmin() && !activeDashboardScope;
   document.querySelector('.nav-item[data-view="manage"]').style.display = show ? "" : "none";
 }
+// Misma razon que renderNewPosRecruiterSelect() de arriba: la lista de organicos cambia justo
+// cuando se acepta un assignment o se crea/borra un req, y es exactamente en esos momentos que
+// este formulario esta en uso.
+function renderNewPosHmSelect(){
+  // Preserva lo que el usuario ya tenga escrito/elegido — renderAll() puede correr de nuevo
+  // mientras el formulario esta a medio llenar (ej. tras aceptar un assignment en otra pestaña),
+  // reconstruir el select desde cero con un valor fijo lo habria borrado a medio escribir.
+  const input = document.getElementById("newPosHMInput");
+  const select = document.getElementById("newPosHMSelect");
+  const usingInput = input.style.display !== "none";
+  const currentValue = usingInput ? (input.value || null) : (select.value || null);
+  setupAddNewSelect("newPosHMSelect", "newPosHMInput", "newPosHMBackToList", organicHiringManagerNames(), currentValue);
+}
 function renderAll(){
   renderNewPosRecruiterSelect();
+  renderNewPosHmSelect();
   renderEditRecruiterSelect();
   updateDangerZoneVisibility();
   updateManageNavVisibility();
@@ -10926,7 +10957,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   const title = document.getElementById("newPosTitle").value.trim();
   const fields = {
     title,
-    hm: document.getElementById("newPosHM").value.trim(),
+    hm: getAddNewValue("newPosHMSelect", "newPosHMInput") || "",
     recruiter: document.getElementById("newPosRecruiter").value,
     country: [...document.querySelectorAll(".newPosCountryCheck:checked")].map(el=>el.value).join(", "),
     workArrangement: document.getElementById("newPosWorkArrangement").value,
@@ -11018,7 +11049,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     document.getElementById("newPosIsGroup").checked = false;
     document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
     document.getElementById("newPosCareersUrl").value = "";
-    document.getElementById("newPosHM").value = "";
+    setupAddNewSelect("newPosHMSelect", "newPosHMInput", "newPosHMBackToList", organicHiringManagerNames(), null);
     document.getElementById("newPosRemark").value = "";
     document.getElementById("newPosStatus").value = "Kickoff";
     updateStatusDateUI("newPos", "Kickoff", null);
@@ -11034,7 +11065,8 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosHeadcountGroup","newPosCareersUrl","newPosHM","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosHeadcountGroup","newPosCareersUrl","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  setupAddNewSelect("newPosHMSelect", "newPosHMInput", "newPosHMBackToList", organicHiringManagerNames(), null);
   document.getElementById("newPosHeadcountRows").innerHTML = "";
   document.getElementById("newPosIsGroup").checked = false;
   document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
