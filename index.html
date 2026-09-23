@@ -4060,7 +4060,7 @@ const CANDIDATE_STATUS_TO_POSITION_STATUS = {
   "Executive Review": "Client Interview",
   "Offer Request": "Offer Request",
 };
-function candidateRowHtml(c){
+function candidateRowHtml(c, viewingPositionId){
   const tone = STATUS_META[BATCH_CANDIDATE_STATUS_TONE[c.status] || "none"];
   const cvHtml = c.cvLink
     ? `<a href="${escapeHtml(c.cvLink)}" target="_blank" rel="noopener" class="batch-candidate-cv">CV ↗</a>`
@@ -4068,6 +4068,14 @@ function candidateRowHtml(c){
   const emailHtml = c.email
     ? `<a href="mailto:${escapeHtml(c.email)}" class="batch-candidate-email">${escapeHtml(c.email)}</a>`
     : `<span class="batch-candidate-email"></span>`;
+  // Headcount Group: este candidato pudo cerrar OTRA req del mismo grupo, no necesariamente la
+  // que se esta viendo ahora mismo (ver updateCandidateStatus()/applyPlacedCandidate()). Nicolas:
+  // "no solo poder elegirlo, si no mostrarlo tambien" — self-contained, nombra la req real.
+  const filledElsewhere = c.closedForPositionId && c.closedForPositionId !== viewingPositionId;
+  const filledTarget = filledElsewhere ? POSITIONS.find(x=>x.id===c.closedForPositionId) : null;
+  const filledNote = filledElsewhere
+    ? `<span class="status-chip" style="background:rgba(var(--good-rgb),0.16); color:var(--good);" title="This candidate filled a different requisition in the same Headcount Group.">→ Filled ${escapeHtml(c.closedForPositionId)}${filledTarget ? " — "+escapeHtml(filledTarget.title) : ""}</span>`
+    : "";
   return `
     <div class="batch-candidate-row">
       <input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">
@@ -4075,6 +4083,7 @@ function candidateRowHtml(c){
       <span class="batch-candidate-name">${escapeHtml(c.name)}</span>
       ${emailHtml}
       ${cvHtml}
+      ${filledNote}
       <select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
         ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(s)}</option>`).join("")}
       </select>
@@ -4089,7 +4098,7 @@ function batchCandidatesBlockHtml(p, batchDate){
   const candidates = (p.batchCandidates||[]).filter(c=>c.batchDate===batchDate);
   return `
     <div class="batch-candidates-block" data-batch-date="${escapeHtml(batchDate)}">
-      ${candidates.map(candidateRowHtml).join("")}
+      ${candidates.map(c=>candidateRowHtml(c, p.id)).join("")}
       <div class="batch-candidates-actions">
         <button type="button" class="fact-edit-link addCandidateBtn" data-batch-date="${escapeHtml(batchDate)}">+ Add Candidate</button>
         ${candidates.length ? `
@@ -7759,27 +7768,47 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
   btn.disabled = true;
   msg.style.color = "var(--text-muted)";
   msg.textContent = "Saving…";
+  let id;
+  const author = currentAuthorName();
   try {
-    const author = currentAuthorName();
-    let cvLink = null;
-    const id = isConnected()
+    id = isConnected()
       ? await graphAppendBatchCandidate(p.id, batchDate, name, email, status, null, author)
       : `${p.id}-${Date.now()}`;
-    if(file && isConnected()){
-      msg.textContent = "Uploading CV…";
+  } catch(err){
+    console.error(err);
+    msg.textContent = "Could not save: " + err.message;
+    msg.style.color = "var(--critical)";
+    btn.disabled = false;
+    return;
+  }
+  // Bug real (David): el candidato ya quedaba creado arriba, pero un 504 transitorio en ESTE
+  // paso (subir el CV / escribir el link) tiraba todo el catch de abajo y el usuario veia
+  // "Could not save" como si nada se hubiera guardado. Ahora ese paso tiene su propio try/catch
+  // no-fatal — el candidato sigue quedando logueado aunque el CV falle.
+  let cvLink = null;
+  let cvWarning = null;
+  if(file && isConnected()){
+    try {
       cvLink = await graphUploadFile("Candidate CVs", p.id, file);
       await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
-    } else if(file){
-      msg.textContent = "Not connected — the CV wasn't uploaded, only kept in this browser tab.";
+    } catch(err){
+      console.error(err);
+      cvLink = null;
+      cvWarning = "the CV upload failed — attach it again from the candidate row.";
     }
+  } else if(file){
+    cvWarning = "not connected — the CV wasn't uploaded, only kept in this browser tab.";
+  }
+  try {
     p.batchCandidates.push({ id, batchDate, name, email: email || null, status, cvLink, addedBy: author, addedDate: localTodayStr() });
     await advancePositionForCandidateStatus(p, name, status);
     await logFieldEdit(p, `${name} added to the ${batchDate} batch (${status}).`);
     closeAddCandidateModal();
     renderDetailModal();
+    if(cvWarning) alert(`${name} was added, but ${cvWarning}`);
   } catch(err){
     console.error(err);
-    msg.textContent = "Could not save: " + err.message;
+    msg.textContent = "Candidate saved, but something else failed: " + err.message;
     msg.style.color = "var(--critical)";
   } finally {
     btn.disabled = false;
@@ -9304,15 +9333,28 @@ function queueIfWrite(method, run){
 }
 async function graphFetch(path, options = {}){
   return queueIfWrite(options.method, async () => {
-    const token = await getGraphToken();
-    const res = await fetch("https://graph.microsoft.com/v1.0" + path, {
-      ...options,
-      headers: {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
+    const doFetch = async () => {
+      const token = await getGraphToken();
+      return fetch("https://graph.microsoft.com/v1.0" + path, {
+        ...options,
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        },
+      });
+    };
+    let res = await doFetch();
+    // Bug real (David, agregando un candidato con CV): Graph respondio 504 en un lookup interno
+    // (resolveTableRowIndexByColumn) y el candidato quedo guardado de todas formas, pero la UI
+    // mostro "Could not save" como si nada hubiera pasado. 502/503/504 son errores TRANSITORIOS
+    // del lado de Graph bajo carga, no un problema real con la escritura en si — un solo
+    // reintento despues de una pausa corta resuelve la mayoria sin que el usuario tenga que hacer
+    // nada. Nunca reintenta 4xx (esos son errores reales, permisos/datos, que repetir no arregla).
+    if([502,503,504].includes(res.status)){
+      await new Promise(r=>setTimeout(r, 1200));
+      res = await doFetch();
+    }
     if(!res.ok){
       const body = await res.text();
       throw new Error(`Graph API error (${res.status}): ${body.slice(0,300)}`);
