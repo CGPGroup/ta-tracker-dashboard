@@ -4477,7 +4477,14 @@ function ganttRowHtml(p, cal){
     </div>`;
   }).join("");
 
-  let milestonesHtml = segs.slice(1).filter(seg=> seg.start >= visStart && seg.start <= visEnd).map(seg=>{
+  // segs COMPLETO, no segs.slice(1) — antes se excluia el primer tramo asumiendo que siempre era
+  // Kickoff y que el inicio visual de la barra ya lo decia por si solo. Eso deja de ser cierto en
+  // cuanto el tramo de Kickoff tiene ancho casi-cero (cae el mismo dia que la siguiente etapa, el
+  // caso NORMAL en los datos reales) — ahi el color no alcanza a verse y sin su propio milestone
+  // Kickoff queda totalmente invisible. Bug real, Nicolas: "en ninguna vista hay kickoff, la unica
+  // que tiene es la de engineering manager" (la unica req real donde Kickoff cae un dia distinto
+  // al siguiente evento).
+  let milestonesHtml = segs.filter(seg=> seg.start >= visStart && seg.start <= visEnd).map(seg=>{
     const leftPct = (cal.pctOf(seg.start) - trackLeftPct) / trackWidthPct * 100;
     return `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
       <span class="gantt-milestone-shape"></span>
