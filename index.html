@@ -4258,7 +4258,15 @@ function statHoverPopoverHtml(s){
 // propia columna de fecha).
 let GANTT_DATA = {};
 let ganttOpenKey = null;
-let ganttScope = "recent";
+// Default real: "recent" (Last 6 Weeks) escondia CASI TODO el trabajo de segmentacion/milestones
+// para cualquier req cuyo Kickoff fuera mas viejo que 6 semanas — que resulto ser la MAYORIA de
+// las reqs reales (11 de 20, confirmado 2026-09-22 corriendo ganttRowHtml sobre las 20 reqs reales
+// bajo "recent" vs "all": 0-1 milestones visibles bajo "recent" contra 2-5 bajo "all" para esas
+// 11). Nicolas, viendo eso: "no es solo el kickoff, son todos los estados... no aparecen en muchas
+// reqs" — tenia razon, el fix de arriba SI funciona, pero la ventana por defecto lo tapaba para la
+// mayoria de sus reqs reales. "All time" como default resuelve esto sin perder legibilidad (el
+// span real de los datos reales cabe comodo, ~3-4 meses maximo).
+let ganttScope = "all";
 
 function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
 function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
@@ -4719,7 +4727,7 @@ function toggleGanttPanel(key, label, positions){
     return;
   }
   ganttOpenKey = key;
-  ganttScope = "recent";
+  ganttScope = "all";
   panelEl.classList.add("show");
   renderGanttGroup(key);
   updateGanttHintBtn();
