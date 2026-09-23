@@ -2841,6 +2841,24 @@ const DELIVERABLE_TEMPLATES = {
       ${kickoffProcessSectionsHtml()}
       <p>Looking forward to working together.</p>`
   }),
+  // Nicolas, 2026-09-23: cuando el hiring manager es Organic (ya trabajamos con el antes — ver
+  // p.hmRelationship/hiringManagerRelationshipChip), el reclutador NO espera un Lead Kickoff Note
+  // aparte primero — se presenta directo, mencionando al Lead dentro de su propia nota, porque el
+  // hiring manager ya lo conoce. Esta variante todavia no vive en el Master Prompt en si (Patch
+  // 28.0 no distingue New/Organic todavia) — es la MISMA base que recruiterKickoff, con un solo
+  // cambio real: la mencion al Lead en el primer parrafo, en vez del checkpoint de "espera a que
+  // el Lead mande la suya primero" que no aplica aqui.
+  recruiterKickoffOrganic: p => ({
+    title: "Recruiter Kickoff Note (Organic Hiring Manager)",
+    subtitle: `Sent by ${escapeHtml(p.recruiter || "the assigned recruiter")} directly — no separate Lead Kickoff Note first, since this hiring manager already has an established relationship with ${LEAD_TALENT_PARTNER}.`,
+    note: `This hiring manager is marked Organic — already worked with ${LEAD_TALENT_PARTNER} before (see the chip next to Hiring Manager above). No separate Lead intro note needed first; send this directly.`,
+    body: `
+      <p>Hi ${escapeHtml(firstName(p.hiringManager) || "[Hiring Manager]")},</p>
+      <p>My name is ${escapeHtml(p.recruiter || "[Recruiter]")}, I'll be your dedicated Talent Partner for the ${escapeHtml(p.title || "[Role]")} (${escapeHtml(p.id || "[Job Code]")}) requisition. I work alongside ${LEAD_TALENT_PARTNER}, our Lead Talent Partner for the Irth Solutions account, who you've already partnered with before.</p>
+      <p>As part of the RPO partnership between Cornerstone and Irth Solutions, I wanted to reach out to align on how we'll work together, given this requires your ownership as the hiring manager. We'll keep all process documentation and feedback logged directly in Workable throughout.</p>
+      ${kickoffProcessSectionsHtml()}
+      <p>Looking forward to working together.</p>`
+  }),
   // Template 11 del Master Prompt (seccion 15) — a diferencia de Kickoff, el candidato en si nunca
   // vive en el req a nivel de posicion (solo existe una vez logueado en un batch, ver
   // [[project_batch_candidates]]), asi que su nombre se deja como placeholder literal "[Candidate
@@ -2936,8 +2954,12 @@ function guidanceDeliverablesFor(p){
     // el Next Step de SU req — ahi solo importa lo que el reclutador asignado tiene que hacer.
     // Deferido a proposito (no resuelto aqui): un lugar aparte donde Nicolas pueda ver/gestionar
     // sus propios Lead Kickoff Notes pendientes para reqs que el no recluta directamente.
-    return p.recruiter === LEAD_TALENT_PARTNER
-      ? [{id:"leadKickoffA", label:"Kickoff Note (You're The Recruiter)"}]
+    // Nicolas, 2026-09-23: si el hiring manager es Organic, el reclutador asignado manda su nota
+    // directo (mencionando al Lead adentro), sin esperar un Lead Kickoff Note aparte primero — ver
+    // recruiterKickoffOrganic arriba.
+    if(p.recruiter === LEAD_TALENT_PARTNER) return [{id:"leadKickoffA", label:"Kickoff Note (You're The Recruiter)"}];
+    return p.hmRelationship === "Organic"
+      ? [{id:"recruiterKickoffOrganic", label:"Recruiter Kickoff Note (Organic Hiring Manager)"}]
       : [{id:"recruiterKickoff", label:"Recruiter Kickoff Note"}];
   }
   // Master Prompt, Checkpoint 2a (seccion 1): el Script de Intake Meeting se prepara "listo justo
