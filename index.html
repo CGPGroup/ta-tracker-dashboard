@@ -4228,7 +4228,10 @@ function statHoverPopoverHtml(s){
 // propia columna de fecha).
 let GANTT_DATA = {};
 let ganttOpenKey = null;
-let ganttScope = "recent";
+// Default "all", no "recent" (Last 6 Weeks) — ese default tapaba el Kickoff/Intake de la mayoria
+// de las reqs reales (11 de 20 kickearon hace mas de 6 semanas). Se revirtio por error junto con
+// el rediseño de milestones que Nicolas pidio deshacer; esto lo restaura, solo esto.
+let ganttScope = "all";
 
 function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
 function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
@@ -4663,7 +4666,7 @@ function toggleGanttPanel(key, label, positions){
     return;
   }
   ganttOpenKey = key;
-  ganttScope = "recent";
+  ganttScope = "all";
   panelEl.classList.add("show");
   renderGanttGroup(key);
   updateGanttHintBtn();
