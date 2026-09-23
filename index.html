@@ -4382,7 +4382,14 @@ function ganttSegments(p){
   for(let i=0;i<checkpoints.length;i++){
     const start = checkpoints[i].date;
     const stop = i+1<checkpoints.length ? checkpoints[i+1].date : (close || end);
-    if(stop<=start) continue;
+    // Antes descartaba CUALQUIER tramo del mismo dia que el siguiente (stop<=start) — pero eso es
+    // el caso NORMAL en los datos reales, no la excepcion (Nicolas suele aceptar + pedir la intake
+    // meeting el mismo dia). Descartar el tramo entero perdia tambien su milestone y su color,
+    // asi que Kickoff/Intake Meeting Requested/etc. quedaban invisibles en la mayoria de las reqs
+    // reales (bug real reportado por Nicolas: "practicamente ninguna req tiene kickoff ni intake
+    // meeting requested, ni held, ni nada"). Solo se descarta si de verdad quedo invertido
+    // (stop<start, nunca deberia pasar tras el forzado monotono de arriba, pero por seguridad).
+    if(stop<start) continue;
     const key = checkpoints[i].key;
     const label = statusLabel(key);
     // boundaryLabel es lo que dice el hito "X empezó" en el limite izquierdo del tramo — separado
