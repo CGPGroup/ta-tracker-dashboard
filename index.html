@@ -3478,7 +3478,13 @@ const TERMINAL = ["Hired","Cancelled","Filled (Internal Hire)"];
 // su propia logica vieja aparte, mostrando un numero distinto bajo el mismo nombre. Cualquier
 // vista nueva que necesite "esta activa de verdad" debe filtrar contra esta constante, nunca
 // reinventar el filtro localmente.
-const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates"];
+// Nicolas, 2026-09-23: "el reclutador ya no tiene que esperar mas... a partir de ahi ya no se
+// deberia tener en cuenta como req activa" — en Offer Request, el trabajo del reclutador ya
+// termino (se le entrego a Immy/Irth: fecha de envio de la oferta, aceptacion/firma, fecha de
+// inicio, nada de eso lo hace el reclutador). Sigue contando en Potential Placements (su propia
+// definicion, POTENTIAL_PLACEMENT_STATUSES, sin relacion con esta constante) — solo deja de
+// pesar como carga de trabajo activa.
+const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates","Offer Request"];
 // Estados que son una decision de negocio explicita, no un paso mas del pipeline lineal — nunca
 // se tocan por un efecto secundario silencioso de loguear una fecha/batch (ver DATE_IMPLIES_STATUS
 // en saveModalDates() y el auto-avance de logBatchSave). Hoisted aqui (antes vivia solo dentro de
@@ -5012,11 +5018,15 @@ function renderEstadoChart(){
 }
 
 // Carga real ponderada por etapa (Playbook seccion 2.5): un req en Sourcing (esfuerzo maximo)
-// no pesa lo mismo que uno en Offer Stage (esperando a Irth) o en On Hold (pausado) — contar
-// solo posiciones brutas sobreestima a quien tiene muchas ya avanzadas y subestima a quien tiene
-// varias en sourcing intensivo. Pesos y limites (10 sweet spot, 12 maximo aceptable) tal cual el
-// Playbook; "Sourcing" (que desde 2026-09-17 incluye Screening, ver STATUS_ORDER) pesa 1.0
-// (construyendo/entregando el batch).
+// no pesa lo mismo que uno recien en Kickoff — contar solo posiciones brutas sobreestima a quien
+// tiene muchas ya avanzadas y subestima a quien tiene varias en sourcing intensivo. Pesos y
+// limites (10 sweet spot, 12 maximo aceptable) tal cual el Playbook; "Sourcing" (que desde
+// 2026-09-17 incluye Screening, ver STATUS_ORDER) pesa 1.0 (construyendo/entregando el batch).
+// Offer Request/Filled/On Hold/On Hold Internal ya NO aparecen aqui — estan en
+// NOT_ACTIVELY_WORKED, asi que se filtran ANTES de llegar a este mapa (nunca pesan nada, no un
+// peso bajo). Nicolas, 2026-09-23, sobre Offer Request especificamente: "el reclutador ya no
+// tiene que esperar mas... a partir de ahi ya no se deberia tener en cuenta como req activa" — el
+// trabajo real ya se le entrego a Immy/Irth en ese punto.
 const STAGE_WEIGHT = {
   "Kickoff": 0.25,
   "Intake Meeting Requested": 0.25,
@@ -5025,10 +5035,6 @@ const STAGE_WEIGHT = {
   "Sourcing": 1.0,
   "Submitted": 0.5,
   "Client Interview": 0.5,
-  "Offer Request": 0.25,
-  "Filled": 0.1,
-  "On Hold": 0.1,
-  "On Hold — Internal Candidates": 0.1,
 };
 const WORKLOAD_SWEET_SPOT = 10;
 const WORKLOAD_MAX = 12;
@@ -5056,7 +5062,11 @@ function slaRateColor(rate){
   return "var(--good)";
 }
 function renderReclutadorChart(){
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  // Bug real (Nicolas, 2026-09-23): "a David le salen unas de full stack que estan on hold... en
+  // sus reqs activas" — este chart solo excluia TERMINAL, nunca NOT_ACTIVELY_WORKED (On Hold,
+  // Filled, Offer Request), asi que un req pausado seguia sumando carga y apareciendo como
+  // "activo" en la tarjeta del reclutador. Misma fuente de verdad que Active Positions.
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
   const rows = RECRUITERS.map(r=>{
     const assigned = active.filter(p=>p.recruiter===r);
     const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
@@ -5091,7 +5101,10 @@ function renderReclutadorChart(){
 }
 
 function renderHiredLocChart(){
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  // Mismo fix que renderReclutadorChart() (2026-09-23): el texto de este panel dice "X active
+  // position(s)" — tenia que excluir NOT_ACTIVELY_WORKED tambien, no solo TERMINAL, para que ese
+  // texto sea cierto.
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
   // Por pais individual, no por el valor crudo del campo — un req que cubre US+Canada a la vez
   // cuenta en las dos barras, no en una tercera categoria compuesta "United States, Canada".
   // El total de las barras puede superar el total de posiciones activas, y esta bien: es una
@@ -5151,7 +5164,9 @@ function renderHiredLocChart(){
 }
 
 function renderSlaChart(){
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  // Mismo fix que renderReclutadorChart()/renderHiredLocChart() (2026-09-23) — este panel dice
+  // "out of X active" en su propio texto, tenia que excluir NOT_ACTIVELY_WORKED tambien.
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
   const metrics = [
     {key:"TTS", label:"Time To Submit (TTS)", tag:"official", tagLabel:"Official SLA"},
     {key:"TTF", label:"Time To Fill (TTF)", tag:"internal", tagLabel:"Internal Goal"},
@@ -5197,7 +5212,8 @@ function renderSlaChart(){
 // mostrar rendimiento del libro completo sin exponer numeros crudos de conversion de
 // candidatos (eso fue lo que preocupo a Nicolas de "Candidate Pipeline Totals").
 function renderSlaMeter(){
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  // Mismo fix de 2026-09-23 que el resto de paneles de "active" — ver renderReclutadorChart().
+  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
   // Sin posiciones activas no hay nada que medir todavia; mostrar "100%" ahi se leeria como
   // un logro real en vez de "no hay datos", asi que este caso se muestra aparte, en gris.
   if(!active.length){
@@ -9136,7 +9152,12 @@ function updateNewPosCapacityHint(){
   if(!hint) return;
   const name = document.getElementById("newPosRecruiter").value;
   if(!name){ hint.textContent = ""; return; }
-  const assigned = POSITIONS.filter(p => !TERMINAL.includes(p.status) && p.recruiter === name);
+  // Mismo fix de 2026-09-23 que el resto (ver renderReclutadorChart()) — CRITICO aqui
+  // especificamente: STAGE_WEIGHT[status] ?? 1 le pone peso COMPLETO (1.0) a cualquier status
+  // ausente del mapa, y Offer Request/Filled/On Hold ya no estan ahi (ver STAGE_WEIGHT) — sin
+  // este filtro, esos reqs pasarian de pesar poco a pesar MAS que antes del fix, justo lo
+  // opuesto de lo que Nicolas pidio.
+  const assigned = POSITIONS.filter(p => !TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status) && p.recruiter === name);
   const currentLoad = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
   const projected = Math.round((currentLoad + 0.25) * 10) / 10;
   if(projected > WORKLOAD_MAX){
