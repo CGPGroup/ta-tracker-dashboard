@@ -84,6 +84,11 @@
     --warning: #d3a355; --warning-rgb: 211,163,85;
     --critical: #c17466; --critical-rgb: 193,116,102;
     --neutral: #7c756d;
+    /* Del mockup original (Req Pulse Timeline) — un gris calido mas claro que --text-secondary,
+       reservado para el diamante del milestone del Gantt. Nunca se traslado al implementar de
+       verdad (se reuso --text-secondary por error), lo que lo dejo un poco mas apagado/marron de
+       lo que Nicolas recordaba: "eran mas blancos". */
+    --neutral-strong: #c9c2b8;
 
     --stage-blue: #6f93c9;
     --stage-teal: #5cae9e;
@@ -150,6 +155,7 @@
     --warning: #a3711e; --warning-rgb: 163,113,30;
     --critical: #b8493a; --critical-rgb: 184,73,58;
     --neutral: #6b6259;
+    --neutral-strong: #4a423a;
   }
 
   * { box-sizing: border-box; }
@@ -560,7 +566,7 @@
      tooltip heredaba ese sistema de coordenadas girado — las tarjetas salian "torcidas" (bug real
      reportado por Nicolas), un rotate(-45deg) puesto a mano en el tooltip no lo corregia bien. */
   .gantt-milestone { position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; margin-left: -3.5px; z-index: 4; }
-  .gantt-milestone-shape { display: block; width: 100%; height: 100%; background: var(--text-secondary); border: 1px solid var(--surface-1); border-radius: 1px; transform: rotate(45deg); }
+  .gantt-milestone-shape { display: block; width: 100%; height: 100%; background: var(--neutral-strong); border: 1px solid var(--surface-1); border-radius: 1px; transform: rotate(45deg); }
   /* Punteado mas grueso a proposito (2.5px, no 1.5px) — a esta escala tan chica (7px) una linea
      de 1.5px casi no se distinguia como punteada, mucho menos entre TTF y TTH. */
   /* CSS border-style:dashed a 7px de caja casi no alcanza a mostrar mas de un tramo por lado —
