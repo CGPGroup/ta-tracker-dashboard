@@ -6179,10 +6179,19 @@ function hiringManagerPriorReq(p){
 }
 function hiringManagerRelationshipChip(p){
   if(!p.hiringManager || !p.hiringManager.trim()) return "";
-  const prior = hiringManagerPriorReq(p);
-  return prior
-    ? ` <span class="status-chip" style="background:rgba(var(--good-rgb),0.16); color:var(--good);" title="Ya trabajaste con este hiring manager antes, en ${escapeHtml(prior.id)} (${escapeHtml(prior.title)}) — no es primer contacto para el Lead Kickoff Note.">Organic — also on ${escapeHtml(prior.id)}</span>`
-    : ` <span class="status-chip" style="background:rgba(255,255,255,0.06); color:var(--text-muted);" title="Primera vez que este hiring manager aparece en el tracker — el Lead Kickoff Note de primer contacto aplica tal cual.">New</span>`;
+  // Nicolas, 2026-09-23, corrigiendo mi primer intento (que recalculaba esto en vivo): "la unica
+  // manera que un hm sea organico, es que sea elegido de esa lista" — es una foto fija tomada al
+  // CREAR este req especifico (p.hmRelationship), nunca algo que cambie despues aunque el mismo
+  // nombre aparezca en otros reqs mas adelante. 3 reqs nuevos creados el mismo dia para un HM
+  // recien agregado siguen siendo New en los 3, aunque ese nombre ya haya quedado en la lista de
+  // organicos para FUTUROS reqs (ver organicHiringManagerNames(), usada solo por el picker).
+  if(p.hmRelationship === "Organic"){
+    // hiringManagerPriorReq() aqui es solo para nombrar un req real en el tooltip (self-contained
+    // text) — no decide el estado, eso ya lo decidio hmRelationship arriba.
+    const prior = hiringManagerPriorReq(p);
+    return ` <span class="status-chip" style="background:rgba(var(--good-rgb),0.16); color:var(--good);" title="Elegido de la lista de hiring managers organicos al crear esta req — no es primer contacto para el Lead Kickoff Note.${prior ? ` Tambien en ${escapeHtml(prior.id)} (${escapeHtml(prior.title)}).` : ""}">Organic${prior ? ` — also on ${escapeHtml(prior.id)}` : ""}</span>`;
+  }
+  return ` <span class="status-chip" style="background:rgba(255,255,255,0.06); color:var(--text-muted);" title="Escrito como nombre nuevo al crear esta req (o dato de antes de que esta distincion existiera) — el Lead Kickoff Note de primer contacto aplica tal cual.">New</span>`;
 }
 function factsSection(title, facts){
   if(!facts.length) return "";
@@ -7194,6 +7203,15 @@ function getAddNewValue(selectId, inputId){
   const select = document.getElementById(selectId);
   const input = document.getElementById(inputId);
   return (select.style.display !== "none" ? select.value : input.value).trim() || null;
+}
+// Nicolas, 2026-09-23: "la unica manera que un hm sea organico, es que sea elegido de esa lista"
+// — si se escribio en vez de elegirse de la lista, es New, sin importar si ese mismo nombre
+// termina apareciendo en otro req despues. Usado solo por el Hiring Manager de Create Position
+// (ver fields.hmRelationship abajo) — es una foto fija al momento de crear el req, nunca se
+// recalcula despues.
+function getAddNewMode(selectId, inputId){
+  const input = document.getElementById(inputId);
+  return input.style.display !== "none" ? "new" : "list";
 }
 function wireAddNewSelect(selectId, inputId, backBtnId){
   document.getElementById(selectId).addEventListener("change", (e)=>{
@@ -9953,6 +9971,14 @@ function parsePositionsTable(posHeaders, posRows){
       // fecha, y llegar aqui via el candidato mas avanzado (ver
       // CANDIDATE_STATUS_TO_POSITION_STATUS/advancePositionForCandidateStatus()) tambien la fija.
       offerRequestDate: excelValToDateStr(r[idx("Offer Request Date")]),
+      // Columna nueva/opcional (2026-09-23): "New" u "Organic", fijado UNA sola vez al crear el
+      // req (ver createPositionBtn/fields.hmRelationship) segun si el hiring manager se escribio
+      // a mano o se eligio de la lista de organicos en ese momento — nunca se recalcula despues,
+      // ni siquiera si el mismo nombre termina en otro req mas adelante. Ausente/null (todo dato
+      // migrado antes de que este campo existiera) se trata como New en el chip del modal —
+      // Nicolas: "la unica manera que un hm sea organico, es que sea elegido de esa lista", y
+      // ningun req viejo paso por esa lista.
+      hmRelationship: r[idx("Hiring Manager Relationship")] || null,
       extra: [],
       batches: [],
       batchCandidates: [],
@@ -10949,6 +10975,14 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     null,
     null, // Intake Waived Date (columna 60, ver slaFor()) — mismo patron: reservado antes de que exista en el Excel real.
     null, // Offer Request Date (columna 61, "BI") — mismo patron.
+    // Hiring Manager Relationship (columna 62, nueva 2026-09-23) — "New" u "Organic" segun si el
+    // HM se escribio a mano o se eligio de la lista de organicos al crear ESTA req especifica
+    // (ver createPositionBtn/fields.hmRelationship) — a diferencia de las columnas de arriba,
+    // esta SI trae un valor real desde ya, nunca null, porque se decide en el momento mismo de
+    // crear el req. Mismo patron de reserva: falta el header real en el Excel, pero
+    // graphAppendPosition() recorta el array al ancho real de la tabla, asi que no rompe nada
+    // mientras tanto — solo no se guarda hasta que Nicolas agregue la columna.
+    fields.hmRelationship,
   ];
 }
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
@@ -10958,6 +10992,9 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   const fields = {
     title,
     hm: getAddNewValue("newPosHMSelect", "newPosHMInput") || "",
+    // Elegido de la lista (que solo trae organicos, ver organicHiringManagerNames()) = Organic;
+    // escrito a mano = New — se guarda tal cual, para siempre, no se vuelve a calcular despues.
+    hmRelationship: getAddNewMode("newPosHMSelect", "newPosHMInput") === "list" ? "Organic" : "New",
     recruiter: document.getElementById("newPosRecruiter").value,
     country: [...document.querySelectorAll(".newPosCountryCheck:checked")].map(el=>el.value).join(", "),
     workArrangement: document.getElementById("newPosWorkArrangement").value,
