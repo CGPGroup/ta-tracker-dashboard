@@ -7160,6 +7160,17 @@ async function confirmIntakeSummarySent(p){
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
+  // Nicolas, 2026-09-23, bug real: David marco un req que en realidad era Filled (Internal Hire)
+  // como Hired a mano desde este dropdown — nada exigia que hubiera un candidato Placed real
+  // detras. "No deje al reclutador marcarlo como placed desde status, sino desde el batch, restringe
+  // para que no se puedan cambiar esos estados manualmente en el campo de status... que los lleve
+  // al lugar donde deben completar la info." La puerta real ya existe (Timeline: loguear el Hire/
+  // Start Date real del candidato mueve el status solo, ver DATE_IMPLIES_STATUS en
+  // saveModalDates()) — este dropdown solo deja de ser un atajo que salta esa fecha real.
+  if(newStatus === "Hired"){
+    alert(`"${statusLabel("Hired")}" can't be set manually here — mark the candidate as Placed in Submission Batches, then log their real Start Date in Timeline. This requisition will move to "${statusLabel("Hired")}" automatically once that date is saved.`);
+    return;
+  }
   // No se puede avanzar el pipeline sin antes aceptar la asignacion (o, si vino por Handoff, sin
   // confirmar el contexto) — sin este bloqueo era posible saltar directo a Sourcing (u otro
   // status downstream) sin haber aceptado nunca, dejando el KPI de Accept Requisition sin ningun
