@@ -559,11 +559,8 @@
      para verse como diamante. Antes el rotate vivia en el mismo div que el tooltip, asi que el
      tooltip heredaba ese sistema de coordenadas girado — las tarjetas salian "torcidas" (bug real
      reportado por Nicolas), un rotate(-45deg) puesto a mano en el tooltip no lo corregia bien. */
-  .gantt-milestone { position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; z-index: 4; }
-  /* .multi = varios eventos reales fusionados en este mismo dia (ver ganttRowHtml) — un poco mas
-     grande nada mas, para insinuar "aqui hay mas de uno" sin agregar anillos ni color extra. */
-  .gantt-milestone.multi { width: 11px; height: 11px; margin-top: -5.5px; margin-left: -5.5px; }
-  .gantt-milestone-shape { display: block; width: 100%; height: 100%; background: var(--text-primary); border: 1.5px solid var(--surface-1); border-radius: 2px; transform: rotate(45deg); }
+  .gantt-milestone { position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; margin-left: -3.5px; z-index: 4; }
+  .gantt-milestone-shape { display: block; width: 100%; height: 100%; background: var(--text-secondary); border: 1px solid var(--surface-1); border-radius: 1px; transform: rotate(45deg); }
   /* Punteado mas grueso a proposito (2.5px, no 1.5px) — a esta escala tan chica (7px) una linea
      de 1.5px casi no se distinguia como punteada, mucho menos entre TTF y TTH. */
   /* CSS border-style:dashed a 7px de caja casi no alcanza a mostrar mas de un tramo por lado —
@@ -3660,48 +3657,15 @@ function computeSlaPauseInfo(p){
 // from X to <toLabel>" — mismo patron que computeSlaPauseInfo, ahora compartido: antes vivia
 // duplicado dentro del Gantt (ganttFindTransitionDate) y aqui NO existia en absoluto, dejando a
 // slaFor() sin este fallback (ver resolveEffectiveIntakeDate abajo). Una sola fuente de verdad.
-// Devuelve la entrada COMPLETA (date + time real, ver nowTimeStr() en commitStatusChange) en vez
-// de solo la fecha — Nicolas, 2026-09-22: "hay algunos que se piden el mismo dia pero no la misma
-// hora, y recuerda que eso ya lo tenemos implementado" (cada cambio de status real ya loguea su
-// hora real, ver commitStatusChange/acceptAssignment/acceptHandoff) — el Gantt necesita esa hora
-// para desempatar checkpoints del mismo dia con el orden REAL, no solo el orden logico fijo de
-// STATUS_ORDER.
-function findStatusTransitionEntry(p, toLabel){
+function findStatusTransitionDate(p, toLabel){
   const entries = [...(p.remarksHistory||[]), ...(p.extra||[])]
     .filter(e => e.type === "status" && typeof e.text === "string" && e.text.startsWith("Status changed from"))
     .sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
   for(const e of entries){
     const m = e.text.match(/Status changed from .+? to (.+?)(?: \(|\.$|\.)/);
-    if(m && m[1] === toLabel) return e;
+    if(m && m[1] === toLabel) return e.date;
   }
   return null;
-}
-function findStatusTransitionDate(p, toLabel){
-  const e = findStatusTransitionEntry(p, toLabel);
-  return e ? e.date : null;
-}
-// Hora real (HH:MM) de un checkpoint del Gantt, SOLO si el Activity log tiene una entrada que
-// coincide con la fecha que ya tenemos — nunca se toma prestada la hora de una entrada de OTRA
-// fecha (un ajuste manual posterior en el Excel puede mover la fecha sin dejar un log nuevo; en
-// ese caso la hora vieja ya no es de fiar y se prefiere degradar a fecha sola). "Accepted" y
-// "Handoff Accepted" no son un status de STATUS_ORDER, asi que se buscan por su texto fijo real
-// (ver acceptAssignment()/acceptHandoff()) en vez de por findStatusTransitionEntry.
-function checkpointTime(p, key, dateStr){
-  if(!dateStr) return null;
-  const log = [...(p.remarksHistory||[]), ...(p.extra||[])];
-  let entry = null;
-  if(key === "Accepted") entry = log.find(e=> e.type==="action" && e.text==="Accepted the assignment.");
-  else if(key === "Handoff Accepted") entry = log.find(e=> e.type==="action" && typeof e.text==="string" && e.text.startsWith(`Accepted handoff from ${p.handoffFrom}`));
-  else entry = findStatusTransitionEntry(p, key);
-  return (entry && entry.date === dateStr) ? (entry.time || null) : null;
-}
-// "9:15 AM" a partir de "HH:MM" (24h, ver nowTimeStr()) — mismo formato corto que ganttFmtDate ya
-// usa para fechas, para que un tooltip combinado lea igual de natural.
-function ganttFmtTime(hhmm){
-  if(!hhmm) return null;
-  const [h,m] = hhmm.split(":").map(Number);
-  const d = new Date(2000,0,1,h,m);
-  return d.toLocaleTimeString("en-US", {hour:"numeric", minute:"2-digit"});
 }
 // Ancla real de "cuando el intake quedo listo" (reunion tenida O waiver) — cadena de fallback que
 // NUNCA fabrica una fecha. Nicolas (2026-09-17) ya habia atrapado que p.intake queda null en un
@@ -4258,15 +4222,7 @@ function statHoverPopoverHtml(s){
 // propia columna de fecha).
 let GANTT_DATA = {};
 let ganttOpenKey = null;
-// Default real: "recent" (Last 6 Weeks) escondia CASI TODO el trabajo de segmentacion/milestones
-// para cualquier req cuyo Kickoff fuera mas viejo que 6 semanas — que resulto ser la MAYORIA de
-// las reqs reales (11 de 20, confirmado 2026-09-22 corriendo ganttRowHtml sobre las 20 reqs reales
-// bajo "recent" vs "all": 0-1 milestones visibles bajo "recent" contra 2-5 bajo "all" para esas
-// 11). Nicolas, viendo eso: "no es solo el kickoff, son todos los estados... no aparecen en muchas
-// reqs" — tenia razon, el fix de arriba SI funciona, pero la ventana por defecto lo tapaba para la
-// mayoria de sus reqs reales. "All time" como default resuelve esto sin perder legibilidad (el
-// span real de los datos reales cabe comodo, ~3-4 meses maximo).
-let ganttScope = "all";
+let ganttScope = "recent";
 
 function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
 function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
@@ -4386,8 +4342,7 @@ function ganttSegments(p){
   // separado), antes ambos se etiquetaban igual "Intake Pending"/"Intake Held" sin importar cual
   // paso de verdad (bug real reportado por Nicolas: "a otros no se les ve el waiver").
   const introKey = (!p.intake && p.intakeWaivedReason) ? "Intake Meeting Waived" : "Intake Pending";
-  const introDoneStr = resolveEffectiveIntakeDate(p);
-  const introDone = parseD(introDoneStr);
+  const introDone = parseD(resolveEffectiveIntakeDate(p));
   const submitDate = parseD(p.submit);
   const ciDateStr = findStatusTransitionDate(p, "Client Interview");
   const ciDateRaw = ciDateStr ? parseD(ciDateStr) : null;
@@ -4396,24 +4351,18 @@ function ganttSegments(p){
   const close = ganttCloseDate(p);
   const end = ganttEndPoint(p);
 
-  // dateStr conserva el string ORIGINAL (nunca reconstruido desde el Date parseado, que podria
-  // desfasarse un dia por zona horaria) — es lo que checkpointTime() necesita para encontrar la
-  // hora real (HH:MM) de este mismo evento en el Activity log, ver [[project_gantt_timeline]]
-  // 2026-09-22: "hay algunos que se piden el mismo dia pero no la misma hora, y recuerda que eso
-  // ya lo tenemos implementado."
   const checkpoints = [
-    {key:"Kickoff", date:kickoff, dateStr:p.kickoff},
-    {key:"Intake Meeting Requested", date:introReq, dateStr:p.intakeRequestedDate},
+    {key:"Kickoff", date:kickoff},
+    {key:"Intake Meeting Requested", date:introReq},
     // introKey es "Intake Pending" (display "Intake Held") o "Intake Meeting Waived" segun cual
     // camino real paso — antes se saltaba directo a "Sourcing" en cuanto habia fecha de intake,
     // asi que un req sentado literalmente en ese status nunca se veia con su propio color.
-    {key:introKey, date:introDone, dateStr:introDoneStr},
-    {key:"Sourcing", date:introDone, dateStr:introDoneStr},
-    {key:"Submitted", date:submitDate, dateStr:p.submit},
-    {key:"Client Interview", date:ciDate, dateStr:ciDateStr},
-    {key:"Offer Request", date:offerDate, dateStr:p.offerRequestDate},
+    {key:introKey, date:introDone},
+    {key:"Sourcing", date:introDone},
+    {key:"Submitted", date:submitDate},
+    {key:"Client Interview", date:ciDate},
+    {key:"Offer Request", date:offerDate},
   ].filter(c=>c.date);
-  checkpoints.forEach(c=>{ c.time = checkpointTime(p, c.key, c.dateStr); });
 
   // Fuerza orden cronologico monotono por si dos fechas reales quedaron invertidas en los datos
   // (nunca deja que un checkpoint retroceda respecto al anterior).
@@ -4447,7 +4396,7 @@ function ganttSegments(p){
     // de "label" (el que usa el color) porque la correccion de abajo puede re-etiquetar el ultimo
     // tramo SIN una fecha real nueva; decir ahi "Offer Request empezó" en una fecha que en
     // realidad es de otra etapa seria una precision falsa que el dato no respalda.
-    segs.push({key, label, boundaryLabel:label, boundaryTime:checkpoints[i].time, color:STAGE_COLORS[key]||"var(--seq-400)", start:new Date(start), stop:new Date(stop)});
+    segs.push({key, label, boundaryLabel:label, color:STAGE_COLORS[key]||"var(--seq-400)", start:new Date(start), stop:new Date(stop)});
   }
 
   // El status guardado SIEMPRE manda para la etapa que se muestra como actual — un req puede
@@ -4464,7 +4413,7 @@ function ganttSegments(p){
     const tDate = tStr ? parseD(tStr) : null;
     if(tDate && tDate > lastSeg.start && tDate < end){
       lastSeg.stop = tDate;
-      segs.push({key:p.status, label:statusLabel(p.status), boundaryLabel:statusLabel(p.status), boundaryTime:checkpointTime(p, p.status, tStr), color:STAGE_COLORS[p.status]||"var(--seq-400)", start:new Date(tDate), stop:new Date(end)});
+      segs.push({key:p.status, label:statusLabel(p.status), boundaryLabel:statusLabel(p.status), color:STAGE_COLORS[p.status]||"var(--seq-400)", start:new Date(tDate), stop:new Date(end)});
     } else {
       lastSeg.key = p.status;
       lastSeg.label = statusLabel(p.status);
@@ -4519,52 +4468,33 @@ function ganttRowHtml(p, cal){
     </div>`;
   }).join("");
 
-  // Un "moment" por cada evento real que merece su propio diamante — TODOS los checkpoints de
-  // segs, Kickoff incluido (Nicolas, 2026-09-22: "todo debe estar completamente mapeado"; antes
-  // se excluia segs[0] asumiendo que era siempre Kickoff y que el inicio de la barra ya lo decia
-  // por si solo, pero eso dejo de ser cierto en cuanto ganttSegments() empezo a preservar tramos
-  // de un solo dia — ver el fix de arriba), mas "Accepted"/"Handoff accepted" (no son una etapa de
-  // STATUS_ORDER, no tienen color propio). Los que caen el MISMO dia se fusionan en un solo
-  // diamante con un tooltip combinado, ordenado por la hora REAL cuando se conoce (checkpointTime,
-  // ya viene del Activity log real) — "hay algunos que se piden el mismo dia pero no la misma
-  // hora, y recuerda que eso ya lo tenemos implementado." El que no tiene hora conocida (dato
-  // migrado antes del tracker) nunca se inventa una — simplemente queda al final del grupo.
-  const moments = segs
-    .filter(seg=> seg.start >= visStart && seg.start <= visEnd)
-    .map(seg=>({date:seg.start, time:seg.boundaryTime, text:`${seg.boundaryLabel} started`}));
+  let milestonesHtml = segs.slice(1).filter(seg=> seg.start >= visStart && seg.start <= visEnd).map(seg=>{
+    const leftPct = (cal.pctOf(seg.start) - trackLeftPct) / trackWidthPct * 100;
+    return `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
+      <span class="gantt-milestone-shape"></span>
+      <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.boundaryLabel)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
+    </div>`;
+  }).join("");
 
+  // "Accepted" (o "Handoff accepted") nunca aparecia en el Gantt — bug real reportado por
+  // Nicolas ("el status de accepted no esta en el gantt... las de Juan David que yo le hice
+  // handoff, esa info debe aparecer"). No es una etapa de STATUS_ORDER (no tiene color propio),
+  // asi que se dibuja como un hito suelto encima de "Kickoff", no como limite de segmento. Con
+  // handoff, la fecha real que manda es handoffAcceptedDate (la que el NUEVO reclutador acepto),
+  // nombrando explicitamente de quien vino — self-contained-text, nunca "aceptado" a secas sin
+  // decir de donde.
   const acceptedDateStr = p.handoffFrom ? p.handoffAcceptedDate : p.recruiterAcceptedDate;
   const acceptedDate = acceptedDateStr ? parseD(acceptedDateStr) : null;
   if(acceptedDate && acceptedDate >= visStart && acceptedDate <= visEnd){
-    moments.push({
-      date: acceptedDate,
-      time: checkpointTime(p, p.handoffFrom ? "Handoff Accepted" : "Accepted", acceptedDateStr),
-      text: p.handoffFrom
-        ? `Handoff accepted from ${p.handoffFrom} · now with ${p.recruiter||"this recruiter"}`
-        : "Assignment accepted",
-    });
-  }
-  moments.sort((a,b)=> a.date - b.date);
-
-  const momentGroups = [];
-  moments.forEach(mo=>{
-    const last = momentGroups[momentGroups.length-1];
-    if(last && last.date.getTime()===mo.date.getTime()) last.items.push(mo);
-    else momentGroups.push({date:mo.date, items:[mo]});
-  });
-  let milestonesHtml = momentGroups.map(g=>{
-    const leftPct = (cal.pctOf(g.date) - trackLeftPct) / trackWidthPct * 100;
-    const known = g.items.filter(i=>i.time).sort((a,b)=> a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
-    const ordered = [...known, ...g.items.filter(i=>!i.time)];
-    const multi = ordered.length > 1;
-    const bodyHtml = multi
-      ? `<b>${ganttFmtDate(g.date)}</b><br><span class="muted">${ordered.map(i=> `${i.time ? ganttFmtTime(i.time)+" — " : ""}${escapeHtml(i.text)}`).join("<br>")}</span>`
-      : `<b>${escapeHtml(ordered[0].text)}</b><br><span class="muted">${ganttFmtDate(g.date)}${ordered[0].time ? ` · ${ganttFmtTime(ordered[0].time)}` : ""}</span>`;
-    return `<div class="gantt-milestone${multi ? " multi" : ""}" style="left:${leftPct.toFixed(3)}%;">
+    const leftPct = (cal.pctOf(acceptedDate) - trackLeftPct) / trackWidthPct * 100;
+    const acceptedLabel = p.handoffFrom
+      ? `Handoff accepted from ${escapeHtml(p.handoffFrom)}`
+      : "Assignment accepted";
+    milestonesHtml += `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
       <span class="gantt-milestone-shape"></span>
-      <div class="gantt-tooltip${multi ? " wide" : ""}" style="bottom:14px;">${bodyHtml}</div>
+      <div class="gantt-tooltip" style="bottom:14px;"><b>${acceptedLabel}</b><br><span class="muted">${ganttFmtDate(acceptedDate)}${p.handoffFrom ? ` · now with ${escapeHtml(p.recruiter||"this recruiter")}` : ""}</span></div>
     </div>`;
-  }).join("");
+  }
 
   if(terminal && end >= visStart && end <= visEnd){
     // 3 desenlaces reales, 3 colores distintos — Filled (Internal Hire) NO es una perdida como
@@ -4727,7 +4657,7 @@ function toggleGanttPanel(key, label, positions){
     return;
   }
   ganttOpenKey = key;
-  ganttScope = "all";
+  ganttScope = "recent";
   panelEl.classList.add("show");
   renderGanttGroup(key);
   updateGanttHintBtn();
