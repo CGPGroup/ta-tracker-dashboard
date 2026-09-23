@@ -7481,22 +7481,74 @@ async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
     if(!opts.skipRerender) renderDetailModal();
     return {ok:false};
   }
-  // Elegido de este batch = el Placed Candidate de la posicion completa (Nicolas: "si alguno de
-  // ese batch es elegido, que sea ese el que quede como candidate placed"). No revierte al que
-  // estuviera Placed antes (si habia otro) — casos asi son raros y mejor que el reclutador lo
-  // corrija a mano que asumir cual de los dos es el correcto.
-  if(newStatus === "Placed" && p.placedCandidate !== c.name){
-    p.placedCandidate = c.name;
+  // Elegido de este batch = el Placed Candidate, pero en un Headcount Group el candidato pudo
+  // cerrar OTRA vacante del mismo grupo, no necesariamente esta req (Nicolas, 2026-09-22: "no solo
+  // poder elegirlo, si no mostrarlo tambien"). Se pregunta cual req cerro realmente cuando hay
+  // otras vacantes abiertas del grupo sin su propio Placed Candidate; si no hay ninguna (o esto es
+  // un bulk-apply, que no puede detenerse a preguntar por cada candidato), se asume esta misma req,
+  // igual que antes.
+  if(newStatus === "Placed"){
+    let targetP = p;
+    if(!opts.skipRerender && p.headcountGroup){
+      const openSiblings = POSITIONS.filter(x=> x.headcountGroup===p.headcountGroup && x.id!==p.id && !x.placedCandidate && !TERMINAL.includes(x.status));
+      if(openSiblings.length){
+        targetP = await pickHeadcountForPlacedCandidate(p, c, openSiblings);
+      }
+    }
+    await applyPlacedCandidate(p, c, targetP);
+  }
+  if(!opts.skipRerender) renderDetailModal();
+  return {ok:true};
+}
+// Picker del headcount real que este candidato cerro (ver comentario arriba). Reusa el modal
+// generico de un solo campo (openEditFieldModal) como <select>; onCancel (cerrar sin elegir) cae
+// de vuelta a la req actual, nunca bloquea el cambio de status en si.
+function pickHeadcountForPlacedCandidate(p, c, openSiblings){
+  const choices = [p, ...openSiblings];
+  const labelFor = (x)=> `${x.id} — ${x.title}`;
+  return new Promise(resolve=>{
+    let resolved = false;
+    openEditFieldModal({
+      title: "Which Headcount Did This Fill?",
+      label: "Requisition closed",
+      noteHtml: `${escapeHtml(c.name)} is being marked Placed. This req is part of Headcount Group "${escapeHtml(p.headcountGroup)}" — pick which specific requisition this candidate actually closed.`,
+      options: choices.map(labelFor),
+      value: labelFor(p),
+      onSave: (newVal)=>{
+        resolved = true;
+        resolve(choices.find(x=> labelFor(x)===newVal) || p);
+      },
+      onCancel: ()=>{
+        if(!resolved) resolve(p);
+      },
+    });
+  });
+}
+// Aplica el Placed Candidate a la req REAL que cerro (puede ser distinta de `sourceP`, la que
+// tiene el batch logueado — ver pickHeadcountForPlacedCandidate arriba). `c.closedForPositionId`
+// solo se marca cuando de verdad difiere, para que candidateRowHtml() no muestre la nota "Filled
+// elsewhere" en el caso normal (sin Headcount Group, o eligiendo la misma req).
+async function applyPlacedCandidate(sourceP, c, targetP){
+  c.closedForPositionId = (targetP.id !== sourceP.id) ? targetP.id : null;
+  if(targetP.id !== sourceP.id){
+    try {
+      // Necesita una columna nueva "Filled Position ID" en BatchCandidatesTable (paso manual de
+      // Nicolas) para persistir en el Excel real — mientras tanto no-fatal, se queda solo en este
+      // navegador (mismo patron ya establecido para toda columna nueva de este proyecto).
+      if(isConnected()) await graphUpdateBatchCandidateField(c.id, "Filled Position ID", targetP.id);
+    } catch(err){ console.error("Could not save which headcount this candidate closed (non-fatal — needs a 'Filled Position ID' column on BatchCandidatesTable):", err); }
+  }
+  if(targetP.placedCandidate !== c.name){
+    targetP.placedCandidate = c.name;
     try {
       if(isConnected()){
-        await graphUpdatePositionFieldByHeader(p.id, "Placed Candidate", c.name);
-        await graphAppendHistorial(p.id, p.title, `${c.name} marked as Placed Candidate (from the ${c.batchDate} batch).`, currentAuthorName(), "milestone");
+        await graphUpdatePositionFieldByHeader(targetP.id, "Placed Candidate", c.name);
+        const crossReqNote = (targetP.id !== sourceP.id) ? `, closing this Headcount Group requisition instead of ${sourceP.id}` : "";
+        await graphAppendHistorial(targetP.id, targetP.title, `${c.name} marked as Placed Candidate (from ${sourceP.id}'s ${c.batchDate} batch)${crossReqNote}.`, currentAuthorName(), "milestone");
       }
     } catch(err){ console.error("Could not save Placed Candidate (non-fatal for the status change itself):", err); }
   }
-  await advancePositionForCandidateStatus(p, c.name, newStatus);
-  if(!opts.skipRerender) renderDetailModal();
-  return {ok:true};
+  await advancePositionForCandidateStatus(targetP, c.name, "Placed");
 }
 // Nicolas (2026-09-21): "más que el req deba moverse a alguno de esos estados [a mano], debe
 // ser el candidato en realidad — si alguno de los candidatos está en esa etapa debemos ponerle
@@ -11088,6 +11140,11 @@ function openEditFieldModal(ctx){
 }
 function closeEditFieldModal(){
   document.getElementById("editFieldModal").classList.remove("open");
+  // onCancel: solo para un ctx que lo pida explicitamente (ej. pickHeadcountForPlacedCandidate),
+  // y solo si se cierra SIN haber guardado — el save handler marca _saved antes del
+  // setTimeout(closeEditFieldModal) que usa para el auto-cierre, asi que un cierre despues de un
+  // guardado exitoso nunca dispara esto tambien.
+  if(editFieldModalCtx && !editFieldModalCtx._saved && editFieldModalCtx.onCancel) editFieldModalCtx.onCancel();
   editFieldModalCtx = null;
 }
 document.getElementById("editFieldModalClose").addEventListener("click", closeEditFieldModal);
@@ -11136,6 +11193,7 @@ document.getElementById("editFieldModalSave").addEventListener("click", async ()
   try {
     const file = editFieldModalCtx.fileFieldLabel ? (document.getElementById("editFieldModalFile").files[0] || null) : null;
     await editFieldModalCtx.onSave(newVal, file);
+    editFieldModalCtx._saved = true;
     if(isConnected()){
       msg.textContent = "Saved.";
       msg.style.color = "var(--good)";
