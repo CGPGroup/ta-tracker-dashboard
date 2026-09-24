@@ -448,11 +448,11 @@
   }
   .ps-hover-popover-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
   .ps-hover-popover ul { margin: 0; padding: 0; list-style: none; }
-  .ps-hover-popover li { font-size: 11.5px; line-height: 1.5; padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--text); }
+  .ps-hover-popover li { font-size: 11.5px; line-height: 1.5; padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--text-primary); }
   .ps-hover-popover li:last-child { border-bottom: none; }
   .ps-hover-popover li b { color: var(--text-muted); font-weight: 600; }
   .ps-stat .stat-num { font-size: 30px; line-height: 1; }
-  .ps-stat .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text); margin-top: 6px; }
+  .ps-stat .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-top: 6px; }
   .ps-stat .stat-desc { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.35; flex: 1; }
   .ps-bar { height: 4px; border-radius: 2px; background: var(--surface-2, rgba(127,127,127,0.16)); margin-top: 8px; overflow: hidden; }
   .ps-bar-fill { height: 100%; border-radius: 2px; }
@@ -488,14 +488,14 @@
   .gantt-panel { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; display: none; }
   .gantt-panel.show { display: block; }
   .gantt-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 2px; }
-  .gantt-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .gantt-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
   .gantt-title span { color: var(--text-secondary); font-weight: 400; }
   .gantt-quarter-note { font-size: 11px; color: var(--text-secondary); margin: 0 0 4px; user-select: none; }
   .gantt-quarter-note b { color: var(--brand); font-weight: 700; }
   .gantt-range-note { font-size: 10.5px; color: var(--text-secondary); margin: 0 0 12px; }
   .gantt-scope-toggle { display: flex; gap: 4px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 3px; user-select: none; }
   .gantt-scope-btn { border: none; background: transparent; color: var(--text-secondary); font-family: inherit; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
-  .gantt-scope-btn:hover { color: var(--text); }
+  .gantt-scope-btn:hover { color: var(--text-primary); }
   .gantt-scope-btn.active { background: var(--brand); color: #fff; }
   .gantt-legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
   .gantt-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-secondary); }
@@ -512,11 +512,19 @@
   .gantt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); position: relative; cursor: pointer; border-radius: 6px; user-select: none; }
   .gantt-row:hover { background: rgba(127,127,127,0.06); }
   .gantt-row:last-child { border-bottom: none; }
+  .gantt-group-section { margin-top: 14px; }
+  .gantt-group-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
+  .gantt-group-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .gantt-group-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; color: var(--text-primary); cursor: pointer; }
+  .gantt-group-chip:hover { border-color: var(--brand); }
+  .gantt-group-chip.active { background: rgba(var(--brand-rgb),0.16); border-color: var(--brand); color: var(--brand); }
+  .gantt-group-chip .count { color: var(--text-muted); font-weight: 400; }
+  .gantt-group-chip.active .count { color: var(--brand); }
   .gantt-row-label { width: 220px; flex: none; padding-right: 8px; }
-  .gantt-row-title { font-size: 11.5px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .gantt-row-title { font-size: 11.5px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
   .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
   .gantt-row-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
-  .gantt-row-meta b { color: var(--text); font-weight: 600; }
+  .gantt-row-meta b { color: var(--text-primary); font-weight: 600; }
   .gantt-avatar {
     width: 14px; height: 14px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -591,7 +599,7 @@
   .gantt-chip.good { background: rgba(var(--good-rgb),0.16); color: var(--good); }
   .gantt-chip.critical { background: rgba(var(--critical-rgb),0.16); color: var(--critical); }
   .gantt-chip.neutral { background: rgba(127,127,127,0.16); color: var(--neutral); }
-  .gantt-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 10.5px; line-height: 1.5; padding: 7px 9px; border-radius: 8px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 6px 18px rgba(0,0,0,0.35); z-index: 6; }
+  .gantt-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--border); color: var(--text-primary); font-size: 10.5px; line-height: 1.5; padding: 7px 9px; border-radius: 8px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 6px 18px rgba(0,0,0,0.35); z-index: 6; }
   /* Los tooltips de TTF/TTH traen una frase larga — de una sola linea (nowrap) se salian del
      borde derecho de la pantalla y quedaban ilegibles (bug real reportado por Nicolas). */
   .gantt-tooltip.wide { white-space: normal; width: 220px; }
@@ -620,10 +628,6 @@
      Con el limite + su propio scroll, la fila queda con una altura razonable sin importar
      cuantas banderas haya. */
   #dashboardAttentionZone { max-height: 260px; overflow-y: auto; }
-  /* Mismo motivo que #dashboardAttentionZone: comparte fila (align-items:stretch) con
-     Placements This Month, que tiene una altura fija — sin este limite, muchas ofertas
-     pendientes a la vez estirarian la fila entera. */
-  #listPendingOffers { max-height: 260px; overflow-y: auto; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
@@ -1427,7 +1431,6 @@
         <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
         <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
         <button type="button" class="dash-tab" id="dashTabPipeline" data-dash-tab="pipeline">Pipeline</button>
-        <button type="button" class="dash-tab" data-dash-tab="offers">Offers &amp; Placements</button>
       </div>
 
       <!-- ======================= DASHBOARD ======================= -->
@@ -1455,6 +1458,22 @@
                   </button>
                 </div>
                 <div class="gantt-panel" id="ganttPanel"></div>
+              </div>
+              <!-- Nicolas, 2026-09-24: "gantt view por recruiter, por rol" — reusa el MISMO
+                   #ganttPanel/toggleGanttPanel de arriba (cero riesgo de mover ese DOM ya probado),
+                   solo agrega mas botones que abren ese panel compartido con otro recorte de
+                   POSITIONS. Reemplaza a la tab Offers & Placements (ver renderGanttGroupTriggers()). -->
+              <div class="panel" id="panelGanttGroups" style="grid-column: span 6;">
+                <h3>Timelines by Recruiter &amp; Role</h3>
+                <div class="panel-sub">Compare timelines across the whole book — click a recruiter or a role to open its Gantt above.</div>
+                <div class="gantt-group-section">
+                  <div class="gantt-group-label">By Recruiter</div>
+                  <div class="gantt-group-chips" id="ganttByRecruiterChips"></div>
+                </div>
+                <div class="gantt-group-section">
+                  <div class="gantt-group-label">By Role</div>
+                  <div class="gantt-group-chips" id="ganttByRoleChips"></div>
+                </div>
               </div>
               <!-- Fila 2, dos tarjetas iguales (span 3 de 6 cada una): panorama de requisitions +
                    carga del equipo. Active Workload By Recruiter / Average Time To Submit ocupan
@@ -1542,25 +1561,6 @@
               </div>
             </div>
 
-            <div class="dash-tab-panel" data-dash-panel="offers">
-              <div class="dash-grid">
-                <div class="panel" style="grid-column: span 3;">
-                  <h3>Pending Offers</h3>
-                  <div class="panel-sub">Positions currently waiting on an offer decision</div>
-                  <div id="listPendingOffers"></div>
-                </div>
-                <div class="panel" style="grid-column: span 3;">
-                  <h3>Placements This Month</h3>
-                  <div class="panel-sub">Confirmed placements, this month vs last month</div>
-                  <div id="chartPlacementsMonth"></div>
-                </div>
-                <div class="panel" style="grid-column: span 6;">
-                  <h3 id="hiresTrendTitle">Placements Per Month</h3>
-                  <div class="panel-sub">Confirmed placements per month, year to date. Click a point to see who.</div>
-                  <div id="chartHiresTrend"></div>
-                </div>
-              </div>
-            </div>
           </div>
       </section>
 
@@ -3187,9 +3187,6 @@ function renderDashboardPanels(){
   renderSlaMeter();
   renderCompletionChart();
   renderAvgTtsChart();
-  renderHiresTrend();
-  renderPlacementsMonth();
-  renderPendingOffers();
   renderDashboardAttentionBanner();
   // A diferencia de todo lo de arriba (siempre visible, cambia con el scope), el perfil en el
   // nav solo existe DENTRO de un workspace — pero tiene que refrescarse en cada
@@ -4688,11 +4685,20 @@ function ganttRowHtml(p, cal){
   const avatarStyle = recPhoto ? `background-image:url('${escapeHtml(recPhoto)}');` : `background:${recName?colorForName(recName):"var(--neutral)"};`;
   const avatarHtml = recName ? `<span class="gantt-avatar" style="${avatarStyle}">${recPhoto ? "" : escapeHtml(initialsFor(recName))}</span>` : "";
 
+  // Compensacion + Hiring Manager en la fila del Gantt — Nicolas, 2026-09-24 ("que se vea el
+  // compensation de cada rol y cualquier informacion relevante con respecto al req"). Reusa
+  // formatSalary() (nunca inventa un numero: null hasta que Currency+Min esten confirmados, igual
+  // que en el resto del tracker) — sin compensacion confirmada, esta linea simplemente no aparece.
+  const salaryText = formatSalary(p);
+  const extraInfoHtml = (salaryText || p.hiringManager)
+    ? `<div class="gantt-row-meta">${salaryText ? escapeHtml(salaryText) : ""}${salaryText && p.hiringManager ? " · " : ""}${p.hiringManager ? "HM "+escapeHtml(p.hiringManager) : ""}</div>`
+    : "";
   return `<div class="gantt-row" data-id="${escapeHtml(p.id)}">
     <div class="gantt-row-label">
       <div class="gantt-row-title">${escapeHtml(p.title||"")}</div>
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
       <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet")}</div>
+      ${extraInfoHtml}
     </div>
     <div class="gantt-row-canvas">
       <div class="gantt-track" style="left:${trackLeftPct}%; width:${trackWidthPct}%;">${segsHtml}${milestonesHtml}</div>
@@ -4806,7 +4812,43 @@ document.getElementById("ganttHintBtn").addEventListener("click", ()=>{
   toggleGanttPanel(key, GANTT_DATA[key].label, GANTT_DATA[key].positions);
 });
 
+// Nicolas, 2026-09-24: "gantt view por recruiter, por rol" — reemplaza a la tab Offers &
+// Placements (ver mas abajo, donde se quita). Cada chip es solo otro trigger mas del MISMO
+// #ganttPanel/toggleGanttPanel que ya usan las 4 tarjetas de Positions & Placements — cero
+// mecanismo nuevo de render, solo otro recorte de POSITIONS. Se llama desde renderKpis() (misma
+// frecuencia que el resto del panel, para que el conteo por chip nunca quede desactualizado).
+function renderGanttGroupTriggers(){
+  const positions = dashboardPositions();
+  const byRecruiter = RECRUITERS.map(r=>({
+    key: `rec-${r}`, label: r,
+    positions: positions.filter(p=>p.recruiter===r),
+  })).filter(g=>g.positions.length);
+  const byRole = [...new Set(positions.map(p=>p.title).filter(Boolean))].sort().map(title=>({
+    key: `role-${title}`, label: title,
+    positions: positions.filter(p=>p.title===title),
+  }));
+  const allGroups = [...byRecruiter, ...byRole];
+  const chipHtml = (g)=> `<button type="button" class="gantt-group-chip${ganttOpenKey===g.key?" active":""}" data-gantt-group-key="${escapeHtml(g.key)}">${escapeHtml(g.label)} <span class="count">${g.positions.length}</span></button>`;
+  const recEl = document.getElementById("ganttByRecruiterChips");
+  const roleEl = document.getElementById("ganttByRoleChips");
+  if(!recEl || !roleEl) return;
+  recEl.innerHTML = byRecruiter.length ? byRecruiter.map(chipHtml).join("") : `<span class="panel-sub" style="margin:0;">No recruiters yet.</span>`;
+  roleEl.innerHTML = byRole.length ? byRole.map(chipHtml).join("") : `<span class="panel-sub" style="margin:0;">No roles yet.</span>`;
+  // GANTT_DATA se llena aqui para que, si uno de estos grupos ya esta abierto, renderKpis()
+  // (llamado despues de esto en la misma pasada) lo refresque con datos frescos — mismo patron
+  // que allStats.forEach(...) ya usa para las 4 tarjetas de arriba.
+  allGroups.forEach(g=> GANTT_DATA[g.key] = {label:g.label, positions:g.positions});
+  [recEl, roleEl].forEach(el=>{
+    el.querySelectorAll("[data-gantt-group-key]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const g = allGroups.find(x=>x.key===btn.dataset.ganttGroupKey);
+        if(g) toggleGanttPanel(g.key, g.label, g.positions);
+      });
+    });
+  });
+}
 function renderKpis(){
+  renderGanttGroupTriggers();
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
   // 1) Nicolas: "no sabemos a que se refiere nada" con solo un numero + una etiqueta chica ->
@@ -5356,151 +5398,6 @@ function renderCompletionChart(){
       openQuickList(row.label, `${matches.length} position${matches.length===1?"":"s"}`, matches);
     }
   );
-}
-
-function renderHiresTrend(){
-  const now = new Date();
-  const year = now.getFullYear();
-  document.getElementById("hiresTrendTitle").textContent = `Placements Per Month (${year})`;
-  const ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const months = ALL_MONTHS.slice(0, now.getMonth() + 1);
-  const counts = new Array(months.length).fill(0);
-  const positionsByMonth = months.map(()=>[]);
-  dashboardPositions().filter(p=>p.status==="Hired" && p.hire).forEach(p=>{
-    const d = parseD(p.hire);
-    if(d.getFullYear()===year && d.getMonth() < months.length){ counts[d.getMonth()]++; positionsByMonth[d.getMonth()].push(p); }
-  });
-
-  // w:h bien "ancho" (no cuadrado) a propocito — la referencia de KeyStone AI tiene esa misma
-  // proporcion elongada, la version anterior (560x170, casi 3:1) se veia como un bloque
-  // "gigante" una vez estirada al ancho completo de la tarjeta; esta (900x130, ~7:1) es fiel a
-  // la proporcion real de la referencia.
-  const w=900, h=130, padL=38, padR=16, padT=18, padB=34;
-  const rawMax = Math.max(...counts, 1);
-  const niceMax = Math.max(2, Math.ceil(rawMax/2)*2);
-  const stepX = (w - padL - padR) / (months.length - 1);
-  const yFor = v => padT + (h - padT - padB) * (1 - v/niceMax);
-  const points = counts.map((v,i)=>({x: padL + i*stepX, y: yFor(v), v}));
-
-  // Curva suave (Catmull-Rom -> Bezier cubica, tension 1/6) en vez de segmentos rectos entre
-  // puntos — el mismo tratamiento que la grafica de referencia de KeyStone AI, una linea recta
-  // segmentada se ve "cruda" comparada con eso.
-  const smoothPath = (pts)=>{
-    if(pts.length < 2) return "";
-    let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-    for(let i=0; i<pts.length-1; i++){
-      const p0 = pts[i===0?0:i-1], p1 = pts[i], p2 = pts[i+1], p3 = pts[i+2<pts.length?i+2:pts.length-1];
-      const c1x = p1.x + (p2.x-p0.x)/6, c1y = p1.y + (p2.y-p0.y)/6;
-      const c2x = p2.x - (p3.x-p1.x)/6, c2y = p2.y - (p3.y-p1.y)/6;
-      d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
-    }
-    return d;
-  };
-  const linePath = smoothPath(points);
-  const baseY = (h - padB).toFixed(1);
-  const areaPath = linePath
-    + ` L${points[points.length-1].x.toFixed(1)},${baseY}`
-    + ` L${points[0].x.toFixed(1)},${baseY} Z`;
-
-  const gridVals = [0, niceMax/2, niceMax];
-  const gridLines = gridVals.map(v=>
-    `<line x1="${padL}" x2="${w-padR}" y1="${yFor(v).toFixed(1)}" y2="${yFor(v).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`
-  ).join("");
-  const gridLabels = gridVals.map(v=>
-    `<text x="${padL-8}" y="${(yFor(v)+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${v}</text>`
-  ).join("");
-  // Titulo del eje Y rotado, mismo detalle que trae la referencia de KeyStone AI ("Sessions",
-  // "Searches", etc. de lado) en vez de dejar los numeros del eje sin ninguna etiqueta.
-  const yAxisTitle = `<text x="12" y="${((padT+h-padB)/2).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-muted)" transform="rotate(-90 12 ${((padT+h-padB)/2).toFixed(1)})">Placements</text>`;
-  const xLabels = points.map((p,i)=>
-    `<text x="${p.x.toFixed(1)}" y="${h-18}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${months[i]}</text>`
-  ).join("");
-  const xAxisTitle = `<text x="${(w/2).toFixed(1)}" y="${h-4}" text-anchor="middle" font-size="8" fill="var(--text-muted)">Month</text>`;
-  const dots = points.map((p,i)=>
-    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="var(--chart-line)" stroke="var(--surface-1)" stroke-width="1.5" data-month-i="${i}" style="pointer-events:none;"/>`
-    + `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="transparent" data-month-i="${i}" style="cursor:pointer;"/>`
-  ).join("");
-  const last = points[points.length-1];
-  const endLabel = `<text x="${last.x.toFixed(1)}" y="${(last.y-10).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">${last.v}</text>`;
-
-  document.getElementById("chartHiresTrend").innerHTML = `
-    <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
-      ${gridLines}
-      ${gridLabels}
-      ${yAxisTitle}
-      ${xAxisTitle}
-      <path d="${areaPath}" fill="rgba(var(--chart-line-rgb),0.12)" stroke="none"/>
-      <path d="${linePath}" fill="none" stroke="var(--chart-line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      ${dots}
-      ${endLabel}
-      ${xLabels}
-    </svg>`;
-  document.querySelectorAll('#chartHiresTrend [data-month-i]').forEach(el=>{
-    el.addEventListener("click", ()=>{
-      const i = Number(el.dataset.monthI);
-      openQuickList(`Placements in ${months[i]} ${year}`, `${counts[i]} position${counts[i]===1?"":"s"}`, positionsByMonth[i]);
-    });
-  });
-}
-
-function renderPlacementsMonth(){
-  const now = new Date();
-  const isThisMonth = (d)=> d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
-  const lastMonthDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
-  const isLastMonth = (d)=> d.getFullYear()===lastMonthDate.getFullYear() && d.getMonth()===lastMonthDate.getMonth();
-
-  const thisMonthPositions = dashboardPositions().filter(p=>p.status==="Hired" && p.hire && isThisMonth(parseD(p.hire)));
-  const lastMonthPositions = dashboardPositions().filter(p=>p.status==="Hired" && p.hire && isLastMonth(parseD(p.hire)));
-  const thisMonthCount = thisMonthPositions.length, lastMonthCount = lastMonthPositions.length;
-  const max = Math.max(1, thisMonthCount, lastMonthCount);
-  const monthNameThis = now.toLocaleString("en-US", {month:"short"});
-  const monthNameLast = lastMonthDate.toLocaleString("en-US", {month:"short"});
-  const delta = thisMonthCount - lastMonthCount;
-  const deltaColor = delta >= 0 ? "var(--good)" : "var(--critical)";
-  const deltaText = delta === 0 ? "Same as last month" : (delta > 0 ? `+${delta} vs last month` : `${delta} vs last month`);
-
-  document.getElementById("chartPlacementsMonth").innerHTML = `
-    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
-      <div style="font-size:32px; color:var(--brand); line-height:1;">${thisMonthCount}</div>
-      <div style="font-size:11.5px; font-weight:600 !important; color:${deltaColor};">${deltaText}</div>
-    </div>
-    <div class="barlist">
-      <div class="barlist-row clickable-stat" data-which="last">
-        <div class="barlist-label">${monthNameLast}</div>
-        <div class="barlist-track"><div class="barlist-fill" style="width:${(lastMonthCount/max*100).toFixed(1)}%; background:${gradientFill("var(--baseline)")};"></div></div>
-        <div class="barlist-value">${lastMonthCount}</div>
-      </div>
-      <div class="barlist-row clickable-stat" data-which="this">
-        <div class="barlist-label">${monthNameThis}</div>
-        <div class="barlist-track"><div class="barlist-fill" style="width:${(thisMonthCount/max*100).toFixed(1)}%; background:${gradientFill("var(--brand)")};"></div></div>
-        <div class="barlist-value">${thisMonthCount}</div>
-      </div>
-    </div>`;
-  document.querySelector('#chartPlacementsMonth [data-which="last"]').addEventListener("click", ()=>{
-    openQuickList(`Placements in ${monthNameLast}`, `${lastMonthCount} position${lastMonthCount===1?"":"s"}`, lastMonthPositions);
-  });
-  document.querySelector('#chartPlacementsMonth [data-which="this"]').addEventListener("click", ()=>{
-    openQuickList(`Placements in ${monthNameThis}`, `${thisMonthCount} position${thisMonthCount===1?"":"s"}`, thisMonthPositions);
-  });
-}
-
-function renderPendingOffers(){
-  const offers = dashboardPositions().filter(p=>p.status==="Offer Request");
-  const list = document.getElementById("listPendingOffers");
-  if(!offers.length){
-    list.innerHTML = `<div class="panel-sub" style="margin:0;">No positions waiting on an offer decision right now.</div>`;
-    return;
-  }
-  list.innerHTML = offers.map(p=>{
-    const s = computeSla(p);
-    return `<div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
-      <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">${escapeHtml(p.recruiter)} · ${escapeHtml(p.hiringManager)}</div></div>
-      ${slaChip(s.TTF)}
-    </div>`;
-  }).join("");
-  list.querySelectorAll(".pending-offer-row").forEach(row=>{
-    row.addEventListener("click", ()=>openDetailModal(row.dataset.id, "view", false, true));
-  });
 }
 
 /* ============================================================
