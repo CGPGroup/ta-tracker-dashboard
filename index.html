@@ -1563,8 +1563,8 @@
             <div class="dash-tab-panel" data-dash-panel="pipeline">
               <div class="dash-grid">
                 <div class="panel" style="grid-column: span 3;">
-                  <h3>Active Pipeline By Status</h3>
-                  <div class="panel-sub">Open positions, grouped by funnel stage</div>
+                  <h3>Pipeline By Status</h3>
+                  <div class="panel-sub">Every non-closed position, grouped by funnel stage — includes Offer Request, Filled, and On Hold, none of which count as "Active" elsewhere in this tracker.</div>
                   <div class="funnel" id="chartEstado"></div>
                 </div>
                 <div class="panel" id="panelPositionByLocation" style="grid-column: span 3;">
@@ -5180,7 +5180,7 @@ function renderEstadoChart(){
   // especifico, encontrado en auditoria 2026-09-19).
   const counts = stages.map(s=>({key:s, label:statusLabel(s), value: active.filter(p=>p.status===s).length})).filter(r=>r.value>0);
   renderFunnel("chartEstado", counts, (row)=>{
-    openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
+    openQuickList(row.label, `${row.value} position${row.value===1?"":"s"} in ${row.label}`,
       active.filter(p=>p.status===row.key));
   });
 }
