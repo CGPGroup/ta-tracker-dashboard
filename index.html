@@ -1015,6 +1015,11 @@
   .batch-candidate-cv { font-size: 11px; white-space: nowrap; }
   .candidateDeleteBtn { background: none; border: none; color: var(--text-muted); font-size: 16px; line-height: 1; padding: 2px 4px; cursor: pointer; border-radius: 4px; }
   .candidateDeleteBtn:hover { color: var(--critical); background: rgba(var(--critical-rgb), 0.12); }
+  .batch-candidate-offer-dates { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 2px 0 6px 24px; font-size: 11px; }
+  .batch-candidate-offer-dates.placed { color: var(--good); font-weight: 600; padding-left: 24px; }
+  .offer-date-field, .offer-date-fact { display: flex; align-items: center; gap: 5px; color: var(--text-muted); }
+  .offer-date-label { cursor: help; border-bottom: 1px dashed var(--text-muted); }
+  .offer-date-field input[type="date"] { font-size: 11px; padding: 2px 4px; width: auto; }
   .log-batch-cand-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--border); }
   .log-batch-cand-row:last-child { border-bottom: none; }
   .log-batch-cand-filename { flex: 0 0 110px; font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2663,21 +2668,16 @@ const STATUS_DATE_FIELD = {
   // practica siempre termina siendo el mismo dia que el Intake Meeting real, asi que se
   // fusionaron en un solo campo: la fecha real de la reunion, la misma que arranca TTS/TTF/TTH.
   "Intake Pending": {key:"intake", col:"H", label:"Intake Meeting Date"},
-  // Agregados 2026-09-19: antes elegir "Filled"/"Hired" desde este dropdown no pedia NINGUNA
-  // fecha (STATUS_DATE_FIELD no tenia entrada para ninguno de los dos), asi que era posible dejar
-  // un req en Hired sin p.hire — y computeSla() usa exactamente esa fecha como cierre de TTF/TTH;
-  // sin ella el SLA queda corriendo contra "hoy" indefinidamente en vez de congelarse, un req ya
-  // colocado hace meses podia seguir viendose "Out Of SLA" y creciendo. Mismo campo que ya usa
-  // Timeline (ver saveModalDates()/DATE_IMPLIES_STATUS) — elegir el status a mano ahora exige la
-  // misma fecha que loguearla en Timeline ya exige el status, cerrando el loop en ambas direcciones.
-  "Filled": {key:"fill", col:"J", label:"Fill Date"},
-  "Hired": {key:"hire", col:"K", label:"Start Date"},
-  // "Submitted" (nuevo status, ver STATUS_ORDER) sigue el mismo criterio que Filled/Hired arriba
-  // — elegirlo a mano exige la misma Submission Date que ya usa Timeline/logBatchSave().
+  // "Filled"/"Hired" YA NO estan aqui (2026-09-23/24) — ambos quedaron bloqueados del todo en
+  // onStatusOptionClick(), nunca elegibles a mano; Fill Date/Start Date se capturan por candidato
+  // en Submission Batches (ver candidateOfferDatesHtml()/saveCandidateFillDate()/
+  // checkArrivedStartDates()), no via un prompt de fecha en este dropdown.
+  // "Submitted" (nuevo status, ver STATUS_ORDER) — elegirlo a mano exige la misma Submission Date
+  // que ya usa logBatchSave().
   "Submitted": {key:"submit", col:"I", label:"Submission Date"},
   // 2026-09-21, Nicolas: "cómo estamos diferenciando el offer del fill?" — antes no habia forma,
   // "Offer Request" nunca pedia su propia fecha. Columna nueva ("BI", 61, append-only como
-  // siempre) — elegir este status a mano ahora exige esta fecha, igual que Submitted/Filled/Hired.
+  // siempre) — elegir este status a mano ahora exige esta fecha, igual que Submitted.
   "Offer Request": {key:"offerRequestDate", col:"BI", label:"Offer Request Date"},
 };
 // Mensaje de "que hacer ahora" por status — Nicolas pidio esto para todos los status, no solo
@@ -2724,8 +2724,8 @@ const STATUS_GUIDANCE = {
   "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, update that candidate's own status in Submission Batches (Technical Interview, Hiring Manager Interview, or Executive Review, whichever applies) — this requisition moves to Client Interview automatically as soon as any candidate does.",
   "Client Interview": "Candidates are interviewing with the client — Technical Interview, Hiring Manager Interview, Executive Review, or some combination, the real order and number of rounds vary by role, so track it per candidate in Submission Batches rather than assuming one fixed sequence here. Feedback is due within 1-3 business days per candidate, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch. Once any candidate moves to Offer Request in Submission Batches, this requisition moves to Offer Request automatically too.",
   "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
-  "Filled": "An offer was accepted. Log the Fill Date in Timeline if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
-  "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. Log the Start Date in Timeline if you haven't already — this requisition moves to Placed automatically once it's logged.",
+  "Filled": "An offer was accepted. Log the candidate's Fill Date in Submission Batches if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
+  "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. If their Start Date isn't logged yet, add it on their row in Submission Batches — this requisition moves to Placed automatically once that date is reached.",
   "Filled (Internal Hire)": "The client filled this requisition on their own — an internal employee move or an intern conversion — without a Cornerstone placement. This requisition is closed and does not count as a placement or an SLA miss; add a remark noting who filled it and how, if known.",
   "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
   // Distinto de "On Hold" normal: no es un incumplimiento de SLA, es una razon de negocio
@@ -3301,6 +3301,19 @@ function renderPendingAssignments(){
       <div style="text-align:right;"><button class="btn ghost small" type="button" data-dismiss-id="${escapeHtml(c.id)}">Got It</button></div>
     </div>`;
   });
+  // Nicolas, 2026-09-23/24: "enviarle una alerta al reclutador... confirmando que la persona si
+  // inicio" — checkArrivedStartDates() llena esta lista cada vez que una req pasa de Filled a
+  // Hired en automatico (su Start Date confirmado ya llego); se muestra hasta que se descarta,
+  // mismo patron/estilo que acceptedConfirmations arriba.
+  justPlacedNotifications.forEach(n=>{
+    // n.title viene de posLabel(p) — YA es HTML real (spans de titulo+codigo), no texto plano;
+    // escapeHtml() lo habria mostrado como markup crudo en vez de renderizarlo (mismo patron que
+    // el resto de este archivo ya usa posLabel() sin escapar, ver el banner de arriba).
+    html += `<div class="alert-banner tier-good" style="flex-direction:column; align-items:stretch;">
+      <div>🎉 <b>${escapeHtml(n.candidateName)} started on ${escapeHtml(n.hireDate)}</b> — ${n.title} moved to "${statusLabel("Hired")}" automatically.</div>
+      <div style="text-align:right;"><button class="btn ghost small" type="button" data-dismiss-placed-id="${escapeHtml(n.id)}">Got It</button></div>
+    </div>`;
+  });
   zone.innerHTML = html;
   zone.querySelectorAll("[data-accept-id]").forEach(btn=>{
     btn.addEventListener("click", ()=> acceptAssignment(btn.dataset.acceptId));
@@ -3314,6 +3327,12 @@ function renderPendingAssignments(){
   zone.querySelectorAll("[data-dismiss-id]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       acceptedConfirmations = acceptedConfirmations.filter(c=>c.id!==btn.dataset.dismissId);
+      renderPendingAssignments();
+    });
+  });
+  zone.querySelectorAll("[data-dismiss-placed-id]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      justPlacedNotifications = justPlacedNotifications.filter(n=>n.id!==btn.dataset.dismissPlacedId);
       renderPendingAssignments();
     });
   });
@@ -4083,7 +4102,14 @@ function canStartSourcing(p){
 // queda pipeline y hay que volver a Sourcing, el reloj de SLA sigue corriendo igual — Nicolas fue
 // explicito en que esto es mas accountability del reclutador que algo que amerite un allowance o
 // un reset.
-const BATCH_CANDIDATE_STATUSES = ["Screening Interview","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Placed","Rejected","Withdrawn","Keep Warm / Hold"];
+// "Placed" NO esta en esta lista a proposito — Nicolas, 2026-09-23/24: "no deje al reclutador
+// marcarlo como placed desde status, sino desde el batch"... y siguiendo esa misma logica, Placed
+// ahora se dispara SOLO cuando el Start Date confirmado ya llego (ver
+// candidateOfferDatesHtml()/checkArrivedStartDates()), nunca eligiendolo a mano en este dropdown.
+// "Placed" sigue siendo un valor VALIDO de c.status (los candidatos que ya llegaron ahi lo tienen
+// guardado), solo dejo de ser una opcion SELECCIONABLE — ver candidateRowHtml(), que muestra un
+// badge fijo en vez del select una vez que un candidato ya esta Placed.
+const BATCH_CANDIDATE_STATUSES = ["Screening Interview","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Rejected","Withdrawn","Keep Warm / Hold"];
 const BATCH_CANDIDATE_STATUS_TONE = {
   "Screening Interview": "within", "Technical Interview": "within",
   "Hiring Manager Interview": "within", "Executive Review": "within", "Offer Request": "within",
@@ -4100,6 +4126,41 @@ const CANDIDATE_STATUS_TO_POSITION_STATUS = {
   "Executive Review": "Client Interview",
   "Offer Request": "Offer Request",
 };
+// Fill Date/Start Date por candidato — Nicolas, 2026-09-23/24: "el fill date es cuando Immy nos
+// confirma que ya le envio el offer letter al candidato y que el candidato acepto... una vez que
+// el start date es confirmado por Immy... llega esa fecha... es cuando se pone como placed, y eso
+// deberia ser automatico." Progressive disclosure (mismo patron que Spott/LinkedIn URL — nunca
+// mostrar un campo antes de que sea relevante): Fill Date solo aparece una vez el candidato llega
+// a Offer Request; Start Date solo una vez Fill Date ya esta confirmado. El disparo real a
+// "Placed" vive en checkArrivedStartDates(), no aqui — esto solo captura las fechas.
+function candidateOfferDatesHtml(c){
+  if(c.status === "Placed"){
+    return `<div class="batch-candidate-offer-dates placed">🎉 Placed${c.hireDate ? ` — started ${escapeHtml(c.hireDate)}` : ""}</div>`;
+  }
+  if(c.status !== "Offer Request" && !c.fillDate && !c.hireDate) return "";
+  const parts = [];
+  if(!c.fillDate){
+    parts.push(`
+      <span class="offer-date-field">
+        <span class="offer-date-label" title="When Immy confirms Irth sent the offer letter and the candidate accepted it.">Fill Date</span>
+        <input type="date" class="candidateFillDateInput" data-candidate-id="${escapeHtml(c.id)}" max="${localTodayStr()}">
+        <button type="button" class="fact-edit-link candidateSaveFillDateBtn" data-candidate-id="${escapeHtml(c.id)}">Save</button>
+      </span>`);
+  } else {
+    parts.push(`<span class="offer-date-fact">Fill Date <b>${escapeHtml(c.fillDate)}</b></span>`);
+    if(!c.hireDate){
+      parts.push(`
+        <span class="offer-date-field">
+          <span class="offer-date-label" title="The candidate's real confirmed start date, from Immy — this requisition moves to Hired automatically once this date arrives.">Start Date</span>
+          <input type="date" class="candidateHireDateInput" data-candidate-id="${escapeHtml(c.id)}">
+          <button type="button" class="fact-edit-link candidateSaveHireDateBtn" data-candidate-id="${escapeHtml(c.id)}">Save</button>
+        </span>`);
+    } else {
+      parts.push(`<span class="offer-date-fact" title="This requisition moves to Hired automatically once this date arrives.">Starts <b>${escapeHtml(c.hireDate)}</b></span>`);
+    }
+  }
+  return `<div class="batch-candidate-offer-dates">${parts.join("")}</div>`;
+}
 function candidateRowHtml(c, viewingPositionId){
   const tone = STATUS_META[BATCH_CANDIDATE_STATUS_TONE[c.status] || "none"];
   const cvHtml = c.cvLink
@@ -4116,6 +4177,13 @@ function candidateRowHtml(c, viewingPositionId){
   const filledNote = filledElsewhere
     ? `<span class="status-chip" style="background:rgba(var(--good-rgb),0.16); color:var(--good);" title="This candidate filled a different requisition in the same Headcount Group.">→ Filled ${escapeHtml(c.closedForPositionId)}${filledTarget ? " — "+escapeHtml(filledTarget.title) : ""}</span>`
     : "";
+  // Placed ya no se elige a mano (ver BATCH_CANDIDATE_STATUSES) — una vez ahi, un badge fijo
+  // reemplaza el select, no queda nada mas que cambiar manualmente.
+  const statusControlHtml = c.status === "Placed"
+    ? `<span class="status-chip" style="background:rgba(var(--good-rgb),0.16); color:var(--good);" title="Set automatically once the candidate's confirmed Start Date arrived — never chosen manually.">🎉 Placed</span>`
+    : `<select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
+        ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(s)}</option>`).join("")}
+      </select>`;
   return `
     <div class="batch-candidate-row">
       <input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">
@@ -4124,11 +4192,10 @@ function candidateRowHtml(c, viewingPositionId){
       ${emailHtml}
       ${cvHtml}
       ${filledNote}
-      <select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
-        ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(s)}</option>`).join("")}
-      </select>
+      ${statusControlHtml}
       <button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>
-    </div>`;
+    </div>
+    ${candidateOfferDatesHtml(c)}`;
 }
 // Una tarjeta de Submission Batches -> su propia lista de candidatos + "Add Candidate" + una
 // barra de bulk (solo aparece si hay >=1 checkbox marcado en ESE batch, ver wireCandidateEvents()
@@ -6350,14 +6417,18 @@ function renderDetailModal(){
       : intakeWaiveStepForTimeline.status !== "done"
         ? `<button class="fact-edit-link" type="button" id="editIntakeWaivedBtn" style="margin-top:4px; display:block;">Waive This Intake Meeting &rarr;</button>`
         : "";
+  // Fill Date/Start Date se QUITARON de Timeline (2026-09-23/24, decision explicita de Nicolas —
+  // "se quitan de Timeline, solo viven en el candidato") — ni siquiera de solo lectura aqui, para
+  // que no exista una segunda fuente/lugar para la misma fecha. La unica forma real de verlas o
+  // editarlas ahora es por candidato en Submission Batches (ver candidateOfferDatesHtml()); el
+  // valor de posicion (p.fill/p.hire) sigue existiendo internamente (SLA, Gantt, etc.), solo dejo
+  // de tener su propio campo aqui.
   const timelineHtml = isView
     ? factsSection("Timeline", [
         {label:"Kickoff Date", value:escapeHtml(p.kickoff) || "-"},
         {label:"Intake Meeting Requested Date", value:(escapeHtml(p.intakeRequestedDate) || "-") + intakeWaivedNote},
         {label:"Intake Meeting Date", value:escapeHtml(p.intake) || "-"},
         {label:"Submission Date", value:escapeHtml(p.submit) || "-"},
-        {label:"Fill Date", value:escapeHtml(p.fill) || "-"},
-        {label:"Start Date", value:escapeHtml(p.hire) || "-"},
       ])
     : `<div class="modal-section-title">Timeline</div>
     <div class="facts-grid">
@@ -6371,9 +6442,8 @@ function renderDetailModal(){
             <button type="button" class="fact-date-input" id="submissionDateTrigger" style="text-align:left;"${!p.intake ? " disabled" : ""}>Log first batch to set this &rarr;</button>
           </div>`}
       ${pivotSlaFactHtml(p)}
-      ${timelineFieldHtml("Fill Date", "editFill", p.fill, !p.submit, "Fill in Submission Date first.")}
-      ${timelineFieldHtml("Start Date", "editHire", p.hire, !p.fill, "Fill in Fill Date first.")}
     </div>
+    <div class="panel-sub" style="margin:-4px 0 24px;">Fill Date and Start Date are captured per candidate in Submission Batches below, once they reach Offer Request.</div>
     <div style="margin-bottom:24px;">
       <button class="btn primary small" id="modalDatesSave" type="button">Save Dates</button>
       <span id="modalDatesMsg" style="font-size:11px; color:var(--text-muted); margin-left:8px;"></span>
@@ -6769,8 +6839,9 @@ async function saveModalDates(){
     {key:"intakeRequestedDate", inputId:"editIntakeRequested", col:"AN", label:"Intake Meeting Requested Date", capToday:true},
     {key:"intake", inputId:"editIntake", col:"H", label:"Intake Meeting Date", capToday:true},
     {key:"submit", inputId:"editSubmit", col:"I", label:"Submission Date", capToday:true},
-    {key:"fill", inputId:"editFill", col:"J", label:"Fill Date"},
-    {key:"hire", inputId:"editHire", col:"K", label:"Start Date"},
+    // Fill Date/Start Date YA NO VIVEN AQUI (2026-09-23/24, ver el comentario junto a timelineHtml
+    // en renderDetailModal()) — se quitaron de Timeline por completo, ahora se capturan por
+    // candidato en Submission Batches (saveCandidateFillDate()/saveCandidateHireDate()).
   ].filter(f => document.getElementById(f.inputId));
   // Estos cuatro campos registran algo que ya paso en la realidad (no una fecha planeada a
   // futuro), asi que una fecha posterior a hoy es siempre un error de captura.
@@ -6793,8 +6864,6 @@ async function saveModalDates(){
     {key:"intakeRequestedDate", label:"Intake Meeting Requested Date"},
     {key:"intake", label:"Intake Meeting Date"},
     {key:"submit", label:"Submission Date"},
-    {key:"fill", label:"Fill Date"},
-    {key:"hire", label:"Start Date"},
   ];
   const rawByKey = {};
   fields.forEach(f=>{ const raw = document.getElementById(f.inputId).value; if(raw) rawByKey[f.key] = raw; });
@@ -6840,7 +6909,10 @@ async function saveModalDates(){
   // "submit" agregado 2026-09-19 junto con Submitted (nuevo status, ver STATUS_ORDER) — el caso
   // mas comun para esta fecha especifica es logBatchSave() (el primer batch la fija sola, ver
   // ahi), pero tambien puede backdatearse aqui directo en Timeline, mismo criterio que las demas.
-  const DATE_IMPLIES_STATUS = {intakeRequestedDate:"Intake Meeting Requested", intake:"Intake Pending", submit:"Submitted", fill:"Filled", hire:"Hired"};
+  // "fill"/"hire" YA NO estan aqui — esos 2 campos se quitaron de este formulario (Timeline) por
+  // completo, ver el comentario junto a "fields" mas arriba. Filled/Hired ahora se disparan desde
+  // saveCandidateFillDate()/checkArrivedStartDates(), nunca desde este auto-avance por fecha.
+  const DATE_IMPLIES_STATUS = {intakeRequestedDate:"Intake Meeting Requested", intake:"Intake Pending", submit:"Submitted"};
   // originalStatus (no solo el "from" del ultimo paso) importa cuando Fill Date y Start Date se
   // logean juntos en el mismo Save: la fila del loop primero avanza a Filled y luego, en la MISMA
   // pasada, a Hired — sin esto el log terminaria diciendo "Filled -> Hired" y se perderia que en
@@ -7160,15 +7232,19 @@ async function confirmIntakeSummarySent(p){
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
-  // Nicolas, 2026-09-23, bug real: David marco un req que en realidad era Filled (Internal Hire)
-  // como Hired a mano desde este dropdown — nada exigia que hubiera un candidato Placed real
-  // detras. "No deje al reclutador marcarlo como placed desde status, sino desde el batch, restringe
-  // para que no se puedan cambiar esos estados manualmente en el campo de status... que los lleve
-  // al lugar donde deben completar la info." La puerta real ya existe (Timeline: loguear el Hire/
-  // Start Date real del candidato mueve el status solo, ver DATE_IMPLIES_STATUS en
-  // saveModalDates()) — este dropdown solo deja de ser un atajo que salta esa fecha real.
+  // Nicolas, 2026-09-23/24, bug real: David marco un req que en realidad era Filled (Internal
+  // Hire) como Hired a mano desde este dropdown — nada exigia que hubiera un candidato Placed
+  // real detras. "No deje al reclutador marcarlo como placed desde status, sino desde el batch...
+  // restringe para que no se puedan cambiar esos estados manualmente en el campo de status." Fill
+  // Date/Start Date ya no viven en Timeline en absoluto (se movieron al candidato, ver
+  // candidateOfferDatesHtml()) — asi que Filled/Hired quedan bloqueados del todo aqui, la unica
+  // puerta real es esa, por candidato.
+  if(newStatus === "Filled"){
+    alert(`"${statusLabel("Filled")}" can't be set manually here — log the candidate's Fill Date in Submission Batches instead (once they've reached Offer Request), and this requisition will move to "${statusLabel("Filled")}" automatically.`);
+    return;
+  }
   if(newStatus === "Hired"){
-    alert(`"${statusLabel("Hired")}" can't be set manually here — mark the candidate as Placed in Submission Batches, then log their real Start Date in Timeline. This requisition will move to "${statusLabel("Hired")}" automatically once that date is saved.`);
+    alert(`"${statusLabel("Hired")}" can't be set manually here — it's set automatically once the placed candidate's confirmed Start Date (logged in Submission Batches) actually arrives.`);
     return;
   }
   // No se puede avanzar el pipeline sin antes aceptar la asignacion (o, si vino por Handoff, sin
@@ -7540,6 +7616,12 @@ function wireCandidateEvents(p){
   document.querySelectorAll(".candidateDeleteBtn").forEach(btn=>{
     btn.addEventListener("click", ()=> deleteBatchCandidate(p, btn.dataset.candidateId));
   });
+  document.querySelectorAll(".candidateSaveFillDateBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=> saveCandidateFillDate(p, btn.dataset.candidateId));
+  });
+  document.querySelectorAll(".candidateSaveHireDateBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=> saveCandidateHireDate(p, btn.dataset.candidateId));
+  });
   document.querySelectorAll(".candidateCheck").forEach(chk=>{
     chk.addEventListener("change", ()=>{
       const batchDate = chk.dataset.batchDate;
@@ -7705,6 +7787,122 @@ async function advancePositionForCandidateStatus(p, candidateName, newStatus){
       if(targetPosStatus === "Offer Request") await graphUpdatePositionField(p.id, "BI", p.offerRequestDate);
       await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
     } catch(err){ console.error("Could not save the req's auto status advance (non-fatal for the candidate change itself):", err); }
+  }
+}
+// Fill Date: "Immy nos confirma que ya le envio el offer letter al candidato y que el candidato
+// acepto" (Nicolas, 2026-09-23/24) — se captura por candidato (ver candidateOfferDatesHtml()), no
+// en Timeline (ese campo se quito de ahi). Avanza el req a "Filled" — Filled/Hired ya no estan en
+// CANDIDATE_STATUS_TO_POSITION_STATUS (no son un status de candidato), asi que este avance vive
+// aparte, con la misma logica forward-only/AUTO_STATUS_LOCKED que advancePositionForCandidateStatus.
+async function saveCandidateFillDate(p, candidateId){
+  const c = (p.batchCandidates||[]).find(x=>x.id===candidateId);
+  const input = document.querySelector(`.candidateFillDateInput[data-candidate-id="${cssEscape(candidateId)}"]`);
+  if(!c || !input || !input.value) return;
+  const dateStr = input.value;
+  const today = localTodayStr();
+  if(dateStr > today){ alert("Fill Date can't be in the future — it logs something that already happened (the candidate accepting the offer)."); return; }
+  c.fillDate = dateStr;
+  if(!p.fill) p.fill = dateStr;
+  let statusChanged = false;
+  let remarkText = null;
+  // Mismo formato canonico que advancePositionForCandidateStatus()/commitStatusChange() usan para
+  // TODO cambio automatico de status ("Status changed from X to Y (automatic — ...)."), type
+  // "status" — no un texto propio ni un type inventado (ver TL_BADGE_LABELS: "milestone" no es un
+  // type real, se veia mal en el badge). Mantiene tambien hasStatusChangeTo() funcionando bien —
+  // sin este formato exacto, el generador de actividad sintetica (para datos viejos sin log real)
+  // no reconoceria esto como "ya logueado" y duplicaria una linea generica aparte.
+  if(!AUTO_STATUS_LOCKED.includes(p.status) && STATUS_ORDER.indexOf("Filled") > STATUS_ORDER.indexOf(p.status)){
+    const fromStatus = p.status;
+    p.status = "Filled";
+    statusChanged = true;
+    remarkText = `Status changed from ${statusLabel(fromStatus)} to ${statusLabel("Filled")} (automatic — ${c.name}'s Fill Date logged).`;
+    p.extra = p.extra || [];
+    p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remarkText});
+  }
+  renderDetailModal();
+  renderTracking();
+  renderPositions();
+  renderKpis();
+  if(isConnected()){
+    try {
+      await graphUpdateBatchCandidateField(c.id, "Fill Date", dateStr);
+      await graphUpdatePositionField(p.id, "J", dateStr);
+      if(statusChanged){
+        await graphUpdatePositionField(p.id, "G", "Filled");
+        await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
+      }
+    } catch(err){
+      console.error(err);
+      alert("Could not save this candidate's Fill Date.\n\n"+err.message);
+    }
+  }
+}
+// Start Date: la fecha real de inicio confirmada por Immy — a diferencia de Fill Date, guardarla
+// NO mueve el status todavia. El req se queda en "Filled" hasta que esa fecha efectivamente
+// llegue (ver checkArrivedStartDates()) — "una vez que llega esa fecha... es cuando se pone como
+// placed, y eso deberia ser automatico" (Nicolas). Por eso puede ser una fecha futura (a
+// diferencia de Fill Date, que registra algo que ya paso).
+async function saveCandidateHireDate(p, candidateId){
+  const c = (p.batchCandidates||[]).find(x=>x.id===candidateId);
+  const input = document.querySelector(`.candidateHireDateInput[data-candidate-id="${cssEscape(candidateId)}"]`);
+  if(!c || !input || !input.value) return;
+  const dateStr = input.value;
+  if(c.fillDate && dateStr < c.fillDate){ alert("Start Date can't be before the Fill Date — check the dates."); return; }
+  c.hireDate = dateStr;
+  if(!p.hire) p.hire = dateStr;
+  renderDetailModal();
+  renderTracking();
+  renderPositions();
+  if(isConnected()){
+    try {
+      await graphUpdateBatchCandidateField(c.id, "Start Date", dateStr);
+      await graphUpdatePositionField(p.id, "K", dateStr);
+    } catch(err){
+      console.error(err);
+      alert("Could not save this candidate's Start Date.\n\n"+err.message);
+    }
+  }
+  // Si la fecha que se acaba de guardar ya llego (o es hoy), el auto-avance a Hired pasa de
+  // inmediato, sin esperar al proximo refresh de 2 min.
+  await checkArrivedStartDates();
+  renderDetailModal();
+  renderTracking();
+  renderPositions();
+  renderKpis();
+}
+// "Placed" ya no se elige a mano en ningun lado (ver BATCH_CANDIDATE_STATUSES) — este es el UNICO
+// lugar donde un candidato pasa a Placed y un req pasa a Hired. Corre en cada carga real de datos
+// (loadFromGraph/demo init, ver esas llamadas) y justo despues de guardar un Start Date que ya
+// llego. Reusa applyPlacedCandidate() (el mismo helper que ya existia para esto, ver mas abajo)
+// para el nombre del Placed Candidate y el hook de Headcount Group — pero SIEMPRE con
+// targetP===sourceP, nunca abre el picker interactivo (pickHeadcountForPlacedCandidate): no hay
+// usuario presente para responderlo en este momento automatico.
+let justPlacedNotifications = [];
+async function checkArrivedStartDates(){
+  const today = localTodayStr();
+  for(const p of POSITIONS){
+    if(p.status !== "Filled" || AUTO_STATUS_LOCKED.includes(p.status)) continue;
+    const c = (p.batchCandidates||[]).find(x=> x.hireDate && x.hireDate <= today && x.status !== "Placed");
+    if(!c) continue;
+    c.status = "Placed";
+    const fromStatus = p.status;
+    p.status = "Hired";
+    if(!p.hire) p.hire = c.hireDate;
+    // Mismo formato canonico que saveCandidateFillDate()/advancePositionForCandidateStatus() —
+    // ver el comentario ahi (type "status", nunca "milestone", que no es un type real).
+    const remarkText = `Status changed from ${statusLabel(fromStatus)} to ${statusLabel("Hired")} (automatic — ${c.name} started on ${c.hireDate}).`;
+    p.extra = p.extra || [];
+    p.extra.push({date: today, time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remarkText});
+    justPlacedNotifications.push({id: p.id, title: posLabel(p), candidateName: c.name, hireDate: c.hireDate});
+    if(isConnected()){
+      try {
+        await graphUpdateBatchCandidateField(c.id, "Status", "Placed");
+        await graphUpdatePositionField(p.id, "G", "Hired");
+        await graphUpdatePositionField(p.id, "K", p.hire);
+        await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
+      } catch(err){ console.error("Could not save the automatic Placed transition (non-fatal, will retry next refresh):", err); }
+    }
+    await applyPlacedCandidate(p, c, p);
   }
 }
 // Nicolas: "en los batches debe estar la opcion de eliminar candidatos por si nos equivocamos de
@@ -7977,7 +8175,7 @@ document.getElementById("addCandidateSave").addEventListener("click", async ()=>
     cvWarning = "not connected — the CV wasn't uploaded, only kept in this browser tab.";
   }
   try {
-    p.batchCandidates.push({ id, batchDate, name, email: email || null, status, cvLink, addedBy: author, addedDate: localTodayStr() });
+    p.batchCandidates.push({ id, batchDate, name, email: email || null, status, cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null });
     await advancePositionForCandidateStatus(p, name, status);
     await logFieldEdit(p, `${name} added to the ${batchDate} batch (${status}).`);
     closeAddCandidateModal();
@@ -8271,7 +8469,7 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
         cvLink = await graphUploadFile("Candidate CVs", p.id, cand.file);
         await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
       }
-      p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening Interview", cvLink, addedBy: author, addedDate: localTodayStr() });
+      p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening Interview", cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null });
       succeeded.push(cand.name);
     } catch(err){
       console.error(`Could not save candidate "${cand.name}":`, err);
@@ -9799,6 +9997,7 @@ async function loadDemoModeAndRender(){
   RECRUITER_PHOTOS = {}; RECRUITER_TITLES = { [DEMO_RECRUITER_NAME]: "Talent Partner" }; RECRUITER_EMAILS = {};
   LOCATIONS = [...new Set(POSITIONS.flatMap(p => splitCountries(p.country)))];
   MY_RECRUITER_NAME = DEMO_RECRUITER_NAME;
+  await checkArrivedStartDates();
   renderAll();
   setConnectionUi(false);
   document.getElementById("demoBanner").innerHTML =
@@ -10129,6 +10328,16 @@ function mergeBatchCandidates(positions, bcHeaders, bcRows){
       cvLink: row[bIdx("CV Link")] || null,
       addedBy: row[bIdx("Added By")] || null,
       addedDate: excelValToDateStr(row[bIdx("Added Date")]),
+      // Columna nueva/opcional (ver applyPlacedCandidate()) — que headcount REAL cerro este
+      // candidato, cuando difiere del req donde se logueo el batch (Headcount Group). idx() da
+      // -1 si el Excel real todavia no tiene la columna, degrada a null.
+      closedForPositionId: row[bIdx("Filled Position ID")] || null,
+      // Columnas nuevas/opcionales 2026-09-24 (ver candidateOfferDatesHtml()): Fill Date = cuando
+      // Immy confirma que el candidato acepto la oferta; Start Date = fecha real de inicio
+      // confirmada por Immy. Placed ahora se dispara SOLO cuando Start Date ya llego (ver
+      // checkArrivedStartDates()), nunca eligiendolo a mano.
+      fillDate: excelValToDateStr(row[bIdx("Fill Date")]),
+      hireDate: excelValToDateStr(row[bIdx("Start Date")]),
     });
   });
   positions.forEach(p => p.batchCandidates.sort((a,b)=> (a.addedDate||"") < (b.addedDate||"") ? -1 : 1));
@@ -10204,6 +10413,11 @@ async function loadFromGraph(){
 
   LOCATIONS = [...new Set(newPositions.flatMap(p => splitCountries(p.country)))];
   POSITIONS = newPositions;
+  // Nicolas, 2026-09-23/24: "una vez que llega esa fecha de start date, es cuando se pone como
+  // placed, y eso deberia ser automatico" — se revisa en cada carga real de datos (login inicial
+  // Y el auto-refresh de 2 min, ver ese setInterval mas abajo), asi que nunca pasan mas de 2
+  // minutos entre que la fecha real llega y el tracker lo refleja.
+  await checkArrivedStartDates();
   renderAll();
   // Aterrizas directo en TU workspace, en Tracking, en vez de Team Dashboard — Team Workspace
   // sigue a un clic bajo Dashboard en el nav, para el que lo necesite, pero ya no es lo primero
