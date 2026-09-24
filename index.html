@@ -1716,9 +1716,8 @@
               <div class="form-field">
                 <label>Hiring Manager</label>
                 <select id="newPosHMSelect"></select>
-                <input type="text" id="newPosHMInput" placeholder="Type the hiring manager's name">
-                <button type="button" class="fact-edit-link" id="newPosHMBackToList" style="display:none; margin-top:6px;">&larr; Choose From The List Instead</button>
-                <div class="panel-sub" style="margin-top:4px;">List shows hiring managers we've already worked with (Organic) — not in the list means they're New.</div>
+                <input type="text" id="newPosHMInput" style="display:none;" placeholder="Type the hiring manager's name">
+                <div class="panel-sub" style="margin-top:4px;">List shows hiring managers we've already worked with (Organic) — not in the list means they're New. To add a new one, pick "+ Add New…" from the list and type their name.</div>
               </div>
               <div class="form-field"><label>Assigned Recruiter</label><select id="newPosRecruiter"></select></div>
               <div class="panel-sub full" id="newPosCapacityHint" style="margin:-6px 0 0;"></div>
@@ -7204,21 +7203,26 @@ function onStatusOptionClick(p, newStatus){
 function setupAddNewSelect(selectId, inputId, backBtnId, options, currentValue){
   const select = document.getElementById(selectId);
   const input = document.getElementById(inputId);
-  const back = document.getElementById(backBtnId);
+  const back = backBtnId ? document.getElementById(backBtnId) : null;
   select.innerHTML = options.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("") + `<option value="__new__">+ Add New…</option>`;
   const inList = currentValue && options.includes(currentValue);
-  if(inList){
-    select.value = currentValue;
+  // Sin valor todavia (ej. formulario de Add Position recien abierto) se trata igual que "esta en
+  // la lista": arranca en modo lista, nunca en modo escribir por defecto — solo un valor real que
+  // NO esta en la lista fuerza el modo "new". Nicolas, 2026-09-24: el campo de HM arrancaba en
+  // modo escribir por defecto en Add Position, que es justo lo contrario de lo que se queria.
+  const forceNewMode = currentValue && !inList;
+  if(!forceNewMode){
+    select.value = inList ? currentValue : "";
     select.style.display = "";
     input.style.display = "none";
-    back.style.display = "none";
+    if(back) back.style.display = "none";
     input.value = "";
   } else {
     select.value = "__new__";
     select.style.display = "none";
     input.style.display = "";
     input.value = currentValue || "";
-    back.style.display = "";
+    if(back) back.style.display = "";
   }
 }
 function getAddNewValue(selectId, inputId){
@@ -7242,9 +7246,10 @@ function wireAddNewSelect(selectId, inputId, backBtnId){
     e.target.style.display = "none";
     input.style.display = "";
     input.value = "";
-    document.getElementById(backBtnId).style.display = "";
+    if(backBtnId) document.getElementById(backBtnId).style.display = "";
     input.focus();
   });
+  if(!backBtnId) return;
   document.getElementById(backBtnId).addEventListener("click", ()=>{
     const select = document.getElementById(selectId);
     select.style.display = "";
@@ -7253,7 +7258,7 @@ function wireAddNewSelect(selectId, inputId, backBtnId){
   });
 }
 wireAddNewSelect("reqInfoHmSelect", "reqInfoHmInput", "reqInfoHmBackToList");
-wireAddNewSelect("newPosHMSelect", "newPosHMInput", "newPosHMBackToList");
+wireAddNewSelect("newPosHMSelect", "newPosHMInput", null);
 // Country ya no es un solo valor de texto libre: se restringe a los mercados reales donde
 // reclutamos (algunas busquedas cubren mas de uno a la vez, ej. US+Canada o AU+NZ), asi que es
 // un set fijo de checkboxes en vez del patron select/"add new" que usan Hiring Manager y demas
@@ -9347,7 +9352,7 @@ function renderNewPosHmSelect(){
   const select = document.getElementById("newPosHMSelect");
   const usingInput = input.style.display !== "none";
   const currentValue = usingInput ? (input.value || null) : (select.value || null);
-  setupAddNewSelect("newPosHMSelect", "newPosHMInput", "newPosHMBackToList", organicHiringManagerNames(), currentValue);
+  setupAddNewSelect("newPosHMSelect", "newPosHMInput", null, organicHiringManagerNames(), currentValue);
 }
 function renderAll(){
   renderNewPosRecruiterSelect();
@@ -11251,7 +11256,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     document.getElementById("newPosIsGroup").checked = false;
     document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
     document.getElementById("newPosCareersUrl").value = "";
-    setupAddNewSelect("newPosHMSelect", "newPosHMInput", "newPosHMBackToList", organicHiringManagerNames(), null);
+    setupAddNewSelect("newPosHMSelect", "newPosHMInput", null, organicHiringManagerNames(), null);
     document.getElementById("newPosRemark").value = "";
     document.getElementById("newPosStatus").value = "Kickoff";
     updateStatusDateUI("newPos", "Kickoff", null);
@@ -11268,7 +11273,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
   ["newPosTitle","newPosCode","newPosHeadcountGroup","newPosCareersUrl","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
-  setupAddNewSelect("newPosHMSelect", "newPosHMInput", "newPosHMBackToList", organicHiringManagerNames(), null);
+  setupAddNewSelect("newPosHMSelect", "newPosHMInput", null, organicHiringManagerNames(), null);
   document.getElementById("newPosHeadcountRows").innerHTML = "";
   document.getElementById("newPosIsGroup").checked = false;
   document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
