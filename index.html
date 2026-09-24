@@ -508,7 +508,11 @@
   .gantt-cal-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: .6; }
   .gantt-cal-today-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--brand); z-index: 3; }
   .gantt-cal-today-label { position: absolute; top: -14px; font-size: 10px; font-weight: 700; color: var(--brand); transform: translateX(-50%); white-space: nowrap; }
-  .gantt-rows { position: relative; }
+  /* Nicolas, 2026-09-24: con muchos reqs (ej. 16 en Active Positions) la lista de filas hacia que
+     toda la pagina se volviera larguisima de scrolear — "deberia ser como la ventana de los
+     graficos la que se scrolea [internamente]". ~6 filas visibles (promedio real ~104px/fila,
+     algunas con linea extra de compensation/HM) antes de que el scroll interno entre en juego. */
+  .gantt-rows { position: relative; max-height: 630px; overflow-y: auto; }
   .gantt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); position: relative; cursor: pointer; border-radius: 6px; user-select: none; }
   .gantt-row:hover { background: rgba(127,127,127,0.06); }
   .gantt-row:last-child { border-bottom: none; }
@@ -555,6 +559,16 @@
     font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0;
   }
   .gantt-filter-clear:hover { color: var(--brand); }
+  /* Insights (Nicolas, 2026-09-24): "se deberian poder ver varios graficos, tal vez con una
+     opcion de maximo dos, y elegir cuales" — reemplaza la pestaña "Pipeline" separada. El picker
+     reusa el look de gantt-scope-toggle/btn (ver arriba) pero con seleccion MULTIPLE (hasta 2),
+     no un solo activo excluyente — ver toggleInsight()/INSIGHTS_SELECTED en el JS. Cada grafico
+     vive en su propia .insight-card, mas liviana que un .panel completo (sin su propio borde+
+     sombra) porque ya esta anidada dentro de uno (panelInsights). */
+  #insightsPicker { margin-bottom: 14px; display: inline-flex; }
+  .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .insight-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .insights-empty { font-size: 12.5px; color: var(--text-muted); padding: 12px 0; }
   .gantt-row-label { width: 220px; flex: none; padding-right: 8px; }
   .gantt-row-title { font-size: 11.5px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
   .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
@@ -1465,7 +1479,6 @@
       <div class="dash-tabs" id="dashTabs" role="tablist">
         <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
         <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
-        <button type="button" class="dash-tab" id="dashTabPipeline" data-dash-tab="pipeline">Pipeline</button>
       </div>
 
       <!-- ======================= DASHBOARD ======================= -->
@@ -1493,6 +1506,38 @@
                   </button>
                 </div>
                 <div class="gantt-panel" id="ganttPanel"></div>
+              </div>
+              <!-- Nicolas, 2026-09-24: rechazo la pestaña "Pipeline" separada (y antes de eso, el
+                   panel de chips "Timelines by Recruiter & Role") por la misma razon de fondo —
+                   "no llenar el dashboard de un monton de cosas y tabs". Pidio en su lugar un
+                   area junto al Gantt donde se puedan "gestionar varios graficos... con una
+                   opcion de maximo dos, y elegir cuales". Los 2 graficos que antes vivian en la
+                   pestaña Pipeline (Pipeline By Status, Position By Location/Work Arrangement)
+                   ahora viven ACA, seleccionables via insightsPicker/toggleInsight() — ver JS.
+                   Ambos vienen seleccionados por defecto (INSIGHTS_SELECTED inicial) porque hoy
+                   son los unicos 2 que existen; el picker ya queda listo para cuando se agreguen
+                   mas graficos a futuro sin volver a tocar esta estructura. -->
+              <div class="panel" id="panelInsights" style="grid-column: span 6;">
+                <h3>Insights</h3>
+                <div class="panel-sub">Pick up to 2 charts to show here, side by side.</div>
+                <div class="gantt-scope-toggle" id="insightsPicker"></div>
+                <div class="insights-grid" id="insightsGrid">
+                  <div class="insight-card" data-insight-key="estado">
+                    <h3>Pipeline By Status</h3>
+                    <div class="panel-sub">Every non-closed position, grouped by funnel stage — includes Offer Request, Filled, and On Hold, none of which count as "Active" elsewhere in this tracker.</div>
+                    <div class="funnel" id="chartEstado"></div>
+                  </div>
+                  <div class="insight-card" data-insight-key="location" id="panelPositionByLocation">
+                    <h3>Position By Location/Work Arrangement</h3>
+                    <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
+                    <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
+                    <div class="barlist" id="chartHiredLoc"></div>
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
+                      <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
+                      <div class="barlist" id="chartWorkArrangement"></div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <!-- Fila 2, dos tarjetas iguales (span 3 de 6 cada una): panorama de requisitions +
                    carga del equipo. Active Workload By Recruiter / Average Time To Submit ocupan
@@ -1556,26 +1601,6 @@
                   <h3>Needs Attention <span class="panel-details-count" id="dashboardAttentionCount"></span></h3>
                   <div class="panel-sub">The specific positions behind the SLA Health numbers above (out of SLA or at risk) plus any stuck on Kickoff/Intake follow-up, most urgent first.</div>
                   <div id="dashboardAttentionZone"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="dash-tab-panel" data-dash-panel="pipeline">
-              <div class="dash-grid">
-                <div class="panel" style="grid-column: span 3;">
-                  <h3>Pipeline By Status</h3>
-                  <div class="panel-sub">Every non-closed position, grouped by funnel stage — includes Offer Request, Filled, and On Hold, none of which count as "Active" elsewhere in this tracker.</div>
-                  <div class="funnel" id="chartEstado"></div>
-                </div>
-                <div class="panel" id="panelPositionByLocation" style="grid-column: span 3;">
-                  <h3>Position By Location/Work Arrangement</h3>
-                  <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
-                  <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
-                  <div class="barlist" id="chartHiredLoc"></div>
-                  <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
-                    <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
-                    <div class="barlist" id="chartWorkArrangement"></div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -3408,14 +3433,11 @@ function setDashboardScope(name, opts){
   activeDashboardScope = name;
   activeDashboardReadOnly = readOnly && name !== MY_RECRUITER_NAME;
   document.getElementById("navItemTracking").style.display = (name && !activeDashboardReadOnly) ? "" : "none";
-  // Pipeline (funnel de status + Position By Location/Work Arrangement) es una vista de equipo
-  // — no le sirve de nada a un solo reclutador viendo unicamente sus propias posiciones. Si
-  // estabas parado ahi cuando entras a tu workspace, te caes a Overview (que si existe siempre).
-  document.getElementById("dashTabPipeline").style.display = name ? "none" : "";
-  if(name && document.querySelector('.dash-tab[data-dash-tab="pipeline"]').classList.contains("active")){
-    document.querySelectorAll(".dash-tab").forEach(b=> b.classList.toggle("active", b.dataset.dashTab==="team"));
-    document.querySelectorAll(".dash-tab-panel").forEach(p=> p.classList.toggle("active", p.dataset.dashPanel==="team"));
-  }
+  // Insights (Pipeline By Status + Position By Location/Work Arrangement, antes su propia
+  // pestaña "Pipeline") es una vista de equipo — no le sirve de nada a un solo reclutador viendo
+  // unicamente sus propias posiciones. Mismo criterio que ya existia para esa pestaña, ahora
+  // aplicado al panel que la reemplazo dentro de Overview (ver panelInsights mas arriba).
+  document.getElementById("panelInsights").style.display = name ? "none" : "";
   updateManageNavVisibility();
   document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
@@ -4906,6 +4928,56 @@ document.getElementById("ganttHintBtn").addEventListener("click", ()=>{
   const key = ganttOpenKey || "active";
   toggleGanttPanel(key, GANTT_DATA[key].label, GANTT_DATA[key].positions);
 });
+
+// Insights (Nicolas, 2026-09-24): picker de seleccion multiple, hasta 2 a la vez, que decide
+// cuales .insight-card se ven dentro de #insightsGrid. Las cards en si son HTML estatico (ver
+// panelInsights arriba) con sus propios ids de siempre (#chartEstado, #chartHiredLoc,
+// #chartWorkArrangement) — renderEstadoChart()/renderHiredLocChart() las siguen llenando exactamente
+// igual que antes sin importar si estan visibles ahora mismo, asi que no hace falta re-renderizar
+// datos al togglear, solo mostrar/ocultar.
+const INSIGHTS_DEFS = [
+  {key:"estado", label:"Pipeline By Status"},
+  {key:"location", label:"Position By Location/Work Arrangement"},
+];
+let INSIGHTS_SELECTED = INSIGHTS_DEFS.map(d=>d.key); // ambas por defecto — hoy son las unicas 2 que existen.
+function applyInsightsVisibility(){
+  document.querySelectorAll("#insightsGrid .insight-card").forEach(card=>{
+    card.style.display = INSIGHTS_SELECTED.includes(card.dataset.insightKey) ? "" : "none";
+  });
+  const emptyNote = document.getElementById("insightsEmptyNote");
+  if(INSIGHTS_SELECTED.length === 0){
+    if(!emptyNote){
+      document.getElementById("insightsGrid").insertAdjacentHTML("afterend",
+        `<div class="insights-empty" id="insightsEmptyNote">Pick a chart above to see it here.</div>`);
+    }
+  } else if(emptyNote){
+    emptyNote.remove();
+  }
+}
+function renderInsightsPicker(){
+  document.getElementById("insightsPicker").innerHTML = INSIGHTS_DEFS.map(d=>
+    `<button type="button" class="gantt-scope-btn${INSIGHTS_SELECTED.includes(d.key)?" active":""}" data-insight-toggle="${escapeHtml(d.key)}">${escapeHtml(d.label)}</button>`
+  ).join("");
+  document.querySelectorAll("#insightsPicker [data-insight-toggle]").forEach(btn=>{
+    btn.addEventListener("click", ()=> toggleInsight(btn.dataset.insightToggle));
+  });
+}
+// Maximo 2 a la vez ("con una opcion de maximo dos, y elegir cuales") — al elegir una tercera,
+// se suelta la que llevaba mas tiempo seleccionada (cola FIFO) en vez de bloquear el click sin
+// explicacion. Deseleccionar hasta 0 esta permitido (ver insights-empty arriba).
+function toggleInsight(key){
+  const idx = INSIGHTS_SELECTED.indexOf(key);
+  if(idx >= 0){
+    INSIGHTS_SELECTED.splice(idx, 1);
+  } else {
+    INSIGHTS_SELECTED.push(key);
+    if(INSIGHTS_SELECTED.length > 2) INSIGHTS_SELECTED.shift();
+  }
+  renderInsightsPicker();
+  applyInsightsVisibility();
+}
+renderInsightsPicker();
+applyInsightsVisibility();
 
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
