@@ -162,6 +162,11 @@
   }
 
   * { box-sizing: border-box; }
+  /* Nicolas, 2026-09-26: "el tracker esta en 100% de zoom de pixeles, moverlo a 90 u 85% para
+     que quepa todo mejor" — mismo efecto que Ctrl+- del navegador, aplicado una sola vez aca en
+     vez de pedirle a cada quien que lo haga manualmente. Solo en html (no tambien en body) para
+     que no se componga (0.9 x 0.9 = 0.81 si se aplicara en los dos). */
+  html { zoom: 0.9; }
   html, body {
     margin: 0; padding: 0;
     font-family: var(--font-body);
