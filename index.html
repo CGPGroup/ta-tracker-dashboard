@@ -4494,6 +4494,18 @@ function ganttSegments(p){
   // paso de verdad (bug real reportado por Nicolas: "a otros no se les ve el waiver").
   const introKey = (!p.intake && p.intakeWaivedReason) ? "Intake Meeting Waived" : "Intake Pending";
   const introDone = parseD(resolveEffectiveIntakeDate(p));
+  // Bug real (Nicolas, 2026-09-25: "sigo viendo reqs en el gantt que no usan todos estos status ya
+  // cuando varios pasaron por ahi"): el checkpoint de "Sourcing" SIEMPRE reusaba introDone tal
+  // cual, asumiendo que sourcing arranca el mismo dia que se cierra el intake — cierto la mayoria
+  // de las veces, pero cuando NO lo es (ej. SE-002/SE-006 reales: Intake Held el 17, Sourcing recien
+  // el 21, 4 dias reales de diferencia segun su propio Activity log) el tramo de Intake Pending/
+  // Held se colapsaba en silencio contra Sourcing por la logica de "misma fecha = mismo momento"
+  // un poco mas abajo — invisible aunque el dato SI existia. Igual que Client Interview arriba,
+  // ahora se busca una fecha real de "Status changed ... to Sourcing" en el Activity log y, solo si
+  // es genuinamente POSTERIOR a introDone, se usa esa en vez de asumir el mismo dia — nunca fabrica
+  // una fecha, solo deja de ignorar una que ya estaba logueada.
+  const sourcingLogDate = parseD(findStatusTransitionDate(p, "Sourcing"));
+  const sourcingDate = (sourcingLogDate && introDone && sourcingLogDate > introDone) ? sourcingLogDate : introDone;
   const submitDate = parseD(p.submit);
   const ciDateStr = findStatusTransitionDate(p, "Client Interview");
   const ciDateRaw = ciDateStr ? parseD(ciDateStr) : null;
@@ -4509,7 +4521,7 @@ function ganttSegments(p){
     // camino real paso — antes se saltaba directo a "Sourcing" en cuanto habia fecha de intake,
     // asi que un req sentado literalmente en ese status nunca se veia con su propio color.
     {key:introKey, date:introDone},
-    {key:"Sourcing", date:introDone},
+    {key:"Sourcing", date:sourcingDate},
     {key:"Submitted", date:submitDate},
     {key:"Client Interview", date:ciDate},
     {key:"Offer Request", date:offerDate},
@@ -4779,16 +4791,18 @@ function renderGanttGroup(key){
   const shown = ganttScope === "all" ? data : data.filter(p=> ganttInWindow(p, win.start, win.end));
   const cal = ganttBuildCalendar(win);
   const hiddenCount = data.length - shown.length;
-  const nowQ = ganttQuarterLabel(new Date());
   const filtersActive = !!(ganttRecruiterFilter || ganttRoleFilter);
   const titleFilterNote = [ganttRecruiterFilter, ganttRoleFilter].filter(Boolean).map(escapeHtml).join(" · ");
   panelEl.innerHTML = `
     <div class="gantt-head">
       <div class="gantt-title">${escapeHtml(group.label)}${titleFilterNote ? ` <span style="color:var(--brand);">· ${titleFilterNote}</span>` : ""} <span>— ${shown.length} requisition${shown.length===1?"":"s"} in ${win.label}${hiddenCount ? ` (${hiddenCount} outside range, hidden)` : ""}</span></div>
+      <!-- Nicolas, 2026-09-25: "esta muy redundante poner last 6 weeks, luego q3 2026, luego
+           2026, luego all time" — dropped Quarter/Year (ganttScopeWindow() still supports those
+           scopes internally, just unreachable from this UI now) down to the 2 ends that actually
+           differ in practice: a narrow recent-activity window vs. everything. All time stays the
+           default (see ganttScope's own comment) since it's the one that never hides real data. -->
       <div class="gantt-scope-toggle" id="ganttScopeToggle">
         <button class="gantt-scope-btn" data-scope="recent">Last 6 Weeks</button>
-        <button class="gantt-scope-btn" data-scope="quarter">${nowQ}</button>
-        <button class="gantt-scope-btn" data-scope="year">${new Date().getFullYear()}</button>
         <button class="gantt-scope-btn" data-scope="all">All time</button>
       </div>
     </div>
@@ -4833,7 +4847,7 @@ function renderGanttGroup(key){
       <div class="gantt-rows" id="ganttRows">${shown.length ? shown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
     </div>
   `;
-  ganttRenderAxis(cal, (ganttScope === "quarter" || ganttScope === "recent") ? "week" : "month");
+  ganttRenderAxis(cal, ganttScope === "recent" ? "week" : "month");
   panelEl.querySelectorAll("#ganttScopeToggle .gantt-scope-btn").forEach(btn=>{
     btn.classList.toggle("active", btn.dataset.scope === ganttScope);
     btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
@@ -11149,7 +11163,21 @@ function hideAppLoadingOverlay(){
   const wait = Math.max(0, APP_LOADING_MIN_MS - (Date.now() - appLoadingStartedAt));
   setTimeout(()=> el.classList.add("hidden"), wait);
 }
-(isDemoModeUrl() ? loadDemoModeAndRender() : trysilentConnect()).finally(hideAppLoadingOverlay);
+// Nicolas, 2026-09-25: "el landing page del dashboard deberia ser el overview tab, con el gantt
+// de active positions abierto" — Overview ya era el default (ver class="view active"/dash-tab
+// active en el HTML), solo faltaba abrir el Gantt de Active Positions automaticamente al aterrizar
+// ahi. Se dispara UNA sola vez, justo despues de que termine la carga real de datos (para que
+// GANTT_DATA.active tenga las posiciones correctas, no un array vacio) — nunca se reabre solo
+// (si el usuario lo cierra, se queda cerrado el resto de la sesion), y solo si de verdad aterrizo
+// en Overview sin haber navegado a otro lado mientras cargaba.
+function autoOpenActiveGanttOnLanding(){
+  if(document.getElementById("view-dashboard")?.classList.contains("active")
+     && document.querySelector('.dash-tab[data-dash-tab="team"]')?.classList.contains("active")
+     && !ganttOpenKey && GANTT_DATA.active){
+    toggleGanttPanel("active", GANTT_DATA.active.label, GANTT_DATA.active.positions);
+  }
+}
+(isDemoModeUrl() ? loadDemoModeAndRender() : trysilentConnect()).finally(()=>{ hideAppLoadingOverlay(); autoOpenActiveGanttOnLanding(); });
 // Red de seguridad: si algo se cuelga de forma inesperada (conexion lenta, error no
 // capturado en algun punto de la cadena), la pantalla de carga no debe quedar pegada para
 // siempre, a los 12s se revela la app igual, con lo que haya cargado hasta ese momento.
