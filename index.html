@@ -5034,11 +5034,22 @@ function renderKpis(){
     {key:"active", label:"Active Positions", value:activePositions.length, positions:activePositions,
       desc:"Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
   ];
+  // 4a tarjeta agregada 2026-09-25 (Nicolas, con los numeros reales delante: "tenemos 30
+  // posiciones, pero solo 16 activas, 3 en potential placements y otras 7 en actual placements.
+  // Eso me da 26. En donde estan las otras 4?... yo supongo que esas son las internal hires, o
+  // las on hold, entonces en esa caja nueva podria ir todo lo que esta cancelled tambien" — tenia
+  // razon: las 4 reales eran 2 Filled (Internal Hire) + 2 On Hold. Definida como "todo lo que NO
+  // cayo en ninguna de las otras 3" (nunca una lista fija de statuses a mano) para que Positions
+  // SIEMPRE sea la suma exacta de las 4 tarjetas, pase lo que pase con statuses nuevos a futuro.
+  const otherPositions = allPositions.filter(p=>
+    !activePositions.includes(p) && !potentialPlacements.includes(p) && p.status!=="Hired");
   const outcomeStats = [
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc:"At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
     {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc:"Confirmed hires to date — a running total, not a next step from the numbers on the left."},
+    {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
+      color:"var(--neutral)", desc:"Paused (On Hold) or closed without a confirmed Irth placement (Cancelled, or Filled Internal Hire) — not active, and not counted in either box to the left. Positions always adds up to Active + Potential + Actual + this one."},
   ];
   const maxVal = funnelStats[0].value || 1;
   const allStats = [...funnelStats, ...outcomeStats];
