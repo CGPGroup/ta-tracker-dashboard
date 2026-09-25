@@ -562,14 +562,14 @@
      vive en su propia .insight-card, mas liviana que un .panel completo (sin su propio borde+
      sombra) porque ya esta anidada dentro de uno (panelInsights). */
   #insightsPicker { margin-bottom: 14px; display: inline-flex; flex-wrap: wrap; }
-  /* Layout pedido por Nicolas, 2026-09-25: Active Workload By Recruiter a la derecha (crece en
-     alto con cuantos reclutadores haya), los otros 3 charts apilados en una sola columna a la
-     izquierda — no un grid parejo. #insightsLeftStack y #insightsWorkloadCard son los 2 unicos
-     hijos directos de .insights-grid; los 3 charts "de la izquierda" viven DENTRO de
-     insightsLeftStack, siempre en una sola columna sin importar cuantos de ellos esten visibles. */
+  /* Layout pedido por Nicolas, 2026-09-25 (version final, tras quitar Pipeline By Status): Active
+     Workload By Recruiter sola a la izquierda (crece en alto con cuantos reclutadores haya), los
+     otros charts apilados en una sola columna a la derecha — no un grid parejo.
+     #insightsWorkloadCard y #insightsStack son los 2 unicos hijos directos de .insights-grid; el
+     orden en el DOM decide el orden visual (izquierda/derecha), no hace falta `order` en CSS. */
   .insights-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
-  .insights-left-stack { flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 16px; }
   #insightsWorkloadCard { flex: 1 1 320px; min-width: 280px; }
+  .insights-stack { flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 16px; }
   .insight-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
   .insights-empty { font-size: 12.5px; color: var(--text-muted); padding: 12px 0; }
   .gantt-row-label { width: 220px; flex: none; padding-right: 8px; }
@@ -1519,31 +1519,33 @@
               </div>
               <!-- Nicolas, 2026-09-24: rechazo la pestaña "Pipeline" separada (y antes de eso, el
                    panel de chips "Timelines by Recruiter & Role") por la misma razon de fondo —
-                   "no llenar el dashboard de un monton de cosas y tabs". 2026-09-25: pidio ademas
-                   mover Active Workload By Recruiter y Submitted Vs Expected aca adentro tambien
-                   ("esas dos deberian ser las dos principales insights, luego estan las otras que
-                   habiamos agregado"), quitar "Total Requisitions" del todo (redundante con la
-                   tarjeta de Positions & Placements de arriba, que ya cubre lo mismo), y un layout
-                   especifico: Active Workload a la derecha (crece con cuantos reclutadores haya),
-                   los otros 3 apilados a la izquierda — ver #insightsLeftStack/#insightsWorkloadCard
-                   y la logica de layout en applyInsightsVisibility(). Ya no hay tope de "maximo 2"
-                   (ver toggleInsight() en el JS) — las 4 vienen seleccionadas por defecto, el picker
-                   sigue sirviendo para ocultar cualquiera si el scroll se pone muy largo. -->
+                   "no llenar el dashboard de un monton de cosas y tabs". 2026-09-25: movio Active
+                   Workload By Recruiter y Submitted Vs Expected aca adentro, quito "Total
+                   Requisitions" del todo (redundante con Positions & Placements arriba), y
+                   despues quito TAMBIEN "Pipeline By Status" ("ya esta en el Gantt" — el Gantt ya
+                   codifica el status por color, y a diferencia de Pipeline By Status SI cubre
+                   Offer Request/Filled/On Hold en la misma vista con solo abrir la tarjeta
+                   "Positions"). Layout final: Active Workload sola a la izquierda (crece con
+                   cuantos reclutadores haya), Submitted Vs Expected + Position By Location
+                   apiladas a la derecha — ver #insightsWorkloadCard/#insightsStack y la logica de
+                   layout en applyInsightsVisibility(). Sin tope de "maximo N" (ver toggleInsight()
+                   en el JS) — las 3 vienen seleccionadas por defecto, el picker sigue sirviendo
+                   para ocultar cualquiera si el scroll se pone muy largo. -->
               <div class="panel" id="panelInsights" style="grid-column: span 6;">
                 <h3>Insights</h3>
                 <div class="panel-sub">Pick which charts to show here.</div>
                 <div class="gantt-scope-toggle" id="insightsPicker"></div>
                 <div class="insights-grid" id="insightsGrid">
-                  <div class="insights-left-stack" id="insightsLeftStack">
+                  <div class="insight-card" data-insight-key="workload" id="insightsWorkloadCard">
+                    <h3>Active Workload By Recruiter</h3>
+                    <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
+                    <div class="workload-grid" id="chartReclutador"></div>
+                  </div>
+                  <div class="insights-stack" id="insightsStack">
                     <div class="insight-card" data-insight-key="submitted">
                       <h3>Submitted Vs Expected</h3>
                       <div class="panel-sub">Submitted candidates vs how many should exist by today, based on each position's own intake date. Only counts positions whose intake has already happened — nothing to source before that.</div>
                       <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
-                    </div>
-                    <div class="insight-card" data-insight-key="estado">
-                      <h3>Pipeline By Status</h3>
-                      <div class="panel-sub">Every non-closed position, grouped by funnel stage — includes Offer Request, Filled, and On Hold, none of which count as "Active" elsewhere in this tracker.</div>
-                      <div class="funnel" id="chartEstado"></div>
                     </div>
                     <div class="insight-card" data-insight-key="location" id="panelPositionByLocation">
                       <h3>Position By Location/Work Arrangement</h3>
@@ -1555,11 +1557,6 @@
                         <div class="barlist" id="chartWorkArrangement"></div>
                       </div>
                     </div>
-                  </div>
-                  <div class="insight-card" data-insight-key="workload" id="insightsWorkloadCard">
-                    <h3>Active Workload By Recruiter</h3>
-                    <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
-                    <div class="workload-grid" id="chartReclutador"></div>
                   </div>
                 </div>
               </div>
@@ -3226,7 +3223,6 @@ function dashboardPositions(){
 function renderDashboardPanels(){
   renderPendingAssignments();
   renderKpis();
-  renderEstadoChart();
   renderReclutadorChart();
   renderHiredLocChart();
   renderSlaChart();
@@ -4949,32 +4945,34 @@ document.getElementById("ganttHintBtn").addEventListener("click", ()=>{
 
 // Insights (Nicolas, 2026-09-24, extendido 2026-09-25): picker de seleccion multiple que decide
 // cuales .insight-card se ven dentro de #insightsGrid. Las cards en si son HTML estatico (ver
-// panelInsights arriba) con sus propios ids de siempre (#chartEstado, #chartHiredLoc,
-// #chartWorkArrangement, #chartReclutador, #statBarSubmitted) — cada render*() las sigue llenando
-// exactamente igual que antes sin importar si estan visibles ahora mismo, asi que no hace falta
-// re-renderizar datos al togglear, solo mostrar/ocultar. "workload" y "location" viven en HTML en
-// lugares distintos del arbol (uno es hijo directo de #insightsGrid, los otros 3 viven dentro de
-// #insightsLeftStack para el layout "workload a la derecha, el resto apilado a la izquierda" que
-// Nicolas pidio) — el selector de abajo los encuentra a todos igual, sin importar el anidamiento.
+// panelInsights arriba) con sus propios ids de siempre (#chartHiredLoc, #chartWorkArrangement,
+// #chartReclutador, #statBarSubmitted) — cada render*() las sigue llenando exactamente igual que
+// antes sin importar si estan visibles ahora mismo, asi que no hace falta re-renderizar datos al
+// togglear, solo mostrar/ocultar. "workload" y "location" viven en HTML en lugares distintos del
+// arbol (uno es hijo directo de #insightsGrid, los otros viven dentro de #insightsStack para el
+// layout "workload sola a la izquierda, el resto apilado a la derecha" que Nicolas pidio) — el
+// selector de abajo los encuentra a todos igual, sin importar el anidamiento.
+// "Pipeline By Status" (key "estado") vivio aca un dia — Nicolas, 2026-09-25: "ya esta en el
+// Gantt... deberiamos quitarlo?" — de acuerdo (el Gantt ya codifica status por color y, abriendo
+// la tarjeta "Positions", cubre TODOS los status en una sola vista, cosa que Pipeline By Status
+// tambien hacia pero de forma redundante) — quitado del todo, no solo ocultado del picker.
 const INSIGHTS_DEFS = [
   {key:"workload", label:"Active Workload By Recruiter"},
   {key:"submitted", label:"Submitted Vs Expected"},
-  {key:"estado", label:"Pipeline By Status"},
   {key:"location", label:"Position By Location/Work Arrangement"},
 ];
-let INSIGHTS_SELECTED = INSIGHTS_DEFS.map(d=>d.key); // las 4 por defecto — "esas dos [workload,
-// submitted] deberian ser las principales, luego estan las otras que habiamos agregado" — todas
-// visibles de entrada, el picker sirve para ocultar cualquiera si el scroll se pone muy largo.
+let INSIGHTS_SELECTED = INSIGHTS_DEFS.map(d=>d.key); // las 3 por defecto, el picker sirve para
+// ocultar cualquiera si el scroll se pone muy largo.
 function applyInsightsVisibility(){
   document.querySelectorAll("#insightsGrid .insight-card").forEach(card=>{
     card.style.display = INSIGHTS_SELECTED.includes(card.dataset.insightKey) ? "" : "none";
   });
-  // #insightsLeftStack no puede depender de :empty (sus 3 cards siguen siendo hijos del DOM aunque
+  // #insightsStack no puede depender de :empty (sus cards siguen siendo hijos del DOM aunque
   // esten en display:none) — se oculta a mano si NINGUNA de ellas quedo visible, para no dejar un
-  // hueco vacio al lado de Active Workload cuando el usuario apago los 3 charts de la izquierda.
-  const leftStack = document.getElementById("insightsLeftStack");
-  const anyLeftVisible = [...leftStack.children].some(c=>c.style.display !== "none");
-  leftStack.style.display = anyLeftVisible ? "" : "none";
+  // hueco vacio al lado de Active Workload cuando el usuario apago los charts de la derecha.
+  const stack = document.getElementById("insightsStack");
+  const anyStackVisible = [...stack.children].some(c=>c.style.display !== "none");
+  stack.style.display = anyStackVisible ? "" : "none";
   const emptyNote = document.getElementById("insightsEmptyNote");
   if(INSIGHTS_SELECTED.length === 0){
     if(!emptyNote){
@@ -5159,37 +5157,6 @@ function renderBarlist(elId, rows, colorVar, onClickRow){
   }
 }
 
-// rows viene ordenado por STATUS_ORDER (etapa de kickoff primero), no por valor descendente —
-// a diferencia de un funnel real de conversion, un req puede llegar a cualquier etapa sin pasar
-// "de a uno" por las anteriores, y una etapa mas tardia puede perfectamente tener mas reqs que
-// una mas temprana. Por eso ya NO se muestran "% of top"/"advanced %" (implicaban una
-// conversion secuencial que no aplica aqui y daban numeros sin sentido, ej. "200% advanced")
-// — solo el conteo crudo por etapa. El fill se degrada de opacidad 1.0 en la primera fila a 0.35
-// en la ultima (puramente por posicion en la lista, no por valor) — no una paleta de N colores
-// fijos, para que funcione igual de bien con 2 etapas activas que con 8.
-function renderFunnel(elId, rows, onClickRow){
-  const top = rows[0]?.value || 1;
-  const n = rows.length;
-  const rowsHtml = rows.map((r,i)=>{
-    const opacity = n<=1 ? 1 : (1 - (i/(n-1))*0.65).toFixed(2);
-    return `
-    <div class="funnel-row${onClickRow?' clickable-stat':''}" data-idx="${i}">
-      <div class="funnel-label" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
-      <div class="funnel-track"><div class="funnel-fill" style="width:${(r.value/top*100).toFixed(1)}%; background:${gradientFill(`rgba(var(--brand-rgb),${opacity})`)};"></div></div>
-      <div class="funnel-stat">
-        <div class="funnel-value">${r.value}</div>
-        <div class="funnel-pct">position${r.value===1?"":"s"}</div>
-      </div>
-    </div>`;
-  }).join("");
-  document.getElementById(elId).innerHTML = rowsHtml;
-  if(onClickRow){
-    document.querySelectorAll(`#${elId} .funnel-row`).forEach((el,i)=>{
-      el.addEventListener("click", ()=>onClickRow(rows[+el.dataset.idx]));
-    });
-  }
-}
-
 // Reemplaza un relleno plano de barra por un degradado sutil del MISMO color (nunca un hue
 // nuevo) — Nicolas señalo que los charts se veian "planos, opacos, poco profesionales"; esto es
 // la version en CSS del mismo tratamiento que ya se le dio a los anillos (renderDonut, ver
@@ -5260,20 +5227,6 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
       el.addEventListener("click", ()=>onClickRow(rows[+el.dataset.idx]));
     });
   }
-}
-
-function renderEstadoChart(){
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
-  const stages = STATUS_ORDER.filter(s=>!TERMINAL.includes(s));
-  // key = status real (para filtrar/hacer match), label = statusLabel(key) (lo que se ve) — antes
-  // usaba el status crudo como label Y como llave a la vez, asi que "Intake Pending" se mostraba
-  // sin pasar por statusLabel() (se veia "Intake Pending" en vez de "Intake Held" en este chart
-  // especifico, encontrado en auditoria 2026-09-19).
-  const counts = stages.map(s=>({key:s, label:statusLabel(s), value: active.filter(p=>p.status===s).length})).filter(r=>r.value>0);
-  renderFunnel("chartEstado", counts, (row)=>{
-    openQuickList(row.label, `${row.value} position${row.value===1?"":"s"} in ${row.label}`,
-      active.filter(p=>p.status===row.key));
-  });
 }
 
 // Carga real ponderada por etapa (Playbook seccion 2.5): un req en Sourcing (esfuerzo maximo)
@@ -8929,7 +8882,6 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
   renderPositions();
   renderTracking();
   renderKpis();
-  renderEstadoChart();
   renderReclutadorChart();
   renderHiredLocChart();
   renderSlaChart();
