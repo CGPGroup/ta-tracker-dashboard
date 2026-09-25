@@ -517,10 +517,16 @@
   .gantt-cal-today-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--brand); z-index: 3; }
   .gantt-cal-today-label { position: absolute; top: -14px; font-size: 10px; font-weight: 700; color: var(--brand); transform: translateX(-50%); white-space: nowrap; }
   /* Nicolas, 2026-09-24: con muchos reqs (ej. 16 en Active Positions) la lista de filas hacia que
-     toda la pagina se volviera larguisima de scrolear — "deberia ser como la ventana de los
-     graficos la que se scrolea [internamente]". ~6 filas visibles (promedio real ~104px/fila,
-     algunas con linea extra de compensation/HM) antes de que el scroll interno entre en juego. */
-  .gantt-rows { position: relative; max-height: 630px; overflow-y: auto; }
+     toda la pagina se volviera larguisima de scrolear. Primer intento: scroll interno de altura
+     fija (~6 filas). 2026-09-26, reemplazado por paginacion real: "que se muestren 5 rows por
+     default, pero permitirle al usuario mostrar 10, 25 o 30" — ver ganttPageSize/pagedShown en
+     renderGanttGroup(). Sin max-height/scroll aca: la altura ahora la decide cuantas filas quepan
+     de verdad en la pagina actual, nunca un recorte fijo en pixeles.*/
+  .gantt-rows { position: relative; }
+  .gantt-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .gantt-pagination-note { font-size: 11px; color: var(--text-muted); }
+  .gantt-pagination-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .gantt-pagination-label select { font-family: inherit; font-size: 11.5px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
   /* Franja de color por reclutador al inicio de cada fila (Nicolas, 2026-09-25, con una captura
      de referencia) — mismo colorForName()/RECRUITER_COLOR_OVERRIDES que el resto de los tags de
      identidad, puesto por inline style en ganttRowHtml() (color dinamico, no puede vivir fijo en
@@ -572,23 +578,9 @@
     font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0;
   }
   .gantt-filter-clear:hover { color: var(--brand); }
-  /* Insights (Nicolas, 2026-09-24): "se deberian poder ver varios graficos, tal vez con una
-     opcion de maximo dos, y elegir cuales" — reemplaza la pestaña "Pipeline" separada. El picker
-     reusa el look de gantt-scope-toggle/btn (ver arriba) pero con seleccion MULTIPLE (hasta 2),
-     no un solo activo excluyente — ver toggleInsight()/INSIGHTS_SELECTED en el JS. Cada grafico
-     vive en su propia .insight-card, mas liviana que un .panel completo (sin su propio borde+
-     sombra) porque ya esta anidada dentro de uno (panelInsights). */
-  #insightsPicker { margin-bottom: 14px; display: inline-flex; flex-wrap: wrap; }
-  /* Layout pedido por Nicolas, 2026-09-25 (version final, tras quitar Pipeline By Status): Active
-     Workload By Recruiter sola a la izquierda (crece en alto con cuantos reclutadores haya), los
-     otros charts apilados en una sola columna a la derecha — no un grid parejo.
-     #insightsWorkloadCard y #insightsStack son los 2 unicos hijos directos de .insights-grid; el
-     orden en el DOM decide el orden visual (izquierda/derecha), no hace falta `order` en CSS. */
-  .insights-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
-  #insightsWorkloadCard { flex: 1 1 320px; min-width: 280px; }
-  .insights-stack { flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 16px; }
-  .insight-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
-  .insights-empty { font-size: 12.5px; color: var(--text-muted); padding: 12px 0; }
+  /* La vieja seccion "Insights" standalone (picker, .insights-grid, .insight-card, etc.) vivio
+     aca — movida dentro del propio Gantt 2026-09-26, ver renderGanttInsights() en el JS y
+     .gantt-insights-row/.gantt-mini-chart mas abajo. */
   .gantt-row-label { width: 220px; flex: none; padding-right: 8px; }
   .gantt-row-title { font-size: 11.5px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
   .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
@@ -947,10 +939,33 @@
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
   .workload-count { font-size: 10.5px; color: var(--text-muted); }
-  /* SLA compliance por reclutador (ver renderReclutadorChart()) — mismo .dot que el resto de la
+  /* SLA compliance por reclutador (ver renderGanttInsights()) — mismo .dot que el resto de la
      app, mismos 3 colores/umbrales que el donut de SLA Compliance, solo que aqui puntual por
      persona en vez de agregado para todo el equipo. */
   .workload-sla { display: flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; }
+  /* Version compacta de workload-card/barlist, solo para los mini-charts dentro del Gantt (ver
+     renderGanttInsights()) — Nicolas, 2026-09-26: "estan muy grandes en pixeles" sobre el tamaño
+     que tenian como tarjeta de Insights aparte; mas chico aca porque comparten espacio con 2
+     graficos mas, uno al lado del otro, en vez de tener todo el ancho del panel para si solas. */
+  .workload-card.compact { width: 76px; padding: 8px 6px; gap: 3px; }
+  .workload-card.compact .workload-avatar { width: 28px; height: 28px; font-size: 10.5px; }
+  .workload-card.compact .workload-name { font-size: 10px; }
+  .workload-card.compact .workload-count { font-size: 9.5px; }
+  .workload-card.compact .workload-sla { font-size: 9.5px; }
+  .barlist.compact { gap: 6px; }
+  .barlist.compact .barlist-row { grid-template-columns: 78px 1fr 26px; gap: 6px; }
+  .barlist.compact .barlist-label, .barlist.compact .barlist-value { font-size: 11px; }
+  /* Los 3 mini-charts que antes vivian en la tarjeta "Insights" aparte (Active Workload By
+     Recruiter, Submitted Vs Expected, Position By Location/Work Arrangement) — Nicolas, 2026-09-26:
+     "esto entonces para que los insights no sean como una tarjeta aparte sino que hagan parte de
+     los Gantts... cada reclutador o all, pero en el Gantt, y debe en lo mas bajo." Uno al lado del
+     otro (flex-wrap, nunca 3 tarjetas gigantes apiladas) al fondo de CUALQUIER Gantt abierto,
+     recalculados sobre el mismo conjunto de posiciones que ese Gantt ya esta mostrando (respeta el
+     filtro de Recruiter — "cada reclutador o all" es justo eso, ver renderGanttInsights()). */
+  .gantt-insights-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .gantt-mini-chart { flex: 1 1 260px; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .gantt-mini-title { font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+  .gantt-mini-sub { font-size: 10.5px; color: var(--text-muted); margin-bottom: 8px; }
 
   .stackbar-wrap { margin-bottom: 6px; }
   .stackbar-title { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
@@ -1220,7 +1235,12 @@
   /* Abierto desde el Gantt (openDetailModal(..., expanded=true)) — el mismo modal de siempre,
      mucho mas ancho, para que se sienta como una ventana de trabajo y no un popup angosto. */
   .modal-overlay.expanded { padding: 24px 20px; }
-  .modal-overlay.expanded .modal-card { max-width: min(1400px, 94vw); }
+  /* Nicolas, 2026-09-26 (viendo el modal del Gantt): "que se expanda mas de derecha a izquierda,
+     para que toda la info se vea sin tener que scrolear, pero que no sea un monstruo que ocupa de
+     borde a borde" — un poco mas ancho que antes (1400 -> 1600), pero el limite en vw (92%, antes
+     94%) deja un margen visible a los dos lados en pantallas grandes, nunca borde a borde. */
+  .modal-overlay.expanded .modal-card { max-width: min(1600px, 92vw); }
+  .modal-overlay.expanded .facts-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   @media (prefers-reduced-motion: reduce) {
     .modal-overlay, .modal-card { transition: none; }
   }
@@ -1548,53 +1568,18 @@
                 <div class="gantt-panel" id="ganttPanel"></div>
               </div>
               <!-- Nicolas, 2026-09-24: rechazo la pestaña "Pipeline" separada (y antes de eso, el
-                   panel de chips "Timelines by Recruiter & Role") por la misma razon de fondo —
-                   "no llenar el dashboard de un monton de cosas y tabs". 2026-09-25: movio Active
-                   Workload By Recruiter y Submitted Vs Expected aca adentro, quito "Total
-                   Requisitions" del todo (redundante con Positions & Placements arriba), y
-                   despues quito TAMBIEN "Pipeline By Status" ("ya esta en el Gantt" — el Gantt ya
-                   codifica el status por color, y a diferencia de Pipeline By Status SI cubre
-                   Offer Request/Filled/On Hold en la misma vista con solo abrir la tarjeta
-                   "Positions"). Layout final: Active Workload sola a la izquierda (crece con
-                   cuantos reclutadores haya), Submitted Vs Expected + Position By Location
-                   apiladas a la derecha — ver #insightsWorkloadCard/#insightsStack y la logica de
-                   layout en applyInsightsVisibility(). Sin tope de "maximo N" (ver toggleInsight()
-                   en el JS) — las 3 vienen seleccionadas por defecto, el picker sigue sirviendo
-                   para ocultar cualquiera si el scroll se pone muy largo. -->
-              <div class="panel" id="panelInsights" style="grid-column: span 6;">
-                <h3>Insights</h3>
-                <div class="panel-sub">Pick which charts to show here.</div>
-                <div class="gantt-scope-toggle" id="insightsPicker"></div>
-                <div class="insights-grid" id="insightsGrid">
-                  <div class="insight-card" data-insight-key="workload" id="insightsWorkloadCard">
-                    <h3>Active Workload By Recruiter</h3>
-                    <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
-                    <div class="workload-grid" id="chartReclutador"></div>
-                  </div>
-                  <div class="insights-stack" id="insightsStack">
-                    <div class="insight-card" data-insight-key="submitted">
-                      <h3>Submitted Vs Expected</h3>
-                      <div class="panel-sub">Submitted candidates vs how many should exist by today, based on each position's own intake date. Only counts positions whose intake has already happened — nothing to source before that.</div>
-                      <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
-                    </div>
-                    <div class="insight-card" data-insight-key="location" id="panelPositionByLocation">
-                      <h3>Position By Location/Work Arrangement</h3>
-                      <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
-                      <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
-                      <div class="barlist" id="chartHiredLoc"></div>
-                      <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
-                        <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
-                        <div class="barlist" id="chartWorkArrangement"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                   panel de chips "Timelines by Recruiter & Role") y, 2026-09-25, tambien la tarjeta
+                   "Insights" aparte que la reemplazo — "para que los insights no sean como una
+                   tarjeta aparte sino que hagan parte de los Gantts... cada reclutador o all, pero
+                   en el Gantt, y debe en lo mas bajo" (2026-09-26). Los 3 mini-charts (Active
+                   Workload By Recruiter, Submitted Vs Expected, Position By Location/Work
+                   Arrangement) ahora viven al fondo de CUALQUIER Gantt abierto — ver
+                   renderGanttInsights() — recalculados sobre lo que ese Gantt ya esta mostrando
+                   (respeta el filtro de Recruiter). Nada vive aca afuera del Gantt ya. -->
               <!-- Average Time To Submit es el equivalente de Active Workload By Recruiter para tu
                    PROPIO workspace individual (Active Workload solo tiene sentido comparando entre
-                   varios reclutadores a la vez, por eso vive adentro de Insights, que ya es
-                   team-only — ver setDashboardScope()). A todo lo ancho porque ahora es lo unico
-                   que ocupa este puesto (antes compartia fila con Total Requisitions). -->
+                   varios reclutadores a la vez, por eso ahora vive dentro del Gantt, que ya es
+                   team-only — ver setDashboardScope()). -->
               <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 6;">
                 <h3>Average Time To Submit</h3>
                 <div class="panel-sub">Your average TTS across active positions still waiting on their first submission batch, vs the 9 business day target — business days since the intake meeting, never the Kickoff.</div>
@@ -3294,8 +3279,6 @@ function dashboardPositions(){
 function renderDashboardPanels(){
   renderPendingAssignments();
   renderKpis();
-  renderReclutadorChart();
-  renderHiredLocChart();
   renderSlaChart();
   renderSlaMeter();
   renderCompletionChart();
@@ -3503,13 +3486,11 @@ function setDashboardScope(name, opts){
   activeDashboardScope = name;
   activeDashboardReadOnly = readOnly && name !== MY_RECRUITER_NAME;
   document.getElementById("navItemTracking").style.display = (name && !activeDashboardReadOnly) ? "" : "none";
-  // Insights (Pipeline By Status, Position By Location/Work Arrangement, Active Workload By
-  // Recruiter, Submitted Vs Expected — antes su propia pestaña "Pipeline") es una vista de
-  // equipo — no le sirve de nada a un solo reclutador viendo unicamente sus propias posiciones,
-  // y Active Workload especificamente solo tiene sentido comparando entre varios reclutadores a
-  // la vez. Este UN toggle ya cubre las 4 (todas viven dentro de panelInsights ahora), a
-  // diferencia de antes que necesitaba su propia linea aparte para panelWorkloadByRecruiter.
-  document.getElementById("panelInsights").style.display = name ? "none" : "";
+  // Los mini-charts que antes vivian en la tarjeta "Insights" aparte (team-only) ahora viven
+  // DENTRO del Gantt (ver renderGanttInsights()), que ya existe en cualquier workspace — no hace
+  // falta un toggle de visibilidad aparte aca. En tu propio workspace, dashboardPositions() ya te
+  // deja viendo solo tus propias reqs, asi que Active Workload simplemente muestra tu propia
+  // tarjeta (correcto, no un bug) en vez de comparar contra otros reclutadores.
   updateManageNavVisibility();
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   // Positions es intencionalmente el directorio COMPLETO para cualquiera, admin o no — es el
@@ -4475,6 +4456,13 @@ let ganttScope = "all";
 // que se abre un grupo nuevo (toggleGanttPanel), igual que ganttScope arriba.
 let ganttRecruiterFilter = null;
 let ganttRoleFilter = null;
+// Nicolas, 2026-09-26: "en el Gantt se muestren 5 rows por default, pero añadir... permitirle al
+// usuario mostrar 10, 25 o 30 max" — reemplaza el scroll interno de altura fija (#ganttRows
+// max-height) por una paginacion real: solo las primeras ganttPageSize filas de `shown` se
+// dibujan, el resto ni siquiera entra al DOM. Se resetea a 5 en cada toggleGanttPanel() nuevo,
+// igual que los demas filtros — cambiar de tarjeta no deberia heredar "mostrar 30" de la anterior.
+let ganttPageSize = 5;
+const GANTT_PAGE_SIZES = [5, 10, 25, 30];
 
 function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
 function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
@@ -4867,6 +4855,114 @@ function ganttRowHtml(p, cal){
   </div>`;
 }
 
+// Los 3 mini-charts que antes eran la tarjeta "Insights" aparte — ver el comentario de CSS junto
+// a .gantt-insights-row. `positions` ya llega recortado por ganttRecruiterFilter/ganttRoleFilter
+// (el mismo array `data` que arma las filas del Gantt), asi que "cada reclutador o all" sale
+// gratis: si el Gantt esta filtrado a un solo reclutador, Active Workload naturalmente muestra
+// solo su tarjeta. Nunca usa dashboardPositions()/RECRUITERS globales — todo sale de lo que YA se
+// esta viendo en este Gantt especifico.
+function renderGanttInsights(containerId, positions){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  const active = positions.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
+
+  const recruiterNames = [...new Set(positions.map(p=>p.recruiter).filter(Boolean))].sort();
+  const workloadRows = recruiterNames.map(r=>{
+    const assigned = active.filter(p=>p.recruiter===r);
+    const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
+    return {label:r, count: assigned.length, value: Math.round(weighted*10)/10, slaRate: recruiterSlaRate(assigned)};
+  }).sort((a,b)=>b.value-a.value);
+  const workloadCardsHtml = workloadRows.map(r=>{
+    const photo = RECRUITER_PHOTOS[r.label];
+    const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
+    const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
+    const slaHtml = r.slaRate === null ? "" : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
+    return `<div class="workload-card compact clickable-stat" data-label="${escapeHtml(r.label)}" title="Open ${escapeHtml(r.label)}'s dashboard">
+      <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
+      <div class="workload-name" title="${escapeHtml(r.label)}">${recruiterDotHtml(r.label)}${escapeHtml(r.label)}</div>
+      <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.value))};"></div></div>
+      <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
+      ${slaHtml}
+    </div>`;
+  }).join("");
+
+  // Submitted Vs Expected — "active" arriba ya excluye TERMINAL y NOT_ACTIVELY_WORKED (Offer
+  // Request incluido), asi que "hasta Offer Request, no mas alla" ya estaba bien calculado; solo
+  // faltaba decirlo explicito en el subtitulo (Nicolas: "hay que explicar que es para posiciones
+  // que ya pasaron la etapa de intake meeting y no han llegado a offer stage").
+  const sourcingStarted = active.filter(p=> !!parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake));
+  const submittedTotal = sourcingStarted.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
+  const minExpected = Math.round(sourcingStarted.reduce((sum,p)=> sum + expectedSubmittedForPosition(p), 0));
+  const ratio = minExpected>0 ? submittedTotal/minExpected : null;
+  const barColor = ratio===null ? "var(--grid)" : ratio>=1 ? "var(--good)" : ratio>=0.5 ? "var(--warning)" : "var(--critical)";
+  const barWidthPct = ratio===null ? 0 : Math.min(100, Math.round(ratio*100));
+  const displayPct = ratio===null ? "-" : Math.round(ratio*100)+"%";
+
+  const byCountry = {};
+  active.forEach(p=>{
+    (countryList(p).length ? countryList(p) : ["Unknown"]).forEach(c=>{ byCountry[c] = (byCountry[c]||0)+1; });
+  });
+  const countryRows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
+  const byArrangement = {"Remote":0,"Hybrid":0,"On-site":0};
+  active.forEach(p=>{ const arr = p.workArrangement || "Remote"; byArrangement[arr]=(byArrangement[arr]||0)+1; });
+  const arrRows = Object.entries(byArrangement).filter(([,v])=>v>0).map(([label,value])=>({label,value}));
+
+  container.innerHTML = `
+    <div class="gantt-insights-row">
+      <div class="gantt-mini-chart">
+        <div class="gantt-mini-title">Active Workload By Recruiter</div>
+        <div class="workload-grid compact">${workloadCardsHtml || `<span class="panel-sub" style="margin:0;">No recruiters in this view.</span>`}</div>
+      </div>
+      <div class="gantt-mini-chart">
+        <div class="gantt-mini-title">Submitted Vs Expected</div>
+        <div class="gantt-mini-sub">Only positions where intake has already happened and that haven't reached Offer Request yet.</div>
+        <div class="funnel-row${sourcingStarted.length>0 ? " clickable-stat" : ""}" id="ganttSubmittedRow">
+          <div class="funnel-label">Candidates Submitted</div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${gradientFill(barColor)};"></div></div>
+          <div class="funnel-stat">
+            <div class="funnel-value">${submittedTotal} / ${minExpected}</div>
+            <div class="funnel-pct">${displayPct} of expected to date</div>
+          </div>
+        </div>
+      </div>
+      <div class="gantt-mini-chart">
+        <div class="gantt-mini-title">Position By Location/Work Arrangement</div>
+        <div style="font-size:10.5px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">BY COUNTRY</div>
+        <div class="barlist compact" id="ganttByCountry">${countryRows.length ? countryRows.map((r,i)=>{
+          const max = countryRows[0].value||1;
+          return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div><div class="barlist-value">${r.value}</div></div>`;
+        }).join("") : `<span class="panel-sub" style="margin:0;">No active positions.</span>`}</div>
+        <div style="font-size:10.5px; font-weight:600; color:var(--text-secondary); margin:8px 0 6px;">BY ARRANGEMENT</div>
+        <div class="barlist compact" id="ganttByArrangement">${arrRows.map((r,i)=>{
+          const max = Math.max(...arrRows.map(x=>x.value),1);
+          const color = ARRANGEMENT_COLORS[r.label] || "var(--neutral)";
+          return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill(color)};"></div></div><div class="barlist-value">${r.value}</div></div>`;
+        }).join("")}</div>
+      </div>
+    </div>
+  `;
+  container.querySelectorAll(".workload-card").forEach(el=>{
+    el.addEventListener("click", ()=> viewRecruiterDashboard(el.dataset.label));
+  });
+  if(sourcingStarted.length>0){
+    document.getElementById("ganttSubmittedRow")?.addEventListener("click", ()=>{
+      openQuickList("Submitted Vs Expected", `${submittedTotal} submitted · expected at least ${minExpected} to date across ${sourcingStarted.length} position${sourcingStarted.length===1?"":"s"} (intake already held)`, sourcingStarted);
+    });
+  }
+  container.querySelectorAll("#ganttByCountry .barlist-row").forEach((el,i)=>{
+    el.addEventListener("click", ()=>{
+      const row = countryRows[i];
+      openQuickList(row.label, `${row.value} position${row.value===1?"":"s"}`, active.filter(p=>(countryList(p).length?countryList(p):["Unknown"]).includes(row.label)));
+    });
+  });
+  container.querySelectorAll("#ganttByArrangement .barlist-row").forEach((el,i)=>{
+    el.addEventListener("click", ()=>{
+      const row = arrRows[i];
+      openQuickList(row.label, `${row.value} position${row.value===1?"":"s"}`, active.filter(p=>(p.workArrangement||"Remote")===row.label));
+    });
+  });
+}
+
 // Nicolas, 2026-09-24 (rechazando la primera version, un panel de chips separado abajo del
 // Gantt): "era mas que le pusieras como filtros al gantt, pero dentro del gantt... algo
 // elegante y profesional, no la tipica lista desplegable". Recruiter y Role ahora filtran EN
@@ -4890,6 +4986,7 @@ function renderGanttGroup(key){
   if(ganttRoleFilter) data = data.filter(p=>p.title===ganttRoleFilter);
   const win = ganttScopeWindow(ganttScope, data);
   const shown = ganttScope === "all" ? data : data.filter(p=> ganttInWindow(p, win.start, win.end));
+  const pagedShown = shown.slice(0, ganttPageSize);
   const cal = ganttBuildCalendar(win);
   const hiddenCount = data.length - shown.length;
   const filtersActive = !!(ganttRecruiterFilter || ganttRoleFilter);
@@ -4945,10 +5042,20 @@ function renderGanttGroup(key){
     <div class="gantt-calendar">
       <div class="gantt-cal-gridlines" id="ganttGridlines"></div>
       <div class="gantt-cal-axis" id="ganttAxis"></div>
-      <div class="gantt-rows" id="ganttRows">${shown.length ? shown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
+      <div class="gantt-rows" id="ganttRows">${pagedShown.length ? pagedShown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
     </div>
+    ${shown.length ? `<div class="gantt-pagination">
+      <span class="gantt-pagination-note">Showing ${pagedShown.length} of ${shown.length} requisition${shown.length===1?"":"s"}</span>
+      <label class="gantt-pagination-label">Show <select id="ganttPageSizeSelect">${GANTT_PAGE_SIZES.map(n=>`<option value="${n}" ${n===ganttPageSize?"selected":""}>${n}</option>`).join("")}</select></label>
+    </div>` : ""}
+    <div id="ganttInsightsContainer"></div>
   `;
   ganttRenderAxis(cal, ganttScope === "recent" ? "week" : "month");
+  renderGanttInsights("ganttInsightsContainer", data);
+  document.getElementById("ganttPageSizeSelect")?.addEventListener("change", (e)=>{
+    ganttPageSize = Number(e.target.value) || 5;
+    renderGanttGroup(key);
+  });
   panelEl.querySelectorAll("#ganttScopeToggle .gantt-scope-btn").forEach(btn=>{
     btn.classList.toggle("active", btn.dataset.scope === ganttScope);
     btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
@@ -5031,6 +5138,7 @@ function toggleGanttPanel(key, label, positions){
   ganttScope = "all";
   ganttRecruiterFilter = null;
   ganttRoleFilter = null;
+  ganttPageSize = 5;
   panelEl.classList.add("show");
   renderGanttGroup(key);
   syncGanttOpenStatClass();
@@ -5047,67 +5155,6 @@ function syncGanttOpenStatClass(){
     el.classList.toggle("ps-stat-open", el.dataset.key === ganttOpenKey);
   });
 }
-// Insights (Nicolas, 2026-09-24, extendido 2026-09-25): picker de seleccion multiple que decide
-// cuales .insight-card se ven dentro de #insightsGrid. Las cards en si son HTML estatico (ver
-// panelInsights arriba) con sus propios ids de siempre (#chartHiredLoc, #chartWorkArrangement,
-// #chartReclutador, #statBarSubmitted) — cada render*() las sigue llenando exactamente igual que
-// antes sin importar si estan visibles ahora mismo, asi que no hace falta re-renderizar datos al
-// togglear, solo mostrar/ocultar. "workload" y "location" viven en HTML en lugares distintos del
-// arbol (uno es hijo directo de #insightsGrid, los otros viven dentro de #insightsStack para el
-// layout "workload sola a la izquierda, el resto apilado a la derecha" que Nicolas pidio) — el
-// selector de abajo los encuentra a todos igual, sin importar el anidamiento.
-// "Pipeline By Status" (key "estado") vivio aca un dia — Nicolas, 2026-09-25: "ya esta en el
-// Gantt... deberiamos quitarlo?" — de acuerdo (el Gantt ya codifica status por color y, abriendo
-// la tarjeta "Positions", cubre TODOS los status en una sola vista, cosa que Pipeline By Status
-// tambien hacia pero de forma redundante) — quitado del todo, no solo ocultado del picker.
-const INSIGHTS_DEFS = [
-  {key:"workload", label:"Active Workload By Recruiter"},
-  {key:"submitted", label:"Submitted Vs Expected"},
-  {key:"location", label:"Position By Location/Work Arrangement"},
-];
-let INSIGHTS_SELECTED = INSIGHTS_DEFS.map(d=>d.key); // las 3 por defecto, el picker sirve para
-// ocultar cualquiera si el scroll se pone muy largo.
-function applyInsightsVisibility(){
-  document.querySelectorAll("#insightsGrid .insight-card").forEach(card=>{
-    card.style.display = INSIGHTS_SELECTED.includes(card.dataset.insightKey) ? "" : "none";
-  });
-  // #insightsStack no puede depender de :empty (sus cards siguen siendo hijos del DOM aunque
-  // esten en display:none) — se oculta a mano si NINGUNA de ellas quedo visible, para no dejar un
-  // hueco vacio al lado de Active Workload cuando el usuario apago los charts de la derecha.
-  const stack = document.getElementById("insightsStack");
-  const anyStackVisible = [...stack.children].some(c=>c.style.display !== "none");
-  stack.style.display = anyStackVisible ? "" : "none";
-  const emptyNote = document.getElementById("insightsEmptyNote");
-  if(INSIGHTS_SELECTED.length === 0){
-    if(!emptyNote){
-      document.getElementById("insightsGrid").insertAdjacentHTML("afterend",
-        `<div class="insights-empty" id="insightsEmptyNote">Pick a chart above to see it here.</div>`);
-    }
-  } else if(emptyNote){
-    emptyNote.remove();
-  }
-}
-function renderInsightsPicker(){
-  document.getElementById("insightsPicker").innerHTML = INSIGHTS_DEFS.map(d=>
-    `<button type="button" class="gantt-scope-btn${INSIGHTS_SELECTED.includes(d.key)?" active":""}" data-insight-toggle="${escapeHtml(d.key)}">${escapeHtml(d.label)}</button>`
-  ).join("");
-  document.querySelectorAll("#insightsPicker [data-insight-toggle]").forEach(btn=>{
-    btn.addEventListener("click", ()=> toggleInsight(btn.dataset.insightToggle));
-  });
-}
-// Ya no hay tope de "maximo 2" (ese limite tenia sentido cuando solo existian 2 charts; con las 4
-// de ahora Nicolas las quiere todas visibles por defecto, en su propio layout de 2 columnas — ver
-// CSS de .insights-grid). Deseleccionar hasta 0 esta permitido (ver insights-empty arriba).
-function toggleInsight(key){
-  const idx = INSIGHTS_SELECTED.indexOf(key);
-  if(idx >= 0) INSIGHTS_SELECTED.splice(idx, 1);
-  else INSIGHTS_SELECTED.push(key);
-  renderInsightsPicker();
-  applyInsightsVisibility();
-}
-renderInsightsPicker();
-applyInsightsVisibility();
-
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
@@ -5202,68 +5249,12 @@ function renderKpis(){
   allStats.forEach(s=> GANTT_DATA[s.key] = {label:s.label, positions:s.positions});
   if(ganttOpenKey) renderGanttGroup(ganttOpenKey);
 
-  // "Total Requisitions" (donut redundante con la tarjeta de Positions & Placements de arriba,
-  // que ya desglosa el mismo total) vivia aca — quitado 2026-09-25 a pedido de Nicolas: "eso ya
-  // esta super redundante ahi... no sirve de nada porque ya lo tenemos en la caja de arriba con
-  // el Gantt."
-
-  // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
-  // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
-  // pipeline de submissions: con batches de 3 a 5 candidatos por posicion (promedio 3.5, regla
-  // de Nicolas), cada posicion deberia tener un PISO acumulado de candidatos submitted.
-  // Es un minimo, no un rango, mas submitted nunca es malo. Por debajo del minimo es señal
-  // real de under-sourcing agregado (complementa, no reemplaza, el TTS por posicion).
-  // BUG REAL encontrado 2026-09-19 (Nicolas: "deberia mostrar el numero pero hasta la fecha...
-  // los reqs que ya deberian estar submitidos"): el "expected" viejo era `active.length * 3.5`
-  // plano — contaba TODAS las posiciones activas por igual, incluida una que tuvo su Kickoff
-  // ayer (el TTS ni siquiera ha arrancado, no hay forma de que ya tenga candidatos) e incluia
-  // Filled/On Hold (que ya no necesitan mas candidatos, ver NOT_ACTIVELY_WORKED). Ahora cada
-  // posicion aporta su propio expected segun cuanto tiempo REAL ha pasado desde su intake
-  // meeting (mismo TTS que ya usa el resto del tracker): 0 mientras el intake no ha pasado o
-  // sigue dentro de la ventana del primer batch (9 dias habiles), 3.5 una vez se cumple esa
-  // ventana, +3.5 mas por cada ciclo de 5 dias habiles adicionales (el mismo ritmo de follow-up
-  // batches que ya describe el guidance de Sourcing) — asi que el numero de arriba ahora es
-  // literalmente "cuantos candidatos deberian existir A ESTA FECHA", no un promedio parejo.
-  // BUG REAL #2 encontrado 2026-09-19 (Nicolas: "para los de data science, architect y engineer
-  // no se ha tenido el intake meeting, entonces por que deberia contarlos, si hasta que se hace
-  // el intake meeting es que se comienza a hacer sourcing") — workingPositions incluia posiciones
-  // que ni siquiera han tenido su intake meeting todavia (Kickoff/Intake Meeting Requested), asi
-  // que aparecian en la cuenta de posiciones y en el quick-list de este chart aunque no tengan
-  // NADA que ver con sourcing/submission todavia — su expected ya daba 0 (matematicamente no
-  // cambiaba el numero), pero seguian ahi como ruido visual, mezcladas con las que SI ya estan
-  // sourcing. Ahora se filtran fuera del todo para este chart especifico — una posicion en
-  // Sourcing que apenas lleva pocos dias (ej. Full Stack Developer) SI sigue apareciendo con 0
-  // esperado (esa si es informacion real: "todavia esta dentro de la ventana, no esta atrasada"),
-  // la diferencia es exclusivamente "ya tuvo intake o no".
-  const workingPositions = active.filter(p=>!NOT_ACTIVELY_WORKED.includes(p.status));
-  const sourcingStarted = workingPositions.filter(p=> !!parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake));
-  const submittedTotal = sourcingStarted.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
-  const minExpected = Math.round(sourcingStarted.reduce((sum,p)=> sum + expectedSubmittedForPosition(p), 0));
-  // Barra en vez de anillo (mismo .funnel-row/.funnel-track ya usado en Active Pipeline By
-  // Status) — Nicolas la queria como las barras de KeyStone, no como un anillo. El color pasa
-  // por 3 tramos segun que tan lejos esta del minimo esperado (no solo bueno/malo binario):
-  // rojo si va menos de la mitad del camino, naranja si va encaminado pero no ha llegado,
-  // verde si ya alcanzo o supero el minimo. El ancho de la barra SI se topa en 100% (una barra
-  // que se sale de su contenedor se ve rota), pero el numero de arriba muestra el % real sin
-  // topar — pasarse del minimo es bueno, no hay razon para esconderlo.
-  const ratio = minExpected>0 ? submittedTotal/minExpected : null;
-  const barColor = ratio===null ? "var(--grid)" : ratio>=1 ? "var(--good)" : ratio>=0.5 ? "var(--warning)" : "var(--critical)";
-  const barWidthPct = ratio===null ? 0 : Math.min(100, Math.round(ratio*100));
-  const displayPct = ratio===null ? "-" : Math.round(ratio*100)+"%";
-  document.getElementById("statBarSubmitted").innerHTML = `
-    <div class="funnel-row${sourcingStarted.length>0 ? " clickable-stat" : ""}">
-      <div class="funnel-label">Candidates Submitted</div>
-      <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${gradientFill(barColor)};"></div></div>
-      <div class="funnel-stat">
-        <div class="funnel-value">${submittedTotal} / ${minExpected}</div>
-        <div class="funnel-pct">${displayPct} of expected to date</div>
-      </div>
-    </div>`;
-  if(sourcingStarted.length>0){
-    document.querySelector("#statBarSubmitted .funnel-row").addEventListener("click", ()=>{
-      openQuickList("Submitted Vs Expected", `${submittedTotal} submitted &middot; expected at least ${minExpected} to date across ${sourcingStarted.length} position${sourcingStarted.length===1?"":"s"} (intake already held)`, sourcingStarted);
-    });
-  }
+  // "Total Requisitions" (quitado 2026-09-25, redundante con la tarjeta de arriba) y "Submitted
+  // Vs Expected"/"Active Workload By Recruiter" (quitados 2026-09-26, ahora viven DENTRO del
+  // Gantt — ver renderGanttInsights(), llamada desde renderGanttGroup() en cada refresh) vivian
+  // aca. La logica de "expected" real (nunca un promedio plano, cada posicion aporta segun su
+  // propio tiempo transcurrido desde el intake — ver expectedSubmittedForPosition()) y el fix de
+  // "solo cuenta si ya tuvo intake" no se perdieron, solo se movieron adentro de esa funcion.
 }
 
 function renderBarlist(elId, rows, colorVar, onClickRow){
@@ -5397,44 +5388,8 @@ function slaRateColor(rate){
   if(rate < 90) return "var(--warning)";
   return "var(--good)";
 }
-function renderReclutadorChart(){
-  // Bug real (Nicolas, 2026-09-23): "a David le salen unas de full stack que estan on hold... en
-  // sus reqs activas" — este chart solo excluia TERMINAL, nunca NOT_ACTIVELY_WORKED (On Hold,
-  // Filled, Offer Request), asi que un req pausado seguia sumando carga y apareciendo como
-  // "activo" en la tarjeta del reclutador. Misma fuente de verdad que Active Positions.
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
-  const rows = RECRUITERS.map(r=>{
-    const assigned = active.filter(p=>p.recruiter===r);
-    const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
-    return {label:r, count: assigned.length, value: Math.round(weighted * 10) / 10, slaRate: recruiterSlaRate(assigned)};
-  }).sort((a,b)=>b.value-a.value);
-  document.getElementById("chartReclutador").innerHTML = rows.map(r=>{
-    const photo = RECRUITER_PHOTOS[r.label];
-    const jobTitle = RECRUITER_TITLES[r.label] || "";
-    const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
-    const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
-    const slaHtml = r.slaRate === null ? "" : `
-      <div class="workload-sla" style="color:${slaRateColor(r.slaRate)};">
-        <span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA
-      </div>`;
-    return `
-    <div class="workload-card clickable-stat" data-label="${escapeHtml(r.label)}" title="Open ${escapeHtml(r.label)}'s dashboard">
-      <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
-      <div class="workload-name" title="${escapeHtml(r.label)}">${recruiterDotHtml(r.label)}${escapeHtml(r.label)}</div>
-      ${jobTitle ? `<div class="workload-title">${escapeHtml(jobTitle)}</div>` : ""}
-      <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.value))};"></div></div>
-      <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
-      ${slaHtml}
-    </div>`;
-  }).join("");
-  // Clic en una tarjeta te lleva al Dashboard de ESE reclutador (solo lectura) — no a su
-  // Workspace. Workspace es la herramienta de trabajo del reclutador (edicion + Tracking);
-  // Dashboard es solo sus KPIs/metricas, que cualquiera puede mirar (igual que Positions ya
-  // esta abierto a todos). Ver viewRecruiterDashboard().
-  document.querySelectorAll("#chartReclutador .workload-card").forEach(el=>{
-    el.addEventListener("click", ()=> viewRecruiterDashboard(el.dataset.label));
-  });
-}
+// renderReclutadorChart() (Active Workload By Recruiter) vivio aca — movida a
+// renderGanttInsights() 2026-09-26, ver el comentario junto a esa funcion.
 
 // ======================= SCORECARD (EOS) =======================
 // Nicolas, 2026-09-25: "me gustaria hacer una seccion de scorecards... basar esto tambien en la
@@ -5583,72 +5538,13 @@ async function saveScorecardGoal(recruiterName, measureKey, rawValue){
   }
 }
 
-function renderHiredLocChart(){
-  // Mismo fix que renderReclutadorChart() (2026-09-23): el texto de este panel dice "X active
-  // position(s)" — tenia que excluir NOT_ACTIVELY_WORKED tambien, no solo TERMINAL, para que ese
-  // texto sea cierto.
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
-  // Por pais individual, no por el valor crudo del campo — un req que cubre US+Canada a la vez
-  // cuenta en las dos barras, no en una tercera categoria compuesta "United States, Canada".
-  // El total de las barras puede superar el total de posiciones activas, y esta bien: es una
-  // cuenta de pertenencia (membership), no una particion.
-  const byCountry = {};
-  active.forEach(p=>{
-    const countries = countryList(p).length ? countryList(p) : ["Unknown"];
-    countries.forEach(country=>{ byCountry[country] = (byCountry[country] || 0) + 1; });
-  });
-  const rows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
-  // Antes un donut de 70px con leyenda al lado — con 4-5 paises distintos y uno dominante (ej.
-  // Canada 8, el resto en 1), un donut asi apenas se lee (una rebanada gigante + astillas) y
-  // desentonaba con BY ARRANGEMENT justo debajo, que ya es un barlist. Mismo tratamiento que
-  // BY ARRANGEMENT para que las dos mitades del panel se vean consistentes.
-  document.getElementById("chartHiredLoc").innerHTML = rows.length ? rows.map((r,i)=>{
-    const max = rows[0].value || 1;
-    return `
-    <div class="barlist-row clickable-stat" data-idx="${i}">
-      <div class="barlist-label">${escapeHtml(r.label)}</div>
-      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div>
-      <div class="barlist-value">${r.value}</div>
-    </div>`;
-  }).join("") : `<div class="panel-sub" style="margin:0;">No active positions.</div>`;
-  document.querySelectorAll("#chartHiredLoc .barlist-row").forEach((el,i)=>{
-    el.addEventListener("click", ()=>{
-      const row = rows[i];
-      openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
-        active.filter(p=>(countryList(p).length ? countryList(p) : ["Unknown"]).includes(row.label)));
-    });
-  });
-
-  const byArrangement = { "Remote": 0, "Hybrid": 0, "On-site": 0 };
-  active.forEach(p=>{
-    const arr = p.workArrangement || "Remote";
-    byArrangement[arr] = (byArrangement[arr] || 0) + 1;
-  });
-  const arrRows = Object.entries(byArrangement)
-    .filter(([,v])=>v>0)
-    .map(([label,value])=>({label,value}));
-  document.getElementById("chartWorkArrangement").innerHTML = arrRows.length ? arrRows.map((r,i)=>{
-    const max = Math.max(...arrRows.map(x=>x.value), 1);
-    const color = ARRANGEMENT_COLORS[r.label] || "var(--neutral)";
-    return `
-    <div class="barlist-row clickable-stat" data-idx="${i}">
-      <div class="barlist-label">${escapeHtml(r.label)}</div>
-      <div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill(color)};"></div></div>
-      <div class="barlist-value">${r.value}</div>
-    </div>`;
-  }).join("") : `<div class="panel-sub" style="margin:0;">No active positions.</div>`;
-  document.querySelectorAll("#chartWorkArrangement .barlist-row").forEach((el,i)=>{
-    el.addEventListener("click", ()=>{
-      const row = arrRows[i];
-      openQuickList(row.label, `${row.value} active position${row.value===1?"":"s"}`,
-        active.filter(p=>(p.workArrangement||"Remote")===row.label));
-    });
-  });
-}
+// renderHiredLocChart() (Position By Location/Work Arrangement) vivio aca — movida a
+// renderGanttInsights() 2026-09-26, ver el comentario junto a esa funcion.
 
 function renderSlaChart(){
-  // Mismo fix que renderReclutadorChart()/renderHiredLocChart() (2026-09-23) — este panel dice
-  // "out of X active" en su propio texto, tenia que excluir NOT_ACTIVELY_WORKED tambien.
+  // Mismo fix que renderReclutadorChart()/renderHiredLocChart() de 2026-09-23 (ver
+  // renderGanttInsights(), donde vive esa logica ahora) — este panel dice "out of X active" en
+  // su propio texto, tenia que excluir NOT_ACTIVELY_WORKED tambien.
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
   const metrics = [
     {key:"TTS", label:"Time To Submit (TTS)", tag:"official", tagLabel:"Official SLA"},
@@ -5695,7 +5591,7 @@ function renderSlaChart(){
 // mostrar rendimiento del libro completo sin exponer numeros crudos de conversion de
 // candidatos (eso fue lo que preocupo a Nicolas de "Candidate Pipeline Totals").
 function renderSlaMeter(){
-  // Mismo fix de 2026-09-23 que el resto de paneles de "active" — ver renderReclutadorChart().
+  // Mismo fix de 2026-09-23 que el resto de paneles de "active" — ver renderGanttInsights().
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
   // Sin posiciones activas no hay nada que medir todavia; mostrar "100%" ahi se leeria como
   // un logro real en vez de "no hay datos", asi que este caso se muestra aparte, en gris.
@@ -9186,8 +9082,6 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
   renderPositions();
   renderTracking();
   renderKpis();
-  renderReclutadorChart();
-  renderHiredLocChart();
   renderSlaChart();
   renderSlaMeter();
   // Restaura el "Up Next" que confirmNextStepDone() ya mostraba (ver ahi) — el Confirm & Advance
@@ -9580,7 +9474,7 @@ function goToDashboard(name, opts){
 }
 document.getElementById("navWorkspaceTeamBtn").addEventListener("click", ()=> goToDashboard(null));
 document.getElementById("navWorkspaceMineBtn").addEventListener("click", ()=> goToDashboard(MY_RECRUITER_NAME));
-// Clic en una tarjeta de "Active Workload By Recruiter" (Team) — ver renderReclutadorChart().
+// Clic en una tarjeta de "Active Workload By Recruiter" (Team) — ver renderGanttInsights().
 // A diferencia de "My Workspace", esto SI puede apuntar al nombre de otro reclutador: es su
 // Dashboard (KPIs/metricas), no su Workspace (edicion + Tracking, protegido en
 // setDashboardScope). Si le das a tu propia tarjeta, esto termina siendo identico a "My
@@ -9698,7 +9592,7 @@ function updateNewPosCapacityHint(){
   if(!hint) return;
   const name = document.getElementById("newPosRecruiter").value;
   if(!name){ hint.textContent = ""; return; }
-  // Mismo fix de 2026-09-23 que el resto (ver renderReclutadorChart()) — CRITICO aqui
+  // Mismo fix de 2026-09-23 que el resto (ver renderGanttInsights()) — CRITICO aqui
   // especificamente: STAGE_WEIGHT[status] ?? 1 le pone peso COMPLETO (1.0) a cualquier status
   // ausente del mapa, y Offer Request/Filled/On Hold ya no estan ahi (ver STAGE_WEIGHT) — sin
   // este filtro, esos reqs pasarian de pesar poco a pesar MAS que antes del fix, justo lo
@@ -9919,7 +9813,7 @@ function renderUserMenu(label){
   const connected = pinModeActive || !!graphAccount;
   if(connected){
     const name = MY_RECRUITER_NAME || (graphAccount && graphAccount.username) || "Admin";
-    // Misma logica que renderSidebarProfile()/renderReclutadorChart(): si RECRUITER_PHOTOS
+    // Misma logica que renderSidebarProfile()/renderGanttInsights(): si RECRUITER_PHOTOS
     // tiene una foto para este nombre, usarla en vez de iniciales — asi el avatar del topbar de
     // verdad coincide con quien esta conectado, no solo un color+letras generico.
     const photo = RECRUITER_PHOTOS[name];
