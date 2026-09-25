@@ -362,10 +362,6 @@
   .nav-workspace-btn:hover { color: var(--text-primary); }
   .nav-workspace-btn.active { color: var(--brand); }
 
-  /* Total Requisitions: el anillo (renderDonut) vive en su PROPIA tarjeta grande dentro de
-     dash-grid, mismo tratamiento que "Applications by channel" en KeyStone — titulo+subtitulo
-     alineados a la izquierda (igual que cualquier .panel), anillo+leyenda centrados abajo. */
-  .panel-ring .donut-wrap { justify-content: center; padding-top: 6px; }
   /* "Positions & Placements" (Overview) — REDISEÑADO 2026-09-19: ya no son 4 numeros sueltos sin
      contexto (Nicolas: "no sabemos a que se refiere nada"). Positions -> Active -> Potential son
      un embudo real (cada uno subconjunto del anterior), asi que llevan flecha + barra
@@ -565,8 +561,15 @@
      no un solo activo excluyente — ver toggleInsight()/INSIGHTS_SELECTED en el JS. Cada grafico
      vive en su propia .insight-card, mas liviana que un .panel completo (sin su propio borde+
      sombra) porque ya esta anidada dentro de uno (panelInsights). */
-  #insightsPicker { margin-bottom: 14px; display: inline-flex; }
-  .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  #insightsPicker { margin-bottom: 14px; display: inline-flex; flex-wrap: wrap; }
+  /* Layout pedido por Nicolas, 2026-09-25: Active Workload By Recruiter a la derecha (crece en
+     alto con cuantos reclutadores haya), los otros 3 charts apilados en una sola columna a la
+     izquierda — no un grid parejo. #insightsLeftStack y #insightsWorkloadCard son los 2 unicos
+     hijos directos de .insights-grid; los 3 charts "de la izquierda" viven DENTRO de
+     insightsLeftStack, siempre en una sola columna sin importar cuantos de ellos esten visibles. */
+  .insights-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
+  .insights-left-stack { flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 16px; }
+  #insightsWorkloadCard { flex: 1 1 320px; min-width: 280px; }
   .insight-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
   .insights-empty { font-size: 12.5px; color: var(--text-muted); padding: 12px 0; }
   .gantt-row-label { width: 220px; flex: none; padding-right: 8px; }
@@ -915,7 +918,14 @@
     font-size: 13px; font-weight: 600; color: #fff;
     background-size: cover; background-position: center;
   }
-  .workload-name { font-size: 11px; font-weight: 600; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; }
+  .workload-name { font-size: 11px; font-weight: 600; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; display: inline-flex; align-items: center; justify-content: center; }
+  /* Tag de color por reclutador (Nicolas, 2026-09-25: "cada reclutador deberia tener como un color
+     tag, algo discreto, con colores que obviamente se noten") — un circulo, no el .dot cuadrado de
+     arriba (ese ya significa "estado/SLA" en el resto del archivo, esto es identidad, no estado).
+     Reusa colorForName(), la MISMA funcion que ya pinta el avatar quivo (ver .workload-avatar) —
+     asi el tag nunca desentona con el avatar de esa misma persona, y sigue siendo visible aunque
+     el reclutador ya tenga foto real (el avatar deja de mostrar el color en ese caso, este tag no). */
+  .recruiter-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; margin-right: 5px; vertical-align: middle; }
   .workload-title { font-size: 10px; color: var(--text-muted); margin-top: -3px; white-space: normal; word-break: break-word; max-width: 100%; }
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
@@ -1509,66 +1519,59 @@
               </div>
               <!-- Nicolas, 2026-09-24: rechazo la pestaña "Pipeline" separada (y antes de eso, el
                    panel de chips "Timelines by Recruiter & Role") por la misma razon de fondo —
-                   "no llenar el dashboard de un monton de cosas y tabs". Pidio en su lugar un
-                   area junto al Gantt donde se puedan "gestionar varios graficos... con una
-                   opcion de maximo dos, y elegir cuales". Los 2 graficos que antes vivian en la
-                   pestaña Pipeline (Pipeline By Status, Position By Location/Work Arrangement)
-                   ahora viven ACA, seleccionables via insightsPicker/toggleInsight() — ver JS.
-                   Ambos vienen seleccionados por defecto (INSIGHTS_SELECTED inicial) porque hoy
-                   son los unicos 2 que existen; el picker ya queda listo para cuando se agreguen
-                   mas graficos a futuro sin volver a tocar esta estructura. -->
+                   "no llenar el dashboard de un monton de cosas y tabs". 2026-09-25: pidio ademas
+                   mover Active Workload By Recruiter y Submitted Vs Expected aca adentro tambien
+                   ("esas dos deberian ser las dos principales insights, luego estan las otras que
+                   habiamos agregado"), quitar "Total Requisitions" del todo (redundante con la
+                   tarjeta de Positions & Placements de arriba, que ya cubre lo mismo), y un layout
+                   especifico: Active Workload a la derecha (crece con cuantos reclutadores haya),
+                   los otros 3 apilados a la izquierda — ver #insightsLeftStack/#insightsWorkloadCard
+                   y la logica de layout en applyInsightsVisibility(). Ya no hay tope de "maximo 2"
+                   (ver toggleInsight() en el JS) — las 4 vienen seleccionadas por defecto, el picker
+                   sigue sirviendo para ocultar cualquiera si el scroll se pone muy largo. -->
               <div class="panel" id="panelInsights" style="grid-column: span 6;">
                 <h3>Insights</h3>
-                <div class="panel-sub">Pick up to 2 charts to show here, side by side.</div>
+                <div class="panel-sub">Pick which charts to show here.</div>
                 <div class="gantt-scope-toggle" id="insightsPicker"></div>
                 <div class="insights-grid" id="insightsGrid">
-                  <div class="insight-card" data-insight-key="estado">
-                    <h3>Pipeline By Status</h3>
-                    <div class="panel-sub">Every non-closed position, grouped by funnel stage — includes Offer Request, Filled, and On Hold, none of which count as "Active" elsewhere in this tracker.</div>
-                    <div class="funnel" id="chartEstado"></div>
-                  </div>
-                  <div class="insight-card" data-insight-key="location" id="panelPositionByLocation">
-                    <h3>Position By Location/Work Arrangement</h3>
-                    <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
-                    <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
-                    <div class="barlist" id="chartHiredLoc"></div>
-                    <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
-                      <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
-                      <div class="barlist" id="chartWorkArrangement"></div>
+                  <div class="insights-left-stack" id="insightsLeftStack">
+                    <div class="insight-card" data-insight-key="submitted">
+                      <h3>Submitted Vs Expected</h3>
+                      <div class="panel-sub">Submitted candidates vs how many should exist by today, based on each position's own intake date. Only counts positions whose intake has already happened — nothing to source before that.</div>
+                      <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
                     </div>
+                    <div class="insight-card" data-insight-key="estado">
+                      <h3>Pipeline By Status</h3>
+                      <div class="panel-sub">Every non-closed position, grouped by funnel stage — includes Offer Request, Filled, and On Hold, none of which count as "Active" elsewhere in this tracker.</div>
+                      <div class="funnel" id="chartEstado"></div>
+                    </div>
+                    <div class="insight-card" data-insight-key="location" id="panelPositionByLocation">
+                      <h3>Position By Location/Work Arrangement</h3>
+                      <div class="panel-sub">Active positions right now, by country and by work arrangement</div>
+                      <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY COUNTRY</div>
+                      <div class="barlist" id="chartHiredLoc"></div>
+                      <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--grid);">
+                        <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">BY ARRANGEMENT</div>
+                        <div class="barlist" id="chartWorkArrangement"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="insight-card" data-insight-key="workload" id="insightsWorkloadCard">
+                    <h3>Active Workload By Recruiter</h3>
+                    <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
+                    <div class="workload-grid" id="chartReclutador"></div>
                   </div>
                 </div>
               </div>
-              <!-- Fila 2, dos tarjetas iguales (span 3 de 6 cada una): panorama de requisitions +
-                   carga del equipo. Active Workload By Recruiter / Average Time To Submit ocupan
-                   el mismo segundo puesto — nunca se ven los dos a la vez (Team ve Workload, tu
-                   propio workspace ve AvgTts, ver setDashboardScope), asi que cual de los dos
-                   aparezca ahi no rompe la fila de 2. -->
-              <div class="panel panel-ring" style="grid-column: span 3;">
-                <h3>Total Requisitions</h3>
-                <div class="panel-sub">Every requisition ever assigned — active, or closed out as a placement, a loss (cancelled/fell through), or filled internally by the client.</div>
-                <div id="statRingTotal"></div>
-              </div>
-              <div class="panel" id="panelWorkloadByRecruiter" style="grid-column: span 3;">
-                <h3>Active Workload By Recruiter</h3>
-                <div class="panel-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. 10 is the sweet spot, 12 the max. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
-                <div class="workload-grid" id="chartReclutador"></div>
-              </div>
-              <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 3;">
+              <!-- Average Time To Submit es el equivalente de Active Workload By Recruiter para tu
+                   PROPIO workspace individual (Active Workload solo tiene sentido comparando entre
+                   varios reclutadores a la vez, por eso vive adentro de Insights, que ya es
+                   team-only — ver setDashboardScope()). A todo lo ancho porque ahora es lo unico
+                   que ocupa este puesto (antes compartia fila con Total Requisitions). -->
+              <div class="panel" id="panelAvgTts" style="display:none; grid-column: span 6;">
                 <h3>Average Time To Submit</h3>
                 <div class="panel-sub">Your average TTS across active positions still waiting on their first submission batch, vs the 9 business day target — business days since the intake meeting, never the Kickoff.</div>
                 <div id="chartAvgTts"></div>
-              </div>
-              <!-- Fila 3, a todo lo ancho: Overview se queda con panorama (cuantas, donde estan,
-                   quien las lleva) — el trabajo de "cual necesita atencion ahora" vive en SLA &
-                   Completion (ver panelDashboardAttention mas abajo), justo al lado de SLA
-                   Health, que es el numero agregado del que esta lista es el desglose fila por
-                   fila. Antes competian por la misma fila aqui en Overview; ahora cada uno vive
-                   donde tiene mas sentido leerlo. -->
-              <div class="panel" style="grid-column: span 6;">
-                <h3>Submitted Vs Expected</h3>
-                <div class="panel-sub">Submitted candidates vs how many should exist by today, based on each position's own intake date. Only counts positions whose intake has already happened — nothing to source before that.</div>
-                <div class="funnel" id="statBarSubmitted" style="margin-top:10px;"></div>
               </div>
             </div>
           </div>
@@ -3433,13 +3436,14 @@ function setDashboardScope(name, opts){
   activeDashboardScope = name;
   activeDashboardReadOnly = readOnly && name !== MY_RECRUITER_NAME;
   document.getElementById("navItemTracking").style.display = (name && !activeDashboardReadOnly) ? "" : "none";
-  // Insights (Pipeline By Status + Position By Location/Work Arrangement, antes su propia
-  // pestaña "Pipeline") es una vista de equipo — no le sirve de nada a un solo reclutador viendo
-  // unicamente sus propias posiciones. Mismo criterio que ya existia para esa pestaña, ahora
-  // aplicado al panel que la reemplazo dentro de Overview (ver panelInsights mas arriba).
+  // Insights (Pipeline By Status, Position By Location/Work Arrangement, Active Workload By
+  // Recruiter, Submitted Vs Expected — antes su propia pestaña "Pipeline") es una vista de
+  // equipo — no le sirve de nada a un solo reclutador viendo unicamente sus propias posiciones,
+  // y Active Workload especificamente solo tiene sentido comparando entre varios reclutadores a
+  // la vez. Este UN toggle ya cubre las 4 (todas viven dentro de panelInsights ahora), a
+  // diferencia de antes que necesitaba su propia linea aparte para panelWorkloadByRecruiter.
   document.getElementById("panelInsights").style.display = name ? "none" : "";
   updateManageNavVisibility();
-  document.getElementById("panelWorkloadByRecruiter").style.display = name ? "none" : "";
   document.getElementById("panelAvgTts").style.display = name ? "" : "none";
   // Positions es intencionalmente el directorio COMPLETO para cualquiera, admin o no — es el
   // camino sancionado para ver requisitions de otro reclutador sin entrar a su workspace. Solo
@@ -4811,7 +4815,7 @@ function renderGanttGroup(key){
         <span class="gantt-filter-label">Recruiter</span>
         <div class="gantt-scope-toggle" id="ganttRecruiterToggle">
           <button type="button" class="gantt-scope-btn${ganttRecruiterFilter ? "" : " active"}" data-recruiter="">All</button>
-          ${recruiters.map(r=>`<button type="button" class="gantt-scope-btn${ganttRecruiterFilter===r ? " active" : ""}" data-recruiter="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join("")}
+          ${recruiters.map(r=>`<button type="button" class="gantt-scope-btn${ganttRecruiterFilter===r ? " active" : ""}" data-recruiter="${escapeHtml(r)}">${recruiterDotHtml(r)}${escapeHtml(r)}</button>`).join("")}
         </div>
       </div>
       <div class="gantt-filter-group">
@@ -4943,21 +4947,34 @@ document.getElementById("ganttHintBtn").addEventListener("click", ()=>{
   toggleGanttPanel(key, GANTT_DATA[key].label, GANTT_DATA[key].positions);
 });
 
-// Insights (Nicolas, 2026-09-24): picker de seleccion multiple, hasta 2 a la vez, que decide
+// Insights (Nicolas, 2026-09-24, extendido 2026-09-25): picker de seleccion multiple que decide
 // cuales .insight-card se ven dentro de #insightsGrid. Las cards en si son HTML estatico (ver
 // panelInsights arriba) con sus propios ids de siempre (#chartEstado, #chartHiredLoc,
-// #chartWorkArrangement) — renderEstadoChart()/renderHiredLocChart() las siguen llenando exactamente
-// igual que antes sin importar si estan visibles ahora mismo, asi que no hace falta re-renderizar
-// datos al togglear, solo mostrar/ocultar.
+// #chartWorkArrangement, #chartReclutador, #statBarSubmitted) — cada render*() las sigue llenando
+// exactamente igual que antes sin importar si estan visibles ahora mismo, asi que no hace falta
+// re-renderizar datos al togglear, solo mostrar/ocultar. "workload" y "location" viven en HTML en
+// lugares distintos del arbol (uno es hijo directo de #insightsGrid, los otros 3 viven dentro de
+// #insightsLeftStack para el layout "workload a la derecha, el resto apilado a la izquierda" que
+// Nicolas pidio) — el selector de abajo los encuentra a todos igual, sin importar el anidamiento.
 const INSIGHTS_DEFS = [
+  {key:"workload", label:"Active Workload By Recruiter"},
+  {key:"submitted", label:"Submitted Vs Expected"},
   {key:"estado", label:"Pipeline By Status"},
   {key:"location", label:"Position By Location/Work Arrangement"},
 ];
-let INSIGHTS_SELECTED = INSIGHTS_DEFS.map(d=>d.key); // ambas por defecto — hoy son las unicas 2 que existen.
+let INSIGHTS_SELECTED = INSIGHTS_DEFS.map(d=>d.key); // las 4 por defecto — "esas dos [workload,
+// submitted] deberian ser las principales, luego estan las otras que habiamos agregado" — todas
+// visibles de entrada, el picker sirve para ocultar cualquiera si el scroll se pone muy largo.
 function applyInsightsVisibility(){
   document.querySelectorAll("#insightsGrid .insight-card").forEach(card=>{
     card.style.display = INSIGHTS_SELECTED.includes(card.dataset.insightKey) ? "" : "none";
   });
+  // #insightsLeftStack no puede depender de :empty (sus 3 cards siguen siendo hijos del DOM aunque
+  // esten en display:none) — se oculta a mano si NINGUNA de ellas quedo visible, para no dejar un
+  // hueco vacio al lado de Active Workload cuando el usuario apago los 3 charts de la izquierda.
+  const leftStack = document.getElementById("insightsLeftStack");
+  const anyLeftVisible = [...leftStack.children].some(c=>c.style.display !== "none");
+  leftStack.style.display = anyLeftVisible ? "" : "none";
   const emptyNote = document.getElementById("insightsEmptyNote");
   if(INSIGHTS_SELECTED.length === 0){
     if(!emptyNote){
@@ -4976,17 +4993,13 @@ function renderInsightsPicker(){
     btn.addEventListener("click", ()=> toggleInsight(btn.dataset.insightToggle));
   });
 }
-// Maximo 2 a la vez ("con una opcion de maximo dos, y elegir cuales") — al elegir una tercera,
-// se suelta la que llevaba mas tiempo seleccionada (cola FIFO) en vez de bloquear el click sin
-// explicacion. Deseleccionar hasta 0 esta permitido (ver insights-empty arriba).
+// Ya no hay tope de "maximo 2" (ese limite tenia sentido cuando solo existian 2 charts; con las 4
+// de ahora Nicolas las quiere todas visibles por defecto, en su propio layout de 2 columnas — ver
+// CSS de .insights-grid). Deseleccionar hasta 0 esta permitido (ver insights-empty arriba).
 function toggleInsight(key){
   const idx = INSIGHTS_SELECTED.indexOf(key);
-  if(idx >= 0){
-    INSIGHTS_SELECTED.splice(idx, 1);
-  } else {
-    INSIGHTS_SELECTED.push(key);
-    if(INSIGHTS_SELECTED.length > 2) INSIGHTS_SELECTED.shift();
-  }
+  if(idx >= 0) INSIGHTS_SELECTED.splice(idx, 1);
+  else INSIGHTS_SELECTED.push(key);
   renderInsightsPicker();
   applyInsightsVisibility();
 }
@@ -5056,29 +5069,10 @@ function renderKpis(){
   allStats.forEach(s=> GANTT_DATA[s.key] = {label:s.label, positions:s.positions});
   if(ganttOpenKey) renderGanttGroup(ganttOpenKey);
 
-  // Total Requisitions: TODAS las asignadas alguna vez (incluye cerradas), no solo las activas
-  // — complementa la tarjeta de arriba mostrando el panorama completo del ciclo de vida en vez
-  // de solo el momento actual. BUG REAL de "informacion relevante" (Nicolas, auditoria de
-  // dashboard 2026-09-17): antes "Closed" mezclaba Hired (una colocacion real) con Cancelled/
-  // Fell Through (una perdida real) y Filled Internal Hire (ni una cosa ni la otra) en un solo
-  // balde gris sin distincion — un vistazo rapido no dejaba ver si lo cerrado fue exito o
-  // fracaso. Desglosado en 3 buckets reales, cada uno con su propio color semantico (mismo good/
-  // critical/neutral que ya usa el resto de la app).
-  const hiredPositions = allPositions.filter(p=>p.status==="Hired");
-  const lostPositions = allPositions.filter(p=>p.status==="Cancelled" || p.status==="Fell Through");
-  const internalHirePositions = allPositions.filter(p=>p.status==="Filled (Internal Hire)");
-  const totalRows = [
-    {label:"Active", value:active.length, positions:active, color:"var(--brand)"},
-    {label:statusLabel("Hired"), value:hiredPositions.length, positions:hiredPositions, color:"var(--good)"},
-    {label:"Cancelled / Fell Through", value:lostPositions.length, positions:lostPositions, color:"var(--critical)"},
-    {label:"Filled (Internal Hire)", value:internalHirePositions.length, positions:internalHirePositions, color:"var(--neutral)"},
-  ].filter(r=>r.value>0);
-  const totalRingRows = totalRows.length ? totalRows : [{label:"No requisitions", value:1, realValue:0, color:"var(--grid)"}];
-  renderDonut("statRingTotal", totalRingRows, totalRingRows.map(r=>r.color), "Total", 168,
-    {value: allPositions.length, label:"Total"},
-    allPositions.length>0 ? (row)=>{
-      openQuickList(row.label, `${row.value} requisition${row.value===1?"":"s"}`, row.positions);
-    } : null);
+  // "Total Requisitions" (donut redundante con la tarjeta de Positions & Placements de arriba,
+  // que ya desglosa el mismo total) vivia aca — quitado 2026-09-25 a pedido de Nicolas: "eso ya
+  // esta super redundante ahi... no sirve de nada porque ya lo tenemos en la caja de arriba con
+  // el Gantt."
 
   // "Hired (YTD)"/"Hires This Week" no encajaba aqui: TTH tiene SLA de 50-55 dias, asi que
   // un conteo semanal de hires casi siempre da 0 y no dice nada util. En su lugar, salud del
@@ -5338,7 +5332,7 @@ function renderReclutadorChart(){
     return `
     <div class="workload-card clickable-stat" data-label="${escapeHtml(r.label)}" title="Open ${escapeHtml(r.label)}'s dashboard">
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
-      <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
+      <div class="workload-name" title="${escapeHtml(r.label)}">${recruiterDotHtml(r.label)}${escapeHtml(r.label)}</div>
       ${jobTitle ? `<div class="workload-title">${escapeHtml(jobTitle)}</div>` : ""}
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.value))};"></div></div>
       <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
@@ -9389,6 +9383,11 @@ function colorForName(name){
   let hash = 0;
   for(let i=0;i<name.length;i++) hash = (hash*31 + name.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+// Circulo pequeño de identidad por reclutador — mismo color que su avatar (colorForName), pero
+// visible SIEMPRE, incluso cuando el avatar de al lado ya muestra una foto real en vez del color.
+function recruiterDotHtml(name){
+  return name ? `<span class="recruiter-dot" style="background:${colorForName(name)};"></span>` : "";
 }
 // A diferencia de fillSelectOnce() (piensa que los filtros son estaticos una vez cargados),
 // este select SI debe reflejar RECRUITERS en cada render: cambia justo cuando se agrega un
