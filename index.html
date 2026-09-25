@@ -94,6 +94,9 @@
     --stage-teal: #5cae9e;
     --stage-purple: #9b84c9;
     --stage-mauve: #9c8aa0;
+    /* Vinotinto — color de identidad de Nicolas (ver RECRUITER_COLOR_OVERRIDES), aproximado del
+       tono real que el señalo en su propia captura de pantalla, 2026-09-25. */
+    --stage-wine: #a8525c;
     /* Paleta propia de Work Arrangement — deliberadamente distinta de las --stage-* de arriba
        (que son de Status) para que dos columnas adyacentes en la misma fila (Status,
        Arrangement) nunca muestren el mismo color por dos razones distintas. */
@@ -509,7 +512,12 @@
      graficos la que se scrolea [internamente]". ~6 filas visibles (promedio real ~104px/fila,
      algunas con linea extra de compensation/HM) antes de que el scroll interno entre en juego. */
   .gantt-rows { position: relative; max-height: 630px; overflow-y: auto; }
-  .gantt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); position: relative; cursor: pointer; border-radius: 6px; user-select: none; }
+  /* Franja de color por reclutador al inicio de cada fila (Nicolas, 2026-09-25, con una captura
+     de referencia) — mismo colorForName()/RECRUITER_COLOR_OVERRIDES que el resto de los tags de
+     identidad, puesto por inline style en ganttRowHtml() (color dinamico, no puede vivir fijo en
+     CSS). border-left en vez de un elemento aparte para que herede el border-radius de la fila
+     sin trabajo extra. */
+  .gantt-row { display: flex; align-items: center; padding: 8px 0 8px 8px; border-bottom: 1px solid var(--border); border-left: 3px solid transparent; position: relative; cursor: pointer; border-radius: 6px; user-select: none; }
   .gantt-row:hover { background: rgba(127,127,127,0.06); }
   .gantt-row:last-child { border-bottom: none; }
   /* Filtros dentro del propio Gantt (Nicolas, 2026-09-24, tras rechazar el panel de chips
@@ -1690,6 +1698,17 @@
            diferencia de las otras 4, no hay una fecha por evento que reconstruya su historial
            semanal sin inventar numeros — mejor dejarla pendiente que fabricarla. -->
       <section class="view" id="view-scorecard">
+        <!-- Nicolas, 2026-09-25: "lo que quiero con lo de needs attention, es que esa info haga
+             parte de los scorecards" — misma data/logica real que ya usan Tracking y SLA &
+             Completion (buildAttentionRows()/attentionRowsHtml(), nunca duplicada), solo un
+             tercer lugar donde se ve — pasando POSITIONS directo (no dashboardPositions()) porque
+             el Scorecard entero ya es una vista de equipo completo, sin importar en que workspace
+             estes parado, igual que la tabla de abajo. -->
+        <div class="panel" style="margin-bottom:16px;">
+          <h3>Needs Attention <span class="panel-details-count" id="scorecardAttentionCount"></span></h3>
+          <div class="panel-sub">What's worth raising in the L10 — out of SLA, at risk, or stuck on Kickoff/Intake follow-up, across the whole book.</div>
+          <div id="scorecardAttentionZone"></div>
+        </div>
         <div class="panel">
           <h3>Scorecard</h3>
           <div class="panel-sub">Weekly numbers, EOS-style — one owner and one goal per row, last 8 weeks at a glance. Green means the goal was met that week, red means it wasn't, grey means no goal is set yet. Set a goal by typing a number and clicking away.</div>
@@ -4822,7 +4841,7 @@ function ganttRowHtml(p, cal){
   const extraInfoHtml = (salaryText || p.hiringManager)
     ? `<div class="gantt-row-meta">${salaryText ? escapeHtml(salaryText) : ""}${salaryText && p.hiringManager ? " · " : ""}${p.hiringManager ? "HM "+escapeHtml(p.hiringManager) : ""}</div>`
     : "";
-  return `<div class="gantt-row" data-id="${escapeHtml(p.id)}">
+  return `<div class="gantt-row" data-id="${escapeHtml(p.id)}" style="border-left-color:${recName ? colorForName(recName) : "transparent"};">
     <div class="gantt-row-label">
       <div class="gantt-row-title">${escapeHtml(p.title||"")}</div>
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
@@ -5105,7 +5124,7 @@ function renderKpis(){
     {key:"active", label:"Active Positions", value:activePositions.length, positions:activePositions,
       desc:"Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
   ];
-  // 4a tarjeta agregada 2026-09-25 (Nicolas, con los numeros reales delante: "tenemos 30
+  // 5a tarjeta agregada 2026-09-25 (Nicolas, con los numeros reales delante: "tenemos 30
   // posiciones, pero solo 16 activas, 3 en potential placements y otras 7 en actual placements.
   // Eso me da 26. En donde estan las otras 4?... yo supongo que esas son las internal hires, o
   // las on hold, entonces en esa caja nueva podria ir todo lo que esta cancelled tambien" — tenia
@@ -5114,16 +5133,23 @@ function renderKpis(){
   // SIEMPRE sea la suma exacta de las 4 tarjetas, pase lo que pase con statuses nuevos a futuro.
   const otherPositions = allPositions.filter(p=>
     !activePositions.includes(p) && !potentialPlacements.includes(p) && p.status!=="Hired");
+  // Reubicada 2026-09-25 (Nicolas: "deberia hacer parte de la parte izquierda de la tabla, como
+  // quedar en 3 posicion de las 5") — vive SU PROPIO grupo, no dentro de funnelStats ni de
+  // outcomeStats: NO es subconjunto de Active Positions (On Hold/Cancelled/Filled Internal Hire
+  // son mutuamente excluyentes con "activa"), asi que la flecha+barra proporcional que conecta
+  // Positions->Active seria una afirmacion falsa si esta tarjeta la heredara. Se dibuja con el
+  // mismo look que las tarjetas de outcome (sin flecha, sin barra) pero posicionada ANTES del
+  // divisor, junto al embudo de la izquierda en vez de junto a Potential/Actual.
+  const otherStat = {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
+    color:"var(--neutral)", desc:"Paused (On Hold) or closed without a confirmed Irth placement (Cancelled, or Filled Internal Hire) — not active, and not counted in either box to the left. Positions always adds up to Active + this one + Potential + Actual."};
   const outcomeStats = [
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc:"At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
     {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc:"Confirmed hires to date — a running total, not a next step from the numbers on the left."},
-    {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
-      color:"var(--neutral)", desc:"Paused (On Hold) or closed without a confirmed Irth placement (Cancelled, or Filled Internal Hire) — not active, and not counted in either box to the left. Positions always adds up to Active + Potential + Actual + this one."},
   ];
   const maxVal = funnelStats[0].value || 1;
-  const allStats = [...funnelStats, ...outcomeStats];
+  const allStats = [...funnelStats, otherStat, ...outcomeStats];
   const funnelHtml = funnelStats.map((s,i)=>`
     <div class="ps-stat clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${i}" data-key="${s.key}">
       <div class="stat-num">${s.value}</div>
@@ -5132,16 +5158,23 @@ function renderKpis(){
       <div class="ps-bar"><div class="ps-bar-fill" style="width:${Math.max(4, s.value/maxVal*100).toFixed(1)}%; background:${gradientFill("var(--brand)")};"></div></div>
       ${statHoverPopoverHtml(s)}
     </div>${i<funnelStats.length-1 ? `<div class="ps-arrow">&rarr;</div>` : ""}`).join("");
+  const otherHtml = `
+    <div class="ps-stat ps-stat-outcome clickable-stat${ganttOpenKey===otherStat.key?" ps-stat-open":""}" data-i="${funnelStats.length}" data-key="${otherStat.key}">
+      <div class="stat-num" style="color:${otherStat.color};">${otherStat.value}</div>
+      <div class="stat-label">${otherStat.label}</div>
+      <div class="stat-desc">${otherStat.desc}</div>
+      ${statHoverPopoverHtml(otherStat)}
+    </div>`;
   const outcomeHtml = `
     <div class="ps-divider"></div>
     ${outcomeStats.map((s,i)=>`
-    <div class="ps-stat ps-stat-outcome clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${funnelStats.length+i}" data-key="${s.key}">
+    <div class="ps-stat ps-stat-outcome clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${funnelStats.length+1+i}" data-key="${s.key}">
       <div class="stat-num" style="color:${s.color};">${s.value}</div>
       <div class="stat-label">${s.label}</div>
       <div class="stat-desc">${s.desc}</div>
       ${statHoverPopoverHtml(s)}
     </div>`).join("")}`;
-  document.getElementById("positionsSummaryStrip").innerHTML = funnelHtml + outcomeHtml;
+  document.getElementById("positionsSummaryStrip").innerHTML = funnelHtml + otherHtml + outcomeHtml;
   document.querySelectorAll("#positionsSummaryStrip .ps-stat").forEach(el=>{
     const s = allStats[+el.dataset.i];
     el.addEventListener("click", ()=> toggleGanttPanel(s.key, s.label, s.positions));
@@ -5466,7 +5499,21 @@ const SCORECARD_MEASURES = [
     // logueado por checkArrivedStartDates() dice "...to Placed...", nunca "to Hired".
     entriesFn: (r)=> scorecardStatusEntries(r, statusLabel("Hired"))},
 ];
+function renderScorecardAttention(){
+  const zone = document.getElementById("scorecardAttentionZone");
+  if(!zone) return;
+  const {slaRows, completionRows} = buildAttentionRows(POSITIONS);
+  const total = slaRows.length + completionRows.length;
+  const countEl = document.getElementById("scorecardAttentionCount");
+  if(countEl) countEl.textContent = total ? `(${total})` : "(none)";
+  zone.innerHTML = total ? attentionRowsHtml(slaRows, completionRows)
+    : `<div class="panel-sub" style="margin:0;">Nothing urgent right now. Every active position is within SLA, on track with Requisition Completion, or hasn't started its clock yet.</div>`;
+  zone.querySelectorAll(".pending-offer-row").forEach(row=>{
+    row.addEventListener("click", ()=> openDetailModal(row.dataset.id, trackingCanEdit() ? "edit" : "view"));
+  });
+}
 function renderScorecard(){
+  renderScorecardAttention();
   const headerRow = document.getElementById("scorecardHeaderRow");
   const body = document.getElementById("scorecardBody");
   if(!headerRow || !body) return;
@@ -9543,13 +9590,25 @@ document.getElementById("trackingMoreFiltersBtn").addEventListener("click", ()=>
    Init (datos locales / de ejemplo)
    ============================================================ */
 // Avatares del sidebar (foto si hay URL guardada, iniciales con color fijo por nombre si no).
-// El color es un hash simple del nombre, asi que cada persona siempre cae en el mismo color
-// entre sesiones sin tener que guardar un color aparte en el Excel.
-const AVATAR_PALETTE = ["var(--stage-blue)","var(--stage-teal)","var(--stage-purple)","var(--stage-mauve)","var(--brand)","var(--seq-500)","var(--good)","var(--warning)"];
+// El color por defecto es un hash simple del nombre, asi que cada persona siempre cae en el mismo
+// color entre sesiones sin tener que guardar un color aparte en el Excel. Nicolas, 2026-09-25,
+// viendo el resultado real ("no uses verde porque ya hay mucho verde... el purpura cambiaselo a
+// David a otro tambien... el vinotinto me lo dejas a mi"): --good (verde, ya sobrecargado en todo
+// el resto del tracker: SLA compliant, Placed, etc.) y --brand/--seq-* (el naranja principal de
+// toda la app, igual de sobrecargado) salieron del pool. Nicolas y David ahora tienen un color FIJO
+// via RECRUITER_COLOR_OVERRIDES (nunca dependen del hash, asi nunca cambian si el algoritmo o la
+// lista de reclutadores cambia) — el pool de abajo solo decide el color de CUALQUIER reclutador
+// nuevo que todavia no tenga uno fijado a mano aca.
+const RECRUITER_COLOR_OVERRIDES = {
+  "Nicolás Patarroyo": "var(--stage-wine)",
+  "Juan David Contreras": "var(--stage-blue)",
+};
+const AVATAR_PALETTE = ["var(--stage-teal)","var(--stage-purple)","var(--stage-mauve)","var(--warning)"];
 function initialsFor(name){
   return name.split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
 }
 function colorForName(name){
+  if(RECRUITER_COLOR_OVERRIDES[name]) return RECRUITER_COLOR_OVERRIDES[name];
   let hash = 0;
   for(let i=0;i<name.length;i++) hash = (hash*31 + name.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
