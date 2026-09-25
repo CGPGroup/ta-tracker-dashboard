@@ -5133,23 +5133,23 @@ function renderKpis(){
   // SIEMPRE sea la suma exacta de las 4 tarjetas, pase lo que pase con statuses nuevos a futuro.
   const otherPositions = allPositions.filter(p=>
     !activePositions.includes(p) && !potentialPlacements.includes(p) && p.status!=="Hired");
-  // Reubicada 2026-09-25 (Nicolas: "deberia hacer parte de la parte izquierda de la tabla, como
-  // quedar en 3 posicion de las 5") — vive SU PROPIO grupo, no dentro de funnelStats ni de
-  // outcomeStats: NO es subconjunto de Active Positions (On Hold/Cancelled/Filled Internal Hire
-  // son mutuamente excluyentes con "activa"), asi que la flecha+barra proporcional que conecta
-  // Positions->Active seria una afirmacion falsa si esta tarjeta la heredara. Se dibuja con el
-  // mismo look que las tarjetas de outcome (sin flecha, sin barra) pero posicionada ANTES del
-  // divisor, junto al embudo de la izquierda en vez de junto a Potential/Actual.
+  // Reubicada 2026-09-25, dos veces el mismo dia — primero a la izquierda (posicion 3, junto al
+  // embudo), despues Nicolas: "ponlo de 3 entonces del lado derecho de la linea y que no haga
+  // parte del otro lado, ya que ya entendi la logica" — o sea, SI del lado de outcome (con
+  // Potential/Actual, mismo look sin flecha/barra, que es justo por lo que no podia ir en
+  // funnelStats), pero primero en ese grupo, no al final. outcomeStats ahora es [other, potential,
+  // actual] — un solo array, ya no necesita su propio bloque HTML aparte como el intento anterior.
   const otherStat = {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
     color:"var(--neutral)", desc:"Paused (On Hold) or closed without a confirmed Irth placement (Cancelled, or Filled Internal Hire) — not active, and not counted in either box to the left. Positions always adds up to Active + this one + Potential + Actual."};
   const outcomeStats = [
+    otherStat,
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc:"At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
     {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc:"Confirmed hires to date — a running total, not a next step from the numbers on the left."},
   ];
   const maxVal = funnelStats[0].value || 1;
-  const allStats = [...funnelStats, otherStat, ...outcomeStats];
+  const allStats = [...funnelStats, ...outcomeStats];
   const funnelHtml = funnelStats.map((s,i)=>`
     <div class="ps-stat clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${i}" data-key="${s.key}">
       <div class="stat-num">${s.value}</div>
@@ -5158,23 +5158,16 @@ function renderKpis(){
       <div class="ps-bar"><div class="ps-bar-fill" style="width:${Math.max(4, s.value/maxVal*100).toFixed(1)}%; background:${gradientFill("var(--brand)")};"></div></div>
       ${statHoverPopoverHtml(s)}
     </div>${i<funnelStats.length-1 ? `<div class="ps-arrow">&rarr;</div>` : ""}`).join("");
-  const otherHtml = `
-    <div class="ps-stat ps-stat-outcome clickable-stat${ganttOpenKey===otherStat.key?" ps-stat-open":""}" data-i="${funnelStats.length}" data-key="${otherStat.key}">
-      <div class="stat-num" style="color:${otherStat.color};">${otherStat.value}</div>
-      <div class="stat-label">${otherStat.label}</div>
-      <div class="stat-desc">${otherStat.desc}</div>
-      ${statHoverPopoverHtml(otherStat)}
-    </div>`;
   const outcomeHtml = `
     <div class="ps-divider"></div>
     ${outcomeStats.map((s,i)=>`
-    <div class="ps-stat ps-stat-outcome clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${funnelStats.length+1+i}" data-key="${s.key}">
+    <div class="ps-stat ps-stat-outcome clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${funnelStats.length+i}" data-key="${s.key}">
       <div class="stat-num" style="color:${s.color};">${s.value}</div>
       <div class="stat-label">${s.label}</div>
       <div class="stat-desc">${s.desc}</div>
       ${statHoverPopoverHtml(s)}
     </div>`).join("")}`;
-  document.getElementById("positionsSummaryStrip").innerHTML = funnelHtml + otherHtml + outcomeHtml;
+  document.getElementById("positionsSummaryStrip").innerHTML = funnelHtml + outcomeHtml;
   document.querySelectorAll("#positionsSummaryStrip .ps-stat").forEach(el=>{
     const s = allStats[+el.dataset.i];
     el.addEventListener("click", ()=> toggleGanttPanel(s.key, s.label, s.positions));
