@@ -522,12 +522,15 @@
   .gantt-cal-today-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--brand); z-index: 3; }
   .gantt-cal-today-label { position: absolute; top: -14px; font-size: 10px; font-weight: 700; color: var(--brand); transform: translateX(-50%); white-space: nowrap; }
   /* Nicolas, 2026-09-24: con muchos reqs (ej. 16 en Active Positions) la lista de filas hacia que
-     toda la pagina se volviera larguisima de scrolear. Primer intento: scroll interno de altura
-     fija (~6 filas). 2026-09-26, reemplazado por paginacion real: "que se muestren 5 rows por
-     default, pero permitirle al usuario mostrar 10, 25 o 30" — ver ganttPageSize/pagedShown en
-     renderGanttGroup(). Sin max-height/scroll aca: la altura ahora la decide cuantas filas quepan
-     de verdad en la pagina actual, nunca un recorte fijo en pixeles.*/
-  .gantt-rows { position: relative; }
+     toda la pagina se volviera larguisima de scrolear — scroll interno de altura fija (~6 filas).
+     2026-09-26: se agrego paginacion real encima (ganttPageSize/pagedShown en renderGanttGroup(),
+     5/10/25/30) pero se quito el max-height/scroll de aca por error — Nicolas: "no era quitarle
+     el scroll, era solo que se mostraran maximo 5 [por defecto], pero si el usuario quiere mas
+     pues ahi esta la lista [el selector]." Las dos cosas conviven: el selector cambia CUANTAS
+     filas se cargan (5 por defecto, hasta 30), este max-height decide si esas filas caben sin
+     alargar la pagina o si hay que scrolear internamente para verlas — a 5 filas nunca se activa
+     el scroll (caben de sobra), a 25-30 si. */
+  .gantt-rows { position: relative; max-height: 630px; overflow-y: auto; }
   .gantt-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
   .gantt-pagination-note { font-size: 11px; color: var(--text-muted); }
   .gantt-pagination-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
@@ -5214,7 +5217,12 @@ function renderKpis(){
   ];
   const maxVal = funnelStats[0].value || 1;
   const allStats = [...funnelStats, ...outcomeStats];
-  const hintHtml = (s)=> `<div class="ps-stat-hint"><button type="button" class="gantt-hint-btn" data-hint-key="${escapeHtml(s.key)}">${escapeHtml(`Hide the ${s.label} timeline`)}</button></div>`;
+  // Nicolas, 2026-09-26: el boton (ver .gantt-hint-btn) se habia quedado sin las clases reales de
+  // boton (btn ghost small) y el icono que tenia la version original de una sola fila debajo de
+  // las 4 tarjetas — quedo como un rectangulo gris sin estilo ("ese boton esta muy feo"). Se
+  // restaura ese look exacto, la unica diferencia real con la version anterior es DONDE vive
+  // (dentro de .ps-stat-hint, debajo de la tarjeta que esta abierta, no una fila fija aparte).
+  const hintHtml = (s)=> `<div class="ps-stat-hint"><button type="button" class="btn ghost small gantt-hint-btn" data-hint-key="${escapeHtml(s.key)}"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 13.5V5M6 13.5V2.5M10 13.5V7M14 13.5V4"/></svg><span>${escapeHtml(`Hide the ${s.label} timeline`)}</span></button></div>`;
   const funnelHtml = funnelStats.map((s,i)=>`
     <div class="ps-stat-col">
     <div class="ps-stat clickable-stat${ganttOpenKey===s.key?" ps-stat-open":""}" data-i="${i}" data-key="${s.key}">
