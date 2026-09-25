@@ -4949,7 +4949,25 @@ function renderGanttGroup(key){
     btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
   });
   panelEl.querySelectorAll("#ganttRecruiterToggle .gantt-scope-btn").forEach(btn=>{
-    btn.addEventListener("click", ()=>{ ganttRecruiterFilter = btn.dataset.recruiter || null; renderGanttGroup(key); });
+    btn.addEventListener("click", ()=>{
+      const name = btn.dataset.recruiter || null;
+      // Nicolas, 2026-09-26: "si filtras por reclutador, todo deberia cambiar, y mostrar los
+      // numeros del reclutador... esto esta pensado para el public access obviamente, porque si
+      // estas en el workspace del reclutador, pues no te tienen porque salir las reqs de otro
+      // reclutador" — un visitante de Public Access viendo Team no tiene otra forma de "entrar"
+      // al mundo de un solo reclutador; reusa el mismo camino readOnly que ya usan las tarjetas
+      // de Active Workload By Recruiter (viewRecruiterDashboard/goToDashboard), asi que Positions
+      // & Placements, Insights y el Gantt reabierto quedan TODOS escopeados a esa persona, no
+      // solo las filas que se ven aca. A proposito SOLO en Public Access — un admin/reclutador ya
+      // logueado viendo Team sigue pudiendo filtrar el Gantt sin que le cambien de vista de golpe
+      // (el ya tiene su propio camino real para eso: My Workspace / el switcher de arriba).
+      if(publicAccessMode){
+        if(name){ viewRecruiterDashboard(name); return; }
+        if(activeDashboardScope && activeDashboardReadOnly){ goToDashboard(null); return; }
+      }
+      ganttRecruiterFilter = name;
+      renderGanttGroup(key);
+    });
   });
   const roleInput = document.getElementById("ganttRoleSearchInput");
   const roleSuggestionsEl = document.getElementById("ganttRoleSuggestions");
