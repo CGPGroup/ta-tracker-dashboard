@@ -470,8 +470,12 @@
   }
   /* Antes la unica pista de que las tarjetas abren un Gantt era pasar el mouse y notar el
      cursor:pointer — Nicolas: "hay que hacer algun botroncito... para decirle al usuario oye,
-     aqui tiene un Gantt chart". Fila propia debajo de las 4 tarjetas, discreta pero real. */
-  .gantt-hint-row { display: flex; justify-content: center; margin-top: 12px; }
+     aqui tiene un Gantt chart". Fila propia debajo de las tarjetas, discreta pero real.
+     2026-09-26: centrado se veia como si perteneciera a la caja que cayera justo en medio (ahora
+     "On Hold & Other Closures", con 5 tarjetas) — Nicolas: "parece que perteneciera a esa caja".
+     Alineado a la izquierda en su lugar, bajo "Positions" (la primera tarjeta) siempre, sin
+     importar cuantas tarjetas haya ni cual este abierta. */
+  .gantt-hint-row { display: flex; justify-content: flex-start; margin-top: 12px; }
   .gantt-hint-btn { display: inline-flex; align-items: center; gap: 7px; }
   .gantt-hint-btn svg { flex: none; opacity: .8; }
   @media (max-width: 720px) {
@@ -1534,7 +1538,7 @@
                    patron que renderAvgTtsChart(): numero + label + openQuickList()). -->
               <div class="panel" id="panelPositionsSummary" style="grid-column: span 6;">
                 <h3>Positions &amp; Placements</h3>
-                <div class="panel-sub">Every requisition, broken down by where it stands toward becoming an actual placement.</div>
+                <div class="panel-sub">Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.</div>
                 <div class="positions-summary-strip" id="positionsSummaryStrip"></div>
                 <div class="gantt-hint-row">
                   <button type="button" class="btn ghost small gantt-hint-btn" id="ganttHintBtn">
