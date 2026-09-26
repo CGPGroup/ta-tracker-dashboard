@@ -179,12 +179,24 @@
   /* ---------- Shell ---------- */
   .shell { display: flex; min-height: 100vh; }
 
+  /* Nicolas, 2026-09-26: "el panel lateral como que no se debe mover aunque tu scrolees hacia
+     arriba o hacia abajo, en cualquier ventana, vista, workspace" — .shell es un simple flex row
+     sin position propia, asi que .sidebar viajaba con el resto de la pagina como cualquier otro
+     hijo normal cuando el contenido de la derecha era mas alto que la ventana (el logo de CGP al
+     fondo del sidebar terminaba fuera de vista, o en una posicion rara, segun cuanto se hubiera
+     scrolleado). position:sticky con top:0 + su propia altura fija a 100vh lo clava al viewport
+     sin sacarlo del flujo del flex (a diferencia de position:fixed, que si necesitaria compensar
+     el ancho en el contenido de al lado a mano). align-self:flex-start evita que el stretch por
+     defecto de .shell (align-items:stretch) le imponga la altura del contenido vecino en vez de
+     su propio 100vh. overflow-y:auto es una salvedad por si el sidebar mismo alguna vez tuviera
+     mas contenido del que cabe en la ventana. */
   .sidebar {
     width: 232px; flex: none;
     background: var(--sidebar-bg);
     color: var(--text-primary);
     display: flex; flex-direction: column;
     padding: 20px 14px;
+    position: sticky; top: 0; align-self: flex-start; height: 100vh; overflow-y: auto;
   }
   .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
   .brand-mark { width: 34px; height: 34px; object-fit: contain; display: block; }
