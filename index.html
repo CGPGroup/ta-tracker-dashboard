@@ -550,7 +550,13 @@
      chocara con SU PROPIO popover, no que otra chocara con su boton). z-index mas alto que el
      popover (30) asegura que el boton, funcional y permanente, siempre gane visualmente sobre un
      popover ajeno, decorativo y transitorio, sin importar de que tarjeta venga. */
-  .ps-stat-hint { display: none; text-align: center; margin-top: 8px; position: absolute; top: 100%; left: 0; right: 0; z-index: 31; }
+  /* BUG REAL 2026-09-26 (Nicolas: "el boton no se ve"): al darle fondo opaco a .gantt-panel para
+     el fix del popover-ghosting (ver ese comentario, z-index:32), ese panel empezo a TAPAR de
+     verdad lo que tuviera detras — y el boton de hint vive justo ahi, en el mismo espacio, con
+     z-index:31 (uno menos). Antes no importaba que .gantt-panel tuviera mayor z-index porque no
+     tenia fondo propio (transparente); ahora que si lo tiene, gana la pelea visual tambien contra
+     el boton. z-index mas alto que .gantt-panel (32) para que el boton vuelva a verse encima. */
+  .ps-stat-hint { display: none; text-align: center; margin-top: 8px; position: absolute; top: 100%; left: 0; right: 0; z-index: 33; }
   .ps-stat.ps-stat-open + .ps-stat-hint { display: block; }
   .gantt-hint-btn { display: inline-flex; align-items: center; gap: 7px; }
   .gantt-hint-btn svg { flex: none; opacity: .8; }
@@ -1351,6 +1357,17 @@
      94%) deja un margen visible a los dos lados en pantallas grandes, nunca borde a borde. */
   .modal-overlay.expanded .modal-card { max-width: min(1600px, 92vw); }
   .modal-overlay.expanded .facts-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  /* Nicolas, 2026-09-26: "quiero que ese modal [el del Gantt] se mas extenso de manera que no
+     toque scrolear la ventana para nada" — todo el contenido de abajo (Facts+Timeline+Batches por
+     un lado, SLA+Completion+Next Step+Activity+Remark por el otro) vivia en una sola columna
+     larga; con el modal ya ancho (92vw/1600px), partirlo en 2 columnas reales usa ese ancho para
+     bajar la altura total en vez de dejarlo como espacio vacio a los lados. .timeline (Next
+     Step/Activity) ya tenia su propio max-height+scroll interno de antes, asi que ninguna lista
+     de actividad real puede volver a forzar el scroll de toda la ventana sin importar que tan
+     larga se ponga con el tiempo. Por defecto (fuera de .expanded) .modal-body-cols no hace nada
+     — mismo flujo vertical de siempre para el modal angosto de Tracking/Positions. */
+  .modal-overlay.expanded .modal-body-cols { display: grid; grid-template-columns: 1.05fr 1fr; gap: 0 32px; align-items: start; }
+  .modal-overlay.expanded .modal-col-left, .modal-overlay.expanded .modal-col-right { min-width: 0; }
   @media (prefers-reduced-motion: reduce) {
     .modal-overlay, .modal-card { transition: none; }
   }
@@ -2233,35 +2250,49 @@
       <button type="button" id="modalEditInTrackingBtn" class="btn ghost small">Edit in Tracking →</button>
     </div>
 
-    <div id="modalFacts"></div>
+    <!-- Nicolas, 2026-09-26 (modal del Gantt especificamente — confirmado: "me refiero al del
+         gantt no?"): "quiero que ese modal se mas extenso de manera que no toque scrolear la
+         ventana para nada". Este wrapper no cambia nada por si solo (display:block, mismo flujo
+         de siempre) — solo entra en accion via .modal-overlay.expanded .modal-body-cols mas abajo
+         en el CSS, que lo convierte en 2 columnas SOLO para el modal ancho del Gantt. El modal
+         normal (Tracking/Positions, mas angosto) sigue exactamente igual, un solo wrapper de mas
+         en el DOM no le cambia el layout. -->
+    <div class="modal-body-cols">
+      <div class="modal-col-left">
+        <div id="modalFacts"></div>
+      </div>
+      <div class="modal-col-right">
+        <div class="modal-section-title">SLA <span id="pivotSlaBadge"></span></div>
+        <div class="sla-grid" id="modalSlaGrid"></div>
 
-    <div class="modal-section-title">SLA <span id="pivotSlaBadge"></span></div>
-    <div class="sla-grid" id="modalSlaGrid"></div>
+        <div class="modal-section-title" id="modalCompletionTitle">Requisition Completion</div>
+        <div class="sla-grid" id="modalCompletionGrid"></div>
+        <div id="modalCompletionAlert"></div>
 
-    <div class="modal-section-title" id="modalCompletionTitle">Requisition Completion</div>
-    <div class="sla-grid" id="modalCompletionGrid"></div>
-    <div id="modalCompletionAlert"></div>
+        <!-- Siempre visible (floating y docked por igual, a diferencia de Activity abajo) — a
+             diferencia de un "Next Step" logueado en HistorialTable (el diseño viejo, ver
+             commitStatusChange()), esto se recalcula en vivo desde p.status en cada render, asi
+             que nunca falta ni queda desactualizado sin importar como se haya creado o editado
+             el req. -->
+        <div class="modal-section-title">Next Step</div>
+        <ul class="timeline" id="modalNextStep"></ul>
 
-    <!-- Siempre visible (floating y docked por igual, a diferencia de Activity abajo) — a
-         diferencia de un "Next Step" logueado en HistorialTable (el diseño viejo, ver
-         commitStatusChange()), esto se recalcula en vivo desde p.status en cada render, asi que
-         nunca falta ni queda desactualizado sin importar como se haya creado o editado el req. -->
-    <div class="modal-section-title">Next Step</div>
-    <ul class="timeline" id="modalNextStep"></ul>
+        <!-- En Tracking (docked) esto se oculta: la actividad de la posicion seleccionada vive en
+             el panel de la izquierda (#trackingSelectedActivityPanel) para dejar mas espacio
+             vertical a la lista de reqs. En Positions/Dashboard (modal flotante) se sigue viendo
+             aqui. -->
+        <div id="modalActivityBlock">
+          <div class="modal-section-title">Activity</div>
+          <ul class="timeline" id="modalTimeline"></ul>
+        </div>
 
-    <!-- En Tracking (docked) esto se oculta: la actividad de la posicion seleccionada vive en el
-         panel de la izquierda (#trackingSelectedActivityPanel) para dejar mas espacio vertical
-         a la lista de reqs. En Positions/Dashboard (modal flotante) se sigue viendo aqui. -->
-    <div id="modalActivityBlock">
-      <div class="modal-section-title">Activity</div>
-      <ul class="timeline" id="modalTimeline"></ul>
-    </div>
-
-    <div class="modal-section-title" id="modalRemarkTitle">Add A Remark</div>
-    <div class="add-remark" id="modalRemarkSection">
-      <textarea id="modalRemarkText" rows="2" placeholder="What changed, what's next…"></textarea>
-      <button class="btn primary small" id="modalRemarkSave" type="button">Add Remark</button>
-      <div style="font-size:11px; margin-top:4px;" id="modalRemarkMsg"></div>
+        <div class="modal-section-title" id="modalRemarkTitle">Add A Remark</div>
+        <div class="add-remark" id="modalRemarkSection">
+          <textarea id="modalRemarkText" rows="2" placeholder="What changed, what's next…"></textarea>
+          <button class="btn primary small" id="modalRemarkSave" type="button">Add Remark</button>
+          <div style="font-size:11px; margin-top:4px;" id="modalRemarkMsg"></div>
+        </div>
+      </div>
     </div>
 
     <div class="modal-danger-zone" id="modalDeleteZone">
