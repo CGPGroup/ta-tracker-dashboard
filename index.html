@@ -5056,13 +5056,28 @@ function ganttRowHtml(p, cal){
   // Kickoff queda totalmente invisible. Bug real, Nicolas: "en ninguna vista hay kickoff, la unica
   // que tiene es la de engineering manager" (la unica req real donde Kickoff cae un dia distinto
   // al siguiente evento).
-  let milestonesHtml = segs.filter(seg=> seg.start >= visStart && seg.start <= visEnd).map(seg=>{
+  // Nicolas, 2026-09-26, round 4, con captura real: SE-035/036 solo mostraban 1 diamante donde
+  // SE-010/011 (mismo status, mismo dia de kickoff) mostraban 3 — "por que en algunos reqs SI
+  // salen todos los milestones y en otros no???" La causa real, encontrada con datos en vivo: en
+  // SE-035/036, kickoff Y accepted caen el MISMO DIA (2026-09-23) — su leftPct matematico sale
+  // IDENTICO, asi que un hito se dibuja exactamente encima del otro, fusionados en un solo
+  // diamante visible. En SE-010/011 esas mismas 2 fechas caen en dias distintos, asi que se ven
+  // separados. No era un bug de datos faltantes (los 4 reqs SI tienen su fecha de accepted) ni
+  // del fix anterior de compresion movil (esto pasa en escritorio, ancho de sobra) — es que 2+
+  // hitos con la MISMA fecha real siempre se van a pintar en el mismo pixel sin importar cuanto
+  // espacio haya. Fix real: en vez de pintar cada hito con su leftPct crudo, se agrupan por
+  // fecha real (no por leftPct redondeado — evita fusionar 2 reqs con fechas MUY cercanas pero
+  // no iguales) y cualquier grupo con mas de un hito se abre en abanico +/-Npx para que cada uno
+  // quede su propio diamante, siempre visible y hoverable por separado, sin importar cuantos
+  // eventos reales hayan caido ese mismo dia.
+  const milestoneEntries = [];
+  segs.filter(seg=> seg.start >= visStart && seg.start <= visEnd).forEach(seg=>{
     const leftPct = (cal.pctOf(seg.start) - trackLeftPct) / trackWidthPct * 100;
-    return `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
+    milestoneEntries.push({date: seg.start, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.boundaryLabel)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
-    </div>`;
-  }).join("");
+    </div>`});
+  });
 
   // "Accepted" (o "Handoff accepted") nunca aparecia en el Gantt — bug real reportado por
   // Nicolas ("el status de accepted no esta en el gantt... las de Juan David que yo le hice
@@ -5078,11 +5093,25 @@ function ganttRowHtml(p, cal){
     const acceptedLabel = p.handoffFrom
       ? `Handoff accepted from ${escapeHtml(p.handoffFrom)}`
       : "Assignment accepted";
-    milestonesHtml += `<div class="gantt-milestone" style="left:${leftPct.toFixed(3)}%;">
+    milestoneEntries.push({date: acceptedDate, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:14px;"><b>${acceptedLabel}</b><br><span class="muted">${ganttFmtDate(acceptedDate)}${p.handoffFrom ? ` · now with ${escapeHtml(p.recruiter||"this recruiter")}` : ""}</span></div>
-    </div>`;
+    </div>`});
   }
+
+  milestoneEntries.sort((a,b)=> a.date - b.date);
+  const milestoneGroups = [];
+  milestoneEntries.forEach(entry=>{
+    const key = entry.date.toDateString();
+    let group = milestoneGroups.find(g=>g.key===key);
+    if(!group){ group = {key, items: []}; milestoneGroups.push(group); }
+    group.items.push(entry);
+  });
+  const MILESTONE_COLLISION_STEP_PX = 6;
+  let milestonesHtml = milestoneGroups.map(group=>{
+    const n = group.items.length;
+    return group.items.map((entry,i)=> entry.html(n===1 ? 0 : ((i-(n-1)/2)*MILESTONE_COLLISION_STEP_PX).toFixed(2))).join("");
+  }).join("");
 
   if(terminal && end >= visStart && end <= visEnd){
     // 3 desenlaces reales, 3 colores distintos — Filled (Internal Hire) NO es una perdida como
