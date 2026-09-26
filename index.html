@@ -976,7 +976,12 @@
      renderGanttInsights()) — Nicolas, 2026-09-26: "estan muy grandes en pixeles" sobre el tamaño
      que tenian como tarjeta de Insights aparte; mas chico aca porque comparten espacio con 2
      graficos mas, uno al lado del otro, en vez de tener todo el ancho del panel para si solas. */
-  .workload-card.compact { width: 76px; padding: 8px 6px; gap: 3px; }
+  /* Nicolas, 2026-09-26, con captura: apellidos como "Contreras"/"Patarroyo" quedaban con su
+     ultima letra huerfana en su propia linea (word-break:break-word partiendo la palabra justo
+     donde ya no cabia mas, a los 76px originales) — no era un recorte, era un ancho real
+     insuficiente para esos apellidos especificos. Subido a 90px, suficiente para que el nombre
+     complete quepa en 2 lineas limpias sin partir ninguna palabra a la mitad. */
+  .workload-card.compact { width: 90px; padding: 8px 6px; gap: 3px; }
   .workload-card.compact .workload-avatar { width: 28px; height: 28px; font-size: 10.5px; }
   .workload-card.compact .workload-name { font-size: 10px; }
   .workload-card.compact .workload-count { font-size: 9.5px; }
@@ -992,7 +997,13 @@
      recalculados sobre el mismo conjunto de posiciones que ese Gantt ya esta mostrando (respeta el
      filtro de Recruiter — "cada reclutador o all" es justo eso, ver renderGanttInsights()). */
   .gantt-insights-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
-  .gantt-mini-chart { flex: 1 1 260px; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  /* Nicolas, 2026-09-26, comparando con captura de SLA Compliance/Requisition Completion: "el
+     color de esas cards de abajo no coinciden con lo que tenemos". Estas viven anidadas un nivel
+     mas profundo (dentro del Gantt, que ya vive dentro de un .panel) que esos otros dos, que son
+     .panel de primer nivel — surface-2 aca (el tono nesting normal) terminaba siendo un tono mas
+     claro que el surface-1 plano que usan esos otros paneles, notorio en pantalla aunque seguia
+     la convencion tecnica del resto de la app. Cambiado a surface-1 para que se vean identicos. */
+  .gantt-mini-chart { flex: 1 1 260px; min-width: 0; background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
   .gantt-mini-title { font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
   .gantt-mini-sub { font-size: 10.5px; color: var(--text-muted); margin-bottom: 8px; }
 
