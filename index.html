@@ -5602,7 +5602,7 @@ function renderKpis(){
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc:"At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
     {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
-      color:"var(--good)", desc:"Confirmed hires to date — a running total, not a next step from the numbers on the left."},
+      color:"var(--good)", desc:"Confirmed placements to date — a running total, not a next step from the numbers on the left."},
   ];
   const maxVal = funnelStats[0].value || 1;
   const allStats = [...funnelStats, ...outcomeStats];
