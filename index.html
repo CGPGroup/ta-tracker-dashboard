@@ -45,6 +45,7 @@
     --surface-2: #332e29;
     --page: #292524;
     --text-primary: #f5f5f4;
+    --text-primary-rgb: 245,245,244;
     --text-secondary: #b3a89c;
     --text-muted: #a8a29e;
     --grid: #44403c;
@@ -139,6 +140,7 @@
     --surface-2: #f2ede7;
     --page: #f7f4f0;
     --text-primary: #241f1b;
+    --text-primary-rgb: 36,31,27;
     --text-secondary: #675d54;
     --text-muted: #8b8074;
     --grid: #e6e0d8;
@@ -360,7 +362,12 @@
   }
   .nav-item { transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
   .nav-item:hover { background: var(--hover-wash); color: var(--text-primary); }
-  .nav-item.active { background: rgba(var(--brand-rgb),0.22); color: var(--text-primary); border-left: 3px solid var(--brand); }
+  /* Color exacto medido en vivo en gokeystone.ai (getComputedStyle real, no aproximado): su nav
+     item activo usa rgb(255,105,0) para el TEXTO, no solo blanco sobre fondo resaltado como
+     teniamos. Deliberadamente NO se reusa --brand (#f97015, un naranja ligeramente distinto)
+     para no arrastrar este cambio a botones/graficas que nunca se auditaron contra Keystone —
+     escopado solo a este rol especifico con su propio valor exacto. */
+  .nav-item.active { background: rgba(var(--brand-rgb),0.22); color: #ff6900; border-left: 3px solid var(--brand); }
   .nav-ic { width: 18px; height: 18px; flex: none; opacity: 1; }
   .nav-ic svg { width: 100%; height: 100%; display: block; }
   /* "Workspace" es su propio acordeon, independiente de en que vista estes parado (antes su
@@ -891,7 +898,14 @@
   .sidebar-toggle:hover { background: var(--hover-wash); color: var(--text-primary); }
   .sidebar-toggle svg { width: 17px; height: 17px; flex: none; }
   .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
-  .topbar h1 .topbar-eyebrow { color: var(--text-muted); font-weight: 600; }
+  /* Nicolas, 2026-09-26, con datos reales extraidos de gokeystone.ai via consola (no adivinado):
+     su equivalente ("Searches", el eyebrow de seccion en su sidebar) usa el texto principal al
+     70% de opacidad, NO su color "muted" — dos roles distintos: el "muted" real de Keystone
+     (rgb(168,162,158), identico a nuestro --text-muted ya existente) se reserva para subtexto/
+     texto de ayuda, mientras que un eyebrow/encabezado de seccion (poca jerarquia pero SI debe
+     leerse con facilidad) usa el texto principal atenuado, no el color muted completo — mas
+     brillante que --text-muted. Ese era justo el "gris caca" que Nicolas señalo en "Workspace". */
+  .topbar h1 .topbar-eyebrow { color: rgba(var(--text-primary-rgb), 0.7); font-weight: 600; }
   .topbar h1 .topbar-eyebrow::after { content: "·"; margin: 0 7px; color: var(--border); font-weight: 400; }
   .topbar .sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
   .topbar-right { display: flex; align-items: center; gap: 14px; }
