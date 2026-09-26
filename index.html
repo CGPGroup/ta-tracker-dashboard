@@ -446,7 +446,15 @@
     opacity: 0; visibility: hidden;
     transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.28s;
   }
-  .ps-stat:hover .ps-hover-popover, .ps-stat:focus-within .ps-hover-popover {
+  /* Nicolas, 2026-09-26, con captura: "hay una linea que le pasa por el medio [del boton], casi
+     casi que es como de margen de los cards". Causa real: este popover (y su conector, ver
+     .ps-hover-popover::after mas abajo) vive en el MISMO espacio, justo debajo de la tarjeta, que
+     .ps-stat-hint (el boton "Hide the X timeline") ocupa para la tarjeta ABIERTA especificamente
+     — si pasas el mouse por encima de esa tarjeta mientras esta abierta, el popover y su conector
+     se disparan igual, encimandose visualmente con el boton que ya esta ahi. :not(.ps-stat-open)
+     evita el choque desactivando el popover solo para la tarjeta abierta — su desglose ya se ve
+     completo en el Gantt de abajo, el popover ahi era redundante de todas formas. */
+  .ps-stat:not(.ps-stat-open):hover .ps-hover-popover, .ps-stat:not(.ps-stat-open):focus-within .ps-hover-popover {
     opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0) scaleY(1);
   }
   /* El conector es una T: la barra horizontal es el propio trigger (.ps-stat), este es solo el
@@ -459,7 +467,12 @@
     transform-origin: top center;
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .ps-stat:hover .ps-hover-popover::after, .ps-stat:focus-within .ps-hover-popover::after {
+  /* Mismo choque que el popover de arriba, y de hecho el verdadero causante visual de "la linea":
+     este conector es una regla APARTE, keyed solo en .ps-stat:hover — sin este mismo
+     :not(.ps-stat-open), se seguia disparando (scaleY 0->1, la barra de 2px SI se hacia visible)
+     aunque el popover que se supone que conecta se quedara oculto por la regla de arriba, dejando
+     literalmente una lineita vertical suelta sin caja, exactamente donde vive el boton de hint. */
+  .ps-stat:not(.ps-stat-open):hover .ps-hover-popover::after, .ps-stat:not(.ps-stat-open):focus-within .ps-hover-popover::after {
     transform: translateX(-50%) scaleY(1);
   }
   .ps-hover-popover-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
@@ -5122,12 +5135,18 @@ function renderGanttGroup(key){
   // cada fila tiene una altura distinta segun cuanta info real tenga — compensacion, HM, etc — un
   // numero fijo en px habria quedado mal para unas y sobrado para otras). Con 4 filas o menos no
   // hace falta limite: ya caben todas sin scroll.
+  // BUG REAL encontrado 2026-09-26 (el zoom:0.9 de html, ver mas arriba): getBoundingClientRect()
+  // devuelve el tamaño YA escalado por el zoom visual, pero max-height (una propiedad CSS normal)
+  // se interpreta en px SIN escalar — el navegador la vuelve a escalar el 0.9 el mismo al pintarla,
+  // asi que el resultado quedaba encogido dos veces (~10% mas chico de lo real, cortando parte de
+  // la fila 4). offsetHeight (como clientHeight) es una metrica de layout, nunca la toca el zoom
+  // visual — mide siempre en las mismas unidades que max-height espera, sin importar el zoom.
   const rowEls = document.getElementById("ganttRows")?.querySelectorAll(".gantt-row");
   const rowsEl = document.getElementById("ganttRows");
   if(rowsEl){
     if(rowEls && rowEls.length > GANTT_VISIBLE_ROWS){
       let visibleHeight = 0;
-      for(let i=0;i<GANTT_VISIBLE_ROWS;i++) visibleHeight += rowEls[i].getBoundingClientRect().height;
+      for(let i=0;i<GANTT_VISIBLE_ROWS;i++) visibleHeight += rowEls[i].offsetHeight;
       rowsEl.style.maxHeight = visibleHeight + "px";
     } else {
       rowsEl.style.maxHeight = "";
