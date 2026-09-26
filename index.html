@@ -266,15 +266,15 @@
   .shell.sidebar-collapsed .sidebar-profile { justify-content: center; padding-left: 0; padding-right: 0; }
   .shell.sidebar-collapsed .sidebar-foot { left: 10px; right: 10px; }
   .shell.sidebar-collapsed .sidebar-cgp-credit { align-items: center; margin-bottom: 0; }
-  /* Nicolas, round 6: "esa es la idea de tener iconos para los workspaces... quiero que se pueda
-     acceder desde el panel colapsado" — el acordeon (icono generico "Workspace" + texto + caret,
-     que expande/colapsa la lista de abajo) YA NO TIENE SENTIDO colapsado: no hay texto que
-     expandir/ocultar, y las 2 opciones YA tienen su propio icono distinto (2 personas / 1
-     persona) que las identifica solas, sin necesitar el label. Entonces colapsado: el boton
-     acordeon (#workspaceMenuToggle) desaparece, y #navWorkspaceSwitch (las 2 opciones reales) se
-     queda SIEMPRE visible como 2 items mas del rail — click directo cambia de workspace al
-     instante, cero pasos intermedios. */
-  .shell.sidebar-collapsed #workspaceMenuToggle { display: none; }
+  /* Nicolas, round 7: "esos 3 iconos [se] colapsen... si yo colapso, se desaparece el icono del
+     workspace" — el round anterior OCULTABA el boton acordeon completo al colapsar, pensando que
+     ya no hacia falta (las 2 opciones de abajo ya tienen su propio icono). Nicolas queria lo
+     contrario: los 3 iconos (el de "Workspace" arriba, Team, Individual) se quedan SIEMPRE
+     visibles en el rail colapsado, en el MISMO orden que se ven expandidos — el boton acordeon NO
+     desaparece, solo pierde su texto/caret (ya se ocultan solos via .nav-label/.nav-group-caret,
+     mismo patron que cualquier otro nav-item) y queda como icono solo, centrado, igual que
+     Dashboard/Positions/etc. Clic en el mientras esta colapsado sigue sin hacer nada (no hay
+     texto que expandir/contraer sin espacio para el), pero el icono en si nunca se esconde. */
   .shell.sidebar-collapsed .nav-workspace-switch {
     display: flex !important; padding: 0; margin-bottom: 4px; border-bottom: 1px solid var(--border);
   }
