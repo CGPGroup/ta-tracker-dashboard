@@ -562,18 +562,15 @@
   .gantt-cal-today-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--brand); z-index: 3; }
   .gantt-cal-today-label { position: absolute; top: -14px; font-size: 10px; font-weight: 700; color: var(--brand); transform: translateX(-50%); white-space: nowrap; }
   /* Nicolas, 2026-09-24: con muchos reqs (ej. 16 en Active Positions) la lista de filas hacia que
-     toda la pagina se volviera larguisima de scrolear — scroll interno de altura fija (~6 filas).
-     2026-09-26, evolucion final: el marco visible SIEMPRE mide exactamente GANTT_VISIBLE_ROWS
-     filas reales (medido en JS en renderGanttGroup(), no un px fijo aca — cada fila mide distinto
-     segun cuanta info real tenga) — Nicolas: "no se muestren 5 o 6 o mas, sino 4... para que los
-     demas artefactos del overview se puedan ver." El selector Show decide cuantas filas EXISTEN
-     para scrollear (4/10/25/30), nunca cuantas se ven de una — eso lo fija este marco. max-height
-     se asigna por JS en cada render, no aca. */
+     toda la pagina se volviera larguisima de scrolear. 2026-09-26, version final (revertido un
+     selector "Show 4/10/25/30" que limitaba cuantas se CARGABAN — mala lectura de esto mismo):
+     "se debe poder scrolear el numero del card especificamente [SIEMPRE todas], mas no que se
+     limite a 4... a lo que me refiero a que se muestren 4 es el maximo que se muestran en la
+     ventana antes de scrolear." Siempre se cargan TODAS las filas reales; el marco visible SIEMPRE
+     mide exactamente GANTT_VISIBLE_ROWS filas reales (medido en JS en renderGanttGroup(), no un px
+     fijo aca — cada fila mide distinto segun cuanta info real tenga), max-height se asigna por JS
+     en cada render, no aca. */
   .gantt-rows { position: relative; overflow-y: auto; }
-  .gantt-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-  .gantt-pagination-note { font-size: 11px; color: var(--text-muted); }
-  .gantt-pagination-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
-  .gantt-pagination-label select { font-family: inherit; font-size: 11.5px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
   /* Franja de color por reclutador al inicio de cada fila (Nicolas, 2026-09-25, con una captura
      de referencia) — mismo colorForName()/RECRUITER_COLOR_OVERRIDES que el resto de los tags de
      identidad, puesto por inline style en ganttRowHtml() (color dinamico, no puede vivir fijo en
@@ -4526,20 +4523,14 @@ let ganttScope = "all";
 // que se abre un grupo nuevo (toggleGanttPanel), igual que ganttScope arriba.
 let ganttRecruiterFilter = null;
 let ganttRoleFilter = null;
-// Nicolas, 2026-09-26: "en el Gantt se muestren 5 rows por default, pero añadir... permitirle al
-// usuario mostrar 10, 25 o 30 max" — reemplaza el scroll interno de altura fija (#ganttRows
-// max-height) por una paginacion real: solo las primeras ganttPageSize filas de `shown` se
-// dibujan, el resto ni siquiera entra al DOM. Se resetea a 5 en cada toggleGanttPanel() nuevo,
-// igual que los demas filtros — cambiar de tarjeta no deberia heredar "mostrar 30" de la anterior.
-let ganttPageSize = 4;
-const GANTT_PAGE_SIZES = [4, 10, 25, 30];
-// Nicolas, 2026-09-26: "debe funcionar que se pueda scrolear... pero en el tamano del recuadro no
-// se muestren 5 o 6 o mas, sino 4... para que los demas artefactos del overview se puedan ver" —
-// el marco visible de filas SIEMPRE debe medir lo mismo que este numero de filas reales, sin
-// importar cuantas cargue el selector Show (4/10/25/30); Show decide cuantas EXISTEN para
-// scrollear, no cuantas se ven de una. Iguala GANTT_PAGE_SIZES[0] (el default/minimo) a proposito
-// — si ese minimo cambia algun dia, el marco visible lo sigue automaticamente.
-const GANTT_VISIBLE_ROWS = GANTT_PAGE_SIZES[0];
+// Nicolas, 2026-09-26, version final (las anteriores — paginacion con selector Show 4/10/25/30 —
+// eran una mala lectura de esto mismo, revertidas): "si hay 16, 24, 30, 90 posiciones activas, se
+// debe poder scrolear el numero del card especificamente, mas no que se limite a 4... a lo que me
+// refiero a que se muestren 4 es el maximo que se muestran en la ventana antes de scrolear."
+// Osea: SIEMPRE se cargan TODAS las filas reales de la tarjeta (nunca un subconjunto artificial),
+// y el marco visible (ver GANTT_VISIBLE_ROWS abajo) solo limita cuantas se VEN de una sin scrolear.
+// No existe ya un selector "Show" — no hace falta, nunca se recorta la carga.
+const GANTT_VISIBLE_ROWS = 4;
 
 function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
 function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
@@ -5065,7 +5056,6 @@ function renderGanttGroup(key){
   if(ganttRoleFilter) data = data.filter(p=>p.title===ganttRoleFilter);
   const win = ganttScopeWindow(ganttScope, data);
   const shown = ganttScope === "all" ? data : data.filter(p=> ganttInWindow(p, win.start, win.end));
-  const pagedShown = shown.slice(0, ganttPageSize);
   const cal = ganttBuildCalendar(win);
   const hiddenCount = data.length - shown.length;
   const filtersActive = !!(ganttRecruiterFilter || ganttRoleFilter);
@@ -5121,12 +5111,8 @@ function renderGanttGroup(key){
     <div class="gantt-calendar">
       <div class="gantt-cal-gridlines" id="ganttGridlines"></div>
       <div class="gantt-cal-axis" id="ganttAxis"></div>
-      <div class="gantt-rows" id="ganttRows">${pagedShown.length ? pagedShown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
+      <div class="gantt-rows" id="ganttRows">${shown.length ? shown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
     </div>
-    ${shown.length ? `<div class="gantt-pagination">
-      <span class="gantt-pagination-note">Showing ${pagedShown.length} of ${shown.length} requisition${shown.length===1?"":"s"}</span>
-      <label class="gantt-pagination-label">Show <select id="ganttPageSizeSelect">${GANTT_PAGE_SIZES.map(n=>`<option value="${n}" ${n===ganttPageSize?"selected":""}>${n}</option>`).join("")}</select></label>
-    </div>` : ""}
     <div id="ganttInsightsContainer"></div>
   `;
   ganttRenderAxis(cal, ganttScope === "recent" ? "week" : "month");
@@ -5152,10 +5138,6 @@ function renderGanttGroup(key){
       rowsEl.style.maxHeight = "";
     }
   }
-  document.getElementById("ganttPageSizeSelect")?.addEventListener("change", (e)=>{
-    ganttPageSize = Number(e.target.value) || GANTT_VISIBLE_ROWS;
-    renderGanttGroup(key);
-  });
   panelEl.querySelectorAll("#ganttScopeToggle .gantt-scope-btn").forEach(btn=>{
     btn.classList.toggle("active", btn.dataset.scope === ganttScope);
     btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
@@ -5228,7 +5210,6 @@ function toggleGanttPanel(key, label, positions){
   ganttScope = "all";
   ganttRecruiterFilter = null;
   ganttRoleFilter = null;
-  ganttPageSize = 4;
   panelEl.classList.add("show");
   renderGanttGroup(key);
   syncGanttOpenStatClass();
