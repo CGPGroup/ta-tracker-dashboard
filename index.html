@@ -524,7 +524,16 @@
      abierta en vez de en la de descripcion corta. Anclado a top:100% de .ps-stat-col (ya
      position:relative), que con .ps-stat en flex:1 ya termina justo en el borde inferior real de
      la caja — mismo lugar visual que antes, pero sin competir por espacio. */
-  .ps-stat-hint { display: none; text-align: center; margin-top: 8px; position: absolute; top: 100%; left: 0; right: 0; }
+  /* BUG REAL 2026-09-26 (Nicolas, con captura: "el boton sigue igual, con el artifact cruzado"):
+     el popover de hover de una tarjeta VECINA (ver .ps-hover-popover, z-index:30) es mas ancho que
+     una sola columna — centrado bajo SU propia tarjeta, sus bordes se meten en la columna de al
+     lado. Si esa columna vecina es la tarjeta ABIERTA, su boton de hint queda literalmente debajo
+     del popover ajeno cuando pasas el mouse por esa otra tarjeta (nada que ver con la tarjeta
+     abierta en si — el fix anterior de :not(.ps-stat-open) solo evitaba que la tarjeta abierta
+     chocara con SU PROPIO popover, no que otra chocara con su boton). z-index mas alto que el
+     popover (30) asegura que el boton, funcional y permanente, siempre gane visualmente sobre un
+     popover ajeno, decorativo y transitorio, sin importar de que tarjeta venga. */
+  .ps-stat-hint { display: none; text-align: center; margin-top: 8px; position: absolute; top: 100%; left: 0; right: 0; z-index: 31; }
   .ps-stat.ps-stat-open + .ps-stat-hint { display: block; }
   .gantt-hint-btn { display: inline-flex; align-items: center; gap: 7px; }
   .gantt-hint-btn svg { flex: none; opacity: .8; }
