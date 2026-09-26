@@ -5099,6 +5099,23 @@ function ganttRowHtml(p, cal){
     </div>`});
   }
 
+  // El desenlace terminal (Placed/Cancelled/Filled) tambien es un hito con fecha real (`end`) —
+  // se agrega a la MISMA lista antes de agrupar, no despues, para que si algun dia coincide con
+  // el mismo dia real que Kickoff/Accepted (caso raro pero posible: cancelado el mismo dia que
+  // se creo el req) tambien se abra en abanico en vez de fusionarse.
+  if(terminal && end >= visStart && end <= visEnd){
+    // 3 desenlaces reales, 3 colores distintos — Filled (Internal Hire) NO es una perdida como
+    // Cancelled (el cliente si cubrio la vacante, solo que no fue una colocacion de Irth), asi
+    // que no puede compartir el rojo de "critical" con Cancelled (bug real senalado por Nicolas:
+    // "por que le pones closed - placed y closed - cancelled... no deberia ser solo placed y
+    // cancelled" llevo a revisar el resto de la leyenda y encontrar este tambien).
+    const outcomeClass = p.status==="Hired" ? "outcome-good" : (p.status==="Cancelled" ? "outcome-critical" : "outcome-neutral");
+    milestoneEntries.push({date: end, html: offsetPx => `<div class="gantt-milestone ${outcomeClass}" style="left:calc(100% + ${offsetPx}px);">
+      <span class="gantt-milestone-shape"></span>
+      <div class="gantt-tooltip" style="bottom:16px;"><b>${escapeHtml(statusLabel(p.status))}</b><br><span class="muted">${ganttFmtDate(end)}</span></div>
+    </div>`});
+  }
+
   milestoneEntries.sort((a,b)=> a.date - b.date);
   const milestoneGroups = [];
   milestoneEntries.forEach(entry=>{
@@ -5112,19 +5129,6 @@ function ganttRowHtml(p, cal){
     const n = group.items.length;
     return group.items.map((entry,i)=> entry.html(n===1 ? 0 : ((i-(n-1)/2)*MILESTONE_COLLISION_STEP_PX).toFixed(2))).join("");
   }).join("");
-
-  if(terminal && end >= visStart && end <= visEnd){
-    // 3 desenlaces reales, 3 colores distintos — Filled (Internal Hire) NO es una perdida como
-    // Cancelled (el cliente si cubrio la vacante, solo que no fue una colocacion de Irth), asi
-    // que no puede compartir el rojo de "critical" con Cancelled (bug real senalado por Nicolas:
-    // "por que le pones closed - placed y closed - cancelled... no deberia ser solo placed y
-    // cancelled" llevo a revisar el resto de la leyenda y encontrar este tambien).
-    const outcomeClass = p.status==="Hired" ? "outcome-good" : (p.status==="Cancelled" ? "outcome-critical" : "outcome-neutral");
-    milestonesHtml += `<div class="gantt-milestone ${outcomeClass}" style="left:100%;">
-      <span class="gantt-milestone-shape"></span>
-      <div class="gantt-tooltip" style="bottom:16px;"><b>${escapeHtml(statusLabel(p.status))}</b><br><span class="muted">${ganttFmtDate(end)}</span></div>
-    </div>`;
-  }
 
   // Misma base real que el resto del tracker usa para TTF/TTH (slaFor(), ver el modal de
   // detalle) — nunca kickoff: el reloj arranca en el primer dia habil despues del intake
