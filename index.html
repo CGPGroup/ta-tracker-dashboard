@@ -190,6 +190,19 @@
      defecto de .shell (align-items:stretch) le imponga la altura del contenido vecino en vez de
      su propio 100vh. overflow-y:auto es una salvedad por si el sidebar mismo alguna vez tuviera
      mas contenido del que cabe en la ventana. */
+  /* BUG REAL, round 4 (Nicolas, con datos reales de su consola): confirmado via
+     getBoundingClientRect en su propia maquina que .sidebar (height:100vh) media 1042px de alto
+     con una ventana de 1158px — exactamente el 90% (1042/1158 = 0.900), el mismo 0.9 de nuestro
+     propio `zoom:0.9` en <html> (ver mas abajo, "Global zoom at 90%"). En SU navegador real
+     (devicePixelRatio 1.1, osea zoom real del SO/navegador ademas del nuestro), `100vh` dentro de
+     un elemento position:sticky + overflow:auto se esta calculando MAL — se le aplica el 0.9 de
+     zoom DOS veces en vez de una, dejando el panel 10% mas corto que la ventana real (justo el
+     hueco que reportaba, no un problema del footer en si — .sidebar-foot SI estaba bien pegado al
+     fondo de .sidebar, solo que .sidebar mismo no llegaba al fondo real de la pantalla). Mi propio
+     navegador de prueba nunca reprodujo esto (ahi 100vh si media exacto). Fix real: dejar de usar
+     `height:100vh` por completo. position:fixed; top:0; left:0; bottom:0 define el alto via los
+     bordes REALES del viewport, sin pasar por ninguna conversion de unidad vh que se pueda
+     calcular mal — inmune al bug de arriba sin importar el navegador/DPI/zoom compuesto. */
   .sidebar {
     width: 232px; flex: none;
     background: var(--sidebar-bg);
@@ -199,19 +212,42 @@
     position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto;
     transition: width 0.2s ease, padding 0.2s ease;
   }
-  .shell.sidebar-collapsed .sidebar { width: 0; padding-left: 0; padding-right: 0; overflow: hidden; }
+  /* Nicolas, 2026-09-26, round 2: el primer intento colapsaba a 0 (ancho + boton flotando afuera)
+     — "no me gusta el boton... no tiene que literal ocultarlo todo, puede dejar los iconos". Ahora
+     es un verdadero "icon rail": ancho reducido (--sidebar-collapsed-w) en vez de 0, .nav-label
+     (el texto de cada item, ver el HTML) se oculta pero el icono se queda centrado — mismo patron
+     que VSCode/Notion. .sidebar-toggle vive DENTRO de .sidebar ahora (ya no hace falta que escape
+     via position:fixed, el rail colapsado sigue siendo ancho suficiente para contenerlo) — un
+     boton normal con su propia etiqueta, no un circulo flotando encima del borde. */
+  :root { --sidebar-collapsed-w: 68px; }
+  .shell.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-w); padding-left: 10px; padding-right: 10px; }
+  .shell.sidebar-collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  .shell.sidebar-collapsed .brand-text,
+  .shell.sidebar-collapsed .nav-label,
+  .shell.sidebar-collapsed .nav-group-caret,
+  .shell.sidebar-collapsed .nav-workspace-switch,
+  .shell.sidebar-collapsed .team-name,
+  .shell.sidebar-collapsed .team-title,
+  .shell.sidebar-collapsed .rail-section-title,
+  .shell.sidebar-collapsed #sidebarRecentReqsZone,
+  .shell.sidebar-collapsed .sidebar-cgp-label,
+  .shell.sidebar-collapsed .sidebar-tagline,
+  .shell.sidebar-collapsed .sidebar-toggle-label,
+  .shell.sidebar-collapsed .sidebar-foot-note { display: none; }
+  .shell.sidebar-collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+  .shell.sidebar-collapsed .sidebar-profile { justify-content: center; padding-left: 0; padding-right: 0; }
+  .shell.sidebar-collapsed .sidebar-toggle { justify-content: center; padding-left: 0; padding-right: 0; }
+  .shell.sidebar-collapsed .sidebar-toggle svg { transform: rotate(180deg); }
+  .shell.sidebar-collapsed .sidebar-foot { left: 10px; right: 10px; }
+  .shell.sidebar-collapsed .sidebar-cgp-credit { align-items: center; margin-bottom: 0; }
   .sidebar-toggle {
-    position: fixed; top: 22px; left: 220px; z-index: 40;
-    width: 24px; height: 24px; border-radius: 50%; flex: none;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary);
-    cursor: pointer; padding: 0;
-    transition: left 0.2s ease, background 0.15s ease, color 0.15s ease;
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 9px 12px; margin: 2px 0 14px; border-radius: 8px;
+    background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+    cursor: pointer; font-size: 12.5px; font-family: inherit; font-weight: 600;
   }
   .sidebar-toggle:hover { background: var(--hover-wash); color: var(--text-primary); }
-  .sidebar-toggle svg { width: 14px; height: 14px; flex: none; transition: transform 0.2s ease; }
-  .shell.sidebar-collapsed .sidebar-toggle { left: 8px; }
-  .shell.sidebar-collapsed .sidebar-toggle svg { transform: rotate(180deg); }
+  .sidebar-toggle svg { width: 16px; height: 16px; flex: none; transition: transform 0.2s ease; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
   .brand-mark { width: 34px; height: 34px; object-fit: contain; display: block; }
   .brand-text { line-height: 1.2; }
@@ -343,15 +379,19 @@
   .nav-group-caret { width: 14px; height: 14px; flex: none; margin-left: auto; opacity: 0.7; transition: transform 0.15s ease; }
   .nav-group-caret.collapsed { transform: rotate(-90deg); }
 
-  /* Nicolas, 2026-09-26, con captura: "lo del managed by... esta super arriba cuando deberia ser
-     como el pie del panel lateral". margin-top:auto (empuja el footer al fondo del flex column)
-     seguia ahi y media bien en las pruebas locales, pero depende de que .sidebar realmente termine
-     de calcular su propia altura (100vh) exactamente como se espera — cualquier diferencia real de
-     entorno (tamano de ventana, etc) deja un espacio real debajo. position:sticky + bottom:0 es
-     mas contundente: sin importar la altura real del contenido de arriba, el footer SIEMPRE keda
-     clavado al borde inferior VISIBLE de .sidebar (que ya tiene su propio scroll, overflow-y:auto)
-     apenas se pueda ver, nunca a mitad de camino. Necesita su propio fondo solido (no transparente)
-     para no dejar ver contenido de mas arriba detras suyo al hacer scroll. */
+  /* Nicolas, 2026-09-26, round 3, con captura real de su pantalla completa: el footer seguia
+     dejando un espacio real y grande debajo (no los ~20px que medi yo mismo en mis pruebas —
+     su ventana real deja mucho mas espacio vacio de lo que reproduje). margin-top:auto (empuja
+     el footer usando el espacio SOBRANTE del flex column) y position:sticky;bottom:0 (lo clava
+     mientras haya scroll) dependen los dos de que el CALCULO de espacio sobrante/scroll sea
+     exacto — evidentemente en su entorno real no lo es. En vez de seguir peleando con ese
+     calculo, esta version usa position:absolute; bottom: 14px directo contra .sidebar (que ya
+     es position:sticky, osea ya es el contenedor de referencia para hijos absolutos) — el
+     footer SIEMPRE se dibuja a una distancia FIJA en pixeles del borde inferior REAL de
+     .sidebar (que mide 100vh, la ventana completa), sin importar cuanto contenido de nav haya
+     arriba ni como el navegador calcule espacio sobrante. .nav (ver su regla, mas arriba) tiene
+     su propio padding-bottom reservado para que el footer nunca tape el ultimo item del nav si
+     esa lista alguna vez creciera mucho. */
   .sidebar-foot {
     position: absolute; left: 14px; right: 14px; bottom: 14px;
     padding: 14px 0 0;
@@ -627,6 +667,21 @@
   .gantt-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-secondary); }
   .gantt-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
   .gantt-legend-diamond { width: 7px; height: 7px; flex: none; background: var(--text-secondary); transform: rotate(45deg); border-radius: 1px; }
+  /* BUG REAL 2026-09-26 (Nicolas, con captura de movil: "no se muestra informacion relevante como
+     el accepted y demas"): los datos SI estaban completos (verificado en el libro real, las 16
+     posiciones activas tienen su fecha de accepted) — el problema era puramente de espacio en
+     pantallas angostas. .gantt-row-label (220px) + .gantt-row-end (175px) son ancho FIJO — en un
+     celular (~390px de viewport) eso deja apenas ~30-40px reales para todo el canvas del timeline,
+     comprimiendo tanto la escala que 2-3 milestones cercanos en el tiempo (ej. Kickoff y Accepted,
+     casi siempre el mismo dia o el siguiente) terminaban en el MISMO pixel — literalmente
+     encimados, invisibles como eventos separados aunque los 3 SI estuvieran en el DOM (confirmado
+     midiendo getBoundingClientRect: dos milestones distintos, rect identico). min-width en
+     .gantt-calendar-inner + overflow-x:auto en .gantt-calendar de vuelta le da al canvas espacio
+     real en pixeles sin importar el ancho de la ventana — se scrollea horizontal en movil en vez
+     de comprimirse hasta la ilegibilidad, mismo trade-off ya aceptado en otras tablas densas de
+     este archivo (.tracking-table-scroll). El position:relative que necesitan las gridlines/el eje
+     (absolutos, left/right en px) se mueve al wrapper NUEVO para que escalen con el ancho real
+     (min-width), no con el viewport angosto de .gantt-calendar. */
   .gantt-calendar { overflow-x: auto; }
   .gantt-calendar-inner { position: relative; min-width: 700px; }
   .gantt-cal-axis { display: flex; margin-left: 220px; margin-right: 175px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 2px; position: relative; height: 15px; }
@@ -815,8 +870,12 @@
      cuantas banderas haya. */
   #dashboardAttentionZone { max-height: 260px; overflow-y: auto; }
 
+  /* .sidebar es position:fixed (ver su comentario), asi que sale del flujo flex de .shell por
+     completo — .main ya no puede confiar en que el flex le deje el espacio automaticamente,
+     necesita su propio margin-left reservando ese ancho a mano, con la MISMA transition que
+     .sidebar para que los dos se muevan juntos al colapsar/expandir. */
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; margin-left: 232px; transition: margin-left 0.2s ease; }
-  .shell.sidebar-collapsed .main { margin-left: 0; }
+  .shell.sidebar-collapsed .main { margin-left: var(--sidebar-collapsed-w); }
 
   .topbar {
     height: 60px; flex: none;
@@ -1053,6 +1112,16 @@
     background-size: cover; background-position: center;
     position: relative;
   }
+  /* BUG REAL 2026-09-26, round 2 (Nicolas: "los nombres en verdad no estan centrados"): el fix
+     anterior (text-align:center en vez de inline-flex) SI centra el bloque de texto, pero el dot
+     de color seguia siendo parte de ese mismo texto centrado (dot + nombre juntos como un solo
+     bloque inline) — el nombre en si quedaba corrido ~6-7px a la derecha del centro real de la
+     tarjeta, la mitad del ancho del dot+su margen. Sacado por completo de .workload-name; ahora
+     vive como badge sobre el avatar (mismo patron que un "online status dot" en un perfil), asi
+     que el texto del nombre se centra solo, sin nada mas compitiendo por ese espacio. El borde
+     del color de fondo de la tarjeta (--surface-2, la MISMA variable que .workload-card ya usa,
+     nunca cambia entre variantes normal/compact) lo separa visualmente del avatar en vez de
+     fundirse con el si el color de identidad coincide con el del avatar generado. */
   .workload-avatar .recruiter-dot {
     position: absolute; right: -1px; bottom: -1px; margin-right: 0;
     border: 2px solid var(--surface-2);
@@ -1078,6 +1147,13 @@
      asi el tag nunca desentona con el avatar de esa misma persona, y sigue siendo visible aunque
      el reclutador ya tenga foto real (el avatar deja de mostrar el color en ese caso, este tag no). */
   .recruiter-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; margin-right: 5px; vertical-align: middle; }
+  /* BUG REAL 2026-09-26 (Nicolas: "mi titulo es mas largo... el de David eso no esta a la misma
+     altura", comparando "Lead Talent Partner" (envuelve a 2 lineas en 90px) contra un cargo mas
+     corto (1 sola linea) — min-height solo reservaba 1 linea, asi que todo lo que viene DESPUES
+     (barra de carga, conteo de reqs, SLA) arrancaba en una altura distinta segun cuantas lineas
+     le tocaran al titulo de ESE reclutador especifico. Mismo principio ya aplicado a
+     .workload-name (reservar el maximo de 2 lineas SIEMPRE, sin importar si el titulo real
+     necesita 1 o 2) para que el resto de la tarjeta arranque en el mismo punto en todas. */
   .workload-title { font-size: 10px; color: var(--text-muted); margin-top: -3px; white-space: normal; word-break: break-word; max-width: 100%; line-height: 1.25; min-height: 2.5em; }
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
@@ -1627,6 +1703,14 @@
         <div class="l2">Talent Acquisition Tracker</div>
       </div>
     </div>
+    <!-- Nicolas, 2026-09-26, round 2: "no me gusta el boton... algo mas profesional" — un boton
+         normal de nav en vez de un circulo flotando encima del borde del panel; vive DENTRO de
+         .sidebar ahora porque el rail colapsado ya no es ancho 0 (ver .sidebar-collapsed en el
+         CSS), sigue teniendo espacio de sobra para contenerlo sin escapar via position:fixed. -->
+    <button type="button" class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar" aria-label="Collapse sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <span class="sidebar-toggle-label">Collapse</span>
+    </button>
     <!-- Reemplaza el viejo panel lateral aparte (aside .team-rail, ya no existe): tu perfil
          vive DIRECTO en el nav principal, no en un segundo panel flotando junto al contenido.
          Solo visible dentro de tu propio workspace (setDashboardScope() lo muestra/oculta). -->
@@ -1641,23 +1725,23 @@
            tu titulo SIEMPRE te deja viendo Dashboard — solo cambia que datos ve. -->
       <button type="button" class="nav-item nav-group-header" id="workspaceMenuToggle">
         <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
-        Workspace
+        <span class="nav-label">Workspace</span>
         <svg class="nav-group-caret" id="workspaceMenuCaret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="nav-workspace-switch" id="navWorkspaceSwitch">
         <button type="button" class="nav-workspace-btn active" id="navWorkspaceTeamBtn">Talent Acquisition Team</button>
         <button type="button" class="nav-workspace-btn" id="navWorkspaceMineBtn" style="display:none;">My Workspace</button>
       </div>
-      <button class="nav-item active" data-view="dashboard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="10" y1="10" x2="10" y2="20"/></svg></span> Dashboard</button>
+      <button class="nav-item active" data-view="dashboard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="10" y1="10" x2="10" y2="20"/></svg></span> <span class="nav-label">Dashboard</span></button>
       <!-- Solo visible dentro de tu propio workspace (setDashboardScope() lo muestra/oculta,
            igual que antes cuando esto vivia como un dash-tab mas arriba) — Nicolas pidio
            devolverlo al panel izquierdo como los demas nav-item, en vez de una pestaña mas
            dentro de la fila de tabs del Dashboard. -->
-      <button class="nav-item" data-view="tracking" id="navItemTracking" style="display:none;"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Tracking</button>
-      <button class="nav-item" data-view="positions"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span> Positions</button>
-      <button class="nav-item" data-view="scorecard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg></span> Scorecard</button>
-      <button class="nav-item" data-view="manage"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="5" x2="14" y2="5"/><line x1="10" y1="5" x2="3" y2="5"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="19" x2="16" y2="19"/><line x1="12" y1="19" x2="3" y2="19"/><line x1="14" y1="3" x2="14" y2="7"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="17" x2="16" y2="21"/></svg></span> SSOT Management</button>
-      <button class="nav-item" data-view="guide"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> Process & SLA Guide</button>
+      <button class="nav-item" data-view="tracking" id="navItemTracking" style="display:none;"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> <span class="nav-label">Tracking</span></button>
+      <button class="nav-item" data-view="positions"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span> <span class="nav-label">Positions</span></button>
+      <button class="nav-item" data-view="scorecard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg></span> <span class="nav-label">Scorecard</span></button>
+      <button class="nav-item" data-view="manage"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="5" x2="14" y2="5"/><line x1="10" y1="5" x2="3" y2="5"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="19" x2="16" y2="19"/><line x1="12" y1="19" x2="3" y2="19"/><line x1="14" y1="3" x2="14" y2="7"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="17" x2="16" y2="21"/></svg></span> <span class="nav-label">SSOT Management</span></button>
+      <button class="nav-item" data-view="guide"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> <span class="nav-label">Process & SLA Guide</span></button>
       <div id="sidebarRecentReqsZone"></div>
     </nav>
     <div class="sidebar-foot">
@@ -1666,14 +1750,12 @@
         <img src="logos/cgp-group.svg" alt="CGP Group" class="cgp-credit-logo" id="cgpCreditLogo">
       </div>
       <div class="sidebar-tagline">The Team's Single Source Of Truth</div>
-      You're seeing live data already.<br>
-      Sign in from the welcome screen if you need to make changes.
+      <div class="sidebar-foot-note">
+        You're seeing live data already.<br>
+        Sign in from the welcome screen if you need to make changes.
+      </div>
     </div>
   </aside>
-
-  <button type="button" class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar" aria-label="Collapse sidebar">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-  </button>
 
   <div class="main">
     <div class="topbar">
@@ -5106,6 +5188,12 @@ function renderGanttInsights(containerId, positions){
     const photo = RECRUITER_PHOTOS[r.label];
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
     const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
+    // BUG REAL 2026-09-26 (Nicolas: "que todo este a la misma altura... que se vea organizado"):
+    // esta linea se omitia POR COMPLETO (string vacio) para un reclutador sin posiciones activas
+    // (recruiterSlaRate() devuelve null ahi) — exactamente el mismo bug de altura inconsistente ya
+    // arreglado para .workload-title, solo que se me paso esta. Siempre se renderiza el div, con
+    // un placeholder neutro cuando no hay dato, para que TODAS las tarjetas reserven la misma
+    // altura sin importar si ese reclutador tiene 0 o varias posiciones activas.
     const slaHtml = r.slaRate === null
       ? `<div class="workload-sla"><span class="dot" style="background:var(--grid);"></span>No active reqs</div>`
       : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
@@ -11640,7 +11728,7 @@ function applyTheme(theme){
   // originales — sin esto se volverian invisibles contra un fondo claro. *-dark.svg son los
   // mismos archivos con ese texto recoloreado a oscuro (el naranja/rojo de marca se queda igual
   // en los dos, solo el texto cambia).
-  document.getElementById("cgpCreditLogo").src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
+  updateCgpCreditLogoSrc();
   const loadingCgp = document.getElementById("loadingCgpLogo");
   const loadingKeystone = document.getElementById("loadingKeystoneLogo");
   if(loadingCgp) loadingCgp.src = theme === "light" ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
@@ -11667,11 +11755,29 @@ document.querySelectorAll(".theme-toggle").forEach(btn=>{
 // flash), esto solo sincroniza el icono del knob con lo que haya quedado.
 applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
 
+// Nicolas, 2026-09-26: "un boton para colapsar y ocultar el panel lateral" — preferencia de ESTE
+// navegador (localStorage, mismo patron que tk_theme), nunca escrita a Excel/Graph. Aplicar el
+// estado guardado apenas carga (antes de que el usuario haga nada) evita que alguien que ya
+// colapso el panel antes tenga que volver a hacerlo en cada visita.
+// Nicolas, round 2: "el de cornerstone... o dejarle solo el simbolo" — colapsado, el wordmark
+// completo (cgp-group.svg, con texto) no cabe ni tiene sentido en un rail de 68px; se cambia al
+// simbolo suelto (cgp-mark.svg, sin texto, ver su comentario en el archivo) en vez de ocultar el
+// logo por completo. Se llama tanto desde applyTheme() (el wordmark SI tiene variante clara/
+// oscura) como desde applySidebarCollapsed() (el simbolo no necesita variante, sus colores de
+// marca funcionan igual en los 2 temas) para que el src siempre refleje la combinacion correcta
+// de las 2 variables sin importar cual cambio ultimo.
+function updateCgpCreditLogoSrc(){
+  const collapsed = document.querySelector(".shell").classList.contains("sidebar-collapsed");
+  if(collapsed){ document.getElementById("cgpCreditLogo").src = "logos/cgp-mark.svg"; return; }
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  document.getElementById("cgpCreditLogo").src = light ? "logos/cgp-group-dark.svg" : "logos/cgp-group.svg";
+}
 function applySidebarCollapsed(collapsed){
   document.querySelector(".shell").classList.toggle("sidebar-collapsed", collapsed);
   const btn = document.getElementById("sidebarToggle");
   btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
   btn.setAttribute("aria-label", btn.title);
+  updateCgpCreditLogoSrc();
   try { localStorage.setItem("tk_sidebar_collapsed", collapsed ? "1" : "0"); } catch(e){}
 }
 document.getElementById("sidebarToggle").addEventListener("click", ()=>{
