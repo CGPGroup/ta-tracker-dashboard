@@ -538,14 +538,13 @@
   .gantt-cal-today-label { position: absolute; top: -14px; font-size: 10px; font-weight: 700; color: var(--brand); transform: translateX(-50%); white-space: nowrap; }
   /* Nicolas, 2026-09-24: con muchos reqs (ej. 16 en Active Positions) la lista de filas hacia que
      toda la pagina se volviera larguisima de scrolear — scroll interno de altura fija (~6 filas).
-     2026-09-26: se agrego paginacion real encima (ganttPageSize/pagedShown en renderGanttGroup(),
-     5/10/25/30) pero se quito el max-height/scroll de aca por error — Nicolas: "no era quitarle
-     el scroll, era solo que se mostraran maximo 5 [por defecto], pero si el usuario quiere mas
-     pues ahi esta la lista [el selector]." Las dos cosas conviven: el selector cambia CUANTAS
-     filas se cargan (5 por defecto, hasta 30), este max-height decide si esas filas caben sin
-     alargar la pagina o si hay que scrolear internamente para verlas — a 5 filas nunca se activa
-     el scroll (caben de sobra), a 25-30 si. */
-  .gantt-rows { position: relative; max-height: 630px; overflow-y: auto; }
+     2026-09-26, evolucion final: el marco visible SIEMPRE mide exactamente GANTT_VISIBLE_ROWS
+     filas reales (medido en JS en renderGanttGroup(), no un px fijo aca — cada fila mide distinto
+     segun cuanta info real tenga) — Nicolas: "no se muestren 5 o 6 o mas, sino 4... para que los
+     demas artefactos del overview se puedan ver." El selector Show decide cuantas filas EXISTEN
+     para scrollear (4/10/25/30), nunca cuantas se ven de una — eso lo fija este marco. max-height
+     se asigna por JS en cada render, no aca. */
+  .gantt-rows { position: relative; overflow-y: auto; }
   .gantt-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
   .gantt-pagination-note { font-size: 11px; color: var(--text-muted); }
   .gantt-pagination-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
@@ -4509,6 +4508,13 @@ let ganttRoleFilter = null;
 // igual que los demas filtros — cambiar de tarjeta no deberia heredar "mostrar 30" de la anterior.
 let ganttPageSize = 4;
 const GANTT_PAGE_SIZES = [4, 10, 25, 30];
+// Nicolas, 2026-09-26: "debe funcionar que se pueda scrolear... pero en el tamano del recuadro no
+// se muestren 5 o 6 o mas, sino 4... para que los demas artefactos del overview se puedan ver" —
+// el marco visible de filas SIEMPRE debe medir lo mismo que este numero de filas reales, sin
+// importar cuantas cargue el selector Show (4/10/25/30); Show decide cuantas EXISTEN para
+// scrollear, no cuantas se ven de una. Iguala GANTT_PAGE_SIZES[0] (el default/minimo) a proposito
+// — si ese minimo cambia algun dia, el marco visible lo sigue automaticamente.
+const GANTT_VISIBLE_ROWS = GANTT_PAGE_SIZES[0];
 
 function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
 function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
@@ -5100,8 +5106,23 @@ function renderGanttGroup(key){
   `;
   ganttRenderAxis(cal, ganttScope === "recent" ? "week" : "month");
   renderGanttInsights("ganttInsightsContainer", data);
+  // El marco de filas mide SIEMPRE lo mismo (GANTT_VISIBLE_ROWS reales, medidos de verdad porque
+  // cada fila tiene una altura distinta segun cuanta info real tenga — compensacion, HM, etc — un
+  // numero fijo en px habria quedado mal para unas y sobrado para otras). Con 4 filas o menos no
+  // hace falta limite: ya caben todas sin scroll.
+  const rowEls = document.getElementById("ganttRows")?.querySelectorAll(".gantt-row");
+  const rowsEl = document.getElementById("ganttRows");
+  if(rowsEl){
+    if(rowEls && rowEls.length > GANTT_VISIBLE_ROWS){
+      let visibleHeight = 0;
+      for(let i=0;i<GANTT_VISIBLE_ROWS;i++) visibleHeight += rowEls[i].getBoundingClientRect().height;
+      rowsEl.style.maxHeight = visibleHeight + "px";
+    } else {
+      rowsEl.style.maxHeight = "";
+    }
+  }
   document.getElementById("ganttPageSizeSelect")?.addEventListener("change", (e)=>{
-    ganttPageSize = Number(e.target.value) || 5;
+    ganttPageSize = Number(e.target.value) || GANTT_VISIBLE_ROWS;
     renderGanttGroup(key);
   });
   panelEl.querySelectorAll("#ganttScopeToggle .gantt-scope-btn").forEach(btn=>{
