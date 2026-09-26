@@ -612,7 +612,8 @@
   .gantt-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-secondary); }
   .gantt-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
   .gantt-legend-diamond { width: 7px; height: 7px; flex: none; background: var(--text-secondary); transform: rotate(45deg); border-radius: 1px; }
-  .gantt-calendar { position: relative; }
+  .gantt-calendar { overflow-x: auto; }
+  .gantt-calendar-inner { position: relative; min-width: 700px; }
   .gantt-cal-axis { display: flex; margin-left: 220px; margin-right: 175px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 2px; position: relative; height: 15px; }
   .gantt-cal-tick { position: absolute; font-size: 10px; font-weight: 600; color: var(--text-secondary); transform: translateX(-50%); white-space: nowrap; }
   .gantt-cal-gridlines { position: absolute; top: 0; bottom: 0; left: 220px; right: 175px; pointer-events: none; }
@@ -5080,7 +5081,9 @@ function renderGanttInsights(containerId, positions){
     const photo = RECRUITER_PHOTOS[r.label];
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
     const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
-    const slaHtml = r.slaRate === null ? "" : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
+    const slaHtml = r.slaRate === null
+      ? `<div class="workload-sla"><span class="dot" style="background:var(--grid);"></span>No active reqs</div>`
+      : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
     // Nicolas, 2026-09-26: "me faltaron los titulos de cada uno" — RECRUITER_TITLES (ej. "Lead
     // Talent Partner") se habia quedado afuera de la version compacta (.workload-title ya existia
     // en el CSS de la version anterior, solo nunca se movio a este markup nuevo).
@@ -5257,9 +5260,11 @@ function renderGanttGroup(key){
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("On Hold"))} — paused, clock frozen</div>
     </div>
     <div class="gantt-calendar">
-      <div class="gantt-cal-gridlines" id="ganttGridlines"></div>
-      <div class="gantt-cal-axis" id="ganttAxis"></div>
-      <div class="gantt-rows" id="ganttRows">${shown.length ? shown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
+      <div class="gantt-calendar-inner">
+        <div class="gantt-cal-gridlines" id="ganttGridlines"></div>
+        <div class="gantt-cal-axis" id="ganttAxis"></div>
+        <div class="gantt-rows" id="ganttRows">${shown.length ? shown.map(p=>ganttRowHtml(p,cal)).join("") : `<div class="gantt-empty">No requisitions in ${win.label}. Try "All time".</div>`}</div>
+      </div>
     </div>
     <div id="ganttInsightsContainer"></div>
   `;
