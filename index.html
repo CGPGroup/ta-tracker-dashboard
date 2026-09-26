@@ -482,9 +482,24 @@
      (ver renderKpis()), oculto por defecto y revelado solo cuando ESA .ps-stat especifica tiene
      .ps-stat-open (selector de hermano adyacente, reusa la clase que syncGanttOpenStatClass() ya
      mantiene sincronizada — cero JS nuevo para sincronizar el texto/visibilidad). */
-  .ps-stat-col { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-  .ps-stat-col > .ps-stat { flex: none; }
-  .ps-stat-hint { display: none; text-align: center; margin-top: 8px; }
+  .ps-stat-col { display: flex; flex-direction: column; flex: 1; min-width: 0; position: relative; }
+  /* Nicolas, 2026-09-26, con captura: "las cards no son congruentes en tamano... deben ser del
+     tamano de la de On Hold & Other Closures" (la de descripcion mas larga). Antes, flex:none aca
+     dejaba que cada .ps-stat solo ocupara su propio contenido, aunque .ps-stat-col (el hermano de
+     verdad que .positions-summary-strip estira parejo via align-items:stretch) ya fuera mas alto
+     por la tarjeta vecina con mas texto — quedaba espacio vacio en la columna, invisible, en vez
+     de que la caja MISMA creciera. flex:1 hace que .ps-stat SI llene esa columna ya estirada; la
+     altura extra la absorbe .stat-desc (que ya tiene flex:1 propio), asi que los .ps-bar quedan
+     alineados abajo en todas las tarjetas por igual. */
+  .ps-stat-col > .ps-stat { flex: 1; }
+  /* .ps-stat-hint saca de flujo (position:absolute) a proposito: si se quedara como hermano
+     normal dentro de .ps-stat-col, la tarjeta ABIERTA (la unica con el hint visible) perderia esa
+     altura de vuelta al reparto de flex:1 de arriba, quedando otra vez mas baja que el resto —
+     exactamente el mismo bug de tamanos que se acababa de arreglar, solo que ahora en la tarjeta
+     abierta en vez de en la de descripcion corta. Anclado a top:100% de .ps-stat-col (ya
+     position:relative), que con .ps-stat en flex:1 ya termina justo en el borde inferior real de
+     la caja — mismo lugar visual que antes, pero sin competir por espacio. */
+  .ps-stat-hint { display: none; text-align: center; margin-top: 8px; position: absolute; top: 100%; left: 0; right: 0; }
   .ps-stat.ps-stat-open + .ps-stat-hint { display: block; }
   .gantt-hint-btn { display: inline-flex; align-items: center; gap: 7px; }
   .gantt-hint-btn svg { flex: none; opacity: .8; }
@@ -515,9 +530,9 @@
   .gantt-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
   .gantt-legend-diamond { width: 7px; height: 7px; flex: none; background: var(--text-secondary); transform: rotate(45deg); border-radius: 1px; }
   .gantt-calendar { position: relative; }
-  .gantt-cal-axis { display: flex; margin-left: 220px; margin-right: 150px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 2px; position: relative; height: 15px; }
+  .gantt-cal-axis { display: flex; margin-left: 220px; margin-right: 175px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 2px; position: relative; height: 15px; }
   .gantt-cal-tick { position: absolute; font-size: 10px; font-weight: 600; color: var(--text-secondary); transform: translateX(-50%); white-space: nowrap; }
-  .gantt-cal-gridlines { position: absolute; top: 0; bottom: 0; left: 220px; right: 150px; pointer-events: none; }
+  .gantt-cal-gridlines { position: absolute; top: 0; bottom: 0; left: 220px; right: 175px; pointer-events: none; }
   .gantt-cal-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: .6; }
   .gantt-cal-today-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--brand); z-index: 3; }
   .gantt-cal-today-label { position: absolute; top: -14px; font-size: 10px; font-weight: 700; color: var(--brand); transform: translateX(-50%); white-space: nowrap; }
@@ -659,7 +674,14 @@
   .gantt-milestone.outcome-critical .gantt-milestone-shape { background: var(--critical); }
   .gantt-milestone.outcome-neutral { width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; }
   .gantt-milestone.outcome-neutral .gantt-milestone-shape { background: var(--neutral); }
-  .gantt-row-end { width: 150px; flex: none; text-align: right; padding-left: 10px; }
+  /* Nicolas, 2026-09-26: "no se por que se puede desplazar hacia la derecha... los chips del
+     final no se ven bien" — el chip mas largo real ("Intake Meeting Requested") no cabia en
+     150px con white-space:nowrap, y como todo flex item por defecto tiene min-width:auto (su
+     contenido manda por encima del width fijo), esa columna se ensanchaba sola, empujando CADA
+     fila a un ancho distinto — de ahi el scroll horizontal que no deberia existir. min-width:0 +
+     overflow:hidden fuerzan el limite real; 175px (subido de 150px) ya alcanza para el chip mas
+     largo sin recortarlo. */
+  .gantt-row-end { width: 175px; min-width: 0; overflow: hidden; flex: none; text-align: right; padding-left: 10px; }
   .gantt-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; max-width: 100%; }
   .gantt-chip .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: currentColor; }
   .gantt-chip.live { background: rgba(var(--brand-rgb),0.16); color: var(--brand); }
@@ -4468,8 +4490,8 @@ let ganttRoleFilter = null;
 // max-height) por una paginacion real: solo las primeras ganttPageSize filas de `shown` se
 // dibujan, el resto ni siquiera entra al DOM. Se resetea a 5 en cada toggleGanttPanel() nuevo,
 // igual que los demas filtros — cambiar de tarjeta no deberia heredar "mostrar 30" de la anterior.
-let ganttPageSize = 5;
-const GANTT_PAGE_SIZES = [5, 10, 25, 30];
+let ganttPageSize = 4;
+const GANTT_PAGE_SIZES = [4, 10, 25, 30];
 
 function ganttFmtDate(dt){ return dt.toLocaleDateString("en-US", {month:"short", day:"numeric"}); }
 function ganttAddDays(dt,n){ return new Date(dt.getTime()+n*86400000); }
@@ -4918,6 +4940,7 @@ function renderGanttInsights(containerId, positions){
     <div class="gantt-insights-row">
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Active Workload By Recruiter</div>
+        <div class="gantt-mini-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. ${WORKLOAD_SWEET_SPOT} is the sweet spot, ${WORKLOAD_MAX} the max. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
         <div class="workload-grid compact">${workloadCardsHtml || `<span class="panel-sub" style="margin:0;">No recruiters in this view.</span>`}</div>
       </div>
       <div class="gantt-mini-chart">
@@ -4934,6 +4957,7 @@ function renderGanttInsights(containerId, positions){
       </div>
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Position By Location/Work Arrangement</div>
+        <div class="gantt-mini-sub">Active positions right now, by country and by work arrangement.</div>
         <div style="font-size:10.5px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">BY COUNTRY</div>
         <div class="barlist compact" id="ganttByCountry">${countryRows.length ? countryRows.map((r,i)=>{
           const max = countryRows[0].value||1;
@@ -5135,7 +5159,7 @@ function toggleGanttPanel(key, label, positions){
   ganttScope = "all";
   ganttRecruiterFilter = null;
   ganttRoleFilter = null;
-  ganttPageSize = 5;
+  ganttPageSize = 4;
   panelEl.classList.add("show");
   renderGanttGroup(key);
   syncGanttOpenStatClass();
