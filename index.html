@@ -196,7 +196,7 @@
     color: var(--text-primary);
     display: flex; flex-direction: column;
     padding: 20px 14px;
-    position: sticky; top: 0; align-self: flex-start; height: 100vh; overflow-y: auto;
+    position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto;
     transition: width 0.2s ease, padding 0.2s ease;
   }
   .shell.sidebar-collapsed .sidebar { width: 0; padding-left: 0; padding-right: 0; overflow: hidden; }
@@ -815,7 +815,8 @@
      cuantas banderas haya. */
   #dashboardAttentionZone { max-height: 260px; overflow-y: auto; }
 
-  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; margin-left: 232px; transition: margin-left 0.2s ease; }
+  .shell.sidebar-collapsed .main { margin-left: 0; }
 
   .topbar {
     height: 60px; flex: none;
