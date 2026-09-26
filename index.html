@@ -1719,7 +1719,7 @@
               <div class="dash-grid">
                 <div class="panel" style="grid-column: span 3;">
                   <h3>SLA Compliance</h3>
-                  <div class="panel-sub">Share of active positions on time on every SLA target (submit, fill, and hire deadlines). The rest are running behind on at least one.</div>
+                  <div class="panel-sub">Share of active positions with a running SLA clock that are on time on every target (submit, fill, and hire deadlines). Positions that haven't had their intake meeting yet aren't counted either way — their clock hasn't started. The rest are running behind on at least one.</div>
                   <div id="chartSlaCompliance"></div>
                 </div>
                 <div class="panel" style="grid-column: span 3;">
@@ -5785,19 +5785,32 @@ function renderSlaChart(){
 function renderSlaMeter(){
   // Mismo fix de 2026-09-23 que el resto de paneles de "active" — ver renderGanttInsights().
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
-  // Sin posiciones activas no hay nada que medir todavia; mostrar "100%" ahi se leeria como
-  // un logro real en vez de "no hay datos", asi que este caso se muestra aparte, en gris.
-  if(!active.length){
+  // BUG REAL 2026-09-26 (Nicolas: "todos los reqs segun eso estan en SLA, y no"): antes este
+  // donut contaba TODA posicion activa que no estuviera literalmente "out" como "On Time" —
+  // incluidas las que todavia no tienen intake, cuyo reloj de TTS/TTF/TTH ni siquiera ha
+  // arrancado (slaFor() devuelve "none" en los 3 targets hasta que hay intake, ver esa funcion).
+  // Con el libro real (16 activas, 10 sin intake todavia), eso inflaba "15 On Time" a 94% cuando
+  // en realidad solo 5 tienen un reloj corriendo de verdad. Igual que Submitted Vs Expected ya
+  // hace (ver renderGanttInsights()), el denominador correcto es solo las posiciones cuyo reloj
+  // ya arranco — "no ha empezado" no es lo mismo que "va a tiempo".
+  const started = active.filter(p=>{
+    const s = computeSla(p);
+    return s.TTS.status!=="none" || s.TTF.status!=="none" || s.TTH.status!=="none";
+  });
+  // Sin posiciones con reloj corriendo (nada activo, o todo lo activo sigue pre-intake) no hay
+  // nada que medir todavia; mostrar "100%" ahi se leeria como un logro real en vez de "no hay
+  // datos", asi que este caso se muestra aparte, en gris.
+  if(!started.length){
     renderDonut("chartSlaCompliance", [{label:"No active positions", value:1, realValue:0}], ["var(--grid)"], null, 100, {value:"-", label:"No Data"});
     return;
   }
-  const missedAnyIds = new Set(active.filter(p=>{
+  const missedAnyIds = new Set(started.filter(p=>{
     const s = computeSla(p);
     return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
   }).map(p=>p.id));
   const outOfSla = missedAnyIds.size;
-  const onTrack = active.length - outOfSla;
-  const rate = Math.round((onTrack / active.length) * 100);
+  const onTrack = started.length - outOfSla;
+  const rate = Math.round((onTrack / started.length) * 100);
   let color = "var(--good)";
   if(rate < 75) color = "var(--critical)";
   else if(rate < 90) color = "var(--warning)";
@@ -5816,8 +5829,8 @@ function renderSlaMeter(){
     {value: rate + "%", label: "On Time"},
     (row)=>{
       const matches = row.label==="On Time"
-        ? active.filter(p=>!missedAnyIds.has(p.id))
-        : active.filter(p=>missedAnyIds.has(p.id));
+        ? started.filter(p=>!missedAnyIds.has(p.id))
+        : started.filter(p=>missedAnyIds.has(p.id));
       openQuickList(row.label, `${matches.length} position${matches.length===1?"":"s"}`, matches);
     }
   );
