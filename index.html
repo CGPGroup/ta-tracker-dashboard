@@ -212,13 +212,11 @@
     position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto;
     transition: width 0.2s ease, padding 0.2s ease;
   }
-  /* Nicolas, 2026-09-26, round 2: el primer intento colapsaba a 0 (ancho + boton flotando afuera)
-     — "no me gusta el boton... no tiene que literal ocultarlo todo, puede dejar los iconos". Ahora
-     es un verdadero "icon rail": ancho reducido (--sidebar-collapsed-w) en vez de 0, .nav-label
-     (el texto de cada item, ver el HTML) se oculta pero el icono se queda centrado — mismo patron
-     que VSCode/Notion. .sidebar-toggle vive DENTRO de .sidebar ahora (ya no hace falta que escape
-     via position:fixed, el rail colapsado sigue siendo ancho suficiente para contenerlo) — un
-     boton normal con su propia etiqueta, no un circulo flotando encima del borde. */
+  /* Nicolas, 2026-09-26, round 3, comparado en vivo con gokeystone.ai/dashboard (capturas
+     reales): "el boton de collapse... el lineado se ve mas bonito porque no es tan grueso, es
+     mas blanco tambien cada logo de menu". Round 2 ya habia resuelto lo estructural (rail de
+     iconos real, no ancho 0) pero el boton en si (dentro del panel, con etiqueta de texto) y el
+     grosor/color de los iconos seguian sin igualar la referencia real. Este round: */
   :root { --sidebar-collapsed-w: 68px; }
   .shell.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-w); padding-left: 10px; padding-right: 10px; }
   .shell.sidebar-collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
@@ -232,22 +230,23 @@
   .shell.sidebar-collapsed #sidebarRecentReqsZone,
   .shell.sidebar-collapsed .sidebar-cgp-label,
   .shell.sidebar-collapsed .sidebar-tagline,
-  .shell.sidebar-collapsed .sidebar-toggle-label,
   .shell.sidebar-collapsed .sidebar-foot-note { display: none; }
   .shell.sidebar-collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
   .shell.sidebar-collapsed .sidebar-profile { justify-content: center; padding-left: 0; padding-right: 0; }
-  .shell.sidebar-collapsed .sidebar-toggle { justify-content: center; padding-left: 0; padding-right: 0; }
-  .shell.sidebar-collapsed .sidebar-toggle svg { transform: rotate(180deg); }
   .shell.sidebar-collapsed .sidebar-foot { left: 10px; right: 10px; }
   .shell.sidebar-collapsed .sidebar-cgp-credit { align-items: center; margin-bottom: 0; }
-  .sidebar-toggle {
-    display: flex; align-items: center; gap: 10px; width: 100%;
-    padding: 9px 12px; margin: 2px 0 14px; border-radius: 8px;
-    background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
-    cursor: pointer; font-size: 12.5px; font-family: inherit; font-weight: 600;
-  }
-  .sidebar-toggle:hover { background: var(--hover-wash); color: var(--text-primary); }
-  .sidebar-toggle svg { width: 16px; height: 16px; flex: none; transition: transform 0.2s ease; }
+  /* "es mas blanco tambien cada logo de menu" — los items sin foco en KeyStone se ven casi tan
+     brillantes como el activo, no apagados a --text-secondary como el resto de este archivo
+     hace por defecto. Solo se sube el brillo EN el rail colapsado (ya no hay texto al lado que
+     le de contexto al icono, necesita leerse solo) — el modo expandido no se toco, esa distincion
+     atenuado/brillante ahi sigue siendo la correcta para texto+icono juntos. */
+  .shell.sidebar-collapsed .nav-item { color: var(--text-primary); }
+  .shell.sidebar-collapsed .nav-ic { opacity: 1; }
+  /* "no es tan grueso" — 1.8 (el stroke-width de cada svg de nav, escrito inline en el HTML) es
+     mas grueso que el de la referencia real. stroke-width en CSS gana sobre el atributo inline
+     del SVG (es solo un valor de presentacion, no un !important), asi que un solo selector aca
+     afina TODOS los iconos del nav de una vez sin tener que editar cada svg uno por uno. */
+  .nav-ic svg, .sidebar-toggle svg { stroke-width: 1.4; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
   .brand-mark { width: 34px; height: 34px; object-fit: contain; display: block; }
   .brand-text { line-height: 1.2; }
@@ -884,6 +883,20 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 24px;
   }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
+  /* Nicolas, round 3, comparado con el boton real de KeyStone (captura): cuadrado chico con
+     esquinas redondeadas, un icono de "panel lateral" estandar (rectangulo + linea vertical
+     cerca del borde izquierdo — el mismo de VSCode/Notion/Linear), sin rotar ni cambiar de
+     icono entre estados; vive en el topbar, no dentro del panel. El id/JS no cambia
+     (applySidebarCollapsed sigue buscando #sidebarToggle), solo su lugar y su look. */
+  .sidebar-toggle {
+    display: flex; align-items: center; justify-content: center; flex: none;
+    width: 32px; height: 32px; padding: 0; border-radius: 8px;
+    background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .sidebar-toggle:hover { background: var(--hover-wash); color: var(--text-primary); }
+  .sidebar-toggle svg { width: 17px; height: 17px; flex: none; }
   .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
   .topbar h1 .topbar-eyebrow { color: var(--text-muted); font-weight: 600; }
   .topbar h1 .topbar-eyebrow::after { content: "·"; margin: 0 7px; color: var(--border); font-weight: 400; }
@@ -1703,14 +1716,6 @@
         <div class="l2">Talent Acquisition Tracker</div>
       </div>
     </div>
-    <!-- Nicolas, 2026-09-26, round 2: "no me gusta el boton... algo mas profesional" — un boton
-         normal de nav en vez de un circulo flotando encima del borde del panel; vive DENTRO de
-         .sidebar ahora porque el rail colapsado ya no es ancho 0 (ver .sidebar-collapsed en el
-         CSS), sigue teniendo espacio de sobra para contenerlo sin escapar via position:fixed. -->
-    <button type="button" class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar" aria-label="Collapse sidebar">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      <span class="sidebar-toggle-label">Collapse</span>
-    </button>
     <!-- Reemplaza el viejo panel lateral aparte (aside .team-rail, ya no existe): tu perfil
          vive DIRECTO en el nav principal, no en un segundo panel flotando junto al contenido.
          Solo visible dentro de tu propio workspace (setDashboardScope() lo muestra/oculta). -->
@@ -1759,9 +1764,21 @@
 
   <div class="main">
     <div class="topbar">
-      <div>
-        <h1 id="topbarTitle"><span class="topbar-eyebrow">Workspace</span>Talent Acquisition Team</h1>
-        <div class="sub" id="topbarSub">Dashboard — Overview of all active positions</div>
+      <div class="topbar-left">
+        <!-- Nicolas, 2026-09-26, round 3: "el de keystone se ve mas bonito, no tan grueso"
+             — comparado en vivo contra gokeystone.ai/dashboard, cuyo boton de colapsar vive en
+             el TOPBAR (no dentro del panel lateral), es un cuadrado pequeno con bordes
+             redondeados, y usa el icono estandar de "panel lateral" (un rectangulo con una
+             linea vertical cerca del borde izquierdo, el mismo que VSCode/Notion/Linear) en vez
+             de una flecha que rota. Movido aca por eso — el id/JS (applySidebarCollapsed) no
+             cambia, solo donde vive el boton en el HTML/CSS. -->
+        <button type="button" class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar" aria-label="Collapse sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+        </button>
+        <div>
+          <h1 id="topbarTitle"><span class="topbar-eyebrow">Workspace</span>Talent Acquisition Team</h1>
+          <div class="sub" id="topbarSub">Dashboard — Overview of all active positions</div>
+        </div>
       </div>
       <div class="topbar-right">
         <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light/dark theme" title="Switch to light theme">
