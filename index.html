@@ -329,10 +329,20 @@
   .nav-group-caret { width: 14px; height: 14px; flex: none; margin-left: auto; opacity: 0.7; transition: transform 0.15s ease; }
   .nav-group-caret.collapsed { transform: rotate(-90deg); }
 
+  /* Nicolas, 2026-09-26, con captura: "lo del managed by... esta super arriba cuando deberia ser
+     como el pie del panel lateral". margin-top:auto (empuja el footer al fondo del flex column)
+     seguia ahi y media bien en las pruebas locales, pero depende de que .sidebar realmente termine
+     de calcular su propia altura (100vh) exactamente como se espera — cualquier diferencia real de
+     entorno (tamano de ventana, etc) deja un espacio real debajo. position:sticky + bottom:0 es
+     mas contundente: sin importar la altura real del contenido de arriba, el footer SIEMPRE keda
+     clavado al borde inferior VISIBLE de .sidebar (que ya tiene su propio scroll, overflow-y:auto)
+     apenas se pueda ver, nunca a mitad de camino. Necesita su propio fondo solido (no transparente)
+     para no dejar ver contenido de mas arriba detras suyo al hacer scroll. */
   .sidebar-foot {
     margin-top: auto; padding: 12px 8px 4px;
     font-size: 11px; color: var(--text-muted); line-height: 1.5;
     border-top: 1px solid var(--border); padding-top: 14px;
+    position: sticky; bottom: 0; background: var(--sidebar-bg);
   }
   .sidebar-tagline {
     color: var(--text-secondary); font-weight: 600; margin-bottom: 12px; padding-bottom: 14px;
@@ -554,7 +564,23 @@
      historial), aprobado por Nicolas y llevado aqui 2026-09-22. Reusa STAGE_COLORS/--seq-* que ya
      existen (nunca colores nuevos) y --text-secondary (no --text-muted) para las fechas del eje —
      Nicolas: "letras como grises y casi no identifico esa info a que periodo pertenecia". */
-  .gantt-panel { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; display: none; }
+  /* BUG REAL 2026-09-26 (Nicolas, con captura: texto fantasma/doble encima del titulo del Gantt
+     abierto — "Active Positions — 16 requisitions in All time"): el popover de hover de CUALQUIER
+     tarjeta de arriba (.ps-hover-popover, z-index:30) es un hermano normal dentro del MISMO
+     #panelPositionsSummary que este panel — ambos viven ahi desde que Insights se metio dentro
+     del Gantt, ya no son paneles separados compitiendo por z-index (la razon original del 30, ver
+     el comentario de 2026-09-18 mas arriba, era ganarle a un panel vecino — "Total Requisitions" —
+     que ya no existe). Aunque el popover ya tiene tope de tamano (ver HOVER_POPOVER_MAX_ITEMS),
+     con tarjetas y espaciados reales todavia puede alcanzar a meterse en el titulo/contenido de
+     ESTE panel apenas se abre. z-index mas alto que el popover (30) y el boton de hint (31)
+     asegura que la sesion de Gantt completa — titulo, filas, insights, todo — siempre gane contra
+     cualquier popover que se le encime, sin importar en que punto exacto lo alcance a tocar.
+     El z-index solo no bastaba: .gantt-panel no tenia fondo propio, asi que aunque SU TEXTO
+     ganara pixel a pixel (confirmado con elementFromPoint), el resto de su caja quedaba
+     transparente en su propia capa de stacking — dejando ver el fondo solido del popover DETRAS
+     igual, como texto fantasma superpuesto. background explicito (mismo tono que .panel) tapa
+     esa caja por completo, no solo su texto. */
+  .gantt-panel { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; display: none; position: relative; z-index: 32; background: var(--surface-1); }
   .gantt-panel.show { display: block; }
   .gantt-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 2px; }
   .gantt-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
