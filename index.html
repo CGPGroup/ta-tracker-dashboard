@@ -423,23 +423,29 @@
      aunque visualmente pareciera "detras". Fix: el panel entero sube de stacking context (no solo
      el popover) para que TODO lo que dibuje, incluido el popover, gane contra sus vecinos. */
   #panelPositionsSummary { position: relative; z-index: 5; }
-  /* Popover de hover (ver statHoverPopoverHtml()) — sin scroll (Nicolas: "sin tener que
-     scrolear" — crece lo que haga falta en vez de recortar con max-height). Debajo de la
-     tarjeta, no encima: esta fila vive pegada al topbar, un popover hacia ARRIBA se cortaba
-     contra el borde del viewport en la practica (probado en vivo). Oculto por opacity+visibility
-     (no display:none) para poder animar la transicion.
+  /* Popover de hover (ver statHoverPopoverHtml()). Debajo de la tarjeta, no encima: esta fila vive
+     pegada al topbar, un popover hacia ARRIBA se cortaba contra el borde del viewport en la
+     practica (probado en vivo). Oculto por opacity+visibility (no display:none) para poder animar
+     la transicion.
      BUG REAL 2026-09-18 (Nicolas, con dibujo a mano): el triangulito de antes (14px de ancho) era
      mucho mas angosto que la tarjeta, asi que a los lados del triangulo — y en el hueco de 12px
      antes de el — se seguia viendo el panel de atras. Pedido explicito: "forma de T hacia abajo",
      mas alto, sin hueco. Ahora el conector es un embudo solido (::before, clip-path) que va del
      ancho casi completo de la tarjeta (angosto arriba, pegado al numero) hasta la caja (ancha
      abajo) — sin gap: top de la caja = justo donde termina el embudo, cero espacio sin cubrir
-     entre el numero y el texto. */
+     entre el numero y el texto.
+     BUG REAL 2026-09-26 (Nicolas: "sigue igual el boton" — el z-index del boton de hint no
+     alcanzaba a arreglarlo del todo): la decision original del 2026-09-18 de "sin scroll, que
+     crezca lo que haga falta" era razonable con pocas posiciones, pero con el libro real (30
+     posiciones) el popover de "Positions" media 814px de alto — no solo tapaba el boton de hint,
+     tapaba TODO el panel del Gantt abierto debajo (filas, insights, todo), muy por debajo de donde
+     ganar el z-index contra el boton alcanzaba a ayudar. max-height + scroll interno evita que
+     vuelva a pasar sin importar cuantas posiciones reales termine teniendo cualquier card. */
   .ps-hover-popover {
     position: absolute; top: calc(100% + 18px); left: 50%;
     transform-origin: top center;
     transform: translateX(-50%) translateY(-6px) scaleY(0.85);
-    min-width: 190px; max-width: 260px;
+    min-width: 190px; max-width: 260px; max-height: 300px; overflow: hidden;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 12px; box-shadow: var(--shadow), 0 8px 20px rgba(0,0,0,0.35);
     text-align: left; z-index: 30; pointer-events: none;
@@ -480,6 +486,7 @@
   .ps-hover-popover li { font-size: 11.5px; line-height: 1.5; padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--text-primary); }
   .ps-hover-popover li:last-child { border-bottom: none; }
   .ps-hover-popover li b { color: var(--text-muted); font-weight: 600; }
+  .ps-hover-popover-more { font-size: 10.5px; color: var(--text-muted); font-style: italic; padding-top: 6px; }
   .ps-stat .stat-num { font-size: 30px; line-height: 1; }
   .ps-stat .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-top: 6px; }
   .ps-stat .stat-desc { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.35; flex: 1; }
@@ -4505,12 +4512,26 @@ const POTENTIAL_PLACEMENT_STATUSES = ["Offer Request","Filled"];
 // — mas simple y sin el parpadeo tipico de un tooltip manejado con mouseenter/mouseleave. Vacio
 // (0 posiciones) no dibuja el popover para nada, no tiene sentido un hover con una lista vacia.
 // pointer-events:none en el popover a proposito: es solo para mirar, no para interactuar — si
-// hay muchos items y no caben, se recortan con overflow en vez de intentar hacerlo scrolleable
-// con el mouse (eso ya lo cubre el click -> openQuickList, que si es interactivo).
+// hay muchos items y no caben, se recortan (el click -> openQuickList ya cubre ver la lista
+// completa e interactuar con ella).
+// BUG REAL 2026-09-26 (Nicolas, con captura real de 30 posiciones): sin un tope real, esta lista
+// crecia sin limite (814px de alto con 30 items) y tapaba el Gantt entero debajo, no solo el
+// boton de hint que vive en ese mismo espacio. HOVER_POPOVER_MAX_ITEMS + "+N more" evita que la
+// lista misma crezca sin limite, y a diferencia de solo recortar con overflow (que corta un item
+// a la mitad sin avisar), esto es explicito sobre cuantos faltan — ver el click -> openQuickList
+// para la lista completa, que ya era y sigue siendo la forma real de verla toda.
+// Bajado varias veces probando en vivo (10 y luego 8 items seguian sin caber completos dentro de
+// max-height, cortando la nota misma sin avisar — los titulos reales pueden envolver a 2 lineas,
+// mas altos de lo que parecia en un calculo a mano). 5 dentro de 300px de max-height (subido de
+// 280px) da margen real de sobra incluso con titulos largos envueltos.
+const HOVER_POPOVER_MAX_ITEMS = 5;
 function statHoverPopoverHtml(s){
   if(!s.positions || !s.positions.length) return "";
-  const items = s.positions.map(p=>`<li><b>${escapeHtml(p.id)}</b> — ${escapeHtml(p.title)}</li>`).join("");
-  return `<div class="ps-hover-popover"><div class="ps-hover-popover-title">${escapeHtml(s.label)}</div><ul>${items}</ul></div>`;
+  const shown = s.positions.slice(0, HOVER_POPOVER_MAX_ITEMS);
+  const items = shown.map(p=>`<li><b>${escapeHtml(p.id)}</b> — ${escapeHtml(p.title)}</li>`).join("");
+  const remaining = s.positions.length - shown.length;
+  const moreNote = remaining > 0 ? `<div class="ps-hover-popover-more">+${remaining} more — click the card to see all</div>` : "";
+  return `<div class="ps-hover-popover"><div class="ps-hover-popover-title">${escapeHtml(s.label)}</div><ul>${items}</ul>${moreNote}</div>`;
 }
 
 // ===== Req Pulse Timeline — Gantt real por requisicion =====
