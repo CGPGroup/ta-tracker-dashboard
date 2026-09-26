@@ -1114,9 +1114,19 @@
   }
   .modal-overlay.docked .modal-card { max-width: none; width: 100%; transform: none !important; }
 
+  /* min-width:0 es el fix real para un bug clasico de grid/flex: .panel es hijo directo de
+     .dash-grid (grid), y un grid item sin min-width propio por defecto usa min-width:auto — es
+     decir, se niega a encogerse mas alla del ancho minimo de SU CONTENIDO. El Gantt que vive
+     DENTRO de un .panel tiene su propio .gantt-calendar-inner con min-width:700px (a proposito,
+     para que los milestones no se compriman en movil, ver ese comentario) — sin este min-width:0
+     aca, esos 700px se filtraban HACIA ARRIBA forzando el .panel entero (y con el, la fila del
+     grid, y con ESO, potencialmente la pagina completa) a nunca encogerse por debajo de ~700px,
+     rompiendo el layout en cualquier pantalla angosta de verdad (telefono) sin importar nada de
+     lo demas que se ajuste — el overflow-x:auto de .gantt-calendar nunca llegaba a activarse
+     porque su contenedor ya se habia estirado para nunca necesitarlo. */
   .panel {
     background: var(--surface-1); border-radius: var(--radius); border: 1px solid var(--border);
-    box-shadow: var(--shadow); padding: 16px 18px;
+    box-shadow: var(--shadow); padding: 16px 18px; min-width: 0;
   }
   /* 700 se veia "agresivo" en Poppins comparado con la referencia de KeyStone AI (su bold de
      titulo es notoriamente mas liviano que el regular-vs-bold de aca) — 600 es bold de sobra
