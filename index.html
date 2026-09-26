@@ -197,7 +197,21 @@
     display: flex; flex-direction: column;
     padding: 20px 14px;
     position: sticky; top: 0; align-self: flex-start; height: 100vh; overflow-y: auto;
+    transition: width 0.2s ease, padding 0.2s ease;
   }
+  .shell.sidebar-collapsed .sidebar { width: 0; padding-left: 0; padding-right: 0; overflow: hidden; }
+  .sidebar-toggle {
+    position: fixed; top: 22px; left: 220px; z-index: 40;
+    width: 24px; height: 24px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary);
+    cursor: pointer; padding: 0;
+    transition: left 0.2s ease, background 0.15s ease, color 0.15s ease;
+  }
+  .sidebar-toggle:hover { background: var(--hover-wash); color: var(--text-primary); }
+  .sidebar-toggle svg { width: 14px; height: 14px; flex: none; transition: transform 0.2s ease; }
+  .shell.sidebar-collapsed .sidebar-toggle { left: 8px; }
+  .shell.sidebar-collapsed .sidebar-toggle svg { transform: rotate(180deg); }
   .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
   .brand-mark { width: 34px; height: 34px; object-fit: contain; display: block; }
   .brand-text { line-height: 1.2; }
@@ -1654,6 +1668,10 @@
       Sign in from the welcome screen if you need to make changes.
     </div>
   </aside>
+
+  <button type="button" class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar" aria-label="Collapse sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
 
   <div class="main">
     <div class="topbar">
@@ -11646,6 +11664,18 @@ document.querySelectorAll(".theme-toggle").forEach(btn=>{
 // El script bloqueante al principio de <head> ya dejo el atributo puesto si tocaba (evita el
 // flash), esto solo sincroniza el icono del knob con lo que haya quedado.
 applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
+
+function applySidebarCollapsed(collapsed){
+  document.querySelector(".shell").classList.toggle("sidebar-collapsed", collapsed);
+  const btn = document.getElementById("sidebarToggle");
+  btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  btn.setAttribute("aria-label", btn.title);
+  try { localStorage.setItem("tk_sidebar_collapsed", collapsed ? "1" : "0"); } catch(e){}
+}
+document.getElementById("sidebarToggle").addEventListener("click", ()=>{
+  applySidebarCollapsed(!document.querySelector(".shell").classList.contains("sidebar-collapsed"));
+});
+try { applySidebarCollapsed(localStorage.getItem("tk_sidebar_collapsed") === "1"); } catch(e){}
 // Cuando la data real (Graph o el proxy publico) esta cacheada/es rapida, trysilentConnect()
 // puede resolver en unos pocos cientos de ms, muy rapido para realmente ver la pantalla de
 // carga. Se fuerza un minimo de tiempo visible para que siempre se alcance a leer/ver bien.
