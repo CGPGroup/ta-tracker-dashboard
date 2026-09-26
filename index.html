@@ -471,15 +471,16 @@
     opacity: 0; visibility: hidden;
     transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.28s;
   }
-  /* Nicolas, 2026-09-26, con captura: "hay una linea que le pasa por el medio [del boton], casi
-     casi que es como de margen de los cards". Causa real: este popover (y su conector, ver
-     .ps-hover-popover::after mas abajo) vive en el MISMO espacio, justo debajo de la tarjeta, que
-     .ps-stat-hint (el boton "Hide the X timeline") ocupa para la tarjeta ABIERTA especificamente
-     — si pasas el mouse por encima de esa tarjeta mientras esta abierta, el popover y su conector
-     se disparan igual, encimandose visualmente con el boton que ya esta ahi. :not(.ps-stat-open)
-     evita el choque desactivando el popover solo para la tarjeta abierta — su desglose ya se ve
-     completo en el Gantt de abajo, el popover ahi era redundante de todas formas. */
-  .ps-stat:not(.ps-stat-open):hover .ps-hover-popover, .ps-stat:not(.ps-stat-open):focus-within .ps-hover-popover {
+  /* Nicolas, 2026-09-26 — 2 rondas sobre este mismo choque: primero solo la tarjeta ABIERTA
+     (:not(.ps-stat-open)), pero cualquier OTRA tarjeta (su popover es mas ancho que una sola
+     columna) todavia podia meterse en el boton de hint o en el propio Gantt de la tarjeta abierta
+     con solo pasar el mouse por al lado. Version final: mientras CUALQUIER Gantt este abierto (no
+     "distinto a esta tarjeta especifica"), ningun popover de hover se dispara en absoluto — con
+     un Gantt abierto, pasar el mouse a otra tarjeta para ver su preview ya no tiene sentido, un
+     click ahi abre su propio Gantt completo de todas formas. #positionsSummaryStrip.gantt-any-open
+     (ver syncGanttOpenStatClass()) es el gate real, no depende de CUAL tarjeta dispara el hover. */
+  #positionsSummaryStrip:not(.gantt-any-open) .ps-stat:hover .ps-hover-popover,
+  #positionsSummaryStrip:not(.gantt-any-open) .ps-stat:focus-within .ps-hover-popover {
     opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0) scaleY(1);
   }
   /* El conector es una T: la barra horizontal es el propio trigger (.ps-stat), este es solo el
@@ -492,12 +493,12 @@
     transform-origin: top center;
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  /* Mismo choque que el popover de arriba, y de hecho el verdadero causante visual de "la linea":
-     este conector es una regla APARTE, keyed solo en .ps-stat:hover — sin este mismo
-     :not(.ps-stat-open), se seguia disparando (scaleY 0->1, la barra de 2px SI se hacia visible)
-     aunque el popover que se supone que conecta se quedara oculto por la regla de arriba, dejando
-     literalmente una lineita vertical suelta sin caja, exactamente donde vive el boton de hint. */
-  .ps-stat:not(.ps-stat-open):hover .ps-hover-popover::after, .ps-stat:not(.ps-stat-open):focus-within .ps-hover-popover::after {
+  /* Mismo gate que el popover de arriba (y el verdadero causante visual de "la linea" cuando solo
+     se apagaba el popover pero no esto — regla APARTE, keyed solo en .ps-stat:hover): sin el mismo
+     gate aca, este conector se seguia disparando (una lineita de 2px suelta, sin la caja que se
+     supone que conecta) aunque el popover ya estuviera apagado. */
+  #positionsSummaryStrip:not(.gantt-any-open) .ps-stat:hover .ps-hover-popover::after,
+  #positionsSummaryStrip:not(.gantt-any-open) .ps-stat:focus-within .ps-hover-popover::after {
     transform: translateX(-50%) scaleY(1);
   }
   .ps-hover-popover-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
@@ -1040,7 +1041,14 @@
      su propia altura segun cuantas lineas le tocara a ESE nombre. line-height explicito +
      min-height de exactamente 2 lineas (en em, escala solo con el font-size de cada variante,
      compact incluida) reserva el mismo espacio sin importar el nombre real. */
-  .workload-name { font-size: 11px; font-weight: 600; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; display: inline-flex; align-items: center; justify-content: center; line-height: 1.25; min-height: 2.5em; }
+  /* BUG REAL 2026-09-26 (Nicolas: "los nombres no estan centrados"): display:inline-flex +
+     justify-content:center centra los FLEX ITEMS como fila (el dot + el nodo de texto), pero una
+     vez el texto envuelve a una 2da linea (nombres largos, ver el fix de ancho de mas arriba),
+     flexbox no re-centra cada linea envuelta — la 2da linea quedaba pegada a la izquierda dentro
+     de su propio item en vez de centrada. text-align:center en un bloque normal SI centra cada
+     linea de texto envuelta por separado, que es lo que en realidad hacia falta aca — .recruiter-
+     dot ya es inline-block (ver su propia regla), fluye bien como texto normal sin necesitar flex. */
+  .workload-name { font-size: 11px; font-weight: 600; color: var(--text-primary); white-space: normal; word-break: break-word; max-width: 100%; text-align: center; line-height: 1.25; min-height: 2.5em; }
   /* Tag de color por reclutador (Nicolas, 2026-09-25: "cada reclutador deberia tener como un color
      tag, algo discreto, con colores que obviamente se noten") — un circulo, no el .dot cuadrado de
      arriba (ese ya significa "estado/SLA" en el resto del archivo, esto es identidad, no estado).
@@ -4558,14 +4566,35 @@ function batchesSubmittedCount(p){
 // agendadas. Quitado ese segundo congelamiento — el mismo ritmo de arriba corre para CUALQUIER
 // status todavia activo (Offer Request en adelante ya ni siquiera llega aca, se filtra antes por
 // NOT_ACTIVELY_WORKED en renderGanttInsights()).
+// BUG REAL 2026-09-26 (Nicolas, corrigiendo la logica completa): "es un initial batch entre los
+// primeros 7 a 9 dias habiles despues del intake meeting... una vez que se submite el batch, a
+// partir de la fecha en que se haya submitido, independiente de si el reclutador se tomo 2, 6 o 9
+// dias, ese follow up batch va en los siguientes 5 dias habiles EN QUE SE ENVIO ESE PRIMER BATCH."
+// La version anterior ignoraba por completo si el primer batch YA existia de verdad — siempre
+// contaba los ciclos de seguimiento desde el TARGET teorico (intake + 9 dias), nunca desde el dia
+// real en que el batch 1 se envio. Eso desalinea el reloj apenas el primero se manda antes o
+// despues del dia 9 exacto: si se mando el dia 6, el 2do batch "deberia" contarse desde el dia 6
+// + 5 = dia 11, no desde el dia 9 (target) + 5 = dia 14 como hacia la version vieja.
+// Ahora: mientras NO exista un batch real, el reloj sigue siendo el mismo de siempre (intake ->
+// target de 9 dias -> 0 hasta ahi). En cuanto el batch 1 SI existe, el ancla salta a esa fecha
+// real y los ciclos de 5 dias se cuentan desde ahi en adelante — sin volver a re-anclar en cada
+// batch posterior (si el 2do o 3er batch real se atrasa, "expected" debe poder adelantarse a
+// "actual" para mostrar precisamente ese atraso; re-anclar en cada batch real anularia esa señal).
 const FOLLOWUP_BATCH_INTERVAL_DAYS = 5;
 function expectedSubmittedForPosition(p){
   const intake = parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake);
   if(!intake) return 0;
-  const elapsed = bizDaysBetween(intake, new Date());
+  const batches = (p.batches || []).slice().sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const firstBatchDate = batches.length ? parseD(batches[0].date) : null;
   const target = SLA_TARGETS.TTS;
-  if(elapsed<target) return 0;
-  const extraCycles = Math.floor((elapsed - target) / FOLLOWUP_BATCH_INTERVAL_DAYS);
+  if(!firstBatchDate){
+    const elapsed = bizDaysBetween(intake, new Date());
+    if(elapsed<target) return 0;
+    const extraCycles = Math.floor((elapsed - target) / FOLLOWUP_BATCH_INTERVAL_DAYS);
+    return 3.5 * (1 + extraCycles);
+  }
+  const elapsedSinceFirstBatch = bizDaysBetween(firstBatchDate, new Date());
+  const extraCycles = Math.floor(elapsedSinceFirstBatch / FOLLOWUP_BATCH_INTERVAL_DAYS);
   return 3.5 * (1 + extraCycles);
 }
 // Offer out or ya aceptada — lo unico que todavia no es una colocacion confirmada (Hired) pero
@@ -5344,6 +5373,9 @@ function syncGanttOpenStatClass(){
   document.querySelectorAll("#positionsSummaryStrip .ps-stat").forEach(el=>{
     el.classList.toggle("ps-stat-open", el.dataset.key === ganttOpenKey);
   });
+  // gantt-any-open (ver el CSS de .ps-hover-popover): apaga TODOS los popovers de hover de esta
+  // tira mientras cualquier Gantt este abierto, sin importar cual tarjeta lo disparo.
+  document.getElementById("positionsSummaryStrip")?.classList.toggle("gantt-any-open", !!ganttOpenKey);
 }
 function renderKpis(){
   const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
