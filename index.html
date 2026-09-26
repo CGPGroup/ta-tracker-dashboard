@@ -264,19 +264,22 @@
   .shell.sidebar-collapsed .sidebar-foot-note {
     opacity: 0; max-width: 0; max-height: 0; margin: 0; pointer-events: none;
   }
-  /* El flyout (ver toggleWorkspaceMenu()) reabre ESTE MISMO elemento via JS con la clase
-     workspace-flyout-open — necesita ganarle explicitamente al colapso de arriba en las mismas
-     propiedades, no solo heredar "lo que sobre". */
-  #navWorkspaceSwitch.workspace-flyout-open { opacity: 1; max-height: none; overflow: visible; pointer-events: auto; }
   .shell.sidebar-collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
   .shell.sidebar-collapsed .sidebar-profile { justify-content: center; padding-left: 0; padding-right: 0; }
   .shell.sidebar-collapsed .sidebar-foot { left: 10px; right: 10px; }
   .shell.sidebar-collapsed .sidebar-cgp-credit { align-items: center; margin-bottom: 0; }
-  /* "no es tan grueso" — 1.8 (el stroke-width de cada svg de nav, escrito inline en el HTML) es
-     mas grueso que el de la referencia real. stroke-width en CSS gana sobre el atributo inline
-     del SVG (es solo un valor de presentacion, no un !important), asi que un solo selector aca
-     afina TODOS los iconos del nav de una vez sin tener que editar cada svg uno por uno. */
-  .nav-ic svg, .sidebar-toggle svg { stroke-width: 1.4; }
+  /* Nicolas, round 5, con datos EXACTOS extraidos de gokeystone.ai via consola (svgs reales +
+     su stroke-width): sus iconos usan stroke-width="2" tal cual, renderizados a 16x16 (viewBox
+     24x24) — el round anterior los habia adelgazado a 1.4 basado en una comparacion a ojo desde
+     una captura, sin tener en cuenta que el efecto visual del stroke-width tambien depende del
+     tamano final de render (mismo stroke-width se ve mas fino entre mas chico el icono). Con los
+     numeros reales en mano, el grosor real de Keystone (2 en un icono de 16px) da un grosor
+     visual PARECIDO al que ya teniamos original (1.8 en un icono de 18px) — el cambio real
+     necesario era el TAMANO del icono (18px -> 16px, ver .nav-ic/.sidebar-toggle svg mas abajo),
+     no el stroke-width. stroke-width en CSS gana sobre el atributo inline del SVG (es solo un
+     valor de presentacion, no un !important), asi que un solo selector aca fija el mismo valor
+     real (2) para todos los iconos del nav de una vez. */
+  .nav-ic svg, .sidebar-toggle svg, .nav-workspace-btn svg { stroke-width: 2; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
   .brand-mark { width: 34px; height: 34px; object-fit: contain; display: block; }
   .brand-text { line-height: 1.2; }
@@ -403,7 +406,7 @@
      para no arrastrar este cambio a botones/graficas que nunca se auditaron contra Keystone —
      escopado solo a este rol especifico con su propio valor exacto. */
   .nav-item.active { background: rgba(var(--brand-rgb),0.22); color: #ff6900; border-left: 3px solid var(--brand); }
-  .nav-ic { width: 18px; height: 18px; flex: none; opacity: 1; }
+  .nav-ic { width: 16px; height: 16px; flex: none; opacity: 1; }
   .nav-ic svg { width: 100%; height: 100%; display: block; }
   /* "Workspace" es su propio acordeon, independiente de en que vista estes parado (antes su
      visibilidad dependia de que Dashboard fuera la vista activa, lo cual no se sentia como un
@@ -473,27 +476,17 @@
      datos que el Dashboard muestra. Solo dos opciones (no un dropdown de reclutadores): esto es
      exactamente lo que Nicolas pidio, y hoy solo existe 1 reclutador real de todos modos. */
   .nav-workspace-switch { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 10px 34px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+  /* Nicolas, round 5: "te pedi que a los workspaces les pusieras esos iconos" — el icono va EN
+     cada opcion (2 personas para el equipo, 1 persona para el workspace individual), no en el
+     boton del acordeon en si (eso quedo revertido, ver toggleWorkspaceMenu()). */
   .nav-workspace-btn {
     appearance: none; background: none; border: none; text-align: left; cursor: pointer;
     font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-muted);
-    padding: 4px 0;
+    padding: 4px 0; display: flex; align-items: center; gap: 6px;
   }
+  .nav-workspace-btn svg { width: 14px; height: 14px; flex: none; }
   .nav-workspace-btn:hover { color: var(--text-primary); }
   .nav-workspace-btn.active { color: var(--brand); }
-  /* Flyout flotante para el rail colapsado (ver toggleWorkspaceMenu()/closeWorkspaceFlyout()) —
-     reusa el mismo #navWorkspaceSwitch y sus 2 botones ya cableados, solo cambia su presentacion:
-     de "acordeon inline con texto" a "menu flotante junto al icono", igual que un rail de iconos
-     de VSCode/Notion. top/left los pone JS via getBoundingClientRect() del boton, nunca fijos
-     aca, porque la posicion vertical real depende de si el perfil del reclutador esta visible. */
-  #navWorkspaceSwitch.workspace-flyout-open {
-    position: fixed; z-index: 50; flex-direction: column; gap: 2px;
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 6px; margin: 0; min-width: 190px; box-shadow: var(--shadow);
-  }
-  #navWorkspaceSwitch.workspace-flyout-open .nav-workspace-btn {
-    padding: 8px 10px; border-radius: 6px; font-size: 13px;
-  }
-  #navWorkspaceSwitch.workspace-flyout-open .nav-workspace-btn:hover { background: var(--hover-wash); }
 
   /* "Positions & Placements" (Overview) — REDISEÑADO 2026-09-19: ya no son 4 numeros sueltos sin
      contexto (Nicolas: "no sabemos a que se refiere nada"). Positions -> Active -> Potential son
@@ -945,7 +938,7 @@
     cursor: pointer;
   }
   .sidebar-toggle:hover { background: var(--hover-wash); color: var(--text-primary); }
-  .sidebar-toggle svg { width: 17px; height: 17px; flex: none; }
+  .sidebar-toggle svg { width: 16px; height: 16px; flex: none; }
   .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
   /* Nicolas, 2026-09-26, con datos reales extraidos de gokeystone.ai via consola (no adivinado):
      su equivalente ("Searches", el eyebrow de seccion en su sidebar) usa el texto principal al
@@ -1785,13 +1778,13 @@
            independiente de en que vista estes parado (ver toggleWorkspaceMenu()). Elegir Team o
            tu titulo SIEMPRE te deja viendo Dashboard — solo cambia que datos ve. -->
       <button type="button" class="nav-item nav-group-header" id="workspaceMenuToggle">
-        <span class="nav-ic" id="workspaceMenuIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
         <span class="nav-label">Workspace</span>
         <svg class="nav-group-caret" id="workspaceMenuCaret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="nav-workspace-switch" id="navWorkspaceSwitch">
-        <button type="button" class="nav-workspace-btn active" id="navWorkspaceTeamBtn">Talent Acquisition Team</button>
-        <button type="button" class="nav-workspace-btn" id="navWorkspaceMineBtn" style="display:none;">My Workspace</button>
+        <button type="button" class="nav-workspace-btn active" id="navWorkspaceTeamBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Talent Acquisition Team</button>
+        <button type="button" class="nav-workspace-btn" id="navWorkspaceMineBtn" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> <span id="navWorkspaceMineLabel">My Workspace</span></button>
       </div>
       <button class="nav-item active" data-view="dashboard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="10" y1="10" x2="10" y2="20"/></svg></span> <span class="nav-label">Dashboard</span></button>
       <!-- Solo visible dentro de tu propio workspace (setDashboardScope() lo muestra/oculta,
@@ -1829,7 +1822,7 @@
              de una flecha que rota. Movido aca por eso — el id/JS (applySidebarCollapsed) no
              cambia, solo donde vive el boton en el HTML/CSS. -->
         <button type="button" class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar" aria-label="Collapse sidebar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>
         </button>
         <div>
           <h1 id="topbarTitle"><span class="topbar-eyebrow">Workspace</span>Talent Acquisition Team</h1>
@@ -3848,14 +3841,6 @@ function setDashboardScope(name, opts){
   // resalta ninguno de los dos botones, para no dar a entender que estas parado en tu propio
   // perfil cuando no lo estas.
   document.getElementById("navWorkspaceMineBtn").classList.toggle("active", !!name && name === MY_RECRUITER_NAME);
-  // Nicolas, 2026-09-26: "ponle al de TA team el icono de personitas... y al individual el de
-  // la personita individual" — el icono del boton "Workspace" ahora refleja el scope ACTUAL
-  // (2 personas para Team, 1 persona para un workspace individual), no un icono generico fijo.
-  // Esto importa sobre todo colapsado (rail de iconos, sin texto): antes no habia forma de saber
-  // en que workspace estabas parado sin expandir el panel.
-  document.getElementById("workspaceMenuIcon").innerHTML = name
-    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
-    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
   // A diferencia de la version anterior, esta funcion YA NO decide a que vista saltas — los 3
   // callers (el switcher Team/My Workspace, el auto-entry al conectar, y "Edit In Tracking" en
   // Positions) ya llaman activateView() ellos mismos con la vista que corresponda. Elegir Team/
@@ -7636,7 +7621,14 @@ async function saveModalDates(){
     // Por campo: si la hermana YA tiene su propia fecha para ese campo especifico, no se pisa —
     // solo se llenan los campos que a ELLA todavia le faltan, aunque ya tenga otros del mismo
     // grupo sincronizados en una pasada anterior.
-    const fieldWrites = siblingSyncChanges.filter(f => !s[f.key]);
+    // BUG REAL 2026-09-26 (encontrado en la auditoria completa, confirmado por Nicolas: "no deben
+    // tener fecha de intake porque no hubo"): una hermana con intakeWaivedReason ya puesto
+    // decidio a proposito NO tener una reunion de intake real — este sync no lo sabia y le
+    // escribia la fecha de "intake" de otra hermana encima de todos modos (real: RD-018/019/020
+    // terminaron con fecha de intake Y razon de waived al mismo tiempo, contradictorio). El campo
+    // "intake" especificamente ahora respeta ese waiver; kickoff/intakeRequestedDate siguen
+    // sincronizando igual que antes (esos no tienen un concepto de "waived").
+    const fieldWrites = siblingSyncChanges.filter(f => !s[f.key] && !(f.key === "intake" && s.intakeWaivedReason));
     if(!fieldWrites.length) return null;
     fieldWrites.forEach(f => { s[f.key] = f.value; });
     let targetStatus = null;
@@ -9969,7 +9961,6 @@ document.querySelectorAll(".nav-item[data-view]").forEach(btn=>{
 function goToDashboard(name, opts){
   setDashboardScope(name, opts);
   activateView("dashboard");
-  closeWorkspaceFlyout();
 }
 document.getElementById("navWorkspaceTeamBtn").addEventListener("click", ()=> goToDashboard(null));
 document.getElementById("navWorkspaceMineBtn").addEventListener("click", ()=> goToDashboard(MY_RECRUITER_NAME));
@@ -9985,54 +9976,15 @@ function viewRecruiterDashboard(name){
 // parado (antes su visibilidad dependia de que Dashboard fuera la vista activa, lo cual no se
 // sentia como un desplegable real — se colapsaba solo al navegar a otro lado).
 let workspaceMenuExpanded = true;
-// Nicolas, 2026-09-26, bug real: "si le doy al icono de workspaces [colapsado], no me sale nada,
-// no pasa nada... no tiene opcion para cambiar de workspace así" — con el rail colapsado,
-// #navWorkspaceSwitch queda forzado a display:none por CSS (.shell.sidebar-collapsed
-// .nav-workspace-switch) sin importar este boolean, asi que el clic literalmente no tenia forma
-// de mostrar nada. En vez de intentar meter el acordeon completo (con texto) en un rail de 68px
-// sin espacio para el, colapsado se abre como un flyout flotante junto al icono — mismo patron
-// que un menu de VSCode/Notion en su barra de iconos. Reusa el MISMO #navWorkspaceSwitch/botones
-// (nunca duplica el HTML ni la logica de goToDashboard ya cableada) — solo cambia como se
-// posiciona y se muestra.
-function positionWorkspaceFlyout(){
-  const switchEl = document.getElementById("navWorkspaceSwitch");
-  const r = document.getElementById("workspaceMenuToggle").getBoundingClientRect();
-  switchEl.style.top = Math.round(r.top) + "px";
-  switchEl.style.left = Math.round(r.right + 8) + "px";
-}
-function closeWorkspaceFlyout(){
-  const switchEl = document.getElementById("navWorkspaceSwitch");
-  if(!switchEl.classList.contains("workspace-flyout-open")) return;
-  switchEl.classList.remove("workspace-flyout-open");
-  switchEl.style.display = "none";
-  switchEl.style.top = ""; switchEl.style.left = "";
-  document.removeEventListener("click", onWorkspaceFlyoutOutsideClick, true);
-  document.removeEventListener("keydown", onWorkspaceFlyoutEscape, true);
-}
-function onWorkspaceFlyoutOutsideClick(e){
-  const switchEl = document.getElementById("navWorkspaceSwitch");
-  const btn = document.getElementById("workspaceMenuToggle");
-  if(switchEl.contains(e.target) || btn.contains(e.target)) return;
-  closeWorkspaceFlyout();
-}
-function onWorkspaceFlyoutEscape(e){ if(e.key === "Escape") closeWorkspaceFlyout(); }
+// Nicolas, 2026-09-26, round 5: revertido el flyout del round anterior — "yo no te pedi un
+// flyout... eso esta todo bugeado". Colapsado, el boton de Workspace simplemente no hace nada
+// (solo se ve su icono en el rail, igual que cualquier otro item sin submenu propio) — cambiar
+// de workspace requiere expandir el panel primero. Expandido, sigue siendo el mismo acordeon
+// inline de siempre (el boolean workspaceMenuExpanded).
 function toggleWorkspaceMenu(){
-  const collapsed = document.querySelector(".shell").classList.contains("sidebar-collapsed");
-  const switchEl = document.getElementById("navWorkspaceSwitch");
-  if(collapsed){
-    if(switchEl.classList.contains("workspace-flyout-open")){ closeWorkspaceFlyout(); return; }
-    switchEl.classList.add("workspace-flyout-open");
-    switchEl.style.display = "flex";
-    positionWorkspaceFlyout();
-    // Se registra en el siguiente tick, no en este mismo clic — si no, el MISMO evento de clic
-    // que abre el flyout tambien lo cerraria de inmediato al burbujear hasta document.
-    setTimeout(()=>{
-      document.addEventListener("click", onWorkspaceFlyoutOutsideClick, true);
-      document.addEventListener("keydown", onWorkspaceFlyoutEscape, true);
-    }, 0);
-    return;
-  }
+  if(document.querySelector(".shell").classList.contains("sidebar-collapsed")) return;
   workspaceMenuExpanded = !workspaceMenuExpanded;
+  const switchEl = document.getElementById("navWorkspaceSwitch");
   switchEl.style.display = workspaceMenuExpanded ? "" : "none";
   document.getElementById("workspaceMenuCaret").classList.toggle("collapsed", !workspaceMenuExpanded);
 }
@@ -10045,7 +9997,7 @@ document.getElementById("workspaceMenuToggle").addEventListener("click", toggleW
 function updateWorkspaceSwitchVisibility(){
   const btn = document.getElementById("navWorkspaceMineBtn");
   btn.style.display = MY_RECRUITER_NAME ? "" : "none";
-  if(MY_RECRUITER_NAME) btn.textContent = RECRUITER_TITLES[MY_RECRUITER_NAME] || "My Workspace";
+  if(MY_RECRUITER_NAME) document.getElementById("navWorkspaceMineLabel").textContent = RECRUITER_TITLES[MY_RECRUITER_NAME] || "My Workspace";
 }
 // Tabs del Dashboard: Overview/SLA & Completion/Pipeline/Offers & Placements solo alternan cual
 // .dash-tab-panel se ve (ningun render*() depende de cual esta activo, todos siguen llenando
@@ -11939,11 +11891,6 @@ function applySidebarCollapsed(collapsed){
   btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
   btn.setAttribute("aria-label", btn.title);
   updateCgpCreditLogoSrc();
-  // El flyout del workspace (ver toggleWorkspaceMenu()) esta posicionado a mano contra el rail
-  // colapsado — si el panel cambia de ancho mientras esta abierto (expandir/colapsar de nuevo)
-  // esa posicion queda obsoleta al instante, mejor cerrarlo que dejarlo flotando en el lugar
-  // equivocado.
-  closeWorkspaceFlyout();
   try { localStorage.setItem("tk_sidebar_collapsed", collapsed ? "1" : "0"); } catch(e){}
 }
 document.getElementById("sidebarToggle").addEventListener("click", ()=>{
