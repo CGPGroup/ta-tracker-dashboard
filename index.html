@@ -1035,6 +1035,11 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 13px; font-weight: 600; color: #fff;
     background-size: cover; background-position: center;
+    position: relative;
+  }
+  .workload-avatar .recruiter-dot {
+    position: absolute; right: -1px; bottom: -1px; margin-right: 0;
+    border: 2px solid var(--surface-2);
   }
   /* Nicolas, 2026-09-26: "asegurate de aplicar el ensanche para cualquier nombre... todas las
      cards deben quedar del mismo tamano" — un nombre de 1 palabra ("Ana") ocupa 1 linea, uno largo
@@ -1057,7 +1062,7 @@
      asi el tag nunca desentona con el avatar de esa misma persona, y sigue siendo visible aunque
      el reclutador ya tenga foto real (el avatar deja de mostrar el color en ese caso, este tag no). */
   .recruiter-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; margin-right: 5px; vertical-align: middle; }
-  .workload-title { font-size: 10px; color: var(--text-muted); margin-top: -3px; white-space: normal; word-break: break-word; max-width: 100%; min-height: 1.3em; }
+  .workload-title { font-size: 10px; color: var(--text-muted); margin-top: -3px; white-space: normal; word-break: break-word; max-width: 100%; line-height: 1.25; min-height: 2.5em; }
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
   .workload-count { font-size: 10.5px; color: var(--text-muted); }
@@ -5093,8 +5098,8 @@ function renderGanttInsights(containerId, positions){
     // de Positions & Placements, ver [[project_positions_card_congruence_and_gantt_chip_fix]]).
     const title = RECRUITER_TITLES[r.label] || "";
     return `<div class="workload-card compact" data-label="${escapeHtml(r.label)}">
-      <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
-      <div class="workload-name" title="${escapeHtml(r.label)}">${recruiterDotHtml(r.label)}${escapeHtml(r.label)}</div>
+      <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}${recruiterDotHtml(r.label)}</div>
+      <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
       <div class="workload-title">${escapeHtml(title)}</div>
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.value))};"></div></div>
       <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
