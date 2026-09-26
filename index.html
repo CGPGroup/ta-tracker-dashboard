@@ -4547,16 +4547,19 @@ function batchesSubmittedCount(p){
 // vez existe (asi debe ser PARA el TTS real, que mide "cuanto tardo el primer batch", no "cuanto
 // ha pasado en total"). Reusarla aqui hacia que una posicion ya en Offer Request con 9 candidatos
 // reales enviados (CE-020) mostrara expected=0 (el elapsed se habia congelado hace semanas, bajo
-// el target de 9 dias) — inflando el numerador sin que el denominador lo reflejara. Ahora esta
-// funcion calcula su PROPIO elapsed, siempre hasta HOY (nunca se congela), y una vez la posicion
-// ya paso de la etapa de armar/enviar batches (status >= "Submitted" en STATUS_ORDER), el
-// esperado se congela en lo que YA se envio (ni de mas ni de menos) — no tiene sentido seguir
-// pidiendo mas batches una vez el proceso paso a entrevistas/oferta.
+// el target de 9 dias) — inflando el numerador sin que el denominador lo reflejara. Esta funcion
+// calcula su PROPIO elapsed, siempre hasta HOY (nunca se congela).
+// 2026-09-26: el fix de arriba en su momento tambien agrego un segundo congelamiento — expected
+// fijo en lo YA enviado una vez el status llegaba a "Submitted" o mas alla, razonando "no tiene
+// sentido pedir mas batches una vez el proceso paso a entrevistas". Nicolas lo corrigio: "yo diria
+// que tal vez no [congelar], porque las siguientes son interviews, y recuerda que van los follow
+// up batches" — un req en Client Interview puede (y de hecho suele) seguir recibiendo batches de
+// seguimiento, el cliente pidiendo mas opciones no se detiene solo porque ya hay entrevistas
+// agendadas. Quitado ese segundo congelamiento — el mismo ritmo de arriba corre para CUALQUIER
+// status todavia activo (Offer Request en adelante ya ni siquiera llega aca, se filtra antes por
+// NOT_ACTIVELY_WORKED en renderGanttInsights()).
 const FOLLOWUP_BATCH_INTERVAL_DAYS = 5;
 function expectedSubmittedForPosition(p){
-  const curIdx = STATUS_ORDER.indexOf(p.status);
-  const submittedIdx = STATUS_ORDER.indexOf("Submitted");
-  if(curIdx>=0 && curIdx>=submittedIdx) return batchesSubmittedCount(p);
   const intake = parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake);
   if(!intake) return 0;
   const elapsed = bizDaysBetween(intake, new Date());
