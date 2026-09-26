@@ -7327,36 +7327,51 @@ async function saveModalDates(){
     p.extra = p.extra || [];
     p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author:currentAuthorName(), text: statusRemarkText});
   }
-  // Nicolas, 2026-09-17: el intake meeting pasa una sola vez POR ROL, no por headcount — si 3
-  // headcounts se asignan juntos, es un solo intake para todo el grupo. Igual que
+  // Nicolas, 2026-09-17 (extendido 2026-09-26 — "Sí, claro. Eso tiene que pasar entre
+  // headcounts", viendo que Intake Meeting REQUESTED Date en un headcount no se reflejaba en el
+  // otro): el intake/kickoff pasa una sola vez POR ROL, no por headcount — si varios headcounts
+  // se asignan juntos, es UNA sola conversacion con el mismo hiring manager para todo el grupo.
+  // Antes solo "intake" (la fecha de la reunion YA TENIDA) se sincronizaba; ahora tambien Kickoff
+  // e Intake Meeting Requested Date, el mismo trio que forma el timeline de "armar el intake".
+  // Submission Date DELIBERADAMENTE no esta aca — cada headcount necesita sus propios candidatos,
+  // ese es el punto real de tener headcounts separados en vez de un solo req. Igual que
   // openWaiveIntakeModal()/confirmIntakeSummarySent() ya hacen para la razon de waive y la
-  // confirmacion de notas, loguear la fecha REAL del intake meeting aqui debe propagarse a las
-  // hermanas del mismo Headcount Group que todavia no tienen su propia fecha (y que no llegaron
-  // por Handoff, que tiene su propio mecanismo de confirmacion de contexto) — mismo filtro de
-  // exclusion que esas dos funciones.
-  const intakeChange = changed.find(f => f.key === "intake");
-  const intakeSiblings = (intakeChange && intakeChange.value && p.headcountGroup)
-    ? POSITIONS.filter(x => x.id !== p.id && x.headcountGroup === p.headcountGroup && !x.intake && !x.handoffFrom)
+  // confirmacion de notas, mismo filtro de exclusion que esas dos funciones (nunca sobre una
+  // hermana que llego por Handoff, que tiene su propio mecanismo de confirmacion de contexto).
+  const SIBLING_SYNCED_KEYS = ["kickoff", "intakeRequestedDate", "intake"];
+  const siblingSyncChanges = changed.filter(f => SIBLING_SYNCED_KEYS.includes(f.key) && f.value);
+  const groupSiblings = (siblingSyncChanges.length && p.headcountGroup)
+    ? POSITIONS.filter(x => x.id !== p.id && x.headcountGroup === p.headcountGroup && !x.handoffFrom)
     : [];
-  const siblingWrites = intakeSiblings.map(s => {
-    s.intake = intakeChange.value;
+  const siblingWrites = groupSiblings.map(s => {
+    // Por campo: si la hermana YA tiene su propia fecha para ese campo especifico, no se pisa —
+    // solo se llenan los campos que a ELLA todavia le faltan, aunque ya tenga otros del mismo
+    // grupo sincronizados en una pasada anterior.
+    const fieldWrites = siblingSyncChanges.filter(f => !s[f.key]);
+    if(!fieldWrites.length) return null;
+    fieldWrites.forEach(f => { s[f.key] = f.value; });
+    let targetStatus = null;
+    fieldWrites.forEach(f => {
+      const t = DATE_IMPLIES_STATUS[f.key];
+      if(t && STATUS_ORDER.indexOf(t) > STATUS_ORDER.indexOf(targetStatus || s.status)) targetStatus = t;
+    });
     let remark = null;
-    if(!AUTO_STATUS_LOCKED.includes(s.status) && STATUS_ORDER.indexOf("Intake Pending") > STATUS_ORDER.indexOf(s.status)){
+    if(targetStatus && !AUTO_STATUS_LOCKED.includes(s.status) && STATUS_ORDER.indexOf(targetStatus) > STATUS_ORDER.indexOf(s.status)){
       const sFrom = s.status;
-      s.status = "Intake Pending";
-      remark = `Status changed from ${statusLabel(sFrom)} to Intake Pending (automatic — same intake meeting logged on ${p.id}).`;
+      s.status = targetStatus;
+      remark = `Status changed from ${statusLabel(sFrom)} to ${statusLabel(targetStatus)} (automatic — same intake logged on ${p.id}).`;
       s.extra = s.extra || [];
       s.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remark});
     }
-    return {s, remark};
-  });
+    return {s, fieldWrites, remark, targetStatus};
+  }).filter(Boolean);
   renderAll();
   renderDetailModal();
   // renderDetailModal() reconstruye el HTML de modalFacts (incluido este span), asi que hay
   // que volver a buscarlo DESPUES de re-renderizar, o el mensaje se pierde en un nodo viejo.
   const msg = document.getElementById("modalDatesMsg");
-  const siblingNote = intakeSiblings.length
-    ? ` Also applied to ${intakeSiblings.length} other headcount${intakeSiblings.length===1?"":"s"} in "${p.headcountGroup}".`
+  const siblingNote = siblingWrites.length
+    ? ` Also applied to ${siblingWrites.length} other headcount${siblingWrites.length===1?"":"s"} in "${p.headcountGroup}".`
     : "";
   const savedNote = (autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "") + siblingNote;
   if(isConnected()){
@@ -7370,10 +7385,12 @@ async function saveModalDates(){
         await graphUpdatePositionField(p.id, "G", autoStatusChange.to);
         await graphAppendHistorial(p.id, p.title, statusRemarkText, currentAuthorName(), "status");
       }
-      for(const {s, remark} of siblingWrites){
-        await graphUpdatePositionField(s.id, "H", s.intake);
+      for(const {s, fieldWrites, remark, targetStatus} of siblingWrites){
+        for(const f of fieldWrites){
+          await graphUpdatePositionField(s.id, f.col, f.value);
+        }
         if(remark){
-          await graphUpdatePositionField(s.id, "G", "Intake Pending");
+          await graphUpdatePositionField(s.id, "G", targetStatus);
           await graphAppendHistorial(s.id, s.title, remark, currentAuthorName(), "status");
         }
       }
