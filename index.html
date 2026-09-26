@@ -925,10 +925,9 @@
   .workload-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
   .workload-card {
     display: flex; flex-direction: column; align-items: center; gap: 5px;
-    width: 92px; padding: 10px 8px; border-radius: 10px; cursor: pointer;
+    width: 92px; padding: 10px 8px; border-radius: 10px;
     background: var(--surface-2); border: 1px solid var(--border); text-align: center;
   }
-  .workload-card:hover { border-color: var(--brand); }
   .workload-avatar {
     width: 38px; height: 38px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -4885,7 +4884,7 @@ function renderGanttInsights(containerId, positions){
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
     const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
     const slaHtml = r.slaRate === null ? "" : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
-    return `<div class="workload-card compact clickable-stat" data-label="${escapeHtml(r.label)}" title="Open ${escapeHtml(r.label)}'s dashboard">
+    return `<div class="workload-card compact" data-label="${escapeHtml(r.label)}">
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
       <div class="workload-name" title="${escapeHtml(r.label)}">${recruiterDotHtml(r.label)}${escapeHtml(r.label)}</div>
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.value))};"></div></div>
@@ -4949,9 +4948,9 @@ function renderGanttInsights(containerId, positions){
       </div>
     </div>
   `;
-  container.querySelectorAll(".workload-card").forEach(el=>{
-    el.addEventListener("click", ()=> viewRecruiterDashboard(el.dataset.label));
-  });
+  // Nicolas, 2026-09-26: "en el recruiter workload, ya no es necesario que te lleve a ninguna
+  // parte" — estas tarjetas ya no navegan a ningun lado, son puramente informativas (mismo
+  // criterio que el resto del panel de insights, que ya solo filtra en el sitio).
   if(sourcingStarted.length>0){
     document.getElementById("ganttSubmittedRow")?.addEventListener("click", ()=>{
       openQuickList("Submitted Vs Expected", `${submittedTotal} submitted · expected at least ${minExpected} to date across ${sourcingStarted.length} position${sourcingStarted.length===1?"":"s"} (intake already held)`, sourcingStarted);
@@ -5070,23 +5069,13 @@ function renderGanttGroup(key){
   });
   panelEl.querySelectorAll("#ganttRecruiterToggle .gantt-scope-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
-      const name = btn.dataset.recruiter || null;
-      // Nicolas, 2026-09-26, corrigiendo el alcance de este mismo fix un dia antes: "más que en
-      // public access... diria que es más en el TA Team workspace en general" — no es un caso
-      // especial de Public Access, es cualquiera parado en Team (activeDashboardScope null):
-      // reusa el mismo camino read-only que ya usan las tarjetas de Active Workload By Recruiter
-      // (viewRecruiterDashboard/goToDashboard), asi que Positions & Placements, Insights y el
-      // Gantt reabierto quedan TODOS escopeados a esa persona, no solo las filas que se ven aca.
-      // Nunca entra en modo edicion (viewRecruiterDashboard siempre es readOnly:true) — ver
-      // trackingCanEdit()/el bloqueo de edicion en Team mas abajo, asi que esto es seguro sin
-      // importar quien lo dispare.
-      if(!activeDashboardScope){
-        if(name){ viewRecruiterDashboard(name); return; }
-      } else if(activeDashboardReadOnly){
-        if(!name){ goToDashboard(null); return; }
-        if(name !== activeDashboardScope){ viewRecruiterDashboard(name); return; }
-      }
-      ganttRecruiterFilter = name;
+      // Nicolas, 2026-09-26, revirtiendo el intento anterior de ese mismo dia (que llamaba
+      // viewRecruiterDashboard/goToDashboard aqui): "si yo le doy a David clic en el Gantt me
+      // lleva a su workspace, en vez de filtrar los numeros de el en el workspace del TA Team...
+      // Eso no fue lo que te pedi." El filtro se queda puramente local al Gantt abierto (filas +
+      // sus propios mini-charts en renderGanttInsights(), que ya reciben `data` ya filtrada) —
+      // nunca navega, nunca cambia activeDashboardScope/la vista activa.
+      ganttRecruiterFilter = btn.dataset.recruiter || null;
       renderGanttGroup(key);
     });
   });
@@ -5357,24 +5346,33 @@ function renderDonut(elId, rows, colors, totalLabel, size, centerOverride, onCli
   }
 }
 
-// Carga real ponderada por etapa (Playbook seccion 2.5): un req en Sourcing (esfuerzo maximo)
-// no pesa lo mismo que uno recien en Kickoff — contar solo posiciones brutas sobreestima a quien
-// tiene muchas ya avanzadas y subestima a quien tiene varias en sourcing intensivo. Pesos y
-// limites (10 sweet spot, 12 maximo aceptable) tal cual el Playbook; "Sourcing" (que desde
-// 2026-09-17 incluye Screening, ver STATUS_ORDER) pesa 1.0 (construyendo/entregando el batch).
-// Offer Request/Filled/On Hold/On Hold Internal ya NO aparecen aqui — estan en
-// NOT_ACTIVELY_WORKED, asi que se filtran ANTES de llegar a este mapa (nunca pesan nada, no un
-// peso bajo). Nicolas, 2026-09-23, sobre Offer Request especificamente: "el reclutador ya no
-// tiene que esperar mas... a partir de ahi ya no se deberia tener en cuenta como req activa" — el
-// trabajo real ya se le entrego a Immy/Irth en ese punto.
+// Carga real ponderada por etapa: un req en Sourcing (esfuerzo maximo) no pesa lo mismo que uno
+// recien en Kickoff — contar solo posiciones brutas sobreestima a quien tiene muchas ya avanzadas
+// y subestima a quien tiene varias en sourcing intensivo. "Sourcing" (que desde 2026-09-17 incluye
+// Screening, ver STATUS_ORDER) pesa 1.0 (construyendo/entregando el batch). Offer Request/Filled/
+// On Hold/On Hold Internal ya NO aparecen aqui — estan en NOT_ACTIVELY_WORKED, asi que se filtran
+// ANTES de llegar a este mapa (nunca pesan nada, no un peso bajo). Nicolas, 2026-09-23, sobre
+// Offer Request especificamente: "el reclutador ya no tiene que esperar mas... a partir de ahi ya
+// no se deberia tener en cuenta como req activa" — el trabajo real ya se le entrego a Immy/Irth en
+// ese punto.
+// Recalibrado 2026-09-26 (Nicolas, viendo sus propios numeros reales: "tener 7 reales, pero que
+// solo pesen lo de 3... me parece un poco irreal"; pidio explicitamente Intake Held > Requested y
+// Sourcing/Screening pesando "muchisimo"): antes de esto, TODA etapa post-Sourcing (Submitted,
+// Client Interview) pesaba solo 0.5 — igual que Kickoff — lo cual subestimaba a un recruiter con
+// varios reqs ya en etapas avanzadas de verdad. Ahora: Kickoff/Intake Requested (esperando al
+// cliente/HM, esfuerzo real pero mas liviano) = 0.5; Intake Held/Waived (reunion ya paso, armando
+// el intake para empezar a sourcear) = 0.75, explicitamente mas que Requested; Sourcing en
+// adelante (Sourcing/Screening, Submitted, Client Interview — todo trabajo activo real de
+// principio a fin, no solo el arranque) = 1.0, el techo. Con sus propios numeros (7 reqs: 3 en
+// Sourcing, 4 en Kickoff/Intake Requested) esto da 3(1.0)+4(0.5)=5.0/7 en vez de 3.5/7.
 const STAGE_WEIGHT = {
-  "Kickoff": 0.25,
-  "Intake Meeting Requested": 0.25,
-  "Intake Pending": 0.5,
-  "Intake Meeting Waived": 0.5,
+  "Kickoff": 0.5,
+  "Intake Meeting Requested": 0.5,
+  "Intake Pending": 0.75,
+  "Intake Meeting Waived": 0.75,
   "Sourcing": 1.0,
-  "Submitted": 0.5,
-  "Client Interview": 0.5,
+  "Submitted": 1.0,
+  "Client Interview": 1.0,
 };
 const WORKLOAD_SWEET_SPOT = 10;
 const WORKLOAD_MAX = 12;
