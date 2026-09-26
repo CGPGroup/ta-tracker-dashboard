@@ -1033,7 +1033,7 @@
      asi el tag nunca desentona con el avatar de esa misma persona, y sigue siendo visible aunque
      el reclutador ya tenga foto real (el avatar deja de mostrar el color en ese caso, este tag no). */
   .recruiter-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; margin-right: 5px; vertical-align: middle; }
-  .workload-title { font-size: 10px; color: var(--text-muted); margin-top: -3px; white-space: normal; word-break: break-word; max-width: 100%; }
+  .workload-title { font-size: 10px; color: var(--text-muted); margin-top: -3px; white-space: normal; word-break: break-word; max-width: 100%; min-height: 1.3em; }
   .workload-track { width: 70%; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
   .workload-fill { height: 100%; border-radius: 3px 0 0 3px; }
   .workload-count { font-size: 10.5px; color: var(--text-muted); }
@@ -1053,6 +1053,7 @@
   .workload-card.compact { width: 90px; padding: 8px 6px; gap: 3px; }
   .workload-card.compact .workload-avatar { width: 28px; height: 28px; font-size: 10.5px; }
   .workload-card.compact .workload-name { font-size: 10px; }
+  .workload-card.compact .workload-title { font-size: 9px; margin-top: 0; }
   .workload-card.compact .workload-count { font-size: 9.5px; }
   .workload-card.compact .workload-sla { font-size: 9.5px; }
   .barlist.compact { gap: 6px; }
@@ -4990,20 +4991,36 @@ function renderGanttInsights(containerId, positions){
   if(!container) return;
   const active = positions.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
 
-  const recruiterNames = [...new Set(positions.map(p=>p.recruiter).filter(Boolean))].sort();
+  // Nicolas, 2026-09-26: "yo deberia aparecer de primero de izquierda a derecha, porque estoy en
+  // el tracker antes que David... si entra alguien mas pues de cuarto" — orden fijo por
+  // antiguedad real en el equipo (el orden en que cada quien se agrego a RECRUITERS, la lista
+  // maestra que ya viene en ese orden desde RecruitersTable), no por peso de trabajo actual — un
+  // recruiter con menos carga esa semana no deberia "saltar" adelante en la fila. RECRUITERS
+  // filtrado a solo quienes tienen reqs en esta vista en particular (respeta el filtro de
+  // recruiter/rol del Gantt), pero SIN reordenar.
+  const recruiterNames = RECRUITERS.filter(r=>positions.some(p=>p.recruiter===r));
   const workloadRows = recruiterNames.map(r=>{
     const assigned = active.filter(p=>p.recruiter===r);
     const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
     return {label:r, count: assigned.length, value: Math.round(weighted*10)/10, slaRate: recruiterSlaRate(assigned)};
-  }).sort((a,b)=>b.value-a.value);
+  });
   const workloadCardsHtml = workloadRows.map(r=>{
     const photo = RECRUITER_PHOTOS[r.label];
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
     const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
     const slaHtml = r.slaRate === null ? "" : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
+    // Nicolas, 2026-09-26: "me faltaron los titulos de cada uno" — RECRUITER_TITLES (ej. "Lead
+    // Talent Partner") se habia quedado afuera de la version compacta (.workload-title ya existia
+    // en el CSS de la version anterior, solo nunca se movio a este markup nuevo).
+    // Siempre se renderiza (nunca condicional): si un reclutador no tiene cargo cargado todavia,
+    // dejar el div vacio en vez de omitirlo — con min-height reservando la misma linea, todas las
+    // tarjetas miden igual sin importar quien si/no tiene cargo (mismo principio que las tarjetas
+    // de Positions & Placements, ver [[project_positions_card_congruence_and_gantt_chip_fix]]).
+    const title = RECRUITER_TITLES[r.label] || "";
     return `<div class="workload-card compact" data-label="${escapeHtml(r.label)}">
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}</div>
       <div class="workload-name" title="${escapeHtml(r.label)}">${recruiterDotHtml(r.label)}${escapeHtml(r.label)}</div>
+      <div class="workload-title">${escapeHtml(title)}</div>
       <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.value))};"></div></div>
       <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
       ${slaHtml}
@@ -5054,6 +5071,9 @@ function renderGanttInsights(containerId, positions){
         <div class="gantt-mini-title">Position By Location/Work Arrangement</div>
         <div class="gantt-mini-sub">Active positions right now, by country and by work arrangement.</div>
         <div style="font-size:10.5px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">BY COUNTRY</div>
+        ${(() => { const countrySum = countryRows.reduce((s,r)=>s+r.value,0); return countrySum > active.length
+          ? `<div class="gantt-mini-sub" style="margin:-2px 0 6px;">Adds up to more than ${active.length} — a position covering more than one country counts once in each.</div>`
+          : ""; })()}
         <div class="barlist compact" id="ganttByCountry">${countryRows.length ? countryRows.map((r,i)=>{
           const max = countryRows[0].value||1;
           return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div><div class="barlist-value">${r.value}</div></div>`;
