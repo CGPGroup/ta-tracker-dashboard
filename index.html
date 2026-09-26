@@ -235,13 +235,6 @@
   .shell.sidebar-collapsed .sidebar-profile { justify-content: center; padding-left: 0; padding-right: 0; }
   .shell.sidebar-collapsed .sidebar-foot { left: 10px; right: 10px; }
   .shell.sidebar-collapsed .sidebar-cgp-credit { align-items: center; margin-bottom: 0; }
-  /* "es mas blanco tambien cada logo de menu" — los items sin foco en KeyStone se ven casi tan
-     brillantes como el activo, no apagados a --text-secondary como el resto de este archivo
-     hace por defecto. Solo se sube el brillo EN el rail colapsado (ya no hay texto al lado que
-     le de contexto al icono, necesita leerse solo) — el modo expandido no se toco, esa distincion
-     atenuado/brillante ahi sigue siendo la correcta para texto+icono juntos. */
-  .shell.sidebar-collapsed .nav-item { color: var(--text-primary); }
-  .shell.sidebar-collapsed .nav-ic { opacity: 1; }
   /* "no es tan grueso" — 1.8 (el stroke-width de cada svg de nav, escrito inline en el HTML) es
      mas grueso que el de la referencia real. stroke-width en CSS gana sobre el atributo inline
      del SVG (es solo un valor de presentacion, no un !important), asi que un solo selector aca
@@ -360,7 +353,7 @@
   .nav-item {
     display: flex; align-items: center; gap: 10px;
     padding: 10px 12px; border-radius: 8px;
-    color: var(--text-secondary); font-size: 13.5px; font-weight: 600;
+    color: var(--text-primary); font-size: 13.5px; font-weight: 600;
     cursor: pointer; user-select: none;
     border: none; background: none; text-align: left; width: 100%;
     border-left: 3px solid transparent;
@@ -368,7 +361,7 @@
   .nav-item { transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
   .nav-item:hover { background: var(--hover-wash); color: var(--text-primary); }
   .nav-item.active { background: rgba(var(--brand-rgb),0.22); color: var(--text-primary); border-left: 3px solid var(--brand); }
-  .nav-ic { width: 18px; height: 18px; flex: none; opacity: 0.9; }
+  .nav-ic { width: 18px; height: 18px; flex: none; opacity: 1; }
   .nav-ic svg { width: 100%; height: 100%; display: block; }
   /* "Workspace" es su propio acordeon, independiente de en que vista estes parado (antes su
      visibilidad dependia de que Dashboard fuera la vista activa, lo cual no se sentia como un
