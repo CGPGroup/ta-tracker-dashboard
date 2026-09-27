@@ -839,6 +839,7 @@
   .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
   .gantt-row-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
   .gantt-row-meta b { color: var(--text-primary); font-weight: 600; }
+  .gantt-row-quarter-note { font-size: 9.5px; font-weight: 600; color: var(--warning); margin-top: 3px; cursor: help; }
   .gantt-avatar {
     width: 14px; height: 14px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -4980,23 +4981,48 @@ function ganttClampedWindow(win, data){
   if(start >= end) return win;
   return {start, end, label: win.label};
 }
-// Nicolas, 2026-09-27, round 2 de esto mismo: probamos el cierre real para las TERMINAL
-// (arreglaba el doble conteo de placements) y probamos congelar "Positions" sin filtrar (arreglaba
-// la contradiccion con su propio "ever assigned") — pero eso dejaba cada tarjeta con un criterio
-// distinto y sin relacion entre si ("no entiendo en que te basas con Active Positions, si hay
-// criterios diferentes que no tienen nada que ver con el card de Positions"). La version que de
-// verdad es consistente: TODAS las tarjetas parten del MISMO cohorte simple — reqs cuyo Kickoff
-// cae dentro del periodo elegido, punto, sin importar que paso despues. Positions = el cohorte
-// completo. Active/On Hold & Other/Potential/Actual = ese MISMO cohorte, partido por su status
-// ACTUAL de hoy (igual que en "All time", solo que aplicado a un cohorte mas chico). Con esto:
-// - "Positions siempre suma con las otras 4" vuelve a ser verdad SIEMPRE, sin casos especiales.
-// - Una colocacion nunca puede aparecer en 2 trimestres, porque el cohorte de una req es UNO
-//   solo (su propio Kickoff), nunca un rango que se solape con varios periodos.
-// - Ya no hace falta la nota de "Started in Q2, sigue en Q3" (ver ganttRowHtml) porque una req ya
-//   no puede aparecer en un trimestre que no sea el suyo.
+// Nicolas, 2026-09-27, round 3 (la version que de verdad se quedo): las 2 rondas anteriores
+// fallaban porque las 5 tarjetas intentaban SUMAR entre si (Positions = Active + On Hold&Other +
+// Potential + Actual), y esa exigencia es la que forzaba a escoger entre 2 males — o una
+// colocacion contaba en el trimestre equivocado (para que la suma cerrara), o la suma dejaba de
+// cerrar. Nicolas: "las tarjetas deben ser independientes, no deben depender una de la otra". Sin
+// esa exigencia, cada tarjeta usa la fecha que de verdad le corresponde a SU pregunta:
+// - Positions: "¿cuantas se asignaron en este periodo?" — solo Kickoff cayendo en el rango (ver
+//   positionAssignedInWindow), sin importar que paso despues. Cada req tiene un solo trimestre de
+//   Kickoff, nunca aparece en 2.
+// - Active / Potential / On Hold (la parte que de verdad sigue en pausa, no cerrada): "¿cuantas
+//   SIGUEN en ese estado, de las que estuvieron en juego durante este periodo?" — una req en
+//   curso puede seguir "viva" mucho despues de su Kickoff, asi que esto usa solape de rango
+//   (ganttInWindow), no solo el Kickoff — si arranco en un trimestre distinto al que se esta
+//   viendo, la fila lo aclara con un aviso (ver ganttRowDisclosureHtml).
+// - Actual Placements, y la parte de On Hold & Other que ya es un cierre real (Cancelled/Filled
+//   Internal Hire): "¿cuantas se colocaron/cerraron REALMENTE durante este periodo?" — la fecha
+//   real de cierre (ganttCloseDate) cayendo en el rango, nunca el Kickoff ni el solape. Una
+//   colocacion vive en el trimestre en que de verdad paso, punto.
+// Consecuencia aceptada: "Positions" ya NO tiene por que sumar exacto con las otras 4 en un
+// trimestre especifico (una req asignada en Q2 pero colocada en Q3 cuenta en el Positions de Q2 Y
+// en el Actual Placements de Q3, nunca en el Actual Placements de Q2) — eso es correcto, no un bug.
 function positionAssignedInWindow(p, start, end){
   const k = parseD(p.kickoff);
   return !!k && k >= start && k <= end;
+}
+function ganttInWindow(p, start, end){
+  const kickoff = parseD(p.kickoff);
+  if(!kickoff) return false;
+  const e = ganttEndPoint(p);
+  return !(e < start || kickoff > end);
+}
+// Aviso en la fila del Gantt cuando una req en curso (Active/Potential/On Hold) aparece en un
+// trimestre distinto al de su propio Kickoff — self-contained, nunca hay que adivinar por que
+// salio ahi si no arranco ese mismo trimestre.
+function ganttRowDisclosureHtml(kickoffDate){
+  const parts = summaryScopeParts();
+  if(!parts.quarter || !kickoffDate) return "";
+  const kQ = Math.floor(kickoffDate.getMonth()/3)+1;
+  const kYear = kickoffDate.getFullYear();
+  if(kYear === parts.year && kQ === parts.quarter) return "";
+  const kLabel = `Q${kQ} ${kYear}`;
+  return `<div class="gantt-row-quarter-note" title="This requisition's Kickoff was in ${escapeHtml(kLabel)}, a different quarter than the one you're viewing.">⚠ Started in ${escapeHtml(kLabel)}</div>`;
 }
 function ganttBuildCalendar(win){
   const totalDays = Math.max(1, ganttDaysBetween(win.start, win.end));
@@ -5382,6 +5408,7 @@ function ganttRowHtml(p, cal){
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
       <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet")}</div>
       ${extraInfoHtml}
+      ${ganttRowDisclosureHtml(kickoff)}
     </div>
     <div class="gantt-row-canvas">
       <div class="gantt-track" style="left:${trackLeftPct}%; width:${trackWidthPct}%;">${segsHtml}${milestonesHtml}</div>
@@ -5774,10 +5801,7 @@ function summaryScopeWindow(){
 }
 function renderKpis(){
   const scopeWin = summaryScopeWindow();
-  // Ver positionAssignedInWindow(): el cohorte de una req para efectos de este filtro es SIEMPRE
-  // su propio trimestre de Kickoff, nunca un rango que se solape con varios — asi Positions y las
-  // otras 4 tarjetas parten todas del mismo grupo de reqs, y nada puede caer en 2 periodos a la vez.
-  const scopedPositions = scopeWin ? dashboardPositions().filter(p=>positionAssignedInWindow(p, scopeWin.start, scopeWin.end)) : dashboardPositions();
+  const basePositions = dashboardPositions();
   // Regenerado por completo en cada render (nunca HTML estatico) a proposito, mismo patron que
   // #ganttScopeToggle en renderGanttGroup() — asi el listener de abajo nunca se acumula entre
   // refrescos (esta funcion se re-ejecuta en cada auto-refresh de 2 minutos).
@@ -5807,61 +5831,70 @@ function renderKpis(){
   const subEl = document.getElementById("positionsSummarySub");
   if(subEl){
     subEl.textContent = scopeWin
-      ? `Every requisition assigned (Kickoff) during ${scopeWin.label}, broken down by where it stands today. Click any card below to see it as a Gantt Chart.`
+      ? `${scopeWin.label} — each card below answers its own question about this period (see its own description), they don't add up to one another. Click any card to see it as a Gantt Chart.`
       : "Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.";
   }
-  const active = scopedPositions.filter(p=>!TERMINAL.includes(p.status));
-  // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
-  // 1) Nicolas: "no sabemos a que se refiere nada" con solo un numero + una etiqueta chica ->
-  //    se agrego una frase por tarjeta explicando EXACTAMENTE que cuenta, mas un embudo real con
-  //    flecha + barra proporcional entre Positions/Active (subconjunto de la anterior).
-  // 2) Nicolas, viendo el numero real de "Active Positions": "no, porque aunque el reclutador
-  //    deba hacer seguimiento eso no cuenta como una posicion activa, esta on hold precisamente"
-  //    -> "Active Positions" NO puede seguir siendo solo "no terminal" (eso incluia Filled, ya sin
-  //    ningun trabajo de reclutamiento pendiente, Y ambos On Hold, pausados por definicion). Ahora
-  //    excluye tambien Filled/On Hold/On Hold-Internal Candidates ademas de TERMINAL.
-  // 3) Con eso, asumi que "Potential Placements" (que solo excluia Filled) habia quedado
-  //    IDENTICO a Active Positions y lo quite — MAL: Nicolas la queria de vuelta pero con su
-  //    propio criterio (ver POTENTIAL_PLACEMENT_STATUSES arriba), sin relacion con Active. Ahora
-  //    vive junto a Actual Placements, despues del divisor — ninguna de las dos es "el siguiente
-  //    paso" de Active Positions (un req puede saltar de Sourcing a Offer Request sin pasar por
-  //    ahi "activo" en el sentido de esta tarjeta), asi que ninguna lleva flecha ni barra
-  //    proporcional compartida con el embudo de la izquierda.
-  const activePositions = active.filter(p=>!NOT_ACTIVELY_WORKED.includes(p.status));
-  const allPositions = scopedPositions;
-  const potentialPlacements = allPositions.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
-  const actualPlacements = allPositions.filter(p=>p.status==="Hired");
+  // "Positions & Placements" — REDISEÑADO 2026-09-19, varias rondas, la ultima 2026-09-27 round 3
+  // (ver el comentario grande junto a positionAssignedInWindow()): cada tarjeta usa la fecha que
+  // de verdad le corresponde a su propia pregunta, sin exigir que sumen entre si.
+  const positionsForPeriod = scopeWin ? basePositions.filter(p=>positionAssignedInWindow(p, scopeWin.start, scopeWin.end)) : basePositions;
+  const activePositions = basePositions.filter(p=>
+    !TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status) &&
+    (scopeWin ? ganttInWindow(p, scopeWin.start, scopeWin.end) : true));
+  const potentialPlacements = basePositions.filter(p=>
+    POTENTIAL_PLACEMENT_STATUSES.includes(p.status) &&
+    (scopeWin ? ganttInWindow(p, scopeWin.start, scopeWin.end) : true));
+  // Actual Placements — una colocacion es un EVENTO de una sola fecha (su hire date real), nunca
+  // "sigue en juego", asi que esta es la unica de las 4 que jamas usa solape de rango: cuenta
+  // exactamente en el periodo en que de verdad paso, sin importar cuando arranco la req.
+  const actualPlacements = basePositions.filter(p=>{
+    if(p.status !== "Hired") return false;
+    if(!scopeWin) return true;
+    const h = parseD(p.hire);
+    return !!h && h >= scopeWin.start && h <= scopeWin.end;
+  });
   const funnelStats = [
-    {key:"positions", label:"Positions", value:allPositions.length, positions:allPositions,
+    {key:"positions", label:"Positions", value:positionsForPeriod.length, positions:positionsForPeriod,
       desc: scopeWin
         ? `Every requisition assigned (Kickoff) during ${scopeWin.label}, in any status.`
         : "Every requisition ever assigned to this book, in any status."},
     {key:"active", label:"Active Positions", value:activePositions.length, positions:activePositions,
-      desc:"Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
+      desc: scopeWin
+        ? `Currently being worked, and still in play at some point during ${scopeWin.label} — excludes Filled, both On Hold statuses, and closed outcomes.`
+        : "Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
   ];
   // 5a tarjeta agregada 2026-09-25 (Nicolas, con los numeros reales delante: "tenemos 30
   // posiciones, pero solo 16 activas, 3 en potential placements y otras 7 en actual placements.
   // Eso me da 26. En donde estan las otras 4?... yo supongo que esas son las internal hires, o
   // las on hold, entonces en esa caja nueva podria ir todo lo que esta cancelled tambien" — tenia
-  // razon: las 4 reales eran 2 Filled (Internal Hire) + 2 On Hold. Definida como "todo lo que NO
-  // cayo en ninguna de las otras 3" (nunca una lista fija de statuses a mano) para que Positions
-  // SIEMPRE sea la suma exacta de las 4 tarjetas, pase lo que pase con statuses nuevos a futuro.
-  const otherPositions = allPositions.filter(p=>
-    !activePositions.includes(p) && !potentialPlacements.includes(p) && p.status!=="Hired");
-  // Reubicada 2026-09-25, dos veces el mismo dia — primero a la izquierda (posicion 3, junto al
-  // embudo), despues Nicolas: "ponlo de 3 entonces del lado derecho de la linea y que no haga
-  // parte del otro lado, ya que ya entendi la logica" — o sea, SI del lado de outcome (con
-  // Potential/Actual, mismo look sin flecha/barra, que es justo por lo que no podia ir en
-  // funnelStats), pero primero en ese grupo, no al final. outcomeStats ahora es [other, potential,
-  // actual] — un solo array, ya no necesita su propio bloque HTML aparte como el intento anterior.
+  // razon: las 4 reales eran 2 Filled (Internal Hire) + 2 On Hold. Mezcla 2 conceptos distintos a
+  // proposito, cada uno con su propia fecha (round 3): la parte On Hold es un estado en curso
+  // (pausado ahora, solape de rango como Active/Potential), la parte Cancelled/Filled Internal
+  // Hire es un cierre real, un evento de una sola fecha (igual que Actual Placements).
+  const onHoldNow = basePositions.filter(p=>
+    (p.status === "On Hold" || p.status === "On Hold — Internal Candidates") &&
+    (scopeWin ? ganttInWindow(p, scopeWin.start, scopeWin.end) : true));
+  const closedElsewhere = basePositions.filter(p=>{
+    if(p.status !== "Cancelled" && p.status !== "Filled (Internal Hire)") return false;
+    if(!scopeWin) return true;
+    const close = ganttCloseDate(p);
+    return !!close && close >= scopeWin.start && close <= scopeWin.end;
+  });
+  const otherPositions = [...onHoldNow, ...closedElsewhere];
   const otherStat = {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
-    color:"var(--neutral)", desc:"Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active, and not counted in either box to the left. Positions always adds up to Active + this one + Potential + Actual."};
+    color:"var(--neutral)", desc: scopeWin
+      ? `Paused (On Hold) at some point during ${scopeWin.label}, or actually closed without an Irth placement during it — lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active.`
+      : "Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active."};
   const outcomeStats = [
     otherStat,
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
-      color:"var(--warning)", desc:"At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
+      color:"var(--warning)", desc: scopeWin
+        ? `At Offer Request or Filled at some point during ${scopeWin.label} — an offer already out or accepted, not yet a confirmed hire.`
+        : "At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
     {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
-      color:"var(--good)", desc:"Confirmed placements to date — a running total, not a next step from the numbers on the left."},
+      color:"var(--good)", desc: scopeWin
+        ? `Confirmed placements whose candidate actually started during ${scopeWin.label} — the same date commissions are based on.`
+        : "Confirmed placements to date — a running total, not a next step from the numbers on the left."},
   ];
   const maxVal = funnelStats[0].value || 1;
   const allStats = [...funnelStats, ...outcomeStats];
