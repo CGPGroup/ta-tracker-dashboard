@@ -753,7 +753,18 @@
   .gantt-cal-gridlines { position: absolute; top: 0; bottom: 0; left: 220px; right: 175px; pointer-events: none; }
   .gantt-cal-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: .6; }
   .gantt-cal-today-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--brand); z-index: 3; }
-  .gantt-cal-today-label { position: absolute; top: -14px; font-size: 10px; font-weight: 700; color: var(--brand); transform: translateX(-50%); white-space: nowrap; }
+  /* BUG REAL 2026-09-26 (Nicolas: "no se ve la fecha de hoy. Esta asi hace rato"): este label vivia
+     dentro de #ganttGridlines (top:-14px, para "flotar" arriba de la fila del eje) pero
+     #ganttGridlines es hijo de .gantt-calendar-inner, que a su vez esta dentro de .gantt-calendar
+     (overflow-x:auto — por spec CSS, overflow-y se computa a auto tambien cuando solo se declara
+     overflow-x, asi que el contenedor SI recorta verticalmente). Un top negativo saca al label por
+     encima del borde superior real del contenido, y ese espacio nunca es alcanzable con scroll
+     (no existe "scroll negativo") — el label quedaba invisible SIEMPRE, mientras que la linea
+     vertical (top:0, dentro de los limites) se veia bien, por eso solo la fecha "desaparecia".
+     Movido a vivir dentro de #ganttAxis en vez de #ganttGridlines (misma fila de 15px que ya
+     usan los meses, nunca recortada) con top:0 en vez de -14px, mas un fondo tipo chip para que
+     se distinga incluso si cae cerca de la etiqueta de un mes. */
+  .gantt-cal-today-label { position: absolute; top: 0; font-size: 10px; font-weight: 700; color: var(--brand); background: var(--surface-1); padding: 0 3px; border-radius: 3px; transform: translateX(-50%); white-space: nowrap; z-index: 2; }
   /* Nicolas, 2026-09-24: con muchos reqs (ej. 16 en Active Positions) la lista de filas hacia que
      toda la pagina se volviera larguisima de scrolear. 2026-09-26, version final (revertido un
      selector "Show 4/10/25/30" que limitaba cuantas se CARGABAN — mala lectura de esto mismo):
@@ -4978,7 +4989,7 @@ function ganttRenderAxis(cal, granularity){
     line.className = "gantt-cal-today-line"; line.style.left = pct+"%";
     const label = document.createElement("div");
     label.className = "gantt-cal-today-label"; label.style.left = pct+"%"; label.textContent = `Today · ${ganttFmtDate(today)}`;
-    gridEl.appendChild(line); gridEl.appendChild(label);
+    gridEl.appendChild(line); axisEl.appendChild(label);
   }
 }
 
