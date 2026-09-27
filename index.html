@@ -839,7 +839,6 @@
   .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
   .gantt-row-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
   .gantt-row-meta b { color: var(--text-primary); font-weight: 600; }
-  .gantt-row-quarter-note { font-size: 9.5px; font-weight: 600; color: var(--warning); margin-top: 3px; cursor: help; }
   .gantt-avatar {
     width: 14px; height: 14px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -1964,17 +1963,14 @@
                   <h3 style="margin:0;">Positions &amp; Placements</h3>
                   <div id="summaryScopeToggle"></div>
                 </div>
+                <!-- Nicolas, 2026-09-27, round 2: "necesito que hagas bien la cuenta... no
+                     entiendo en que te basas con Active Positions, si hay criterios diferentes que
+                     no tienen nada que ver con el card de Positions" — ver el comentario junto a
+                     positionAssignedInWindow() para el diseño final: las 5 tarjetas parten del
+                     MISMO cohorte (Kickoff dentro del periodo elegido), asi que "cuantas se
+                     asignaron en Q2" ya lo contesta la tarjeta Positions misma — no hace falta una
+                     nota aparte (la que existia aca se elimino por redundante). -->
                 <div class="panel-sub" id="positionsSummarySub">Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.</div>
-                <!-- Nicolas, 2026-09-27: "si alguien me llega a pedir, dime cuantas reqs se
-                     asignaron en Q2, no les voy a poder decir rapido" — una pregunta real distinta
-                     de las 5 tarjetas de arriba (esas describen el LIBRO/estado actual, mezclando
-                     fecha de cierre para las cerradas y "sigue viva" para las abiertas; ver
-                     positionMatchesWindow()). "Asignadas" es mas simple y NUNCA deberia sumar con
-                     esas 5: solo cuenta por fecha de Kickoff cayendo en el periodo, sin importar
-                     el status actual. Vive aparte, nunca como 6ta tarjeta (rompería el "siempre
-                     suma" de las otras 5) — solo aparece con un Quarter/Year especifico elegido,
-                     porque en "All time" seria identico al numero de Positions, puro ruido. -->
-                <div class="panel-sub" id="summaryAssignedNote" style="display:none;"></div>
                 <div class="positions-summary-strip" id="positionsSummaryStrip"></div>
                 <div class="gantt-panel" id="ganttPanel"></div>
               </div>
@@ -4984,26 +4980,23 @@ function ganttClampedWindow(win, data){
   if(start >= end) return win;
   return {start, end, label: win.label};
 }
-function ganttInWindow(p, start, end){
-  const kickoff = parseD(p.kickoff);
-  if(!kickoff) return false;
-  const e = ganttEndPoint(p);
-  return !(e < start || kickoff > end);
-}
-// Nicolas, 2026-09-27: "el placement no hace parte de 2 quarters diferentes" — una req YA
-// cerrada (Hired/Cancelled/Filled Internal Hire) es un EVENTO de una sola fecha (su cierre
-// real), nunca algo que "siga pasando" en cada trimestre entre su kickoff y su cierre — por eso
-// para las 3 TERMINAL se compara la fecha real de cierre cayendo DENTRO de la ventana, nunca el
-// solape de todo su rango (eso es lo que hace ganttInWindow, correcto para una req todavia en
-// curso, incluido On Hold). Usado tanto para filtrar las tarjetas (renderKpis) como para decidir
-// que trimestres/años mostrar en el menu (summaryAvailableQuarters) — misma regla en los 2
-// lugares, para que un trimestre nunca aparezca clickeable sin datos reales detras.
-function positionMatchesWindow(p, start, end){
-  if(TERMINAL.includes(p.status)){
-    const close = ganttCloseDate(p);
-    return !!close && close >= start && close <= end;
-  }
-  return ganttInWindow(p, start, end);
+// Nicolas, 2026-09-27, round 2 de esto mismo: probamos el cierre real para las TERMINAL
+// (arreglaba el doble conteo de placements) y probamos congelar "Positions" sin filtrar (arreglaba
+// la contradiccion con su propio "ever assigned") — pero eso dejaba cada tarjeta con un criterio
+// distinto y sin relacion entre si ("no entiendo en que te basas con Active Positions, si hay
+// criterios diferentes que no tienen nada que ver con el card de Positions"). La version que de
+// verdad es consistente: TODAS las tarjetas parten del MISMO cohorte simple — reqs cuyo Kickoff
+// cae dentro del periodo elegido, punto, sin importar que paso despues. Positions = el cohorte
+// completo. Active/On Hold & Other/Potential/Actual = ese MISMO cohorte, partido por su status
+// ACTUAL de hoy (igual que en "All time", solo que aplicado a un cohorte mas chico). Con esto:
+// - "Positions siempre suma con las otras 4" vuelve a ser verdad SIEMPRE, sin casos especiales.
+// - Una colocacion nunca puede aparecer en 2 trimestres, porque el cohorte de una req es UNO
+//   solo (su propio Kickoff), nunca un rango que se solape con varios periodos.
+// - Ya no hace falta la nota de "Started in Q2, sigue en Q3" (ver ganttRowHtml) porque una req ya
+//   no puede aparecer en un trimestre que no sea el suyo.
+function positionAssignedInWindow(p, start, end){
+  const k = parseD(p.kickoff);
+  return !!k && k >= start && k <= end;
 }
 function ganttBuildCalendar(win){
   const totalDays = Math.max(1, ganttDaysBetween(win.start, win.end));
@@ -5188,25 +5181,6 @@ function ganttSegments(p){
     lastSeg.stop = end;
   }
   return segs;
-}
-
-// Nicolas, 2026-09-27: "si hay reqs que pertenecen a Q3 pero tienen informacion de Q2, que se
-// pueda ver... poner como un disclosure o warning, que esa info pertenece a Q2 pero igual es
-// visible" — cuando las tarjetas estan filtradas a un trimestre ESPECIFICO (ver summaryScope) y
-// una req que aparece ahi en realidad arranco en un trimestre distinto (aparece porque seguia
-// activa durante el trimestre elegido, ver ganttInWindow()), esta nota lo deja explicito en la
-// fila misma — nunca oculta el req, solo aclara de donde viene, self-contained (no hace falta
-// conectar esto con ningun otro elemento de la pantalla para entenderlo).
-function ganttQuarterDisclosureHtml(kickoffDate){
-  const qMatch = /^q-(\d+)-(\d+)$/.exec(summaryScope);
-  if(!qMatch || !kickoffDate) return "";
-  const selYear = +qMatch[1], selQ = +qMatch[2];
-  const kQ = Math.floor(kickoffDate.getMonth()/3)+1;
-  const kYear = kickoffDate.getFullYear();
-  if(kYear === selYear && kQ === selQ) return "";
-  const kLabel = `Q${kQ} ${kYear}`;
-  const selLabel = `Q${selQ} ${selYear}`;
-  return `<div class="gantt-row-quarter-note" title="This requisition actually started in ${escapeHtml(kLabel)}, not ${escapeHtml(selLabel)} — shown here because it was still active during ${escapeHtml(selLabel)}.">⚠ Started in ${escapeHtml(kLabel)}, still active in ${escapeHtml(selLabel)}</div>`;
 }
 
 function ganttRowHtml(p, cal){
@@ -5408,7 +5382,6 @@ function ganttRowHtml(p, cal){
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
       <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet")}</div>
       ${extraInfoHtml}
-      ${ganttQuarterDisclosureHtml(kickoff)}
     </div>
     <div class="gantt-row-canvas">
       <div class="gantt-track" style="left:${trackLeftPct}%; width:${trackWidthPct}%;">${segsHtml}${milestonesHtml}</div>
@@ -5786,13 +5759,10 @@ function summaryAvailableQuarters(year){
   const qs = [];
   for(let q=1;q<=4;q++){
     const start = new Date(year,(q-1)*3,1), end = new Date(year,q*3,0);
-    // BUG REAL 2026-09-27 (Nicolas: "por que aparece Q4 si aun no ha iniciado?"): una req YA
-    // colocada con fecha de inicio real futura (ej. RD-011, Placed Oct 5) hace que
-    // ganttInWindow() de verdad se solape con Q4, aunque el calendario todavia no haya llegado
-    // ahi — el dato es real, pero el TRIMESTRE en si no ha empezado. Se necesitan las 2 cosas:
-    // que el trimestre ya haya arrancado (start <= hoy) Y que tenga datos reales.
+    // Nicolas, 2026-09-27: "por que aparece Q4 si aun no ha iniciado?" — un trimestre nunca se
+    // ofrece antes de que el calendario real lo alcance, sin importar los datos.
     if(start > today) continue;
-    if(positions.some(p=>positionMatchesWindow(p,start,end))) qs.push(q);
+    if(positions.some(p=>positionAssignedInWindow(p,start,end))) qs.push(q);
   }
   return qs;
 }
@@ -5804,10 +5774,10 @@ function summaryScopeWindow(){
 }
 function renderKpis(){
   const scopeWin = summaryScopeWindow();
-  // Nicolas, 2026-09-27: "si pongo placements de Q2 me salen 3, pero luego esas mismas me salen
-  // en Q3 tambien" — ver positionMatchesWindow(): una req ya cerrada cuenta por su fecha real de
-  // cierre, nunca por solape de rango, asi nunca cae en 2 trimestres a la vez.
-  const scopedPositions = scopeWin ? dashboardPositions().filter(p=>positionMatchesWindow(p, scopeWin.start, scopeWin.end)) : dashboardPositions();
+  // Ver positionAssignedInWindow(): el cohorte de una req para efectos de este filtro es SIEMPRE
+  // su propio trimestre de Kickoff, nunca un rango que se solape con varios — asi Positions y las
+  // otras 4 tarjetas parten todas del mismo grupo de reqs, y nada puede caer en 2 periodos a la vez.
+  const scopedPositions = scopeWin ? dashboardPositions().filter(p=>positionAssignedInWindow(p, scopeWin.start, scopeWin.end)) : dashboardPositions();
   // Regenerado por completo en cada render (nunca HTML estatico) a proposito, mismo patron que
   // #ganttScopeToggle en renderGanttGroup() — asi el listener de abajo nunca se acumula entre
   // refrescos (esta funcion se re-ejecuta en cada auto-refresh de 2 minutos).
@@ -5837,24 +5807,8 @@ function renderKpis(){
   const subEl = document.getElementById("positionsSummarySub");
   if(subEl){
     subEl.textContent = scopeWin
-      ? `Every requisition active at some point during ${scopeWin.label}, broken down by where it stands. Click any card below to see it as a Gantt Chart.`
+      ? `Every requisition assigned (Kickoff) during ${scopeWin.label}, broken down by where it stands today. Click any card below to see it as a Gantt Chart.`
       : "Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.";
-  }
-  // "Cuantas reqs se asignaron en Q2" — a proposito NUNCA se mezcla con las 5 tarjetas de abajo
-  // (ver el comentario junto a #summaryAssignedNote en el HTML): cuenta solo por Kickoff cayendo
-  // en el periodo, sin importar si esa req ya se cerro, sigue abierta, o en que estado esta hoy.
-  const assignedNoteEl = document.getElementById("summaryAssignedNote");
-  if(assignedNoteEl){
-    if(scopeWin){
-      const assignedCount = dashboardPositions().filter(p=>{
-        const k = parseD(p.kickoff);
-        return k && k >= scopeWin.start && k <= scopeWin.end;
-      }).length;
-      assignedNoteEl.textContent = `${assignedCount} requisition${assignedCount===1?"":"s"} actually assigned (Kickoff) during ${scopeWin.label}, regardless of where they stand today.`;
-      assignedNoteEl.style.display = "";
-    } else {
-      assignedNoteEl.style.display = "none";
-    }
   }
   const active = scopedPositions.filter(p=>!TERMINAL.includes(p.status));
   // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
@@ -5877,19 +5831,10 @@ function renderKpis(){
   const allPositions = scopedPositions;
   const potentialPlacements = allPositions.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
   const actualPlacements = allPositions.filter(p=>p.status==="Hired");
-  // BUG REAL 2026-09-27 (Nicolas: "no le encuentro sentido a que si filtro por Q3 me salgan 29,
-  // pero si filtro por Q2 me sale 1 en Positions... lo que dice el filtro es 'ever assigned',
-  // entonces deberia traer las 30 siempre"): tenia toda la razon — su propia descripcion dice
-  // "ever" (sin limite de tiempo), asi que dejarla cambiar con el filtro de Quarter/Year la volvia
-  // literalmente falsa. "Positions" ahora SIEMPRE usa el libro completo sin filtrar, sin importar
-  // que trimestre/año este elegido arriba — las otras 4 (Active/On Hold/Potential/Actual) si
-  // siguen respondiendo al filtro como ya estaba, porque esas si describen "donde esta parado
-  // ahorita/en ese periodo", una pregunta que SI tiene sentido acotar por fecha.
-  const totalPositions = dashboardPositions();
   const funnelStats = [
-    {key:"positions", label:"Positions", value:totalPositions.length, positions:totalPositions,
+    {key:"positions", label:"Positions", value:allPositions.length, positions:allPositions,
       desc: scopeWin
-        ? "Every requisition ever assigned to this book, in any status — always the full book, not affected by the Quarter/Year filter above."
+        ? `Every requisition assigned (Kickoff) during ${scopeWin.label}, in any status.`
         : "Every requisition ever assigned to this book, in any status."},
     {key:"active", label:"Active Positions", value:activePositions.length, positions:activePositions,
       desc:"Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
@@ -5910,9 +5855,7 @@ function renderKpis(){
   // funnelStats), pero primero en ese grupo, no al final. outcomeStats ahora es [other, potential,
   // actual] — un solo array, ya no necesita su propio bloque HTML aparte como el intento anterior.
   const otherStat = {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
-    color:"var(--neutral)", desc: `Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active, and not counted in either box to the left. ${scopeWin
-      ? `These 4 add up to ${allPositions.length}, everything relevant to ${scopeWin.label} — not to Positions above, which always stays the full book no matter what's selected.`
-      : "Positions always adds up to Active + this one + Potential + Actual."}`};
+    color:"var(--neutral)", desc:"Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active, and not counted in either box to the left. Positions always adds up to Active + this one + Potential + Actual."};
   const outcomeStats = [
     otherStat,
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
