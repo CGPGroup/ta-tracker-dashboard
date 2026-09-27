@@ -749,6 +749,7 @@
   .gantt-calendar-inner { position: relative; min-width: 700px; }
   .gantt-cal-axis { display: flex; margin-left: 220px; margin-right: 175px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 2px; position: relative; height: 15px; }
   .gantt-cal-tick { position: absolute; font-size: 10px; font-weight: 600; color: var(--text-secondary); transform: translateX(-50%); white-space: nowrap; }
+  .gantt-cal-tick.sub { font-size: 9px; font-weight: 500; color: var(--text-muted); opacity: .75; }
   .gantt-cal-gridlines { position: absolute; top: 0; bottom: 0; left: 220px; right: 175px; pointer-events: none; }
   .gantt-cal-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: .6; }
   .gantt-cal-today-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--brand); z-index: 3; }
@@ -1266,7 +1267,20 @@
   /* SLA compliance por reclutador (ver renderGanttInsights()) — mismo .dot que el resto de la
      app, mismos 3 colores/umbrales que el donut de SLA Compliance, solo que aqui puntual por
      persona en vez de agregado para todo el equipo. */
-  .workload-sla { display: flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; }
+  /* BUG REAL 2026-09-26 (Nicolas, con captura: "lo de SLA no esta alineado" entre 2 tarjetas
+     lado a lado con el MISMO texto "100% on SLA"): esta fila era display:flex mientras que
+     .workload-name/.workload-count (que si se veian bien alineadas) son texto normal centrado con
+     text-align:center. Un flex row centrado por el padre redondea el ancho de sus items (dot +
+     gap + texto) a pixeles de dispositivo de forma independiente por tarjeta, y como cada tarjeta
+     arranca en una posicion X absoluta distinta en la pagina, ese redondeo por-flex-item se
+     acumula distinto en cada una — con el zoom:0.9 global (ver [[project_global_zoom_90]]) mas un
+     devicePixelRatio no entero (comprobado 1.1 en la maquina real de Nicolas), el error de
+     redondeo se magnifica lo suficiente para verse a simple vista. Sacado de flex, mismo patron
+     que .workload-count: texto normal + text-align:center, con el dot como inline-block (igual
+     que .recruiter-dot) en vez de flex item — sin distribucion flex que redondear, se alinea
+     identico a las demas filas. */
+  .workload-sla { font-size: 10.5px; font-weight: 600; text-align: center; }
+  .workload-sla .dot { margin-right: 4px; vertical-align: middle; }
   /* Version compacta de workload-card/barlist, solo para los mini-charts dentro del Gantt (ver
      renderGanttInsights()) — Nicolas, 2026-09-26: "estan muy grandes en pixeles" sobre el tamaño
      que tenian como tarjeta de Insights aparte; mas chico aca porque comparten espacio con 2
@@ -4926,25 +4940,34 @@ function ganttRenderAxis(cal, granularity){
   const gridEl = document.getElementById("ganttGridlines");
   if(!axisEl || !gridEl) return;
   axisEl.innerHTML = ""; gridEl.innerHTML = "";
-  const addTick = (date,label)=>{
+  const addTick = (date,label,sub)=>{
     const pct = cal.pctOf(date);
     const tick = document.createElement("div");
-    tick.className = "gantt-cal-tick"; tick.style.left = pct+"%"; tick.textContent = label;
+    tick.className = "gantt-cal-tick" + (sub ? " sub" : ""); tick.style.left = pct+"%"; tick.textContent = label;
     axisEl.appendChild(tick);
-    const line = document.createElement("div");
-    line.className = "gantt-cal-gridline"; line.style.left = pct+"%";
-    gridEl.appendChild(line);
+    if(!sub){
+      const line = document.createElement("div");
+      line.className = "gantt-cal-gridline"; line.style.left = pct+"%";
+      gridEl.appendChild(line);
+    }
   };
   if(granularity === "week"){
     let cursor = new Date(cal.rangeStart);
     while(cursor.getDay() !== 1) cursor = ganttAddDays(cursor,1);
     while(cursor <= cal.rangeEnd){ addTick(cursor, ganttFmtDate(cursor)); cursor = ganttAddDays(cursor,7); }
   } else {
+    // Nicolas, 2026-09-26: "si las meses se ven tan anchos, porque no le ponemos al menos la
+    // fecha de la mitad a cada mes" - un mes entero como una sola etiqueta al inicio deja el resto
+    // de la columna sin ninguna referencia de fecha. Sub-tick liviano (mas chico, sin su propia
+    // gridline solida, para no competir visualmente con las gridlines reales de cada mes) en el
+    // dia 15 de cada mes visible, solo como punto de referencia entre el inicio y el fin del mes.
     let cursor = new Date(cal.rangeStart.getFullYear(), cal.rangeStart.getMonth(), 1);
     const spansYears = cal.rangeStart.getFullYear() !== cal.rangeEnd.getFullYear();
     while(cursor <= cal.rangeEnd){
       const label = cursor.toLocaleDateString("en-US",{month:"short"}) + (spansYears ? " '"+String(cursor.getFullYear()).slice(2) : "");
       addTick(cursor, label);
+      const mid = new Date(cursor.getFullYear(), cursor.getMonth(), 15);
+      if(mid > cal.rangeStart && mid < cal.rangeEnd) addTick(mid, "15", true);
       cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
     }
   }
