@@ -7258,6 +7258,20 @@ function renderDetailModal(){
 
   const outcomeFacts = [];
   if(p.placedCandidate) outcomeFacts.push({label:"Placed Candidate", value:escapeHtml(p.placedCandidate)});
+  // Nicolas, 2026-09-27: "los modales del gantt no muestran toda la informacion de campos como
+  // fill y hire" — BUG REAL encontrado: p.fill/p.hire (las fechas reales que TODO el resto del
+  // tracker ya usa — SLA, el cierre del Gantt, Actual Placements por trimestre) solo se mostraban
+  // dentro de la fila del candidato en Submission Batches (ver candidateOfferDatesHtml()). Una
+  // req como RD-011 tiene p.fill/p.hire con valor real pero CERO candidatos logueados en batches
+  // (llego a Hired por otro camino, probablemente antes de que existiera el flujo por candidato) —
+  // esas 2 fechas quedaban invisibles en TODO el modal, sin ningun lugar donde verlas. Se agregan
+  // aca como facts de solo lectura (nunca editables aca, eso sigue siendo por candidato en
+  // Submission Batches — ver el "2026-09-23/24" mas abajo) que SIEMPRE se muestran si el campo
+  // tiene valor, sin importar si hay o no un candidato de batch detras.
+  if(p.fill) outcomeFacts.push({label:"Fill Date", value:escapeHtml(p.fill)});
+  if(p.hire) outcomeFacts.push({label:"Hire (Start) Date", value:escapeHtml(p.hire)});
+  const readOnlyOutcomeFactsHtml = outcomeFacts.filter(f=>f.label!=="Placed Candidate")
+    .map(f=>`<div><div class="fact-label">${f.label}</div><div class="fact-value">${f.value}</div></div>`).join("");
   // Antes esto SOLO se mostraba (fact de solo lectura, y solo si ya tenia valor) — no habia
   // ninguna forma de escribirlo desde el tracker, el unico modo de que aparezca era alguien
   // editando el Excel directo. Nicolas: "no veo un campo para poner al candidato que quedo
@@ -7267,6 +7281,7 @@ function renderDetailModal(){
   const outcomeFactsHtml = isView ? factsSection("", outcomeFacts) : `
     <div class="facts-grid" style="margin-bottom:22px;">
       ${editableFactCell("Placed Candidate", p.placedCandidate ? escapeHtml(p.placedCandidate) : "", "editPlacedCandidateBtn")}
+      ${readOnlyOutcomeFactsHtml}
     </div>`;
 
   // Intake Waived vive DENTRO de la celda de Intake Requested Date (debajo de su input), no
