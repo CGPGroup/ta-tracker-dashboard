@@ -1931,6 +1931,7 @@
       <div class="dash-tabs" id="dashTabs" role="tablist">
         <button type="button" class="dash-tab active" data-dash-tab="team">Overview</button>
         <button type="button" class="dash-tab" data-dash-tab="sla">SLA &amp; Completion</button>
+        <button type="button" class="dash-tab" data-dash-tab="quarter">By Quarter</button>
       </div>
 
       <!-- ======================= DASHBOARD ======================= -->
@@ -2002,6 +2003,35 @@
                   <h3>Needs Attention <span class="panel-details-count" id="dashboardAttentionCount"></span></h3>
                   <div class="panel-sub">The specific positions behind the SLA Health numbers above (out of SLA or at risk) plus any stuck on Kickoff/Intake follow-up, most urgent first.</div>
                   <div id="dashboardAttentionZone"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Nicolas, 2026-09-26: "quiero que el tracker sirva tambien como reporting tool" —
+                 3 metricas independientes por trimestre, cada una con su propia fecha, sin forzar
+                 un solo "quarter" por req (asi es como reportan las plataformas de reclutamiento
+                 reales: pipeline abierto y placements cerrados son 2 lineas de tiempo separadas,
+                 nunca una sola etiqueta). Ver renderQuarterlyReport(). -->
+            <div class="dash-tab-panel" data-dash-panel="quarter">
+              <div class="panel" style="margin-bottom:16px; display:flex; align-items:center; gap:10px;">
+                <div style="font-weight:600; font-size:13px; color:var(--text-muted);">Year</div>
+                <div class="gantt-scope-toggle" id="quarterYearPicker"></div>
+              </div>
+              <div class="dash-grid">
+                <div class="panel" style="grid-column: span 2;">
+                  <h3>Reqs Opened</h3>
+                  <div class="panel-sub">By the quarter each req's Kickoff happened, no matter when (or if) it closed.</div>
+                  <div class="barlist" id="quarterOpenedChart"></div>
+                </div>
+                <div class="panel" style="grid-column: span 2;">
+                  <h3>Placements</h3>
+                  <div class="panel-sub">By the quarter the candidate actually started — the same date commissions are based on.</div>
+                  <div class="barlist" id="quarterPlacedChart"></div>
+                </div>
+                <div class="panel" style="grid-column: span 2;">
+                  <h3>Active Reqs</h3>
+                  <div class="panel-sub">Reqs with real active work during that quarter (time spent On Hold doesn't count). A req spanning two quarters counts in both — that's correct, not a bug.</div>
+                  <div class="barlist" id="quarterActiveChart"></div>
                 </div>
               </div>
             </div>
@@ -3684,11 +3714,65 @@ function renderDashboardPanels(){
   renderCompletionChart();
   renderAvgTtsChart();
   renderDashboardAttentionBanner();
+  renderQuarterlyReport();
   // A diferencia de todo lo de arriba (siempre visible, cambia con el scope), el perfil en el
   // nav solo existe DENTRO de un workspace — pero tiene que refrescarse en cada
   // renderDashboardPanels(), no solo la vez que entras al workspace, para que no se quede viejo
   // despues de guardar un cambio o del auto-refresh de 2 minutos.
   if(activeDashboardScope) renderSidebarProfile();
+}
+// Reporte por trimestre (Nicolas, 2026-09-26: "la idea del tracker es que tambien sirva como
+// reporting tool"). 3 conteos independientes, cada uno con su propia fecha real, sin forzar un
+// solo "quarter" por req — asi reportan las plataformas de reclutamiento reales (pipeline abierto
+// y placements cerrados son 2 lineas de tiempo separadas). "Active" reusa ganttEndPoint(), la
+// MISMA funcion que ya usa el Gantt para saber donde termina la barra de una req: para una
+// terminal, la fecha real de cierre; para una en On Hold, el momento en que se pauso (asi los
+// dias en On Hold nunca cuentan como "trabajo activo", el hueco que senalo Nicolas); para
+// cualquier otra abierta, hoy. Por eso una req puede contar como activa en MAS de un trimestre a
+// la vez si de verdad cruzo ambos — eso es correcto, no un bug.
+let quarterReportYear = null;
+function renderQuarterlyReport(){
+  const openedEl = document.getElementById("quarterOpenedChart");
+  if(!openedEl) return;
+  const positions = dashboardPositions();
+  const years = new Set([new Date().getFullYear()]);
+  positions.forEach(p=>{
+    const k = parseD(p.kickoff); if(k) years.add(k.getFullYear());
+    if(p.status === "Hired"){ const h = parseD(p.hire); if(h) years.add(h.getFullYear()); }
+  });
+  const yearList = [...years].sort((a,b)=>a-b);
+  if(!quarterReportYear || !yearList.includes(quarterReportYear)) quarterReportYear = yearList[yearList.length-1];
+  const pickerEl = document.getElementById("quarterYearPicker");
+  pickerEl.innerHTML = yearList.map(y=>`<button type="button" class="gantt-scope-btn${y===quarterReportYear?' active':''}" data-year="${y}">${y}</button>`).join("");
+  pickerEl.querySelectorAll("button").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ quarterReportYear = +btn.dataset.year; renderQuarterlyReport(); });
+  });
+
+  const year = quarterReportYear;
+  const qLabels = ["Q1","Q2","Q3","Q4"];
+  const qBounds = qLabels.map((_,i)=> ({
+    start: new Date(year, i*3, 1),
+    end: new Date(year, i*3+3, 0, 23, 59, 59, 999),
+  }));
+  const openedCounts = qBounds.map(b => positions.filter(p=>{
+    const k = parseD(p.kickoff);
+    return k && k >= b.start && k <= b.end;
+  }).length);
+  const placedCounts = qBounds.map(b => positions.filter(p=>{
+    if(p.status !== "Hired") return false;
+    const h = parseD(p.hire);
+    return h && h >= b.start && h <= b.end;
+  }).length);
+  const activeCounts = qBounds.map(b => positions.filter(p=>{
+    const k = parseD(p.kickoff);
+    if(!k) return false;
+    const endPt = ganttEndPoint(p);
+    return k <= b.end && endPt >= b.start;
+  }).length);
+
+  renderBarlist("quarterOpenedChart", qLabels.map((l,i)=>({label:l, value:openedCounts[i]})), "var(--seq-400)");
+  renderBarlist("quarterPlacedChart", qLabels.map((l,i)=>({label:l, value:placedCounts[i]})), "var(--good)");
+  renderBarlist("quarterActiveChart", qLabels.map((l,i)=>({label:l, value:activeCounts[i]})), "var(--brand)");
 }
 function renderSidebarProfile(){
   const name = activeDashboardScope;
