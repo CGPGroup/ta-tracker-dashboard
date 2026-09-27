@@ -2484,7 +2484,7 @@
               <li>Placement confirmed, start date pending: <b>0.1</b> — effectively closed.</li>
               <li>On Hold: <b>0.1</b> — paused, no active effort, but still an open requisition that will eventually need attention.</li>
             </ul>
-            <p style="margin-top:10px;"><b>10</b> requisitions (raw count) is the healthy sweet spot, <b>12</b> is the accepted ceiling, an exception to lean on temporarily, never the norm. A new requisition can still be assigned as long as the recruiter's <i>weighted</i> load, not the raw count, has room left.</p>
+            <p style="margin-top:10px;"><b>10</b> requisitions (raw count) is the target, <b>12</b> is the real max, an exception to lean on temporarily, never the norm — the raw count is what decides whether a new requisition can still be assigned, not the weighted number (that one only measures effort intensity).</p>
           </div>
 
           <div class="panel" style="margin-bottom:0;">
@@ -5456,7 +5456,7 @@ function renderGanttInsights(containerId, positions){
     <div class="gantt-insights-row">
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Active Workload By Recruiter</div>
-        <div class="gantt-mini-sub">${WORKLOAD_SWEET_SPOT} active reqs is the sweet spot, ${WORKLOAD_MAX} the real max, no matter what stage they're in. The weighted number in parentheses is effort intensity only — a req in Sourcing takes more real work than one waiting on Offer Stage or paused On Hold, but it still counts as one req against the cap. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
+        <div class="gantt-mini-sub">${WORKLOAD_SWEET_SPOT} active reqs is the target, ${WORKLOAD_MAX} the real max, no matter what stage they're in. The weighted number in parentheses is effort intensity only — a req in Sourcing takes more real work than one waiting on Offer Stage or paused On Hold, but it still counts as one req against the cap. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
         <div class="workload-grid compact">${workloadCardsHtml || `<span class="panel-sub" style="margin:0;">No recruiters in this view.</span>`}</div>
       </div>
       <div class="gantt-mini-chart">
@@ -10308,7 +10308,7 @@ function updateNewPosCapacityHint(){
   if(projectedCount > WORKLOAD_MAX){
     hint.innerHTML = `⛔ This would put ${escapeHtml(name)} at ${projectedCount} active reqs, over the ${WORKLOAD_MAX} max — consider another recruiter.`;
   } else if(projectedCount > WORKLOAD_SWEET_SPOT){
-    hint.innerHTML = `⚠ This would put ${escapeHtml(name)} at ${projectedCount} active reqs, past the ${WORKLOAD_SWEET_SPOT} sweet spot (still under the ${WORKLOAD_MAX} max). Currently ${currentLoad} weighted.`;
+    hint.innerHTML = `⚠ This would put ${escapeHtml(name)} at ${projectedCount} active reqs, past the ${WORKLOAD_SWEET_SPOT} target (still under the ${WORKLOAD_MAX} max). Currently ${currentLoad} weighted.`;
   } else {
     hint.textContent = `${name} is currently at ${assigned.length} active req${assigned.length===1?"":"s"} (${currentLoad} weighted) — plenty of room.`;
   }
