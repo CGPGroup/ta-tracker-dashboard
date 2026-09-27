@@ -4017,9 +4017,9 @@ const TERMINAL = ["Hired","Cancelled","Filled (Internal Hire)"];
 // Nicolas, 2026-09-23: "el reclutador ya no tiene que esperar mas... a partir de ahi ya no se
 // deberia tener en cuenta como req activa" — en Offer Request, el trabajo del reclutador ya
 // termino (se le entrego a Immy/Irth: fecha de envio de la oferta, aceptacion/firma, fecha de
-// inicio, nada de eso lo hace el reclutador). Sigue contando en Potential Placements (su propia
-// definicion, POTENTIAL_PLACEMENT_STATUSES, sin relacion con esta constante) — solo deja de
-// pesar como carga de trabajo activa.
+// inicio, nada de eso lo hace el reclutador). Sigue contando en Potential Placements/Filled
+// (renderKpis(), sin relacion con esta constante) — solo deja de pesar como carga de trabajo
+// activa.
 const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates","Offer Request"];
 // Estados que son una decision de negocio explicita, no un paso mas del pipeline lineal — nunca
 // se tocan por un efecto secundario silencioso de loguear una fecha/batch (ver DATE_IMPLIES_STATUS
@@ -4867,13 +4867,6 @@ function expectedSubmittedForPosition(p){
   const extraCycles = Math.floor(elapsedSinceFirstBatch / FOLLOWUP_BATCH_INTERVAL_DAYS);
   return 3.5 * (1 + extraCycles);
 }
-// Offer out or ya aceptada — lo unico que todavia no es una colocacion confirmada (Hired) pero
-// ya esta lo bastante encaminado para contar como "podria convertirse en colocacion pronto".
-// Nicolas fue explicito: "Potential placements solo debe contar a partir de que estan en offer
-// requested, no antes" — NO es "activa y sin oferta" (esa era mi lectura original, y quedaba
-// identico a Active Positions una vez esta excluyo Filled/On Hold; ver historial abajo). Es su
-// propio concepto, sin relacion con la definicion de Active Positions.
-const POTENTIAL_PLACEMENT_STATUSES = ["Offer Request","Filled"];
 // 2026-09-18, Nicolas: "un hover bonito... con forma de t hacia abajo... con una lista... con
 // bullet points" para ver DE UNA, sin hacer click, cuales reqs componen cada numero de Positions &
 // Placements — el click a openQuickList() ya existia para el detalle completo, esto es el vistazo
@@ -5872,7 +5865,7 @@ function renderKpis(){
   const subEl = document.getElementById("positionsSummarySub");
   if(subEl){
     subEl.textContent = scopeWin
-      ? `${scopeWin.label} — Positions is every req assigned then. Active/Potential/On Hold always mean right now (never "back then"), so they only show real numbers for the current quarter or All time — a past period always shows 0 there. Actual Placements (and real closures) use their own real date, independent of when the req was assigned. Click any card to see it as a Gantt Chart.`
+      ? `${scopeWin.label} — Positions is every req assigned then. Active/Potential/Filled/On Hold always mean right now (never "back then"), so they only show real numbers for the current quarter or All time — a past period always shows 0 there. Placements (and real closures) use their own real date, independent of when the req was assigned. Click any card to see it as a Gantt Chart.`
       : "Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.";
   }
   // "Positions & Placements" — REDISEÑADO 2026-09-19, varias rondas. La que se quedo (2026-09-27,
@@ -5896,37 +5889,33 @@ function renderKpis(){
   const positionsForPeriod = scopeWin ? basePositions.filter(p=>positionAssignedInWindow(p, scopeWin.start, scopeWin.end)) : basePositions;
   const activeSourceSet = isPastPeriod ? [] : basePositions;
   const activePositions = activeSourceSet.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
-  // Nicolas, 2026-09-27: "el potential cuenta para el quarter en el que está la fecha... de fill
-  // date" — tenia razon, Potential mezclaba 2 conceptos igual que On Hold & Other (ver mas abajo)
-  // pero solo se le habia arreglado uno: "Offer Request" SI es genuinamente en curso (la oferta
-  // sigue esperando respuesta, cuenta ahora mismo, como Active) — pero "Filled" ya tiene su propia
-  // fecha real (Fill Date, p.fill), un evento de una sola fecha igual que Cancelled/Filled Internal
-  // Hire (ver closedElsewhere mas abajo, MISMO patron: exigir el status ACTUAL exacto Y la fecha).
-  // BUG REAL encontrado en la primera version de este mismo dia (Nicolas: "asegurate que todo
-  // quede bien, esto es reporting"): filtrar SOLO por p.fill sin exigir status==="Filled" colaba 3
-  // cosas que no son un Filled real: CE-022 (status HOY es "Offer Request" pero tenia un p.fill
-  // viejo — contaba 2 VECES, una por cada filtro), y RD-020/RD-010 (status "Filled (Internal
-  // Hire)" — un concepto totalmente distinto, ya contado aparte en On Hold & Other Closures, con
-  // su propio p.fill de antes de haber pasado a ese status). Ademas, mostrar algo YA Hired bajo
-  // "Potential Placements" contradice la descripcion de la tarjeta misma ("not yet a confirmed
-  // hire") — asi que esta parte, a diferencia de Actual/Cancelled/Filled Internal Hire, SI exige
-  // que el status ACTUAL siga siendo exactamente "Filled" (no basta con haberlo sido alguna vez).
-  const potentialOfferRequest = activeSourceSet.filter(p=>p.status === "Offer Request");
-  const potentialFilled = basePositions.filter(p=>{
-    if(p.status !== "Filled") return false;
-    if(!scopeWin) return true;
-    const f = parseD(p.fill);
-    return !!f && f >= scopeWin.start && f <= scopeWin.end;
-  });
-  const potentialPlacements = [...potentialOfferRequest, ...potentialFilled];
-  // Actual Placements — una colocacion es un EVENTO de una sola fecha (su hire date real), nunca
-  // "sigue en juego", asi que esta es la unica de las 4 que jamas usa solape de rango: cuenta
-  // exactamente en el periodo en que de verdad paso, sin importar cuando arranco la req.
+  // Nicolas, 2026-09-27 round 7: "no se deberia contar como placement hasta que esa fecha [Start
+  // Date] no llegue... debe haber una tarjeta nueva que sea Filled... offer request de filled y
+  // placements". La ronda anterior (ver historial de git) ya habia notado que "Potential
+  // Placements" mezclaba 2 conceptos (Offer Request + Filled) y les exigio la MISMA fecha-evento
+  // que Actual/Cancelled/Filled Internal Hire — pero la mezcla en si misma seguia sin resolver lo
+  // que de verdad pedia Nicolas: un offer que sigue esperando respuesta y una oferta YA aceptada
+  // (solo falta que el candidato arranque) son 2 pasos distintos del funnel, no el mismo. Ahora
+  // son 3 tarjetas separadas: Potential Placements (Offer Request, "ahora mismo" igual que
+  // Active/On Hold), Filled (nueva, tambien "ahora mismo") y Placements (mas abajo, el unico de
+  // los 3 anclado a una fecha real de evento en vez de al status actual).
+  const potentialPlacements = activeSourceSet.filter(p=>p.status === "Offer Request");
+  const filledNow = activeSourceSet.filter(p=>p.status === "Filled");
+  // Placements (antes "Actual Placements") — un placement real exige DOS cosas: que el status
+  // diga Hired Y que la fecha real de Start Date YA HAYA LLEGADO (hoy >= esa fecha). No basta con
+  // que el campo status ya diga "Hired": encontrado en vivo el mismo dia (auditoria pedida por
+  // Nicolas, "esto es reporting y si no queda bien me voy a joder") que SM-111 y RD-007 seguian
+  // contando aqui con Start Date de manana/pasado manana, y RD-011 con Start Date 8 dias en el
+  // futuro (que ademas cae en Q4, no en el Q3 en que se ve "Hired") — los 3 son data vieja
+  // cargada directo (sin pasar por Submission Batches, ver checkArrivedStartDates()) con el
+  // status adelantado a mano antes de que la fecha real llegara. Este guard hace que la tarjeta
+  // nunca cuente de mas aunque ese campo status quede mal cargado — no depende de corregirlo.
   const actualPlacements = basePositions.filter(p=>{
     if(p.status !== "Hired") return false;
-    if(!scopeWin) return true;
     const h = parseD(p.hire);
-    return !!h && h >= scopeWin.start && h <= scopeWin.end;
+    if(!h || h > today) return false;
+    if(!scopeWin) return true;
+    return h >= scopeWin.start && h <= scopeWin.end;
   });
   const funnelStats = [
     {key:"positions", label:"Positions", value:positionsForPeriod.length, positions:positionsForPeriod,
@@ -5962,31 +5951,37 @@ function renderKpis(){
       ? `Paused (On Hold) right now (0 if ${scopeWin.label} is a past period — see Active's note), plus any that actually closed without an Irth placement during this period (lost/Cancelled, or filled by the client another way/Filled Internal Hire, wherever they were assigned). Not active.`
       : "Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active."};
   // Nicolas, 2026-09-27, round 6: "eso es lo que nos toca explicar, a traves de añadir una
-  // tarjeta nueva" — de las que cuentan arriba como Active/Potential/On Hold (siempre "ahora
-  // mismo"), cuantas en realidad NO se asignaron durante este periodo especifico, sino antes. Solo
-  // tiene sentido preguntarlo cuando el periodo elegido es el que contiene HOY (para un periodo ya
-  // pasado, Active/Potential/On Hold ya son 0, nada que explicar; para "All time" no hay un
-  // "antes de este periodo" real). Nunca aparece sola — siempre es un desglose de las otras 3.
-  // Solo la parte genuinamente "en curso" (Offer Request, Active, On Hold pausado) puede venir de
-  // un periodo distinto y necesitar explicacion — Filled (potentialFilled) ya cuenta por su propia
-  // fecha real (igual que Actual/Cancelled/Filled Internal Hire), nunca necesita este aviso.
+  // tarjeta nueva" — de las que cuentan arriba como Active/Potential/Filled/On Hold (siempre
+  // "ahora mismo"), cuantas en realidad NO se asignaron durante este periodo especifico, sino
+  // antes. Solo tiene sentido preguntarlo cuando el periodo elegido es el que contiene HOY (para
+  // un periodo ya pasado, esas 4 ya son 0, nada que explicar; para "All time" no hay un "antes de
+  // este periodo" real). Nunca aparece sola — siempre es un desglose de las otras 4. Round 7:
+  // Filled se sumo a esta union (antes solo tenia sentido para Offer Request, cuando "Filled"
+  // vivia anclado a su Fill Date dentro de Potential Placements) — ahora que Filled es su propia
+  // tarjeta "ahora mismo", puede venir de un periodo distinto igual que Active/Offer Request/On
+  // Hold. Placements sigue siendo el unico que jamas entra aqui: ancla a su propia fecha real de
+  // evento (Start Date), nunca al status actual.
   const carriedOverPositions = isCurrentPeriod
-    ? [...activePositions, ...potentialOfferRequest, ...onHoldNow].filter(p=>!positionAssignedInWindow(p, scopeWin.start, scopeWin.end))
+    ? [...activePositions, ...potentialPlacements, ...filledNow, ...onHoldNow].filter(p=>!positionAssignedInWindow(p, scopeWin.start, scopeWin.end))
     : [];
   const outcomeStats = [
     otherStat,
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc: scopeWin
-        ? `At Offer Request right now (0 if ${scopeWin.label} is a past period — an offer waiting on a response only means something right now), plus reqs still sitting at Filled today whose real Fill Date falls in this period, wherever they were assigned.`
-        : "At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
-    {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
+        ? `At Offer Request right now (0 if ${scopeWin.label} is a past period — an offer waiting on a response only means something right now). The offer hasn't been accepted yet — see Filled for that.`
+        : "At Offer Request — an offer is out, waiting on the candidate's response. Not yet accepted."},
+    {key:"filled", label:"Filled", value:filledNow.length, positions:filledNow,
+      color:"var(--stage-blue)", desc: scopeWin
+        ? `Offer accepted right now (0 if ${scopeWin.label} is a past period — same rule as Active/Potential/On Hold). Waiting on the candidate's real Start Date to arrive — not yet a confirmed placement, even if a Start Date is already scheduled.`
+        : "Offer accepted, waiting on the candidate's real Start Date to arrive — not yet a confirmed placement, even if a Start Date is already scheduled."},
+    {key:"actual", label:"Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc: scopeWin
-        ? `Confirmed placements whose candidate actually started during ${scopeWin.label} — the same date commissions are based on.`
-        : "Confirmed placements to date — a running total, not a next step from the numbers on the left."},
+        ? `Confirmed placements whose candidate's Start Date has actually arrived, falling within ${scopeWin.label} — the same date commissions are based on. A future Start Date never counts here, even if the status already says Hired.`
+        : "Confirmed placements to date, by real Start Date already arrived — a running total, not a next step from the numbers on the left."},
   ];
   if(isCurrentPeriod){
     outcomeStats.push({key:"carriedover", label:"Carried Over From Earlier Periods", value:carriedOverPositions.length, positions:carriedOverPositions,
-      color:"var(--brand)", desc:`Of the Active/Potential/On Hold numbers above, ${carriedOverPositions.length} were actually assigned before ${scopeWin.label} started — still counted above because they're real right now, this just says where they came from.`});
+      color:"var(--brand)", desc:`Of the Active/Potential/Filled/On Hold numbers above, ${carriedOverPositions.length} were actually assigned before ${scopeWin.label} started — still counted above because they're real right now, this just says where they came from.`});
   }
   const maxVal = funnelStats[0].value || 1;
   const allStats = [...funnelStats, ...outcomeStats];
@@ -6581,12 +6576,15 @@ function renderPositions(){
   // constante) — este conteo tenia su propia logica vieja aparte ("no terminal", sin excluir
   // Filled/On Hold) y mostraba un numero DISTINTO bajo el mismo nombre "Active Positions" que
   // el resto del tracker (bug real reportado por Nicolas: "Potential Placements" ya ni existe
-  // como tarjeta y esto seguia calculandola con la definicion vieja). Actual Placements = Hired
-  // especificamente, nunca Filled (ver STATUS_GUIDANCE["Hired"]).
+  // como tarjeta y esto seguia calculandola con la definicion vieja). Placements = Hired
+  // especificamente Y con Start Date ya llegada (mismo guard que renderKpis(), ver ahi el
+  // comentario sobre SM-111/RD-007/RD-011 — sin este guard, este conteo se habria desincronizado
+  // del de Overview otra vez, la misma clase de bug de un parrafo arriba).
   const activeCount = rows.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status)).length;
-  const actualCount = rows.filter(p=>p.status==="Hired").length;
+  const todayStr = localTodayStr();
+  const actualCount = rows.filter(p=>p.status==="Hired" && p.hire && p.hire <= todayStr).length;
   document.getElementById("positionsCount").textContent =
-    `${rows.length} positions · ${activeCount} Active Positions · ${actualCount} Actual Placements`;
+    `${rows.length} positions · ${activeCount} Active Positions · ${actualCount} Placements`;
   // Checkbox de seleccion en lote: solo admin la ve (mismo criterio que borrar posiciones) —
   // reasignar reqs de otras personas de golpe es una accion de gestion, no algo que cualquier
   // recruiter viendo el directorio completo deba poder disparar. isAdmin() por si solo trata
