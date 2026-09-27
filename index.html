@@ -5013,16 +5013,22 @@ function ganttInWindow(p, start, end){
   return !(e < start || kickoff > end);
 }
 // Aviso en la fila del Gantt cuando una req en curso (Active/Potential/On Hold) aparece en un
-// trimestre distinto al de su propio Kickoff — self-contained, nunca hay que adivinar por que
-// salio ahi si no arranco ese mismo trimestre.
+// periodo distinto al de su propio Kickoff — self-contained, nunca hay que adivinar por que
+// salio ahi si no arranco ese mismo periodo. Funciona igual con un Quarter especifico elegido
+// (compara Q + año) o solo con un Year elegido, sin Quarter (compara solo el año — Nicolas,
+// 2026-09-27: "sería bueno" tenerlo tambien ahi, no solo cuando hay un Quarter especifico).
 function ganttRowDisclosureHtml(kickoffDate){
   const parts = summaryScopeParts();
-  if(!parts.quarter || !kickoffDate) return "";
-  const kQ = Math.floor(kickoffDate.getMonth()/3)+1;
+  if(!parts.year || !kickoffDate) return "";
   const kYear = kickoffDate.getFullYear();
-  if(kYear === parts.year && kQ === parts.quarter) return "";
-  const kLabel = `Q${kQ} ${kYear}`;
-  return `<div class="gantt-row-quarter-note" title="This requisition's Kickoff was in ${escapeHtml(kLabel)}, a different quarter than the one you're viewing.">⚠ Started in ${escapeHtml(kLabel)}</div>`;
+  if(parts.quarter){
+    const kQ = Math.floor(kickoffDate.getMonth()/3)+1;
+    if(kYear === parts.year && kQ === parts.quarter) return "";
+    const kLabel = `Q${kQ} ${kYear}`;
+    return `<div class="gantt-row-quarter-note" title="This requisition's Kickoff was in ${escapeHtml(kLabel)}, a different quarter than the one you're viewing.">⚠ Started in ${escapeHtml(kLabel)}</div>`;
+  }
+  if(kYear === parts.year) return "";
+  return `<div class="gantt-row-quarter-note" title="This requisition's Kickoff was in ${kYear}, a different year than the one you're viewing.">⚠ Started in ${kYear}</div>`;
 }
 // BUG REAL 2026-09-27 (encontrado revisando el diseño de las 5 tarjetas independientes): el menu
 // de Year/Quarter solo ofrecia un periodo si TENIA UN KICKOFF ahi (positionAssignedInWindow) — pero
