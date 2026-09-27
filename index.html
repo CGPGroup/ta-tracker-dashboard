@@ -1965,6 +1965,16 @@
                   <div id="summaryScopeToggle"></div>
                 </div>
                 <div class="panel-sub" id="positionsSummarySub">Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.</div>
+                <!-- Nicolas, 2026-09-27: "si alguien me llega a pedir, dime cuantas reqs se
+                     asignaron en Q2, no les voy a poder decir rapido" — una pregunta real distinta
+                     de las 5 tarjetas de arriba (esas describen el LIBRO/estado actual, mezclando
+                     fecha de cierre para las cerradas y "sigue viva" para las abiertas; ver
+                     positionMatchesWindow()). "Asignadas" es mas simple y NUNCA deberia sumar con
+                     esas 5: solo cuenta por fecha de Kickoff cayendo en el periodo, sin importar
+                     el status actual. Vive aparte, nunca como 6ta tarjeta (rompería el "siempre
+                     suma" de las otras 5) — solo aparece con un Quarter/Year especifico elegido,
+                     porque en "All time" seria identico al numero de Positions, puro ruido. -->
+                <div class="panel-sub" id="summaryAssignedNote" style="display:none;"></div>
                 <div class="positions-summary-strip" id="positionsSummaryStrip"></div>
                 <div class="gantt-panel" id="ganttPanel"></div>
               </div>
@@ -5830,6 +5840,22 @@ function renderKpis(){
       ? `Every requisition active at some point during ${scopeWin.label}, broken down by where it stands. Click any card below to see it as a Gantt Chart.`
       : "Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.";
   }
+  // "Cuantas reqs se asignaron en Q2" — a proposito NUNCA se mezcla con las 5 tarjetas de abajo
+  // (ver el comentario junto a #summaryAssignedNote en el HTML): cuenta solo por Kickoff cayendo
+  // en el periodo, sin importar si esa req ya se cerro, sigue abierta, o en que estado esta hoy.
+  const assignedNoteEl = document.getElementById("summaryAssignedNote");
+  if(assignedNoteEl){
+    if(scopeWin){
+      const assignedCount = dashboardPositions().filter(p=>{
+        const k = parseD(p.kickoff);
+        return k && k >= scopeWin.start && k <= scopeWin.end;
+      }).length;
+      assignedNoteEl.textContent = `${assignedCount} requisition${assignedCount===1?"":"s"} actually assigned (Kickoff) during ${scopeWin.label}, regardless of where they stand today.`;
+      assignedNoteEl.style.display = "";
+    } else {
+      assignedNoteEl.style.display = "none";
+    }
+  }
   const active = scopedPositions.filter(p=>!TERMINAL.includes(p.status));
   // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
   // 1) Nicolas: "no sabemos a que se refiere nada" con solo un numero + una etiqueta chica ->
@@ -5851,9 +5877,20 @@ function renderKpis(){
   const allPositions = scopedPositions;
   const potentialPlacements = allPositions.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
   const actualPlacements = allPositions.filter(p=>p.status==="Hired");
+  // BUG REAL 2026-09-27 (Nicolas: "no le encuentro sentido a que si filtro por Q3 me salgan 29,
+  // pero si filtro por Q2 me sale 1 en Positions... lo que dice el filtro es 'ever assigned',
+  // entonces deberia traer las 30 siempre"): tenia toda la razon — su propia descripcion dice
+  // "ever" (sin limite de tiempo), asi que dejarla cambiar con el filtro de Quarter/Year la volvia
+  // literalmente falsa. "Positions" ahora SIEMPRE usa el libro completo sin filtrar, sin importar
+  // que trimestre/año este elegido arriba — las otras 4 (Active/On Hold/Potential/Actual) si
+  // siguen respondiendo al filtro como ya estaba, porque esas si describen "donde esta parado
+  // ahorita/en ese periodo", una pregunta que SI tiene sentido acotar por fecha.
+  const totalPositions = dashboardPositions();
   const funnelStats = [
-    {key:"positions", label:"Positions", value:allPositions.length, positions:allPositions,
-      desc:"Every requisition ever assigned to this book, in any status."},
+    {key:"positions", label:"Positions", value:totalPositions.length, positions:totalPositions,
+      desc: scopeWin
+        ? "Every requisition ever assigned to this book, in any status — always the full book, not affected by the Quarter/Year filter above."
+        : "Every requisition ever assigned to this book, in any status."},
     {key:"active", label:"Active Positions", value:activePositions.length, positions:activePositions,
       desc:"Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
   ];
@@ -5873,7 +5910,9 @@ function renderKpis(){
   // funnelStats), pero primero en ese grupo, no al final. outcomeStats ahora es [other, potential,
   // actual] — un solo array, ya no necesita su propio bloque HTML aparte como el intento anterior.
   const otherStat = {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
-    color:"var(--neutral)", desc:"Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active, and not counted in either box to the left. Positions always adds up to Active + this one + Potential + Actual."};
+    color:"var(--neutral)", desc: `Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active, and not counted in either box to the left. ${scopeWin
+      ? `These 4 add up to ${allPositions.length}, everything relevant to ${scopeWin.label} — not to Positions above, which always stays the full book no matter what's selected.`
+      : "Positions always adds up to Active + this one + Potential + Actual."}`};
   const outcomeStats = [
     otherStat,
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
