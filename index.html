@@ -5842,7 +5842,21 @@ function summaryScopeWindow(){
 // (dato migrado sin ese log especifico), ganttSegments() tampoco la tiene, y el ultimo tramo
 // conocido se relabelea al status actual (mismo comportamiento que ya tiene el Gantt visual hoy)
 // — en ese caso puntual la reconstruccion sigue siendo una aproximacion, no es magia.
+// BUG REAL encontrado 2026-09-27 (Nicolas, con numeros reales que no cuadraban entre si mismos):
+// para una req YA terminal (ej. "Filled (Internal Hire)") SIN fecha de cierre logueada,
+// ganttCloseDate() cae en su propio fallback de "new Date()" (el momento EXACTO en que se llama,
+// no una fecha real guardada) — eso hacia que el limite del ultimo tramo se moviera un poquito
+// cada vez que esta funcion se llamaba (milisegundos de diferencia entre 2 llamadas), dando un
+// resultado distinto para la MISMA req en la MISMA consulta segun el orden exacto de ejecucion.
+// Pasa solo al mirar el trimestre EN CURSO (asOfDate termina siendo "ahora mismo" tambien, ver
+// summaryScopeWindow/renderKpis). Arreglo: preguntar "a partir de hoy" siempre tiene una sola
+// respuesta real y estable — el status de HOY, sin reconstruir nada — asi nunca se topa con ese
+// limite fantasma. Reconstruir con ganttSegments() solo tiene sentido para una fecha genuinamente
+// en el pasado, donde "hoy" siempre queda claramente despues sin importar el milisegundo exacto.
 function historicalStatusAt(p, asOfDate){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const asOfDay = new Date(asOfDate); asOfDay.setHours(0,0,0,0);
+  if(asOfDay >= today) return p.status;
   const segs = ganttSegments(p);
   if(!segs.length) return null;
   if(asOfDate < segs[0].start) return null;
