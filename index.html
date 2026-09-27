@@ -5896,7 +5896,18 @@ function renderKpis(){
   const positionsForPeriod = scopeWin ? basePositions.filter(p=>positionAssignedInWindow(p, scopeWin.start, scopeWin.end)) : basePositions;
   const activeSourceSet = isPastPeriod ? [] : basePositions;
   const activePositions = activeSourceSet.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
-  const potentialPlacements = activeSourceSet.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
+  // Nicolas, 2026-09-27: "el potential cuenta para el quarter en el que está la fecha... de fill
+  // date" — tenia razon, Potential mezclaba 2 conceptos igual que On Hold & Other (ver mas abajo)
+  // pero solo se le habia arreglado uno: "Offer Request" SI es genuinamente en curso (la oferta
+  // sigue esperando respuesta, cuenta ahora mismo, como Active) — pero "Filled" ya tiene su propia
+  // fecha real (Fill Date, p.fill), un evento de una sola fecha igual que Hired/Cancelled/Filled
+  // Internal Hire. Cuenta por esa fecha cayendo en el periodo, sin importar el status ACTUAL (una
+  // req puede haber avanzado a Hired desde entonces — el Fill Date real de cuando paso no cambia).
+  const potentialOfferRequest = activeSourceSet.filter(p=>p.status === "Offer Request");
+  const potentialFilled = scopeWin
+    ? basePositions.filter(p=>{ const f = parseD(p.fill); return !!f && f >= scopeWin.start && f <= scopeWin.end; })
+    : basePositions.filter(p=>p.status === "Filled");
+  const potentialPlacements = [...potentialOfferRequest, ...potentialFilled];
   // Actual Placements — una colocacion es un EVENTO de una sola fecha (su hire date real), nunca
   // "sigue en juego", asi que esta es la unica de las 4 que jamas usa solape de rango: cuenta
   // exactamente en el periodo en que de verdad paso, sin importar cuando arranco la req.
@@ -5945,16 +5956,17 @@ function renderKpis(){
   // tiene sentido preguntarlo cuando el periodo elegido es el que contiene HOY (para un periodo ya
   // pasado, Active/Potential/On Hold ya son 0, nada que explicar; para "All time" no hay un
   // "antes de este periodo" real). Nunca aparece sola — siempre es un desglose de las otras 3.
+  // Solo la parte genuinamente "en curso" (Offer Request, Active, On Hold pausado) puede venir de
+  // un periodo distinto y necesitar explicacion — Filled (potentialFilled) ya cuenta por su propia
+  // fecha real (igual que Actual/Cancelled/Filled Internal Hire), nunca necesita este aviso.
   const carriedOverPositions = isCurrentPeriod
-    ? [...activePositions, ...potentialPlacements, ...onHoldNow].filter(p=>!positionAssignedInWindow(p, scopeWin.start, scopeWin.end))
+    ? [...activePositions, ...potentialOfferRequest, ...onHoldNow].filter(p=>!positionAssignedInWindow(p, scopeWin.start, scopeWin.end))
     : [];
   const outcomeStats = [
     otherStat,
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc: scopeWin
-        ? (isPastPeriod
-            ? `At Offer Request or Filled always means right now, never "back then" — ${scopeWin.label} already ended, so this is always 0 here.`
-            : `At Offer Request or Filled, right now — an offer already out or accepted, not yet a confirmed hire.`)
+        ? `At Offer Request right now (0 if ${scopeWin.label} is a past period — an offer waiting on a response only means something right now), plus any actually Filled (offer accepted) during this period by its real Fill Date, wherever they were assigned.`
         : "At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
     {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc: scopeWin
