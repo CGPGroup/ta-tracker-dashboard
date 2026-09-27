@@ -5900,13 +5900,24 @@ function renderKpis(){
   // date" — tenia razon, Potential mezclaba 2 conceptos igual que On Hold & Other (ver mas abajo)
   // pero solo se le habia arreglado uno: "Offer Request" SI es genuinamente en curso (la oferta
   // sigue esperando respuesta, cuenta ahora mismo, como Active) — pero "Filled" ya tiene su propia
-  // fecha real (Fill Date, p.fill), un evento de una sola fecha igual que Hired/Cancelled/Filled
-  // Internal Hire. Cuenta por esa fecha cayendo en el periodo, sin importar el status ACTUAL (una
-  // req puede haber avanzado a Hired desde entonces — el Fill Date real de cuando paso no cambia).
+  // fecha real (Fill Date, p.fill), un evento de una sola fecha igual que Cancelled/Filled Internal
+  // Hire (ver closedElsewhere mas abajo, MISMO patron: exigir el status ACTUAL exacto Y la fecha).
+  // BUG REAL encontrado en la primera version de este mismo dia (Nicolas: "asegurate que todo
+  // quede bien, esto es reporting"): filtrar SOLO por p.fill sin exigir status==="Filled" colaba 3
+  // cosas que no son un Filled real: CE-022 (status HOY es "Offer Request" pero tenia un p.fill
+  // viejo — contaba 2 VECES, una por cada filtro), y RD-020/RD-010 (status "Filled (Internal
+  // Hire)" — un concepto totalmente distinto, ya contado aparte en On Hold & Other Closures, con
+  // su propio p.fill de antes de haber pasado a ese status). Ademas, mostrar algo YA Hired bajo
+  // "Potential Placements" contradice la descripcion de la tarjeta misma ("not yet a confirmed
+  // hire") — asi que esta parte, a diferencia de Actual/Cancelled/Filled Internal Hire, SI exige
+  // que el status ACTUAL siga siendo exactamente "Filled" (no basta con haberlo sido alguna vez).
   const potentialOfferRequest = activeSourceSet.filter(p=>p.status === "Offer Request");
-  const potentialFilled = scopeWin
-    ? basePositions.filter(p=>{ const f = parseD(p.fill); return !!f && f >= scopeWin.start && f <= scopeWin.end; })
-    : basePositions.filter(p=>p.status === "Filled");
+  const potentialFilled = basePositions.filter(p=>{
+    if(p.status !== "Filled") return false;
+    if(!scopeWin) return true;
+    const f = parseD(p.fill);
+    return !!f && f >= scopeWin.start && f <= scopeWin.end;
+  });
   const potentialPlacements = [...potentialOfferRequest, ...potentialFilled];
   // Actual Placements — una colocacion es un EVENTO de una sola fecha (su hire date real), nunca
   // "sigue en juego", asi que esta es la unica de las 4 que jamas usa solape de rango: cuenta
@@ -5966,7 +5977,7 @@ function renderKpis(){
     otherStat,
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc: scopeWin
-        ? `At Offer Request right now (0 if ${scopeWin.label} is a past period — an offer waiting on a response only means something right now), plus any actually Filled (offer accepted) during this period by its real Fill Date, wherever they were assigned.`
+        ? `At Offer Request right now (0 if ${scopeWin.label} is a past period — an offer waiting on a response only means something right now), plus reqs still sitting at Filled today whose real Fill Date falls in this period, wherever they were assigned.`
         : "At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
     {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc: scopeWin
