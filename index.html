@@ -726,6 +726,19 @@
   .gantt-scope-btn { border: none; background: transparent; color: var(--text-secondary); font-family: inherit; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
   .gantt-scope-btn:hover { color: var(--text-primary); }
   .gantt-scope-btn.active { background: var(--brand); color: #fff; }
+  /* Menu real de trimestres/años (Nicolas, 2026-09-27: "es literal una lista que te deje elegir")
+     en vez de 2 botones fijos "This Quarter"/"This Year" relativos a hoy — ver
+     summaryScopeOptions(). Un <select> nativo evita todo el lio de popovers/z-index que ya se ha
+     repetido varias veces en este archivo para listas desplegables custom. Nicolas, round 2:
+     "me gustaria que cuando selecciones la opcion, quede como los botones de los otros filtros" —
+     un <select> cerrado siempre muestra solo la opcion actual (nunca las demas), asi que pintarlo
+     siempre con el mismo estilo solido de .gantt-scope-btn.active logra exactamente eso, sin
+     necesitar reconstruir un dropdown custom desde cero. */
+  .summary-scope-select {
+    font-family: inherit; font-size: 11px; font-weight: 600; color: #fff;
+    background: var(--brand); border: none; border-radius: 6px;
+    padding: 7px 12px; cursor: pointer;
+  }
   .gantt-legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
   .gantt-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-secondary); }
   .gantt-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
@@ -834,6 +847,7 @@
   .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
   .gantt-row-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
   .gantt-row-meta b { color: var(--text-primary); font-weight: 600; }
+  .gantt-row-quarter-note { font-size: 9.5px; font-weight: 600; color: var(--warning); margin-top: 3px; cursor: help; }
   .gantt-avatar {
     width: 14px; height: 14px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -1949,8 +1963,17 @@
                    de izquierda a derecha — no un anillo, numeros grandes clickeables (mismo
                    patron que renderAvgTtsChart(): numero + label + openQuickList()). -->
               <div class="panel" id="panelPositionsSummary" style="grid-column: span 6;">
-                <h3>Positions &amp; Placements</h3>
-                <div class="panel-sub">Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.</div>
+                <!-- Nicolas, 2026-09-27: "en las mismas tarjetas, simplemente que las podamos
+                     filtrar por Q o por año o por all time" — despues de intentar una tarjeta de
+                     metricas aparte (revertido, ver el comentario mas abajo), la version simple
+                     era esta: reusar ganttScopeWindow()/ganttInWindow(), que ya soportaban
+                     Quarter/Year internamente (solo estaban ocultos de esta UI), para filtrar las
+                     mismas 5 tarjetas de siempre. Ver summaryScope/renderKpis(). -->
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                  <h3 style="margin:0;">Positions &amp; Placements</h3>
+                  <div id="summaryScopeToggle"></div>
+                </div>
+                <div class="panel-sub" id="positionsSummarySub">Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.</div>
                 <div class="positions-summary-strip" id="positionsSummaryStrip"></div>
                 <div class="gantt-panel" id="ganttPanel"></div>
               </div>
@@ -1962,7 +1985,13 @@
                    Workload By Recruiter, Submitted Vs Expected, Position By Location/Work
                    Arrangement) ahora viven al fondo de CUALQUIER Gantt abierto — ver
                    renderGanttInsights() — recalculados sobre lo que ese Gantt ya esta mostrando
-                   (respeta el filtro de Recruiter). Nada vive aca afuera del Gantt ya. -->
+                   (respeta el filtro de Recruiter). Nada vive aca afuera del Gantt ya.
+                   2026-09-27: se probo separarlo en su propio panel (.panel #panelGanttInsights) y
+                   Nicolas decidio que era mas complicado de lo necesario para lo que en realidad
+                   queria — revertido a este estado, sin ese panel. Lo que si queria: poder filtrar
+                   estas mismas tarjetas por Quarter/Year/All time — ver summaryScope, y el propio
+                   toggle "Last 6 Weeks/All time" del Gantt (ganttScope) que este reemplazo
+                   terminaria eliminando del todo, ver el comentario junto a renderGanttGroup(). -->
               <!-- Average Time To Submit es el equivalente de Active Workload By Recruiter para tu
                    PROPIO workspace individual (Active Workload solo tiene sentido comparando entre
                    varios reclutadores a la vez, por eso ahora vive dentro del Gantt, que ya es
@@ -4970,12 +4999,9 @@ function statHoverPopoverHtml(s){
 // propia columna de fecha).
 let GANTT_DATA = {};
 let ganttOpenKey = null;
-// Default "all", no "recent" (Last 6 Weeks) — ese default tapaba el Kickoff/Intake de la mayoria
-// de las reqs reales (11 de 20 kickearon hace mas de 6 semanas). Se revirtio por error junto con
-// el rediseño de milestones que Nicolas pidio deshacer; esto lo restaura, solo esto.
-let ganttScope = "all";
 // Filtros en vivo dentro del propio Gantt abierto (Nicolas, 2026-09-24) — se resetean cada vez
-// que se abre un grupo nuevo (toggleGanttPanel), igual que ganttScope arriba.
+// que se abre un grupo nuevo (toggleGanttPanel). ganttScope (el viejo "Last 6 Weeks"/"All time")
+// se elimino 2026-09-27 — ver el comentario junto a summaryScopeWindow() en renderGanttGroup().
 let ganttRecruiterFilter = null;
 let ganttRoleFilter = null;
 // Nicolas, 2026-09-26, version final (las anteriores — paginacion con selector Show 4/10/25/30 —
@@ -5210,6 +5236,25 @@ function ganttSegments(p){
   return segs;
 }
 
+// Nicolas, 2026-09-27: "si hay reqs que pertenecen a Q3 pero tienen informacion de Q2, que se
+// pueda ver... poner como un disclosure o warning, que esa info pertenece a Q2 pero igual es
+// visible" — cuando las tarjetas estan filtradas a un trimestre ESPECIFICO (ver summaryScope) y
+// una req que aparece ahi en realidad arranco en un trimestre distinto (aparece porque seguia
+// activa durante el trimestre elegido, ver ganttInWindow()), esta nota lo deja explicito en la
+// fila misma — nunca oculta el req, solo aclara de donde viene, self-contained (no hace falta
+// conectar esto con ningun otro elemento de la pantalla para entenderlo).
+function ganttQuarterDisclosureHtml(kickoffDate){
+  const qMatch = /^q-(\d+)-(\d+)$/.exec(summaryScope);
+  if(!qMatch || !kickoffDate) return "";
+  const selYear = +qMatch[1], selQ = +qMatch[2];
+  const kQ = Math.floor(kickoffDate.getMonth()/3)+1;
+  const kYear = kickoffDate.getFullYear();
+  if(kYear === selYear && kQ === selQ) return "";
+  const kLabel = `Q${kQ} ${kYear}`;
+  const selLabel = `Q${selQ} ${selYear}`;
+  return `<div class="gantt-row-quarter-note" title="This requisition actually started in ${escapeHtml(kLabel)}, not ${escapeHtml(selLabel)} — shown here because it was still active during ${escapeHtml(selLabel)}.">⚠ Started in ${escapeHtml(kLabel)}, still active in ${escapeHtml(selLabel)}</div>`;
+}
+
 function ganttRowHtml(p, cal){
   const segs = ganttSegments(p);
   if(!segs.length) return "";
@@ -5409,6 +5454,7 @@ function ganttRowHtml(p, cal){
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
       <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b> · Start ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet")}</div>
       ${extraInfoHtml}
+      ${ganttQuarterDisclosureHtml(kickoff)}
     </div>
     <div class="gantt-row-canvas">
       <div class="gantt-track" style="left:${trackLeftPct}%; width:${trackWidthPct}%;">${segsHtml}${milestonesHtml}</div>
@@ -5564,8 +5610,9 @@ function renderGanttInsights(containerId, positions){
 // elegante y profesional, no la tipica lista desplegable". Recruiter y Role ahora filtran EN
 // VIVO lo que ya esta abierto (cualquiera de las 4 tarjetas de Positions & Placements), en vez
 // de ser otra forma de abrir el panel — group.positions es siempre el universo completo de la
-// tarjeta que se abrio; ganttRecruiterFilter/ganttRoleFilter se aplican encima de eso, antes de
-// que ganttScope recorte por fecha.
+// tarjeta que se abrio; ganttRecruiterFilter/ganttRoleFilter se aplican encima de eso. La ventana
+// de fecha ya no la recorta un toggle propio del Gantt (ver el comentario mas abajo, junto a
+// summaryScopeWindow()) — viene directo del filtro de tarjetas.
 function renderGanttGroup(key){
   const group = GANTT_DATA[key];
   const panelEl = document.getElementById("ganttPanel");
@@ -5580,24 +5627,23 @@ function renderGanttGroup(key){
   let data = allData;
   if(ganttRecruiterFilter) data = data.filter(p=>p.recruiter===ganttRecruiterFilter);
   if(ganttRoleFilter) data = data.filter(p=>p.title===ganttRoleFilter);
-  const win = ganttScopeWindow(ganttScope, data);
-  const shown = ganttScope === "all" ? data : data.filter(p=> ganttInWindow(p, win.start, win.end));
+  // Nicolas, 2026-09-27: "eso de last 6 weeks y all time para filtrar el gantt hay que quitarlo
+  // no?" — si. El propio toggle de arriba (ganttScope: "recent"/"all", ver el comentario que este
+  // reemplaza) quedo redundante en cuanto el filtro de trimestre/año de las tarjetas (summaryScope,
+  // ver renderKpis()) empezo a ser el que de verdad decide que reqs entran — `data` (via
+  // group.positions) YA viene recortado por esa misma ventana antes de llegar aca, asi que
+  // filtrar otra vez con ganttScope habria sido filtrar 2 veces por lo mismo con 2 controles
+  // distintos, justo la confusion que Nicolas señalo. El calendario ahora usa exactamente la
+  // ventana del filtro de tarjetas (summaryScopeWindow()) — "All time" (default) sigue calculando
+  // el rango dinamico real (kickoff mas viejo -> cierre mas nuevo, ver ganttScopeWindow()).
+  const win = summaryScopeWindow() || ganttScopeWindow("all", data);
+  const shown = data;
   const cal = ganttBuildCalendar(win);
-  const hiddenCount = data.length - shown.length;
   const filtersActive = !!(ganttRecruiterFilter || ganttRoleFilter);
   const titleFilterNote = [ganttRecruiterFilter, ganttRoleFilter].filter(Boolean).map(escapeHtml).join(" · ");
   panelEl.innerHTML = `
     <div class="gantt-head">
-      <div class="gantt-title">${escapeHtml(group.label)}${titleFilterNote ? ` <span style="color:var(--brand);">· ${titleFilterNote}</span>` : ""} <span>— ${shown.length} requisition${shown.length===1?"":"s"} in ${win.label}${hiddenCount ? ` (${hiddenCount} outside range, hidden)` : ""}</span></div>
-      <!-- Nicolas, 2026-09-25: "esta muy redundante poner last 6 weeks, luego q3 2026, luego
-           2026, luego all time" — dropped Quarter/Year (ganttScopeWindow() still supports those
-           scopes internally, just unreachable from this UI now) down to the 2 ends that actually
-           differ in practice: a narrow recent-activity window vs. everything. All time stays the
-           default (see ganttScope's own comment) since it's the one that never hides real data. -->
-      <div class="gantt-scope-toggle" id="ganttScopeToggle">
-        <button class="gantt-scope-btn" data-scope="recent">Last 6 Weeks</button>
-        <button class="gantt-scope-btn" data-scope="all">All time</button>
-      </div>
+      <div class="gantt-title">${escapeHtml(group.label)}${titleFilterNote ? ` <span style="color:var(--brand);">· ${titleFilterNote}</span>` : ""} <span>— ${shown.length} requisition${shown.length===1?"":"s"} in ${win.label}</span></div>
     </div>
     <div class="gantt-filter-row">
       <div class="gantt-filter-group">
@@ -5617,7 +5663,7 @@ function renderGanttGroup(key){
       </div>
       ${filtersActive ? `<button type="button" class="gantt-filter-clear" id="ganttFilterClearAll">Clear filters</button>` : ""}
     </div>
-    <p class="gantt-quarter-note">Showing <b>${win.label}</b> — this view opens here by default.</p>
+    <p class="gantt-quarter-note">Showing <b>${win.label}</b>${summaryScope==="all" ? " — this view opens here by default" : ""}.</p>
     <div class="gantt-legend">
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>${escapeHtml(statusLabel("Kickoff"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-200);"></span>${escapeHtml(statusLabel("Intake Meeting Requested"))}</div>
@@ -5643,7 +5689,7 @@ function renderGanttGroup(key){
     </div>
     <div id="ganttInsightsContainer"></div>
   `;
-  ganttRenderAxis(cal, ganttScope === "recent" ? "week" : "month");
+  ganttRenderAxis(cal, "month");
   renderGanttInsights("ganttInsightsContainer", data);
   // El marco de filas mide SIEMPRE lo mismo (GANTT_VISIBLE_ROWS reales, medidos de verdad porque
   // cada fila tiene una altura distinta segun cuanta info real tenga — compensacion, HM, etc — un
@@ -5666,10 +5712,6 @@ function renderGanttGroup(key){
       rowsEl.style.maxHeight = "";
     }
   }
-  panelEl.querySelectorAll("#ganttScopeToggle .gantt-scope-btn").forEach(btn=>{
-    btn.classList.toggle("active", btn.dataset.scope === ganttScope);
-    btn.addEventListener("click", ()=>{ ganttScope = btn.dataset.scope; renderGanttGroup(key); });
-  });
   panelEl.querySelectorAll("#ganttRecruiterToggle .gantt-scope-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       // Nicolas, 2026-09-26, revirtiendo el intento anterior de ese mismo dia (que llamaba
@@ -5735,7 +5777,6 @@ function toggleGanttPanel(key, label, positions){
     return;
   }
   ganttOpenKey = key;
-  ganttScope = "all";
   ganttRecruiterFilter = null;
   ganttRoleFilter = null;
   panelEl.classList.add("show");
@@ -5757,8 +5798,68 @@ function syncGanttOpenStatClass(){
   // tira mientras cualquier Gantt este abierto, sin importar cual tarjeta lo disparo.
   document.getElementById("positionsSummaryStrip")?.classList.toggle("gantt-any-open", !!ganttOpenKey);
 }
+// Filtra las 5 tarjetas de Positions & Placements (y por lo tanto cualquier Gantt abierto desde
+// ahi, ver el hook de sincronizacion mas abajo). "all" (default) o "q-{year}-{quarter}"/"year-
+// {year}" para un trimestre/año real y especifico — Nicolas, 2026-09-27, round 2: rechazo el
+// primer intento (botones "This Quarter"/"This Year" relativos a hoy, "se ve muy feo") por un
+// menu real de opciones concretas: "cada que llega la fecha de Q4, ahi se crea en la lista, cada
+// que llega un nuevo año, se crea el año, con su Q1". No hay estado guardado en ningun lado para
+// esto — summaryScopeOptions() recalcula la lista completa en cada render a partir de la fecha de
+// HOY (nunca de si ya existe un req con esa fecha), asi que un trimestre/año nuevo aparece solo
+// apenas el calendario real lo alcanza, sin que nadie tenga que tocar nada.
+let summaryScope = "all";
+function summaryScopeOptions(){
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentQ = Math.floor(today.getMonth()/3)+1;
+  let minYear = currentYear;
+  dashboardPositions().forEach(p=>{ const k = parseD(p.kickoff); if(k && k.getFullYear() < minYear) minYear = k.getFullYear(); });
+  const opts = [];
+  for(let y=minYear; y<=currentYear; y++){
+    opts.push({value:`year-${y}`, label:String(y)});
+    const qEnd = (y===currentYear) ? currentQ : 4;
+    for(let q=1;q<=qEnd;q++) opts.push({value:`q-${y}-${q}`, label:`  Q${q} ${y}`});
+  }
+  return opts;
+}
+function summaryScopeWindow(){
+  const qMatch = /^q-(\d+)-(\d+)$/.exec(summaryScope);
+  if(qMatch){
+    const y = +qMatch[1], q = +qMatch[2];
+    return {start: new Date(y, (q-1)*3, 1), end: new Date(y, q*3, 0), label: `Q${q} ${y}`};
+  }
+  const yMatch = /^year-(\d+)$/.exec(summaryScope);
+  if(yMatch){
+    const y = +yMatch[1];
+    return {start: new Date(y,0,1), end: new Date(y,11,31), label: String(y)};
+  }
+  return null;
+}
 function renderKpis(){
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
+  const scopeWin = summaryScopeWindow();
+  const scopedPositions = scopeWin ? dashboardPositions().filter(p=>ganttInWindow(p, scopeWin.start, scopeWin.end)) : dashboardPositions();
+  // Regenerado por completo en cada render (nunca HTML estatico) a proposito, mismo patron que
+  // #ganttScopeToggle en renderGanttGroup() — asi el listener de abajo nunca se acumula entre
+  // refrescos (esta funcion se re-ejecuta en cada auto-refresh de 2 minutos).
+  const summaryScopeToggleEl = document.getElementById("summaryScopeToggle");
+  if(summaryScopeToggleEl){
+    const opts = summaryScopeOptions();
+    summaryScopeToggleEl.innerHTML = `<select class="summary-scope-select" id="summaryScopeSelect">
+      <option value="all"${summaryScope==="all"?" selected":""}>All time</option>
+      ${opts.map(o=>`<option value="${o.value}"${summaryScope===o.value?" selected":""}>${o.label}</option>`).join("")}
+    </select>`;
+    document.getElementById("summaryScopeSelect").addEventListener("change", (e)=>{
+      summaryScope = e.target.value;
+      renderKpis();
+    });
+  }
+  const subEl = document.getElementById("positionsSummarySub");
+  if(subEl){
+    subEl.textContent = scopeWin
+      ? `Every requisition active at some point during ${scopeWin.label}, broken down by where it stands. Click any card below to see it as a Gantt Chart.`
+      : "Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.";
+  }
+  const active = scopedPositions.filter(p=>!TERMINAL.includes(p.status));
   // "Positions & Placements" — REDISEÑADO 2026-09-19, tres rondas:
   // 1) Nicolas: "no sabemos a que se refiere nada" con solo un numero + una etiqueta chica ->
   //    se agrego una frase por tarjeta explicando EXACTAMENTE que cuenta, mas un embudo real con
@@ -5776,7 +5877,7 @@ function renderKpis(){
   //    ahi "activo" en el sentido de esta tarjeta), asi que ninguna lleva flecha ni barra
   //    proporcional compartida con el embudo de la izquierda.
   const activePositions = active.filter(p=>!NOT_ACTIVELY_WORKED.includes(p.status));
-  const allPositions = dashboardPositions();
+  const allPositions = scopedPositions;
   const potentialPlacements = allPositions.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
   const actualPlacements = allPositions.filter(p=>p.status==="Hired");
   const funnelStats = [
