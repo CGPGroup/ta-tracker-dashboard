@@ -5872,25 +5872,31 @@ function renderKpis(){
   const subEl = document.getElementById("positionsSummarySub");
   if(subEl){
     subEl.textContent = scopeWin
-      ? `${scopeWin.label} — Positions is every req assigned then; Active/Potential/On Hold show where those same ones stand today. Actual Placements (and real closures) use their own real date instead, so they can include a req assigned earlier. Click any card to see it as a Gantt Chart.`
+      ? `${scopeWin.label} — Positions is every req assigned then. Active/Potential/On Hold always mean right now (never "back then"), so they only show real numbers for the current quarter or All time — a past period always shows 0 there. Actual Placements (and real closures) use their own real date, independent of when the req was assigned. Click any card to see it as a Gantt Chart.`
       : "Every requisition, broken down by where it stands toward becoming an actual placement. Click any card below to see it as a Gantt Chart.";
   }
   // "Positions & Placements" — REDISEÑADO 2026-09-19, varias rondas. La que se quedo (2026-09-27,
-  // round 5, la explicacion de Nicolas que de verdad cerro esto): "algo activo no puede estar
-  // activo en Q1 si sigue vivo hoy, está activo es en Q2 (ahora)... si dejamos Positions como reqs
-  // asignadas para ese periodo, salen 10, pero si hay alguna activa de un periodo anterior, en
-  // Active sale 11, ahí hay una discrepancia." Tenia razon — la reconstruccion historica (round 4)
-  // solucionaba UN problema (el status de hace tiempo) pero creaba otro (Active > Positions para
-  // el mismo periodo, y una req "activa en Q1" cuando en realidad sigue activa HOY, no en Q1).
-  // Diseño final, mas simple que las 2 rondas anteriores: Active/Potential/On Hold (la parte en
-  // curso) SIEMPRE se preguntan sobre el MISMO cohorte que Positions (asignadas en este periodo,
-  // ver positionAssignedInWindow), nunca sobre todas las reqs — "de las que arrancaron aca,
-  // ¿cuantas siguen en tal estado HOY?". Nunca mas ancho que Positions (es un subconjunto, no un
-  // conteo aparte), y usa el status de HOY tal cual (no hace falta reconstruir nada — la pregunta
-  // ya NO es "que era en ese momento", es "que es ahora, de las que empezaron ahi").
+  // round 6, el ejemplo que de verdad la cerro): "si hay una posicion que viene de Q1, si filtro
+  // por Q1, no deberia aparecer active en Q1 si sigue viva en Q2. Debe aparecer active en Q2, pero
+  // fue asignada en Q1. Entonces ahi habra una discrepancia [Positions vs Active]... eso es lo que
+  // nos toca explicar, a traves de añadir una tarjeta nueva." Las rondas anteriores fallaban por
+  // tratar de decidir "a que periodo pertenece el estado actual de una req" — la respuesta real es
+  // que NO le pertenece a ningun periodo elegido, le pertenece a AHORA, punto. Active/Potential/On
+  // Hold (la parte en curso) ya NO se acotan al cohorte de Positions de este periodo — son
+  // simplemente el conteo global de ahora mismo (identico a "All time"), y solo tienen sentido
+  // mostrarse cuando el periodo elegido ES el que contiene hoy (o no hay periodo elegido) — para
+  // cualquier periodo YA TERMINADO, siempre son 0: nada puede "seguir activo" en un periodo que ya
+  // paso, esa misma req sigue activa es AHORA. La tarjeta nueva "Carried Over" (mas abajo) aclara,
+  // solo cuando el periodo elegido es el actual, cuantas de esas activas/potenciales/en pausa en
+  // realidad se asignaron ANTES de que este periodo arrancara — la discrepancia que Nicolas pedia
+  // explicar, ahora explicita en vez de escondida.
+  const today = new Date();
+  const isPastPeriod = !!scopeWin && scopeWin.end < today;
+  const isCurrentPeriod = !!scopeWin && scopeWin.start <= today && today <= scopeWin.end;
   const positionsForPeriod = scopeWin ? basePositions.filter(p=>positionAssignedInWindow(p, scopeWin.start, scopeWin.end)) : basePositions;
-  const activePositions = positionsForPeriod.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
-  const potentialPlacements = positionsForPeriod.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
+  const activeSourceSet = isPastPeriod ? [] : basePositions;
+  const activePositions = activeSourceSet.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
+  const potentialPlacements = activeSourceSet.filter(p=>POTENTIAL_PLACEMENT_STATUSES.includes(p.status));
   // Actual Placements — una colocacion es un EVENTO de una sola fecha (su hire date real), nunca
   // "sigue en juego", asi que esta es la unica de las 4 que jamas usa solape de rango: cuenta
   // exactamente en el periodo en que de verdad paso, sin importar cuando arranco la req.
@@ -5907,7 +5913,9 @@ function renderKpis(){
         : "Every requisition ever assigned to this book, in any status."},
     {key:"active", label:"Active Positions", value:activePositions.length, positions:activePositions,
       desc: scopeWin
-        ? `Of the reqs assigned during ${scopeWin.label}, still being actively worked today — excludes Filled, both On Hold statuses, and closed outcomes.`
+        ? (isPastPeriod
+            ? `Active always means right now, never "back then" — ${scopeWin.label} already ended, so this is always 0 here. Check the current quarter or All time for the real active count.`
+            : `Currently being worked, right now — same as All time (a req doesn't stop being active just because you're looking at ${scopeWin.label}). Excludes Filled, both On Hold statuses, and closed outcomes.`)
         : "Currently being worked — excludes Filled (offer already accepted), both On Hold statuses, and closed outcomes."},
   ];
   // 5a tarjeta agregada 2026-09-25 (Nicolas, con los numeros reales delante: "tenemos 30
@@ -5916,10 +5924,10 @@ function renderKpis(){
   // las on hold, entonces en esa caja nueva podria ir todo lo que esta cancelled tambien" — tenia
   // razon: las 4 reales eran 2 Filled (Internal Hire) + 2 On Hold. Mezcla 2 conceptos distintos a
   // proposito, cada uno con su propia fecha: la parte On Hold es un estado en curso — igual que
-  // Active/Potential (round 5), de las asignadas en este periodo, cuantas siguen en pausa HOY — la
-  // parte Cancelled/Filled Internal Hire es un cierre real, un evento de una sola fecha (igual que
+  // Active/Potential (round 6: siempre "ahora", nunca acotado a un periodo ya pasado) — la parte
+  // Cancelled/Filled Internal Hire es un cierre real, un evento de una sola fecha (igual que
   // Actual Placements), por eso esa SI puede venir de un periodo distinto al de Positions.
-  const onHoldNow = positionsForPeriod.filter(p=> p.status === "On Hold" || p.status === "On Hold — Internal Candidates");
+  const onHoldNow = activeSourceSet.filter(p=> p.status === "On Hold" || p.status === "On Hold — Internal Candidates");
   const closedElsewhere = basePositions.filter(p=>{
     if(p.status !== "Cancelled" && p.status !== "Filled (Internal Hire)") return false;
     if(!scopeWin) return true;
@@ -5929,19 +5937,34 @@ function renderKpis(){
   const otherPositions = [...onHoldNow, ...closedElsewhere];
   const otherStat = {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
     color:"var(--neutral)", desc: scopeWin
-      ? `Of the reqs assigned during ${scopeWin.label}, still paused (On Hold) today — plus any that actually closed without an Irth placement during this period (lost/Cancelled, or filled by the client another way/Filled Internal Hire, wherever they were assigned). Not active.`
+      ? `Paused (On Hold) right now (0 if ${scopeWin.label} is a past period — see Active's note), plus any that actually closed without an Irth placement during this period (lost/Cancelled, or filled by the client another way/Filled Internal Hire, wherever they were assigned). Not active.`
       : "Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active."};
+  // Nicolas, 2026-09-27, round 6: "eso es lo que nos toca explicar, a traves de añadir una
+  // tarjeta nueva" — de las que cuentan arriba como Active/Potential/On Hold (siempre "ahora
+  // mismo"), cuantas en realidad NO se asignaron durante este periodo especifico, sino antes. Solo
+  // tiene sentido preguntarlo cuando el periodo elegido es el que contiene HOY (para un periodo ya
+  // pasado, Active/Potential/On Hold ya son 0, nada que explicar; para "All time" no hay un
+  // "antes de este periodo" real). Nunca aparece sola — siempre es un desglose de las otras 3.
+  const carriedOverPositions = isCurrentPeriod
+    ? [...activePositions, ...potentialPlacements, ...onHoldNow].filter(p=>!positionAssignedInWindow(p, scopeWin.start, scopeWin.end))
+    : [];
   const outcomeStats = [
     otherStat,
     {key:"potential", label:"Potential Placements", value:potentialPlacements.length, positions:potentialPlacements,
       color:"var(--warning)", desc: scopeWin
-        ? `Of the reqs assigned during ${scopeWin.label}, at Offer Request or Filled today — an offer already out or accepted, not yet a confirmed hire.`
+        ? (isPastPeriod
+            ? `At Offer Request or Filled always means right now, never "back then" — ${scopeWin.label} already ended, so this is always 0 here.`
+            : `At Offer Request or Filled, right now — an offer already out or accepted, not yet a confirmed hire.`)
         : "At Offer Request or Filled — an offer is already out or accepted, not yet a confirmed hire."},
     {key:"actual", label:"Actual Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc: scopeWin
         ? `Confirmed placements whose candidate actually started during ${scopeWin.label} — the same date commissions are based on.`
         : "Confirmed placements to date — a running total, not a next step from the numbers on the left."},
   ];
+  if(isCurrentPeriod){
+    outcomeStats.push({key:"carriedover", label:"Carried Over From Earlier Periods", value:carriedOverPositions.length, positions:carriedOverPositions,
+      color:"var(--brand)", desc:`Of the Active/Potential/On Hold numbers above, ${carriedOverPositions.length} were actually assigned before ${scopeWin.label} started — still counted above because they're real right now, this just says where they came from.`});
+  }
   const maxVal = funnelStats[0].value || 1;
   const allStats = [...funnelStats, ...outcomeStats];
   // Nicolas, 2026-09-26: el boton (ver .gantt-hint-btn) se habia quedado sin las clases reales de
@@ -5956,7 +5979,7 @@ function renderKpis(){
       <div class="stat-num">${s.value}</div>
       <div class="stat-label">${s.label}</div>
       <div class="stat-desc">${s.desc}</div>
-      <div class="ps-bar"><div class="ps-bar-fill" style="width:${Math.max(4, s.value/maxVal*100).toFixed(1)}%; background:${gradientFill("var(--brand)")};"></div></div>
+      <div class="ps-bar"><div class="ps-bar-fill" style="width:${Math.min(100, Math.max(4, s.value/maxVal*100)).toFixed(1)}%; background:${gradientFill("var(--brand)")};"></div></div>
       ${statHoverPopoverHtml(s)}
     </div>
     ${hintHtml(s)}
