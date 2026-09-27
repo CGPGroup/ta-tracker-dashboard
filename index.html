@@ -4980,6 +4980,21 @@ function ganttInWindow(p, start, end){
   const e = ganttEndPoint(p);
   return !(e < start || kickoff > end);
 }
+// Nicolas, 2026-09-27: "el placement no hace parte de 2 quarters diferentes" — una req YA
+// cerrada (Hired/Cancelled/Filled Internal Hire) es un EVENTO de una sola fecha (su cierre
+// real), nunca algo que "siga pasando" en cada trimestre entre su kickoff y su cierre — por eso
+// para las 3 TERMINAL se compara la fecha real de cierre cayendo DENTRO de la ventana, nunca el
+// solape de todo su rango (eso es lo que hace ganttInWindow, correcto para una req todavia en
+// curso, incluido On Hold). Usado tanto para filtrar las tarjetas (renderKpis) como para decidir
+// que trimestres/años mostrar en el menu (summaryAvailableQuarters) — misma regla en los 2
+// lugares, para que un trimestre nunca aparezca clickeable sin datos reales detras.
+function positionMatchesWindow(p, start, end){
+  if(TERMINAL.includes(p.status)){
+    const close = ganttCloseDate(p);
+    return !!close && close >= start && close <= end;
+  }
+  return ganttInWindow(p, start, end);
+}
 function ganttBuildCalendar(win){
   const totalDays = Math.max(1, ganttDaysBetween(win.start, win.end));
   const pctOf = (dt) => Math.max(0, Math.min(100, ganttDaysBetween(win.start, dt) / totalDays * 100));
@@ -5767,7 +5782,7 @@ function summaryAvailableQuarters(year){
     // ahi — el dato es real, pero el TRIMESTRE en si no ha empezado. Se necesitan las 2 cosas:
     // que el trimestre ya haya arrancado (start <= hoy) Y que tenga datos reales.
     if(start > today) continue;
-    if(positions.some(p=>ganttInWindow(p,start,end))) qs.push(q);
+    if(positions.some(p=>positionMatchesWindow(p,start,end))) qs.push(q);
   }
   return qs;
 }
@@ -5779,7 +5794,10 @@ function summaryScopeWindow(){
 }
 function renderKpis(){
   const scopeWin = summaryScopeWindow();
-  const scopedPositions = scopeWin ? dashboardPositions().filter(p=>ganttInWindow(p, scopeWin.start, scopeWin.end)) : dashboardPositions();
+  // Nicolas, 2026-09-27: "si pongo placements de Q2 me salen 3, pero luego esas mismas me salen
+  // en Q3 tambien" — ver positionMatchesWindow(): una req ya cerrada cuenta por su fecha real de
+  // cierre, nunca por solape de rango, asi nunca cae en 2 trimestres a la vez.
+  const scopedPositions = scopeWin ? dashboardPositions().filter(p=>positionMatchesWindow(p, scopeWin.start, scopeWin.end)) : dashboardPositions();
   // Regenerado por completo en cada render (nunca HTML estatico) a proposito, mismo patron que
   // #ganttScopeToggle en renderGanttGroup() — asi el listener de abajo nunca se acumula entre
   // refrescos (esta funcion se re-ejecuta en cada auto-refresh de 2 minutos).
