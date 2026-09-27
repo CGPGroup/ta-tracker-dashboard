@@ -5363,7 +5363,9 @@ function renderGanttInsights(containerId, positions){
   const workloadCardsHtml = workloadRows.map(r=>{
     const photo = RECRUITER_PHOTOS[r.label];
     const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
-    const pct = Math.min(100, (r.value / WORKLOAD_MAX) * 100);
+    // La barra y su color ahora reflejan CANTIDAD cruda de reqs contra el tope real de 12 (ver el
+    // comentario junto a WORKLOAD_MAX), no el numero pesado — esto es lo que de verdad se acaba.
+    const pct = Math.min(100, (r.count / WORKLOAD_MAX) * 100);
     // BUG REAL 2026-09-26 (Nicolas: "que todo este a la misma altura... que se vea organizado"):
     // esta linea se omitia POR COMPLETO (string vacio) para un reclutador sin posiciones activas
     // (recruiterSlaRate() devuelve null ahi) — exactamente el mismo bug de altura inconsistente ya
@@ -5385,8 +5387,8 @@ function renderGanttInsights(containerId, positions){
       <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}${recruiterDotHtml(r.label)}</div>
       <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
       <div class="workload-title">${escapeHtml(title)}</div>
-      <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.value))};"></div></div>
-      <div class="workload-count">${r.value} / ${WORKLOAD_SWEET_SPOT} weighted (${r.count} req${r.count===1?"":"s"})</div>
+      <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.count))};"></div></div>
+      <div class="workload-count">${r.count} / ${WORKLOAD_MAX} req${r.count===1?"":"s"} (${r.value} weighted)</div>
       ${slaHtml}
     </div>`;
   }).join("");
@@ -5416,7 +5418,7 @@ function renderGanttInsights(containerId, positions){
     <div class="gantt-insights-row">
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Active Workload By Recruiter</div>
-        <div class="gantt-mini-sub">Weighted by how much active effort each stage really takes — a req in Sourcing counts more than one waiting on Offer Stage or paused On Hold. ${WORKLOAD_SWEET_SPOT} is the sweet spot, ${WORKLOAD_MAX} the max. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
+        <div class="gantt-mini-sub">${WORKLOAD_SWEET_SPOT} active reqs is the sweet spot, ${WORKLOAD_MAX} the real max, no matter what stage they're in. The weighted number in parentheses is effort intensity only — a req in Sourcing takes more real work than one waiting on Offer Stage or paused On Hold, but it still counts as one req against the cap. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
         <div class="workload-grid compact">${workloadCardsHtml || `<span class="panel-sub" style="margin:0;">No recruiters in this view.</span>`}</div>
       </div>
       <div class="gantt-mini-chart">
@@ -5893,6 +5895,16 @@ const STAGE_WEIGHT = {
   "Submitted": 1.0,
   "Client Interview": 1.0,
 };
+// BUG REAL DE DISEÑO 2026-09-26 (Nicolas: "David tiene 9 reqs, pero es como si por workload en
+// realidad tuviera 5.5... eso basicamente significa que se le podrian agregar hasta 6.5 mas como
+// maximo y no queremos eso. Queremos un numero que sea real"): el peso minimo por req es 0.5
+// (Kickoff/Intake Requested), asi que con SOLO el numero pesado como limite, alguien podia acumular
+// muchas mas reqs livianas de las que en realidad puede atender antes de que la barra se viera
+// "llena". Nicolas confirmo el numero real: el TOPE VERDADERO es 12 reqs activas, sin importar en
+// que etapa esten. WORKLOAD_MAX/WORKLOAD_SWEET_SPOT ahora son el tope de CANTIDAD CRUDA de reqs
+// (la barra principal y su color), no del numero pesado — el numero pesado sigue existiendo como
+// dato secundario (intensidad de esfuerzo real), pero ya no decide que tan "llena" se ve la
+// tarjeta. Mismos 2 numeros de siempre (10/12), solo se les cambio a que se aplican.
 const WORKLOAD_SWEET_SPOT = 10;
 const WORKLOAD_MAX = 12;
 function workloadColor(v){
@@ -10163,10 +10175,13 @@ function renderNewPosRecruiterSelect(){
   if(RECRUITERS.includes(prev)) sel.value = prev;
   updateNewPosCapacityHint();
 }
-// Regla de asignacion del Playbook (seccion 2.5): se puede asignar un req nuevo si carga real +
-// 1.0 (asumiendo que entra en Etapa 1) sigue <= 10 (o hasta 12 en casos aceptables) — aqui se usa
-// 0.25 (el peso real de "Kickoff enviado") en vez de 1.0, porque un req nuevo siempre arranca ahi,
-// nunca ya en Sourcing.
+// Regla de asignacion del Playbook (seccion 2.5), recalibrada 2026-09-26 (Nicolas: "lo maximo de
+// reqs que se pueden asignar son 12, sin importar en que etapa esten las demas" — ver el
+// comentario junto a WORKLOAD_MAX): el tope real es CANTIDAD cruda de reqs activas, no el numero
+// pesado — con solo el numero pesado, un reclutador con puras reqs livianas (Kickoff/Intake
+// Requested a 0.5 cada una) podia acumular muchas mas de las que en realidad puede atender antes
+// de que esto avisara nada. El numero pesado se sigue mostrando como dato secundario (intensidad
+// de esfuerzo real), pero ya no decide el aviso.
 function updateNewPosCapacityHint(){
   const hint = document.getElementById("newPosCapacityHint");
   if(!hint) return;
@@ -10178,14 +10193,14 @@ function updateNewPosCapacityHint(){
   // este filtro, esos reqs pasarian de pesar poco a pesar MAS que antes del fix, justo lo
   // opuesto de lo que Nicolas pidio.
   const assigned = POSITIONS.filter(p => !TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status) && p.recruiter === name);
-  const currentLoad = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
-  const projected = Math.round((currentLoad + 0.25) * 10) / 10;
-  if(projected > WORKLOAD_MAX){
-    hint.innerHTML = `⛔ This would put ${escapeHtml(name)} at ${projected} weighted load, over the ${WORKLOAD_MAX} max — consider another recruiter.`;
-  } else if(projected > WORKLOAD_SWEET_SPOT){
-    hint.innerHTML = `⚠ This would put ${escapeHtml(name)} at ${projected} weighted load, past the ${WORKLOAD_SWEET_SPOT} sweet spot (still under the ${WORKLOAD_MAX} max).`;
+  const currentLoad = Math.round(assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0)*10)/10;
+  const projectedCount = assigned.length + 1;
+  if(projectedCount > WORKLOAD_MAX){
+    hint.innerHTML = `⛔ This would put ${escapeHtml(name)} at ${projectedCount} active reqs, over the ${WORKLOAD_MAX} max — consider another recruiter.`;
+  } else if(projectedCount > WORKLOAD_SWEET_SPOT){
+    hint.innerHTML = `⚠ This would put ${escapeHtml(name)} at ${projectedCount} active reqs, past the ${WORKLOAD_SWEET_SPOT} sweet spot (still under the ${WORKLOAD_MAX} max). Currently ${currentLoad} weighted.`;
   } else {
-    hint.textContent = `${name} is currently at ${Math.round(currentLoad*10)/10} weighted load (${assigned.length} active req${assigned.length===1?"":"s"}) — plenty of room.`;
+    hint.textContent = `${name} is currently at ${assigned.length} active req${assigned.length===1?"":"s"} (${currentLoad} weighted) — plenty of room.`;
   }
 }
 // Precarga los campos de Edit Recruiter con lo que ya se sabe de ese nombre, para poder
