@@ -4953,6 +4953,27 @@ function ganttScopeWindow(scope, data){
   }, new Date());
   return { start: ganttAddDays(earliest,-2), end: ganttAddDays(latest,3), label:"All time" };
 }
+// BUG REAL 2026-09-27 (Nicolas: "si filtro por 2026, me sale Enero hasta mayo, cuando no hay
+// info de esos meses, eso solo hace ruido"): un "Year" o "Quarter" elegido le daba al calendario
+// el rango de calendario COMPLETO (todo Jan-Dec, o los 3 meses exactos del trimestre), sin
+// importar si las reqs reales de ese año/trimestre arrancaron mucho despues — igual que "All
+// time" ya recorta al rango real (kickoff mas viejo -> cierre mas nuevo, ver arriba), un
+// Year/Quarter especifico deberia recortarse IGUAL, nunca mas ancho de lo que los datos reales
+// necesitan. Nunca mas angosto que la ventana pedida tampoco (Math.max/min con los bordes reales
+// del scope elegido) — un Quarter sigue siendo como maximo esos 3 meses.
+function ganttClampedWindow(win, data){
+  if(!data.length) return win;
+  const earliest = data.reduce((min,p)=>{ const k=parseD(p.kickoff); return k && (!min || k<min) ? k : min; }, null);
+  const latest = data.reduce((max,p)=>{
+    const proj = ganttCloseDate(p) || ganttAddDays(parseD(p.kickoff)||new Date(), SLA_TARGETS.TTF);
+    return (!max || proj > max) ? proj : max;
+  }, null);
+  if(!earliest || !latest) return win;
+  const start = new Date(Math.max(win.start.getTime(), ganttAddDays(earliest,-2).getTime()));
+  const end = new Date(Math.min(win.end.getTime(), ganttAddDays(latest,3).getTime()));
+  if(start >= end) return win;
+  return {start, end, label: win.label};
+}
 function ganttInWindow(p, start, end){
   const kickoff = parseD(p.kickoff);
   if(!kickoff) return false;
@@ -5544,7 +5565,7 @@ function renderGanttGroup(key){
   // distintos, justo la confusion que Nicolas señalo. El calendario ahora usa exactamente la
   // ventana del filtro de tarjetas (summaryScopeWindow()) — "All time" (default) sigue calculando
   // el rango dinamico real (kickoff mas viejo -> cierre mas nuevo, ver ganttScopeWindow()).
-  const win = summaryScopeWindow() || ganttScopeWindow("all", data);
+  const win = ganttClampedWindow(summaryScopeWindow() || ganttScopeWindow("all", data), data);
   const shown = data;
   const cal = ganttBuildCalendar(win);
   const filtersActive = !!(ganttRecruiterFilter || ganttRoleFilter);
@@ -5736,9 +5757,16 @@ function summaryAvailableYears(){
 function summaryAvailableQuarters(year){
   if(!year) return [];
   const positions = dashboardPositions();
+  const today = new Date();
   const qs = [];
   for(let q=1;q<=4;q++){
     const start = new Date(year,(q-1)*3,1), end = new Date(year,q*3,0);
+    // BUG REAL 2026-09-27 (Nicolas: "por que aparece Q4 si aun no ha iniciado?"): una req YA
+    // colocada con fecha de inicio real futura (ej. RD-011, Placed Oct 5) hace que
+    // ganttInWindow() de verdad se solape con Q4, aunque el calendario todavia no haya llegado
+    // ahi — el dato es real, pero el TRIMESTRE en si no ha empezado. Se necesitan las 2 cosas:
+    // que el trimestre ya haya arrancado (start <= hoy) Y que tenga datos reales.
+    if(start > today) continue;
     if(positions.some(p=>ganttInWindow(p,start,end))) qs.push(q);
   }
   return qs;
