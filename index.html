@@ -5024,6 +5024,24 @@ function ganttRowDisclosureHtml(kickoffDate){
   const kLabel = `Q${kQ} ${kYear}`;
   return `<div class="gantt-row-quarter-note" title="This requisition's Kickoff was in ${escapeHtml(kLabel)}, a different quarter than the one you're viewing.">⚠ Started in ${escapeHtml(kLabel)}</div>`;
 }
+// BUG REAL 2026-09-27 (encontrado revisando el diseño de las 5 tarjetas independientes): el menu
+// de Year/Quarter solo ofrecia un periodo si TENIA UN KICKOFF ahi (positionAssignedInWindow) — pero
+// ahora que Actual Placements/On Hold & Other cuentan por fecha real de cierre, un trimestre puede
+// tener un placement real sin tener ningun Kickoff propio (caso real: RD-011, Kickoff en Jul,
+// Hired el 5 de Oct — ningun req nunca ha arrancado en Q4 2026, asi que Q4 nunca aparecia en el
+// menu, aunque ESE placement real viviera ahi). Un periodo ahora se ofrece si CUALQUIERA de los 5
+// criterios (asignado, en curso, o cerrado) tiene algo real ahi — mismas 3 pruebas que ya usa
+// renderKpis(), solo que aca basta con que UNA sea verdadera para UNA req cualquiera.
+function anyPositionRelevantToWindow(positions, start, end){
+  return positions.some(p=>{
+    if(positionAssignedInWindow(p, start, end)) return true;
+    if(TERMINAL.includes(p.status)){
+      const close = ganttCloseDate(p);
+      return !!close && close >= start && close <= end;
+    }
+    return ganttInWindow(p, start, end);
+  });
+}
 function ganttBuildCalendar(win){
   const totalDays = Math.max(1, ganttDaysBetween(win.start, win.end));
   const pctOf = (dt) => Math.max(0, Math.min(100, ganttDaysBetween(win.start, dt) / totalDays * 100));
@@ -5775,9 +5793,18 @@ function summaryScopeParts(){
   return {year: null, quarter: null};
 }
 function summaryAvailableYears(){
-  const years = new Set();
-  dashboardPositions().forEach(p=>{ const k = parseD(p.kickoff); if(k) years.add(k.getFullYear()); });
-  return [...years].sort((a,b)=>a-b);
+  const positions = dashboardPositions();
+  const today = new Date();
+  // Rango candidato: del año de Kickoff mas viejo al año actual (nunca un año futuro completo,
+  // aunque una fecha de cierre real ya caiga ahi — ver el guard de "ya arranco" en Quarters de
+  // abajo, el mismo principio aplica por año).
+  let minYear = today.getFullYear();
+  positions.forEach(p=>{ const k = parseD(p.kickoff); if(k && k.getFullYear() < minYear) minYear = k.getFullYear(); });
+  const years = [];
+  for(let y=minYear; y<=today.getFullYear(); y++){
+    if(anyPositionRelevantToWindow(positions, new Date(y,0,1), new Date(y,11,31))) years.push(y);
+  }
+  return years;
 }
 function summaryAvailableQuarters(year){
   if(!year) return [];
@@ -5789,7 +5816,7 @@ function summaryAvailableQuarters(year){
     // Nicolas, 2026-09-27: "por que aparece Q4 si aun no ha iniciado?" — un trimestre nunca se
     // ofrece antes de que el calendario real lo alcance, sin importar los datos.
     if(start > today) continue;
-    if(positions.some(p=>positionAssignedInWindow(p,start,end))) qs.push(q);
+    if(anyPositionRelevantToWindow(positions, start, end)) qs.push(q);
   }
   return qs;
 }
