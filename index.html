@@ -1680,6 +1680,22 @@
   .sla-subchip-label { font-size: 10.5px; color: var(--text-muted); font-weight: 600; }
   .modal-section-title { font-size: 12.5px; font-weight: 500; margin: 22px 0 8px; }
   .modal-section-title:first-child { margin-top: 0; }
+  /* Diagrama de flujo del modal (ver renderFlowMilestones()) — reemplaza la barra comprimida del
+     Gantt del dashboard SOLO aqui, con todos los milestones reales como pasos conectados. */
+  .flow-diagram { display: flex; align-items: stretch; flex-wrap: wrap; gap: 0 0; margin: 0 0 4px; }
+  .flow-step { display: flex; align-items: center; }
+  .flow-box { border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 11px; min-width: 108px; background: var(--surface-2); }
+  .flow-box.done { border-color: var(--brand); background: rgba(var(--brand-rgb),0.12); }
+  .flow-box.pending { border-style: dashed; opacity: .55; }
+  .flow-box.warn { border-color: var(--warning); background: rgba(211,163,85,0.14); opacity: 1; border-style: solid; }
+  .flow-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
+  .flow-box.done .flow-label { color: var(--brand); }
+  .flow-box.warn .flow-label { color: var(--warning); }
+  .flow-date { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-top: 2px; white-space: nowrap; }
+  .flow-box.pending .flow-date { color: var(--text-muted); font-weight: 500; font-style: italic; }
+  .flow-subnote { font-size: 10px; color: var(--text-muted); margin-top: 3px; max-width: 140px; }
+  .flow-connector { width: 18px; height: 2px; background: var(--border); flex: none; }
+  .flow-connector.done { background: var(--brand); }
   /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
      texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
      menu es una lista simple debajo, cada item con su propio punto de color via STAGE_COLORS. */
@@ -7366,6 +7382,114 @@ function factsSection(title, facts){
     <div class="facts-grid">${facts.map(f=>`
       <div><div class="fact-label">${f.label}</div><div class="fact-value">${f.value}</div></div>`).join("")}</div>`;
 }
+// Diagrama de flujo del modal — Nicolas, con captura anotada en Paint sobre el modal real de
+// SE-035: "el Gantt de preview es el que vive en el dashboard [...] el Gantt ya como diagrama de
+// flujo y decision, es el que vive en el modal y muestra todos los milestones necesarios, asi de
+// esa manera el gantt del dashboard no queda sobrecargado". Reusa las MISMAS fechas reales que ya
+// alimentan ganttSegments()/computeCompletion() (nunca fabrica una fecha nueva) pero las muestra
+// como una secuencia de pasos conectados en vez de una barra comprimida — con hora real cuando el
+// Activity log la tiene (Nicolas: "esto fue el mismo dia pero hora distinta"), y los pasos que
+// todavia no han pasado se ven vacios/pendientes en vez de no aparecer, para que se vea el camino
+// completo de una vez.
+function findActivityTime(p, matchFn){
+  // buildTimeline(p), no positionActivityEntries(p): incluye tambien los "auto" sinteticos
+  // (ej. el milestone de Kickoff, que nunca vive en el Activity log real guardado) — es la misma
+  // lista completa que de verdad se le muestra al reclutador en la seccion Activity del modal.
+  const hit = buildTimeline(p).find(e=> typeof e.text === "string" && matchFn(e.text));
+  return hit ? hit.time : null;
+}
+function flowStepHtml(step){
+  const done = !!step.date;
+  const dateLine = done
+    ? `${ganttFmtDate(parseD(step.date))}${step.time ? ` · ${step.time}` : ""}`
+    : (step.pendingNote || "Pending");
+  return `<div class="flow-step">
+    <div class="flow-box${done ? " done" : " pending"}${step.warn ? " warn" : ""}">
+      <div class="flow-label">${escapeHtml(step.label)}</div>
+      <div class="flow-date">${escapeHtml(dateLine)}</div>
+      ${step.subNote ? `<div class="flow-subnote">${escapeHtml(step.subNote)}</div>` : ""}
+    </div>
+    <div class="flow-connector${done ? " done" : ""}"></div>
+  </div>`;
+}
+function renderFlowMilestones(p){
+  if(!p.kickoff) return "";
+  const steps = [];
+  steps.push({
+    key:"kickoff", label:"Kickoff", date:p.kickoff,
+    time: findActivityTime(p, t=>t.includes("kicked off")),
+  });
+  const acceptedDateStr = p.handoffFrom ? p.handoffAcceptedDate : p.recruiterAcceptedDate;
+  steps.push({
+    key:"accepted", label: p.handoffFrom ? `Handoff Accepted (from ${p.handoffFrom})` : "Assignment Accepted",
+    date: acceptedDateStr,
+    time: findActivityTime(p, t=>t.includes("Accepted the assignment") || t.includes("Handoff accepted")),
+    pendingNote: `Waiting on ${p.recruiter||"the recruiter"} to accept`,
+  });
+  if(p.intakeWaivedReason){
+    steps.push({
+      key:"intake", label:"Intake Meeting Waived",
+      date: p.intakeWaivedDate || findStatusTransitionDate(p,"Intake Meeting Waived"),
+      subNote: p.intakeWaivedReason.length > 60 ? p.intakeWaivedReason.slice(0,57)+"…" : p.intakeWaivedReason,
+    });
+  } else {
+    steps.push({
+      key:"intakeReq", label:"Intake Meeting Requested", date:p.intakeRequestedDate,
+      time: findActivityTime(p, t=>t.includes("to Intake Meeting Requested")),
+      pendingNote:"Not requested yet",
+    });
+    steps.push({
+      key:"intakeHeld", label:"Intake Meeting Held", date:p.intake,
+      time: findActivityTime(p, t=>t.includes("to Intake Held") || t.includes("to Intake Pending")),
+      pendingNote: p.intakeRequestedDate ? "Waiting on the hiring manager" : "Not requested yet",
+    });
+  }
+  const sourcingDate = findStatusTransitionDate(p,"Sourcing") || (p.intakeWaivedReason ? p.intakeWaivedDate : p.intake);
+  steps.push({
+    key:"sourcing", label:"Sourcing/Screening", date: sourcingDate,
+    time: findActivityTime(p, t=>t.includes("to Sourcing")),
+    pendingNote:"Intake not wrapped up yet",
+  });
+  steps.push({
+    key:"submitted", label:"Submitted", date:p.submit,
+    time: findActivityTime(p, t=>t.includes("to Submitted")),
+    pendingNote:"No batch logged yet",
+  });
+  steps.push({
+    key:"clientInterview", label:"Client Interview", date: findStatusTransitionDate(p,"Client Interview"),
+    time: findActivityTime(p, t=>t.includes("to Client Interview")),
+    pendingNote:"No candidate advanced yet",
+  });
+  steps.push({
+    key:"offerRequest", label:"Offer Request", date:p.offerRequestDate,
+    time: findActivityTime(p, t=>t.includes("to Offer Request")),
+    pendingNote:"Not there yet",
+  });
+  steps.push({
+    key:"filled", label:"Filled", date:p.fill,
+    time: findActivityTime(p, t=>t.includes("to Filled")),
+    pendingNote:"Offer not accepted yet",
+  });
+  steps.push({
+    key:"hired", label:"Placed (Start Date)", date:p.hire,
+    time: findActivityTime(p, t=>t.includes("to Placed") || t.includes("to Hired")),
+    pendingNote:"Start Date hasn't arrived yet",
+  });
+  // Desenlaces reales que rompen el camino normal (Cancelled/On Hold/Filled Internal Hire) — se
+  // agregan como un paso final aparte, marcado distinto (warn), en vez de fingir que el camino
+  // normal sigue cuando en realidad no.
+  if(p.status==="Cancelled" || p.status==="Filled (Internal Hire)"){
+    const closeStr = findStatusTransitionDate(p, p.status);
+    steps.push({key:"outcome", label: statusLabel(p.status), date: closeStr, warn:true});
+  } else if(SLA_PAUSING_STATUSES.includes(p.status)){
+    const pauseInfo = computeSlaPauseInfo(p);
+    const pausedStr = pauseInfo.pausedSinceDate ? pauseInfo.pausedSinceDate.toISOString().slice(0,10) : null;
+    steps.push({key:"outcome", label: statusLabel(p.status), date: pausedStr, warn:true, subNote:"Paused — clock frozen"});
+  }
+  return `
+    <div class="modal-section-title">Requisition Flow</div>
+    <div class="flow-diagram">${steps.map(flowStepHtml).join("")}</div>`;
+}
 function renderDetailModal(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
@@ -7636,6 +7760,7 @@ function renderDetailModal(){
     </div>`;
 
   document.getElementById("modalFacts").innerHTML =
+    renderFlowMilestones(p) +
     factsSection("", positionFacts) +
     basicInfoEditHtml +
     urlFactsHtml +
