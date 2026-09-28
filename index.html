@@ -3635,7 +3635,14 @@ const STAGE_COLORS = {
   "Submitted": "var(--seq-500)",
   "Client Interview": "var(--seq-600)",
   "Offer Request": "var(--warning)",
-  "Filled": "var(--good)",
+  // Nicolas: "no entiendo por que si el card es Filled, las barras no muestran el periodo de
+  // Filled" — reusaba var(--good), el MISMO color que Hired, asi que aunque el tramo si se
+  // recoloreaba (ver ganttSegments()), era visualmente identico a un placement ya confirmado, y
+  // ademas nunca tuvo su propia entrada en la leyenda (ver renderGanttGroup()) — exactamente la
+  // distincion Filled-no-es-Hired que el resto de esta sesion reforzo en todos lados menos aqui.
+  // Mismo azul que ya usa la tarjeta KPI "Filled" (round 7), para que sea el mismo concepto en los
+  // dos lugares.
+  "Filled": "var(--stage-blue)",
   "Hired": "var(--good)",
   "Filled (Internal Hire)": "var(--neutral)",
   "On Hold": "var(--neutral)",
@@ -5638,6 +5645,7 @@ function renderGanttGroup(key){
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>${escapeHtml(statusLabel("Submitted"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>${escapeHtml(statusLabel("Client Interview"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>${escapeHtml(statusLabel("Offer Request"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--stage-blue);"></span>${escapeHtml(statusLabel("Filled"))} — offer accepted, waiting on the real Start Date</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond"></span>Real date a stage began</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected Time To Fill (internal goal)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--good);"></span>Projected Time To Hire (internal goal)</div>
