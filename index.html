@@ -5421,13 +5421,20 @@ function ganttRowHtml(p, cal){
   }
 
   const daysToTarget = targetDate ? Math.round((targetDate - now)/86400000) : null;
-  let chipClass, chipLabel;
+  let chipClass, chipLabel, chipTitle = "";
   if(paused){ chipClass = "paused"; chipLabel = `Paused — ${statusLabel(p.status)}`; }
   else if(terminal){
     chipClass = p.status==="Hired" ? "good" : (p.status==="Cancelled" ? "critical" : "neutral");
     chipLabel = `${statusLabel(p.status)} · ${ganttFmtDate(end)}`;
   }
-  else if(daysToTarget === null){ chipClass = "live"; chipLabel = statusLabel(p.status); }
+  // Nicolas: "por que en Filled la de Senior QA sale con el chip de Filled pero las otras no?" —
+  // no es un bug de codigo, es que esta req en concreto (RD-071) no tiene NINGUNA fecha real de
+  // intake (ni Held, ni Requested, ni una fecha logueada de cuando se waiveo — solo el motivo
+  // escrito, sin fecha) para anclar un target de Time To Fill real. Sin eso, nunca se inventa un
+  // numero — se muestra el status a secas, igual que aqui. Se veia inconsistente sin explicacion
+  // (misma tarjeta, unas con "Xd past target" y esta sola con el nombre del status), asi que ahora
+  // el chip mismo dice por que en su tooltip, en vez de dejarlo sin explicar.
+  else if(daysToTarget === null){ chipClass = "live"; chipLabel = statusLabel(p.status); chipTitle = "No Time To Fill target to compare against — this req has no real intake date on file (not held, not requested, not even a logged waiver date) to calculate one from."; }
   else {
     chipClass = (daysToTarget < 5) ? "risk" : "live";
     chipLabel = daysToTarget >= 0 ? `${daysToTarget}d to target` : `${-daysToTarget}d past target`;
@@ -5460,7 +5467,7 @@ function ganttRowHtml(p, cal){
       ${projectedHtml}
     </div>
     <div class="gantt-row-end">
-      <div class="gantt-chip ${chipClass}"><span class="dot"></span>${escapeHtml(chipLabel)}</div>
+      <div class="gantt-chip ${chipClass}"${chipTitle ? ` title="${escapeHtml(chipTitle)}"` : ""}><span class="dot"></span>${escapeHtml(chipLabel)}</div>
     </div>
   </div>`;
 }
