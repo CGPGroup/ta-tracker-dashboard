@@ -5976,7 +5976,7 @@ function renderKpis(){
         : "Offer accepted, waiting on the candidate's real Start Date to arrive — not yet a confirmed placement, even if a Start Date is already scheduled."},
     {key:"actual", label:"Placements", value:actualPlacements.length, positions:actualPlacements,
       color:"var(--good)", desc: scopeWin
-        ? `Confirmed placements whose candidate's Start Date has actually arrived, falling within ${scopeWin.label} — the same date commissions are based on. A future Start Date never counts here, even if the status already says Hired.`
+        ? `Confirmed placements whose candidate's Start Date has actually arrived, falling within ${scopeWin.label}. A future Start Date never counts here, even if the status already says Hired.`
         : "Confirmed placements to date, by real Start Date already arrived — a running total, not a next step from the numbers on the left."},
   ];
   if(isCurrentPeriod){
