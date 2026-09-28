@@ -1696,6 +1696,20 @@
   .flow-subnote { font-size: 10px; color: var(--text-muted); margin-top: 3px; max-width: 140px; }
   .flow-connector { width: 18px; height: 2px; background: var(--border); flex: none; }
   .flow-connector.done { background: var(--brand); }
+  /* Nicolas, tras la v1: "un Gantt CON diagrama de flujo, usando la vista de calendario tal cual
+     como esta en el gantt de overview del dashboard" — la v1 no tenia ningun eje de calendario
+     real. .flow-gantt envuelve ese eje real (mismas clases gantt-cal-axis/gantt-cal-gridlines/
+     gantt-cal-tick/gantt-cal-today-line que ya pinta ganttRenderAxis() para el Gantt de verdad, ver
+     flowCalendarFor()) arriba, como referencia de EN QUE EPOCA cae cada milestone, y el flujo de
+     cajas conectadas (.flow-diagram) debajo — las cajas NO se posicionan pixel-a-pixel sobre el
+     eje (2 rondas atras eso mismo termino con las cajas encimadas cuando 2 fechas reales caian con
+     pocos dias de diferencia, ilegible) — cada uno resuelve una pregunta distinta: el eje de arriba
+     dice "cuando", las cajas de abajo dicen "en que orden y que tan lejos" del camino completo. */
+  .flow-gantt { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); padding: 10px 12px 12px; margin-bottom: 4px; }
+  .flow-calendar-strip { overflow-x: auto; margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .flow-calendar-strip-inner { position: relative; min-width: 640px; height: 20px; }
+  .flow-gantt .gantt-cal-axis { margin: 0; height: 15px; border-bottom: none; padding-bottom: 0; }
+  .flow-gantt .gantt-cal-gridlines { left: 0; right: 0; height: 20px; }
   /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
      texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
      menu es una lista simple debajo, cada item con su propio punto de color via STAGE_COLORS. */
@@ -5111,9 +5125,12 @@ function ganttBuildCalendar(win){
   const pctOf = (dt) => Math.max(0, Math.min(100, ganttDaysBetween(win.start, dt) / totalDays * 100));
   return { rangeStart:win.start, rangeEnd:win.end, totalDays, pctOf };
 }
-function ganttRenderAxis(cal, granularity){
-  const axisEl = document.getElementById("ganttAxis");
-  const gridEl = document.getElementById("ganttGridlines");
+// axisId/gridId parametrizados (con el default de siempre) para que renderFlowMilestones() pueda
+// reusar EXACTAMENTE este mismo eje de calendario dentro del modal, con sus propios ids unicos —
+// nunca duplicando la logica de meses/dia 15/linea de Hoy en un segundo lugar aparte.
+function ganttRenderAxis(cal, granularity, axisId="ganttAxis", gridId="ganttGridlines"){
+  const axisEl = document.getElementById(axisId);
+  const gridEl = document.getElementById(gridId);
   if(!axisEl || !gridEl) return;
   axisEl.innerHTML = ""; gridEl.innerHTML = "";
   const addTick = (date,label,sub)=>{
@@ -7398,6 +7415,14 @@ function findActivityTime(p, matchFn){
   const hit = buildTimeline(p).find(e=> typeof e.text === "string" && matchFn(e.text));
   return hit ? hit.time : null;
 }
+// Ventana/calendario acotada a esta UNA req — mismas funciones que ya usa el Gantt del dashboard
+// (ganttScopeWindow/ganttBuildCalendar), reusadas tal cual para que el eje de arriba (meses, dia
+// 15, linea de Hoy) sea EXACTAMENTE el mismo componente, no una version aparte reinventada.
+function flowCalendarFor(p){
+  const win = ganttScopeWindow("all", [p]);
+  const cal = ganttBuildCalendar(win);
+  return {win, cal};
+}
 function flowStepHtml(step){
   const done = !!step.date;
   const dateLine = done
@@ -7488,7 +7513,13 @@ function renderFlowMilestones(p){
   }
   return `
     <div class="modal-section-title">Requisition Flow</div>
-    <div class="flow-diagram">${steps.map(flowStepHtml).join("")}</div>`;
+    <div class="flow-gantt">
+      <div class="flow-calendar-strip"><div class="flow-calendar-strip-inner">
+        <div class="gantt-cal-gridlines" id="modalFlowGridlines"></div>
+        <div class="gantt-cal-axis" id="modalFlowAxis"></div>
+      </div></div>
+      <div class="flow-diagram">${steps.map(flowStepHtml).join("")}</div>
+    </div>`;
 }
 function renderDetailModal(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
@@ -7768,6 +7799,11 @@ function renderDetailModal(){
     timelineHtml +
     batchesHtml +
     outcomeFactsHtml;
+  // El eje de calendario (meses/dia 15/linea de Hoy) se dibuja aparte, DESPUES de insertar el HTML
+  // de arriba — ganttRenderAxis() escribe por id de elemento (#modalFlowAxis/Gridlines, ver
+  // renderFlowMilestones()), que todavia no existen en el DOM mientras se arma el string de
+  // innerHTML. Mismo patron que renderGanttGroup() ya usa para el Gantt del dashboard.
+  if(p.kickoff) ganttRenderAxis(flowCalendarFor(p).cal, "month", "modalFlowAxis", "modalFlowGridlines");
   // Navegacion entre hermanas de Headcount Group — SIEMPRE conectada (nunca dentro del if(!isView)
   // de abajo), preserva el mismo modo/tamaño con el que ya estaba abierto este modal (view/edit,
   // agrandado o no) en vez de resetearlo.
