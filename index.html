@@ -4042,6 +4042,12 @@ const NOT_ACTIVELY_WORKED = ["Filled","On Hold","On Hold — Internal Candidates
 // saveModalDates()) para que ambos lugares usen la MISMA lista — el resto de esta sesion fue
 // justo encontrar y arreglar casos de dos copias de la misma regla desincronizandose.
 const AUTO_STATUS_LOCKED = ["Cancelled","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates"];
+// Hoisted aqui 2026-09-28 (misma razon que AUTO_STATUS_LOCKED arriba — antes vivian solo dentro
+// de saveModalDates()) para que reconcileHeadcountGroups() (ver mas abajo) use la MISMA regla de
+// "que campo implica que status" y "cuales campos se sincronizan entre hermanas de headcount" en
+// vez de mantener una segunda copia que se pueda desincronizar de la original.
+const DATE_IMPLIES_STATUS = {intakeRequestedDate:"Intake Meeting Requested", intake:"Intake Pending", submit:"Submitted"};
+const SIBLING_SYNCED_KEYS = ["kickoff", "intakeRequestedDate", "intake"];
 
 let RECRUITERS = ["Nicolás Patarroyo"];
 let RECRUITER_PHOTOS = {}; // nombre -> URL de foto (opcional; sin foto, cae a iniciales)
@@ -5723,7 +5729,19 @@ function renderGanttGroup(key){
     if(rowEls && rowEls.length > GANTT_VISIBLE_ROWS){
       let visibleHeight = 0;
       for(let i=0;i<GANTT_VISIBLE_ROWS;i++) visibleHeight += rowEls[i].offsetHeight;
-      rowsEl.style.maxHeight = visibleHeight + "px";
+      // BUG REAL 2026-09-28 (Nicolas, con captura: "esta seleccionado Active Positions, pero no
+      // sale el Gantt" — titulo/leyenda/eje SI se veian, las filas no, "no se como reproducirlo").
+      // renderKpis() corre en CADA renderAll(), sin importar que vista este activa (ver
+      // renderDashboardPanels()) — el auto-refresh de 2 minutos sigue llamando renderGanttGroup()
+      // para el Gantt que haya quedado abierto (ganttOpenKey) aunque el usuario ya se haya ido a
+      // Tracking/Positions/etc. Ahi el panel esta detras de un display:none ancestro (la vista
+      // Overview no activa) — offsetHeight SIEMPRE da 0 en ese estado, y sin este guard eso dejaba
+      // maxHeight clavado en "0px" hasta el proximo refresh que corriera con Overview de verdad
+      // visible (hasta 2 minutos). Nunca aplicar una medicion de 0 — el peor caso pasa a ser "sin
+      // limite de scroll por un momento" (se corrige solo, inofensivo) en vez de "0 filas
+      // visibles" (rompe la vista entera). activateView() (ver ahi) tambien fuerza un remedido
+      // real al volver a Dashboard, para no depender de esperar el proximo tick del auto-refresh.
+      if(visibleHeight > 0) rowsEl.style.maxHeight = visibleHeight + "px";
     } else {
       rowsEl.style.maxHeight = "";
     }
@@ -7997,7 +8015,7 @@ async function saveModalDates(){
   // "fill"/"hire" YA NO estan aqui — esos 2 campos se quitaron de este formulario (Timeline) por
   // completo, ver el comentario junto a "fields" mas arriba. Filled/Hired ahora se disparan desde
   // saveCandidateFillDate()/checkArrivedStartDates(), nunca desde este auto-avance por fecha.
-  const DATE_IMPLIES_STATUS = {intakeRequestedDate:"Intake Meeting Requested", intake:"Intake Pending", submit:"Submitted"};
+  // (DATE_IMPLIES_STATUS ahora vive como constante de modulo, ver junto a AUTO_STATUS_LOCKED)
   // originalStatus (no solo el "from" del ultimo paso) importa cuando Fill Date y Start Date se
   // logean juntos en el mismo Save: la fila del loop primero avanza a Filled y luego, en la MISMA
   // pasada, a Hired — sin esto el log terminaria diciendo "Filled -> Hired" y se perderia que en
@@ -8030,7 +8048,7 @@ async function saveModalDates(){
   // openWaiveIntakeModal()/confirmIntakeSummarySent() ya hacen para la razon de waive y la
   // confirmacion de notas, mismo filtro de exclusion que esas dos funciones (nunca sobre una
   // hermana que llego por Handoff, que tiene su propio mecanismo de confirmacion de contexto).
-  const SIBLING_SYNCED_KEYS = ["kickoff", "intakeRequestedDate", "intake"];
+  // (SIBLING_SYNCED_KEYS ahora vive como constante de modulo, ver junto a AUTO_STATUS_LOCKED)
   const siblingSyncChanges = changed.filter(f => SIBLING_SYNCED_KEYS.includes(f.key) && f.value);
   const groupSiblings = (siblingSyncChanges.length && p.headcountGroup)
     ? POSITIONS.filter(x => x.id !== p.id && x.headcountGroup === p.headcountGroup && !x.handoffFrom)
@@ -9018,6 +9036,64 @@ async function checkArrivedStartDates(){
       } catch(err){ console.error("Could not save the automatic Placed transition (non-fatal, will retry next refresh):", err); }
     }
     await applyPlacedCandidate(p, c, p);
+  }
+}
+// BUG REAL 2026-09-28 (David reporto sus headcounts desincronizados, y el fix fue el mismo David
+// arreglandolo a mano — Nicolas: "eso tiene que pasar con todos los req de aqui en adelante. no
+// puede haber fallo con algo tan sencillo como esto"). El sync que ya existia (SIBLING_SYNCED_KEYS
+// en saveModalDates()) solo empuja HACIA ADELANTE, cuando alguien edita una fecha de una hermana
+// YA existente en el modal — un headcount nuevo agregado a un grupo que ya tenia su intake
+// resuelto nace sin heredar nada (buildNewPositionRow() nunca copia fechas de hermanas, ver ahi),
+// y se queda desincronizado hasta que alguien vuelva a tocar una fecha de otra hermana, o lo note
+// y lo arregle a mano (exactamente lo que paso). Corre en cada carga real de datos (mismo patron
+// que checkArrivedStartDates() justo arriba — login inicial y el auto-refresh de 2 min), asi que
+// nunca depende de que alguien edite algo primero: cualquier grupo desincronizado, sin importar
+// como haya pasado, se autocorrige solo. Nunca cruza recruiters distintos que compartan el mismo
+// NOMBRE de grupo por coincidencia (bug real encontrado auditando esto mismo: RD-013 y "Full
+// Stack Developer Group" — 2 conversaciones de intake totalmente distintas, con el mismo nombre
+// solo por casualidad. Nicolas: "esa RD-013 no pertenece al grupo de hcs de David").
+async function reconcileHeadcountGroups(){
+  const COL_BY_KEY = {kickoff:"AA", intakeRequestedDate:"AN", intake:"H"};
+  const groups = {};
+  POSITIONS.forEach(p=>{
+    if(!p.headcountGroup || p.handoffFrom) return;
+    const key = p.headcountGroup + "\u0000" + p.recruiter;
+    (groups[key] = groups[key] || []).push(p);
+  });
+  for(const members of Object.values(groups)){
+    if(members.length < 2) continue;
+    for(const key of SIBLING_SYNCED_KEYS){
+      // Igual que en saveModalDates(): "intake" respeta un waiver real (una hermana pudo decidir
+      // a proposito no tener su propia reunion) — nunca se le escribe una fecha encima.
+      const known = members
+        .filter(m => m[key] && !(key === "intake" && m.intakeWaivedReason))
+        .map(m => ({value:m[key], date:parseD(m[key])}))
+        .sort((a,b)=> a.date - b.date);
+      if(!known.length) continue;
+      const canonicalValue = known[0].value;
+      for(const s of members){
+        if(s[key] || (key === "intake" && s.intakeWaivedReason)) continue;
+        s[key] = canonicalValue;
+        const targetStatus = DATE_IMPLIES_STATUS[key];
+        let remark = `Headcount Group "${s.headcountGroup}": inherited ${key==="kickoff"?"Kickoff Date":key==="intakeRequestedDate"?"Intake Meeting Requested Date":"Intake Meeting Held Date"} (${canonicalValue}) from another requisition in the same group — one hiring manager conversation, never repeated per headcount (automatic).`;
+        let newStatus = null;
+        if(targetStatus && !AUTO_STATUS_LOCKED.includes(s.status) && STATUS_ORDER.indexOf(targetStatus) > STATUS_ORDER.indexOf(s.status)){
+          const sFrom = s.status;
+          s.status = targetStatus;
+          newStatus = targetStatus;
+          remark = `Status changed from ${statusLabel(sFrom)} to ${statusLabel(targetStatus)} (automatic — same intake as another requisition in Headcount Group "${s.headcountGroup}").`;
+        }
+        s.extra = s.extra || [];
+        s.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remark});
+        if(isConnected()){
+          try {
+            await graphUpdatePositionField(s.id, COL_BY_KEY[key], canonicalValue);
+            if(newStatus) await graphUpdatePositionField(s.id, "G", newStatus);
+            await graphAppendHistorial(s.id, s.title, remark, currentAuthorName(), "status");
+          } catch(err){ console.error(`Could not save headcount reconciliation for ${s.id} (non-fatal, will retry next refresh):`, err); }
+        }
+      }
+    }
   }
 }
 // Nicolas: "en los batches debe estar la opcion de eliminar candidatos por si nos equivocamos de
@@ -10351,6 +10427,12 @@ function activateView(view){
   // toolbar) — sin esto, el flag de "editable" (identidad conectada vs activeDashboardScope)
   // queda pegado al valor que tenia la ULTIMA vez que se renderizo, no al actual.
   if(view === "tracking") renderTracking();
+  // Mismo patron que renderTracking() arriba: si el Gantt se quedo "abierto" (ganttOpenKey)
+  // mientras el usuario estaba en otra vista, un remedido real de sus filas (ver el guard de
+  // visibleHeight>0 en renderGanttGroup()) pudo haber quedado clavado en 0 por estar escondido
+  // detras de este mismo display:none. Forzar un render aqui, justo cuando la vista SI se vuelve
+  // visible, corrige eso de inmediato en vez de esperar hasta 2 minutos al proximo auto-refresh.
+  if(view === "dashboard" && ganttOpenKey) renderGanttGroup(ganttOpenKey);
 }
 // Tracking usa el mismo #detailModal que Positions/Dashboard, pero "acoplado" como panel fijo
 // a la derecha de la lista en vez de como ventana flotante — mover el nodo (no clonarlo)
@@ -11599,6 +11681,7 @@ async function loadFromGraph(){
   // Y el auto-refresh de 2 min, ver ese setInterval mas abajo), asi que nunca pasan mas de 2
   // minutos entre que la fecha real llega y el tracker lo refleja.
   await checkArrivedStartDates();
+  await reconcileHeadcountGroups();
   renderAll();
   // Aterrizas directo en TU workspace, en Tracking, en vez de Team Dashboard — Team Workspace
   // sigue a un clic bajo Dashboard en el nav, para el que lo necesite, pero ya no es lo primero
