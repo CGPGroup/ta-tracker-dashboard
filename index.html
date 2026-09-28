@@ -617,7 +617,7 @@
   .ps-hover-popover-more { font-size: 10.5px; color: var(--text-muted); font-style: italic; padding-top: 6px; }
   .ps-stat .stat-num { font-size: 30px; line-height: 1; }
   .ps-stat .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-top: 6px; }
-  .ps-stat .stat-desc { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.35; flex: 1; }
+  .ps-stat .stat-desc { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.35; flex: 1; cursor: default; }
   .ps-bar { height: 4px; border-radius: 2px; background: var(--surface-2, rgba(127,127,127,0.16)); margin-top: 8px; overflow: hidden; }
   .ps-bar-fill { height: 100%; border-radius: 2px; }
   .ps-arrow { align-self: center; margin-top: 22px; font-size: 15px; color: var(--text-muted); }
@@ -732,7 +732,7 @@
      .gantt-scope-btn, sin CSS propio) para que se vea identico, ver renderKpis(). */
   #summaryScopeToggle { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .gantt-legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
-  .gantt-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-secondary); }
+  .gantt-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-secondary); cursor: default; }
   .gantt-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
   .gantt-legend-diamond { width: 7px; height: 7px; flex: none; background: var(--text-secondary); transform: rotate(45deg); border-radius: 1px; }
   /* BUG REAL 2026-09-26 (Nicolas, con captura de movil: "no se muestra informacion relevante como
@@ -799,7 +799,7 @@
      evita ese problema sin necesitar normalizar los titulos reales. */
   .gantt-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 2px 0 14px; }
   .gantt-filter-group { display: flex; align-items: center; gap: 8px; }
-  .gantt-filter-label { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+  .gantt-filter-label { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; cursor: default; }
   .gantt-role-search { position: relative; width: 230px; }
   .gantt-role-search-input {
     width: 100%; font-family: inherit; font-size: 12px; padding: 7px 28px 7px 10px;
@@ -1174,7 +1174,7 @@
   /* Sin ".panel" de ancestro (asi estaba antes) esto solo aplicaba dentro de un .panel real —
      un monton de usos de .panel-sub viven dentro de modales (#modalFacts, #logBatchModal, etc.),
      donde nunca tuvo efecto y el texto se veia con el color/peso por defecto en vez de gris. */
-  .panel-sub { font-size: 11.5px; color: var(--text-muted); margin-bottom: 8px; }
+  .panel-sub { font-size: 11.5px; color: var(--text-muted); margin-bottom: 8px; cursor: default; }
 
   /* Patron base de "seccion desplegable" reusado por Danger Zone y por cualquier panel cuyo
      contenido pueda crecer mucho (ej. Recent Activity) — el color normal es el mismo que un
