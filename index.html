@@ -5954,15 +5954,18 @@ function renderKpis(){
   // tarjeta nueva" — de las que cuentan arriba como Active/Potential/Filled/On Hold (siempre
   // "ahora mismo"), cuantas en realidad NO se asignaron durante este periodo especifico, sino
   // antes. Solo tiene sentido preguntarlo cuando el periodo elegido es el que contiene HOY (para
-  // un periodo ya pasado, esas 4 ya son 0, nada que explicar; para "All time" no hay un "antes de
-  // este periodo" real). Nunca aparece sola — siempre es un desglose de las otras 4. Round 7:
-  // Filled se sumo a esta union (antes solo tenia sentido para Offer Request, cuando "Filled"
-  // vivia anclado a su Fill Date dentro de Potential Placements) — ahora que Filled es su propia
-  // tarjeta "ahora mismo", puede venir de un periodo distinto igual que Active/Offer Request/On
-  // Hold. Placements sigue siendo el unico que jamas entra aqui: ancla a su propia fecha real de
-  // evento (Start Date), nunca al status actual.
+  // un periodo ya pasado, esas ya son 0, nada que explicar; para "All time" no hay un "antes de
+  // este periodo" real). Nunca aparece sola — siempre es un desglose de las otras.
+  // Round 8 (Nicolas: "yo eso de carried over lo queria era para ver los reqs que venian de otros
+  // Q y asi", tras confundirse con el round 7 que lo dejaba SOLO para Active/Potential/Filled/On
+  // Hold): la version anterior excluia a proposito Placements y Cerrados (Cancelled/Filled
+  // Internal Hire) porque ya cuentan por su propia fecha real de evento, sin ambiguedad que
+  // aclarar — pero eso no es lo que Nicolas queria ver aqui. Ahora es la union de TODAS las
+  // tarjetas de resultado (las 4 "ahora mismo" + Placements + la parte de cierre real de On Hold &
+  // Other), sin importar en que termino cada req — cualquier cosa que este contando en este
+  // periodo pero se haya asignado antes.
   const carriedOverPositions = isCurrentPeriod
-    ? [...activePositions, ...potentialPlacements, ...filledNow, ...onHoldNow].filter(p=>!positionAssignedInWindow(p, scopeWin.start, scopeWin.end))
+    ? [...activePositions, ...potentialPlacements, ...filledNow, ...onHoldNow, ...closedElsewhere, ...actualPlacements].filter(p=>!positionAssignedInWindow(p, scopeWin.start, scopeWin.end))
     : [];
   const outcomeStats = [
     otherStat,
@@ -5981,7 +5984,7 @@ function renderKpis(){
   ];
   if(isCurrentPeriod){
     outcomeStats.push({key:"carriedover", label:"Carried Over From Earlier Periods", value:carriedOverPositions.length, positions:carriedOverPositions,
-      color:"var(--brand)", desc:`Of the Active/Potential/Filled/On Hold numbers above, ${carriedOverPositions.length} were actually assigned before ${scopeWin.label} started — still counted above because they're real right now, this just says where they came from.`});
+      color:"var(--brand)", desc:`Of every number above (Active, Potential Placements, Filled, On Hold & Other Closures, Placements), ${carriedOverPositions.length} were actually assigned before ${scopeWin.label} started, no matter how they turned out — this just says where they came from.`});
   }
   const maxVal = funnelStats[0].value || 1;
   const allStats = [...funnelStats, ...outcomeStats];
