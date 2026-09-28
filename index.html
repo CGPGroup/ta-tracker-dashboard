@@ -839,6 +839,14 @@
   .gantt-row-code { font-size: 10px; color: var(--text-secondary); }
   .gantt-row-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
   .gantt-row-meta b { color: var(--text-primary); font-weight: 600; }
+  /* Nicolas: "esa mierda no se lee bien porque no hace parte de la misma linea" — Kickoff/Start
+     Date/TTF target/salario/HM vivian como texto plano concatenado dentro de un div de 220px de
+     ancho, asi que el navegador partia el texto donde le tocara (a veces literal en medio de
+     "Start" y "Date"), sin respetar que cada frase es una sola idea. Cada frase real ahora es su
+     propio <span> con nowrap — si no caben todas en una linea, el navegador hace wrap ENTRE
+     frases completas (flex-wrap), nunca dentro de una. */
+  .gantt-row-dates { font-size: 10px; color: var(--text-secondary); margin-top: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+  .gantt-row-dates span { white-space: nowrap; }
   .gantt-row-quarter-note { font-size: 9.5px; font-weight: 600; color: var(--warning); margin-top: 3px; cursor: help; }
   .gantt-avatar {
     width: 14px; height: 14px; border-radius: 50%; flex: none;
@@ -4948,6 +4956,23 @@ function ganttQuarterLabel(date){ return `Q${Math.floor(date.getMonth()/3)+1} ${
 // Quarter/Year/All.
 function ganttRecentBounds(date){ return { start: ganttAddDays(date, -42), end: ganttAddDays(date, 21) }; }
 
+// BUG REAL 2026-09-28 (Nicolas: "por que si el card es Filled, las barras no muestran el periodo
+// de Filled" — la causa real resulto ser mucho mas ancha que Filled: cualquier req NO terminal que
+// ya se paso de su propia proyeccion TTF). ganttScopeWindow()/ganttClampedWindow() calculaban el
+// borde derecho del calendario ("latest") con kickoff+SLA_TARGETS.TTF como fallback para cualquier
+// req sin fecha de cierre real — una proyeccion FUTURA, pensada para dejarle aire al diamante de
+// "Projected Time To Fill" en un req que todavia va a tiempo. Pero si el req ya lleva mas dias
+// abiertos que esa proyeccion (chips reales vistos en vivo: "33d past target", "9d past target"),
+// esa fecha proyectada queda ANTES de hoy — el calendario se recortaba ahi, y el tramo real que
+// llega hasta hoy (ganttEndPoint) quedaba fuera de la ventana visible, invisible sin ningun aviso.
+// Nunca acorta la ventana futura para un req que SI va a tiempo (sigue siendo el mayor de los dos),
+// solo evita que un req atrasado se recorte por debajo de donde realmente llega ahora mismo.
+function ganttProjectedOrRealEnd(p){
+  const projectedFallback = ganttAddDays(parseD(p.kickoff)||new Date(), SLA_TARGETS.TTF);
+  const real = ganttEndPoint(p);
+  return projectedFallback > real ? projectedFallback : real;
+}
+
 function ganttScopeWindow(scope, data){
   if(scope === "recent"){ const b = ganttRecentBounds(new Date()); return {...b, label:"the last 6 weeks"}; }
   if(scope === "quarter"){ const b = ganttQuarterBounds(new Date()); return {...b, label:ganttQuarterLabel(new Date())}; }
@@ -4955,7 +4980,7 @@ function ganttScopeWindow(scope, data){
   if(!data.length) return { start:new Date(), end:new Date(), label:"All time" };
   const earliest = data.reduce((min,p)=>{ const k=parseD(p.kickoff); return k && (!min || k<min) ? k : min; }, null) || new Date();
   const latest = data.reduce((max,p)=>{
-    const proj = ganttCloseDate(p) || ganttAddDays(parseD(p.kickoff)||new Date(), SLA_TARGETS.TTF);
+    const proj = ganttCloseDate(p) || ganttProjectedOrRealEnd(p);
     return proj > max ? proj : max;
   }, new Date());
   return { start: ganttAddDays(earliest,-2), end: ganttAddDays(latest,3), label:"All time" };
@@ -4972,7 +4997,7 @@ function ganttClampedWindow(win, data){
   if(!data.length) return win;
   const earliest = data.reduce((min,p)=>{ const k=parseD(p.kickoff); return k && (!min || k<min) ? k : min; }, null);
   const latest = data.reduce((max,p)=>{
-    const proj = ganttCloseDate(p) || ganttAddDays(parseD(p.kickoff)||new Date(), SLA_TARGETS.TTF);
+    const proj = ganttCloseDate(p) || ganttProjectedOrRealEnd(p);
     return (!max || proj > max) ? proj : max;
   }, null);
   if(!earliest || !latest) return win;
@@ -5419,13 +5444,14 @@ function ganttRowHtml(p, cal){
   // que en el resto del tracker) — sin compensacion confirmada, esta linea simplemente no aparece.
   const salaryText = formatSalary(p);
   const extraInfoHtml = (salaryText || p.hiringManager)
-    ? `<div class="gantt-row-meta">${salaryText ? escapeHtml(salaryText) : ""}${salaryText && p.hiringManager ? " · " : ""}${p.hiringManager ? "HM "+escapeHtml(p.hiringManager) : ""}</div>`
+    ? `<div class="gantt-row-dates">${salaryText ? `<span>${escapeHtml(salaryText)}</span>` : ""}${p.hiringManager ? `<span>${salaryText ? "· " : ""}HM ${escapeHtml(p.hiringManager)}</span>` : ""}</div>`
     : "";
   return `<div class="gantt-row" data-id="${escapeHtml(p.id)}" style="border-left-color:${recName ? colorForName(recName) : "transparent"};">
     <div class="gantt-row-label">
       <div class="gantt-row-title">${escapeHtml(p.title||"")}</div>
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
-      <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b> · Kickoff ${ganttFmtDate(kickoff)} · ${terminal ? "Closed "+ganttFmtDate(end) : (p.status==="Filled" ? (p.hire ? "Start Date "+ganttFmtDate(parseD(p.hire)) : "Start Date not confirmed yet") : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet"))}</div>
+      <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b></div>
+      <div class="gantt-row-dates"><span>Kickoff ${ganttFmtDate(kickoff)}</span><span>· ${terminal ? "Closed "+ganttFmtDate(end) : (p.status==="Filled" ? (p.hire ? "Start Date "+ganttFmtDate(parseD(p.hire)) : "Start Date not confirmed yet") : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet"))}</span></div>
       ${extraInfoHtml}
       ${ganttRowDisclosureHtml(kickoff)}
     </div>
