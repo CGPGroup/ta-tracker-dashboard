@@ -5451,7 +5451,7 @@ function ganttRowHtml(p, cal){
       <div class="gantt-row-title">${escapeHtml(p.title||"")}</div>
       <div class="gantt-row-code">${escapeHtml(p.id)}</div>
       <div class="gantt-row-meta">${avatarHtml}<b>${escapeHtml(recName||"—")}</b></div>
-      <div class="gantt-row-dates"><span>Kickoff ${ganttFmtDate(kickoff)}</span><span>· ${terminal ? "Closed "+ganttFmtDate(end) : (p.status==="Filled" ? (p.hire ? "Start Date "+ganttFmtDate(parseD(p.hire)) : "Start Date not confirmed yet") : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet"))}</span></div>
+      <div class="gantt-row-dates"><span>Kickoff ${ganttFmtDate(kickoff)}</span><span>· ${terminal ? "Closed "+ganttFmtDate(end) : (p.status==="Filled" ? (p.hire ? "Start Date "+ganttFmtDate(parseD(p.hire)) : "Start Date Pending") : (targetDate ? "TTF target "+ganttFmtDate(targetDate) : "No intake meeting date yet"))}</span></div>
       ${extraInfoHtml}
       ${ganttRowDisclosureHtml(kickoff)}
     </div>
