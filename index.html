@@ -1680,36 +1680,43 @@
   .sla-subchip-label { font-size: 10.5px; color: var(--text-muted); font-weight: 600; }
   .modal-section-title { font-size: 12.5px; font-weight: 500; margin: 22px 0 8px; }
   .modal-section-title:first-child { margin-top: 0; }
-  /* Diagrama de flujo del modal (ver renderFlowMilestones()) — reemplaza la barra comprimida del
-     Gantt del dashboard SOLO aqui, con todos los milestones reales como pasos conectados. */
-  .flow-diagram { display: flex; align-items: stretch; flex-wrap: wrap; gap: 0 0; margin: 0 0 4px; }
-  .flow-step { display: flex; align-items: center; }
-  .flow-box { border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 11px; min-width: 108px; background: var(--surface-2); }
-  .flow-box.done { border-color: var(--brand); background: rgba(var(--brand-rgb),0.12); }
-  .flow-box.pending { border-style: dashed; opacity: .55; }
-  .flow-box.warn { border-color: var(--warning); background: rgba(211,163,85,0.14); opacity: 1; border-style: solid; }
-  .flow-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
-  .flow-box.done .flow-label { color: var(--brand); }
-  .flow-box.warn .flow-label { color: var(--warning); }
-  .flow-date { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-top: 2px; white-space: nowrap; }
-  .flow-box.pending .flow-date { color: var(--text-muted); font-weight: 500; font-style: italic; }
-  .flow-subnote { font-size: 10px; color: var(--text-muted); margin-top: 3px; max-width: 140px; }
-  .flow-connector { width: 18px; height: 2px; background: var(--border); flex: none; }
-  .flow-connector.done { background: var(--brand); }
-  /* Nicolas, tras la v1: "un Gantt CON diagrama de flujo, usando la vista de calendario tal cual
-     como esta en el gantt de overview del dashboard" — la v1 no tenia ningun eje de calendario
-     real. .flow-gantt envuelve ese eje real (mismas clases gantt-cal-axis/gantt-cal-gridlines/
-     gantt-cal-tick/gantt-cal-today-line que ya pinta ganttRenderAxis() para el Gantt de verdad, ver
-     flowCalendarFor()) arriba, como referencia de EN QUE EPOCA cae cada milestone, y el flujo de
-     cajas conectadas (.flow-diagram) debajo — las cajas NO se posicionan pixel-a-pixel sobre el
-     eje (2 rondas atras eso mismo termino con las cajas encimadas cuando 2 fechas reales caian con
-     pocos dias de diferencia, ilegible) — cada uno resuelve una pregunta distinta: el eje de arriba
-     dice "cuando", las cajas de abajo dicen "en que orden y que tan lejos" del camino completo. */
-  .flow-gantt { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); padding: 10px 12px 12px; margin-bottom: 4px; }
-  .flow-calendar-strip { overflow-x: auto; margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
-  .flow-calendar-strip-inner { position: relative; min-width: 640px; height: 20px; }
-  .flow-gantt .gantt-cal-axis { margin: 0; height: 15px; border-bottom: none; padding-bottom: 0; }
-  .flow-gantt .gantt-cal-gridlines { left: 0; right: 0; height: 20px; }
+  /* Diagrama de flujo del modal (ver computeFlowSteps()/renderFlowMilestones()) — un mini-Gantt
+     de VERDAD, una FILA por milestone real del req, calcado del ejemplo que Nicolas mando (ClickUp:
+     una fila por tarea, barra posicionada por fecha real de calendario, conector recto entre el fin
+     de una fila y el inicio de la siguiente). Reemplaza la version anterior (pasos conectados en
+     una sola linea horizontal) — cada fila tiene SU PROPIO carril vertical, asi que 2 fechas reales
+     del mismo dia (el bug de rondas atras: cajas encimadas cuando se intento posicionar todo en una
+     sola fila) nunca colisionan sin importar que tan cerca caigan en el eje horizontal. */
+  .flow-gantt { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); padding: 10px 12px 12px; margin-bottom: 4px; overflow-x: auto; }
+  .flow-gantt-inner { position: relative; min-width: 640px; }
+  .flow-weekend-bands { position: absolute; top: 0; bottom: 0; left: 150px; right: 0; pointer-events: none; z-index: 0; }
+  .flow-weekend-band { position: absolute; top: 0; bottom: 0; background: rgba(127,127,127,0.08); }
+  .flow-gantt .gantt-cal-axis { margin: 0 0 4px 150px; height: 15px; border-bottom: none; padding-bottom: 0; z-index: 2; }
+  .flow-gantt .gantt-cal-gridlines { left: 150px; right: 0; top: 0; bottom: 0; z-index: 1; }
+  .flow-rows { position: relative; z-index: 2; }
+  .flow-row { display: flex; align-items: stretch; height: 34px; }
+  .flow-row-label { width: 150px; flex: none; padding-right: 10px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+  .flow-row-name { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .flow-row.done .flow-row-name, .flow-row.ongoing .flow-row-name { color: var(--text-primary); }
+  .flow-row.warn .flow-row-name { color: var(--warning); }
+  .flow-row-date { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .flow-row.pending .flow-row-date { font-style: italic; }
+  .flow-subnote { font-size: 9.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .flow-row-track { position: relative; flex: 1; overflow: visible; }
+  .flow-bar { position: absolute; top: 50%; height: 18px; margin-top: -9px; border-radius: 4px; min-width: 6px; }
+  .flow-bar.ongoing { border-right: 2px dashed rgba(255,255,255,0.55); }
+  /* Diamante = un milestone puntual (Kickoff, Placed, un desenlace) en vez de una duracion — mismo
+     patron ya usado por .gantt-milestone en el Gantt real del dashboard, no uno nuevo inventado. */
+  .flow-milestone-mark { position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; margin-left: -4.5px; z-index: 3; }
+  .flow-milestone-shape { display: block; width: 100%; height: 100%; border-radius: 1px; transform: rotate(45deg); }
+  .flow-milestone-mark.pending .flow-milestone-shape { background: transparent; border: 1.5px dashed var(--text-muted); }
+  .flow-milestone-mark.undocumented .flow-milestone-shape { background: var(--text-muted); opacity: .5; }
+  .flow-row.undocumented .flow-row-date { font-style: italic; opacity: .8; }
+  /* El conector vive DENTRO de la fila anterior y se extiende exactamente 1 altura de fila hacia
+     abajo (34px) — como las filas quedan pegadas sin espacio entre si, esto siempre aterriza justo
+     en el centro vertical de la fila siguiente, sin necesitar coordenadas globales calculadas en JS. */
+  .flow-connector-v { position: absolute; top: 50%; width: 2px; height: 34px; z-index: 1; background: var(--border); }
+  .flow-connector-v.done { background: var(--brand); opacity: .5; }
   /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
      texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
      menu es una lista simple debajo, cada item con su propio punto de color via STAGE_COLORS. */
@@ -7423,80 +7430,108 @@ function flowCalendarFor(p){
   const cal = ganttBuildCalendar(win);
   return {win, cal};
 }
-function flowStepHtml(step){
-  const done = !!step.date;
-  const dateLine = done
-    ? `${ganttFmtDate(parseD(step.date))}${step.time ? ` · ${step.time}` : ""}`
-    : (step.pendingNote || "Pending");
-  return `<div class="flow-step">
-    <div class="flow-box${done ? " done" : " pending"}${step.warn ? " warn" : ""}">
-      <div class="flow-label">${escapeHtml(step.label)}</div>
-      <div class="flow-date">${escapeHtml(dateLine)}</div>
+// Conector recto entre el final visual de ESTA fila y el inicio de la siguiente — vive DENTRO del
+// carril de esta fila y se estira exactamente 1 alto de fila (34px) hacia abajo, asi que aterriza
+// solo en el centro de la fila de abajo sin necesitar coordenadas globales calculadas aparte.
+function flowConnectorHtml(pct, done){
+  return `<div class="flow-connector-v${done?" done":""}" style="left:${pct}%;"></div>`;
+}
+function flowRowWrap(step, state, trackHtml, dateLine){
+  return `<div class="flow-row ${state}${step.warn?" warn":""}">
+    <div class="flow-row-label">
+      <div class="flow-row-name">${escapeHtml(step.label)}</div>
+      <div class="flow-row-date">${escapeHtml(dateLine)}</div>
       ${step.subNote ? `<div class="flow-subnote">${escapeHtml(step.subNote)}</div>` : ""}
     </div>
-    <div class="flow-connector${done ? " done" : ""}"></div>
+    <div class="flow-row-track">${trackHtml}</div>
   </div>`;
+}
+function flowBarTrackHtml(cal, start, end, color, state, connectPct, hasNext){
+  const p1 = cal.pctOf(start), p2 = cal.pctOf(end);
+  const left = Math.min(p1,p2), width = Math.max(0.4, Math.abs(p2-p1));
+  let html = `<div class="flow-bar ${state}" style="left:${left}%; width:${width}%; background:${color};"></div>`;
+  if(hasNext) html += flowConnectorHtml(connectPct, state!=="pending");
+  return html;
+}
+// Busca el siguiente paso con fecha real conocida despues del indice i — includeOutcome=true para
+// encontrar el LIMITE final de una etapa que si arranco (un Cancelled a mitad de Sourcing SI debe
+// terminar su barra en la fecha de cancelacion, no seguir corriendo hasta hoy); includeOutcome=
+// false para decidir si un paso SIN fecha propia ya quedo atras en el camino normal (el desenlace
+// no prueba que un paso normal anterior de verdad paso por ahi, solo que el proceso termino).
+function nextKnownIndex(steps, i, includeOutcome){
+  for(let j=i+1;j<steps.length;j++){
+    if(steps[j].date && (includeOutcome || steps[j].key!=="outcome")) return j;
+  }
+  return -1;
+}
+function flowMilestoneTrackHtml(cal, date, color, state, connectPct, hasNext){
+  const pct = date ? cal.pctOf(date) : connectPct;
+  let html = `<div class="flow-milestone-mark ${state}" style="left:${pct}%;">
+    <span class="flow-milestone-shape" style="${color?`background:${color};`:""}"></span>
+  </div>`;
+  if(hasNext) html += flowConnectorHtml(pct, state!=="pending");
+  return html;
 }
 function renderFlowMilestones(p){
   if(!p.kickoff) return "";
   const steps = [];
   steps.push({
-    key:"kickoff", label:"Kickoff", date:p.kickoff,
+    key:"kickoff", label:"Kickoff", date:p.kickoff, color:STAGE_COLORS["Kickoff"],
     time: findActivityTime(p, t=>t.includes("kicked off")),
   });
   const acceptedDateStr = p.handoffFrom ? p.handoffAcceptedDate : p.recruiterAcceptedDate;
   steps.push({
     key:"accepted", label: p.handoffFrom ? `Handoff Accepted (from ${p.handoffFrom})` : "Assignment Accepted",
-    date: acceptedDateStr,
+    date: acceptedDateStr, color:STAGE_COLORS["Kickoff"],
     time: findActivityTime(p, t=>t.includes("Accepted the assignment") || t.includes("Handoff accepted")),
     pendingNote: `Waiting on ${p.recruiter||"the recruiter"} to accept`,
   });
   if(p.intakeWaivedReason){
     steps.push({
-      key:"intake", label:"Intake Meeting Waived",
+      key:"intake", label:"Intake Meeting Waived", color:STAGE_COLORS["Intake Meeting Waived"],
       date: p.intakeWaivedDate || findStatusTransitionDate(p,"Intake Meeting Waived"),
       subNote: p.intakeWaivedReason.length > 60 ? p.intakeWaivedReason.slice(0,57)+"…" : p.intakeWaivedReason,
     });
   } else {
     steps.push({
-      key:"intakeReq", label:"Intake Meeting Requested", date:p.intakeRequestedDate,
+      key:"intakeReq", label:"Intake Meeting Requested", date:p.intakeRequestedDate, color:STAGE_COLORS["Intake Meeting Requested"],
       time: findActivityTime(p, t=>t.includes("to Intake Meeting Requested")),
       pendingNote:"Not requested yet",
     });
     steps.push({
-      key:"intakeHeld", label:"Intake Meeting Held", date:p.intake,
+      key:"intakeHeld", label:"Intake Meeting Held", date:p.intake, color:STAGE_COLORS["Intake Pending"],
       time: findActivityTime(p, t=>t.includes("to Intake Held") || t.includes("to Intake Pending")),
       pendingNote: p.intakeRequestedDate ? "Waiting on the hiring manager" : "Not requested yet",
     });
   }
   const sourcingDate = findStatusTransitionDate(p,"Sourcing") || (p.intakeWaivedReason ? p.intakeWaivedDate : p.intake);
   steps.push({
-    key:"sourcing", label:"Sourcing/Screening", date: sourcingDate,
+    key:"sourcing", label:"Sourcing/Screening", date: sourcingDate, color:STAGE_COLORS["Sourcing"],
     time: findActivityTime(p, t=>t.includes("to Sourcing")),
     pendingNote:"Intake not wrapped up yet",
   });
   steps.push({
-    key:"submitted", label:"Submitted", date:p.submit,
+    key:"submitted", label:"Submitted", date:p.submit, color:STAGE_COLORS["Submitted"],
     time: findActivityTime(p, t=>t.includes("to Submitted")),
     pendingNote:"No batch logged yet",
   });
   steps.push({
-    key:"clientInterview", label:"Client Interview", date: findStatusTransitionDate(p,"Client Interview"),
+    key:"clientInterview", label:"Client Interview", date: findStatusTransitionDate(p,"Client Interview"), color:STAGE_COLORS["Client Interview"],
     time: findActivityTime(p, t=>t.includes("to Client Interview")),
     pendingNote:"No candidate advanced yet",
   });
   steps.push({
-    key:"offerRequest", label:"Offer Request", date:p.offerRequestDate,
+    key:"offerRequest", label:"Offer Request", date:p.offerRequestDate, color:STAGE_COLORS["Offer Request"],
     time: findActivityTime(p, t=>t.includes("to Offer Request")),
     pendingNote:"Not there yet",
   });
   steps.push({
-    key:"filled", label:"Filled", date:p.fill,
+    key:"filled", label:"Filled", date:p.fill, color:STAGE_COLORS["Filled"],
     time: findActivityTime(p, t=>t.includes("to Filled")),
     pendingNote:"Offer not accepted yet",
   });
   steps.push({
-    key:"hired", label:"Placed (Start Date)", date:p.hire,
+    key:"hired", label:"Placed (Start Date)", date:p.hire, milestone:true, color:STAGE_COLORS["Hired"],
     time: findActivityTime(p, t=>t.includes("to Placed") || t.includes("to Hired")),
     pendingNote:"Start Date hasn't arrived yet",
   });
@@ -7505,21 +7540,85 @@ function renderFlowMilestones(p){
   // normal sigue cuando en realidad no.
   if(p.status==="Cancelled" || p.status==="Filled (Internal Hire)"){
     const closeStr = findStatusTransitionDate(p, p.status);
-    steps.push({key:"outcome", label: statusLabel(p.status), date: closeStr, warn:true});
+    steps.push({key:"outcome", label: statusLabel(p.status), date: closeStr, milestone:true, warn:true, color:STAGE_COLORS[p.status]});
   } else if(SLA_PAUSING_STATUSES.includes(p.status)){
     const pauseInfo = computeSlaPauseInfo(p);
     const pausedStr = pauseInfo.pausedSinceDate ? pauseInfo.pausedSinceDate.toISOString().slice(0,10) : null;
-    steps.push({key:"outcome", label: statusLabel(p.status), date: pausedStr, warn:true, subNote:"Paused — clock frozen"});
+    steps.push({key:"outcome", label: statusLabel(p.status), date: pausedStr, milestone:true, warn:true, subNote:"Paused — clock frozen", color:STAGE_COLORS[p.status]});
   }
+
+  const {cal} = flowCalendarFor(p);
+  const today = new Date();
+  const todayPct = (today>=cal.rangeStart && today<=cal.rangeEnd) ? cal.pctOf(today) : 100;
+
+  // Cada fila de DURACION (todas menos Placed/el desenlace) muestra el tiempo que el req paso EN
+  // esa etapa: la barra va de la fecha propia del paso hasta la fecha del SIGUIENTE checkpoint real
+  // conocido (nunca al reves) — asi la barra que se ve "en curso" bajo una fila SIEMPRE corresponde
+  // a la etapa que esa fila nombra (bug real encontrado probando con datos sinteticos: antes la
+  // barra en curso aparecia mal, bajo la fila del SIGUIENTE paso en vez del actual). Si un paso
+  // intermedio nunca quedo logueado (ej. Client Interview sin fecha propia) pero un paso posterior SI
+  // tiene fecha real, el paso anterior simplemente extiende su barra hasta ese siguiente checkpoint —
+  // el paso sin fecha se marca "undocumented" (paso silenciosamente, sin hora exacta), nunca "pending".
+  const terminalOrPaused = TERMINAL.includes(p.status) || SLA_PAUSING_STATUSES.includes(p.status);
+  const endPoint = ganttEndPoint(p); // hoy, o el punto real donde el reloj se congelo (Cancelled/On Hold/etc.)
+  let lastKnownDate = null;
+  const rowsHtml = steps.map((step,i)=>{
+    const hasNext = i < steps.length-1;
+    const stepDate = step.date ? parseD(step.date) : null;
+
+    if(stepDate){
+      const dateLine = `${ganttFmtDate(stepDate)}${step.time ? ` · ${step.time}` : ""}`;
+      if(step.milestone){
+        lastKnownDate = stepDate;
+        return flowRowWrap(step, "done", flowMilestoneTrackHtml(cal, stepDate, step.color, "done", cal.pctOf(stepDate), hasNext), dateLine);
+      }
+      const nextIdx = nextKnownIndex(steps, i, true);
+      const endDate = nextIdx>=0 ? parseD(steps[nextIdx].date) : (terminalOrPaused ? endPoint : null);
+      if(endDate){
+        // lastKnownDate queda en el LIMITE de esta barra (donde termina, no donde empieza) — un
+        // paso indocumentado que viene despues se ubica ahi, no al inicio de esta barra (real
+        // ajuste visual: antes el diamante de "sin fecha exacta" quedaba encima del arranque de
+        // Submitted, insinuando que Client Interview paso ANTES de que se sometiera el batch).
+        lastKnownDate = endDate;
+        return flowRowWrap(step, "done", flowBarTrackHtml(cal, stepDate, endDate, step.color||"var(--seq-400)", "done", cal.pctOf(endDate), hasNext), dateLine);
+      }
+      // Sin ningun checkpoint posterior conocido y el proceso sigue activo -> esta es la etapa
+      // REALMENTE en curso ahora mismo (solo puede haber una, por construccion).
+      lastKnownDate = endPoint;
+      return flowRowWrap(step, "ongoing", flowBarTrackHtml(cal, stepDate, endPoint, step.color||"var(--seq-400)", "ongoing", todayPct, hasNext), dateLine);
+    }
+
+    // Sin fecha propia: ¿algun paso posterior (que no sea el desenlace especial) SI tiene fecha
+    // real? Si es asi, este paso ya quedo atras sin quedar registrado — nunca lo contrario (el
+    // desenlace no prueba que un paso normal anterior de verdad ocurrio).
+    const passedSilently = nextKnownIndex(steps, i, false) >= 0;
+    if(passedSilently && lastKnownDate){
+      return flowRowWrap(step, "undocumented", flowMilestoneTrackHtml(cal, lastKnownDate, "var(--text-muted)", "undocumented", cal.pctOf(lastKnownDate), hasNext), "No exact date logged");
+    }
+    const dateLine = step.pendingNote || "Pending";
+    return flowRowWrap(step, "pending", flowMilestoneTrackHtml(cal, null, null, "pending", todayPct, hasNext), dateLine);
+  }).join("");
+
+  // Bandas de fin de semana — mismo cal de arriba, calculadas aqui de una (no requieren el DOM
+  // insertado todavia, a diferencia del eje de meses que si necesita sus elementos ya en el DOM).
+  let weekendHtml = "";
+  let d = new Date(cal.rangeStart);
+  while(d <= cal.rangeEnd){
+    if(d.getDay()===0 || d.getDay()===6){
+      const p1 = cal.pctOf(d), p2 = cal.pctOf(ganttAddDays(d,1));
+      weekendHtml += `<div class="flow-weekend-band" style="left:${p1}%; width:${Math.max(0,p2-p1)}%;"></div>`;
+    }
+    d = ganttAddDays(d,1);
+  }
+
   return `
     <div class="modal-section-title">Requisition Flow</div>
-    <div class="flow-gantt">
-      <div class="flow-calendar-strip"><div class="flow-calendar-strip-inner">
-        <div class="gantt-cal-gridlines" id="modalFlowGridlines"></div>
-        <div class="gantt-cal-axis" id="modalFlowAxis"></div>
-      </div></div>
-      <div class="flow-diagram">${steps.map(flowStepHtml).join("")}</div>
-    </div>`;
+    <div class="flow-gantt"><div class="flow-gantt-inner">
+      <div class="flow-weekend-bands">${weekendHtml}</div>
+      <div class="gantt-cal-gridlines" id="modalFlowGridlines"></div>
+      <div class="gantt-cal-axis" id="modalFlowAxis"></div>
+      <div class="flow-rows">${rowsHtml}</div>
+    </div></div>`;
 }
 function renderDetailModal(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
