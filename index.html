@@ -5710,19 +5710,19 @@ function renderGanttGroup(key){
     <p class="gantt-quarter-note">Showing <b>${win.label}</b>${summaryScope==="all" ? " — this view opens here by default" : ""}.</p>
     <div class="gantt-legend">
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--neutral-strong);"></span>Real date — marks exactly when the stage next to it actually started</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>${escapeHtml(statusLabel("Kickoff"))} — recruiting work on this requisition started</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-300);"></span>Intake — waiting on or wrapping up the hiring manager intake meeting</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-400);"></span>${escapeHtml(statusLabel("Sourcing"))} — actively sourcing and screening candidates</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>${escapeHtml(statusLabel("Submitted"))} — candidates submitted, waiting on the hiring manager</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>${escapeHtml(statusLabel("Client Interview"))} — candidates interviewing with the client</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>${escapeHtml(statusLabel("Offer Request"))} — hiring manager wants to move forward with an offer</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--stage-blue);"></span>${escapeHtml(statusLabel("Filled"))} — offer accepted, waiting on the real Start Date</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>${escapeHtml(statusLabel("Kickoff"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-300);"></span>Intake Meeting (Requested & Held)</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-400);"></span>${escapeHtml(statusLabel("Sourcing"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>${escapeHtml(statusLabel("Submitted"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>${escapeHtml(statusLabel("Client Interview"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>${escapeHtml(statusLabel("Offer Request"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--stage-blue);"></span>${escapeHtml(statusLabel("Filled"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected Time To Fill (internal goal)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--good);"></span>Projected Time To Hire (internal goal)</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Placed</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Placed (Hired)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Cancelled</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("Filled (Internal Hire)"))} — client filled it internally, not a Cornerstone placement</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("On Hold"))} — paused, clock frozen (covers both On Hold reasons)</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--neutral);"></span>On Hold (On Hold & On Hold — Internal Candidates)</div>
     </div>
     <div class="gantt-calendar">
       <div class="gantt-calendar-inner">
