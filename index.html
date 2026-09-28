@@ -3631,7 +3631,14 @@ function nextStepRowHtml(p, isView){
 // distintos (exito real vs. no-progreso), nunca por variedad visual sola.
 const STAGE_COLORS = {
   "Kickoff": "var(--seq-100)",
-  "Intake Meeting Requested": "var(--seq-200)",
+  // Nicolas, 2026-09-28, viendo la leyenda real: "el overview del Gantt solo dejemoslo con los
+  // estados... mas generales" — quito "Intake Meeting Requested" como color propio (era
+  // --seq-200) y lo fusiono con "Intake Pending"/"Intake Meeting Waived" en uno solo. Las fechas
+  // reales de cada tramo (ganttSegments()) no cambian — el limite real entre "se pidio la
+  // reunion" y "ya se tuvo/waived" sigue existiendo en los datos y en el tooltip de cada tramo —
+  // solo dejan de tener 2 colores/leyendas DISTINTOS para lo que, visto de lejos, es la misma
+  // etapa general ("todavia organizando el intake").
+  "Intake Meeting Requested": "var(--seq-300)",
   "Intake Pending": "var(--seq-300)",
   // Mismo tono que Intake Pending, a proposito — es el mismo punto real del proceso llegado por
   // otro camino, no una etapa distinta (ver STATUS_ORDER).
@@ -5686,21 +5693,20 @@ function renderGanttGroup(key){
     </div>
     <p class="gantt-quarter-note">Showing <b>${win.label}</b>${summaryScope==="all" ? " — this view opens here by default" : ""}.</p>
     <div class="gantt-legend">
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>${escapeHtml(statusLabel("Kickoff"))}</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-200);"></span>${escapeHtml(statusLabel("Intake Meeting Requested"))}</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-300);"></span>${escapeHtml(statusLabel("Intake Pending"))}</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-400);"></span>${escapeHtml(statusLabel("Sourcing"))}</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>${escapeHtml(statusLabel("Submitted"))}</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>${escapeHtml(statusLabel("Client Interview"))}</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>${escapeHtml(statusLabel("Offer Request"))}</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--neutral-strong);"></span>Real date — marks exactly when the stage next to it actually started</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>${escapeHtml(statusLabel("Kickoff"))} — recruiting work on this requisition started</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-300);"></span>Intake — waiting on or wrapping up the hiring manager intake meeting</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-400);"></span>${escapeHtml(statusLabel("Sourcing"))} — actively sourcing and screening candidates</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>${escapeHtml(statusLabel("Submitted"))} — candidates submitted, waiting on the hiring manager</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>${escapeHtml(statusLabel("Client Interview"))} — candidates interviewing with the client</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--warning);"></span>${escapeHtml(statusLabel("Offer Request"))} — hiring manager wants to move forward with an offer</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--stage-blue);"></span>${escapeHtml(statusLabel("Filled"))} — offer accepted, waiting on the real Start Date</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond"></span>Real date a stage began</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected Time To Fill (internal goal)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--good);"></span>Projected Time To Hire (internal goal)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Placed</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Cancelled</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("Filled (Internal Hire)"))} — client hired without an Irth placement</div>
-      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("On Hold"))} — paused, clock frozen</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("Filled (Internal Hire)"))} — client filled it internally, not a Cornerstone placement</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("On Hold"))} — paused, clock frozen (covers both On Hold reasons)</div>
     </div>
     <div class="gantt-calendar">
       <div class="gantt-calendar-inner">
@@ -6016,8 +6022,8 @@ function renderKpis(){
   const otherPositions = [...onHoldNow, ...closedElsewhere];
   const otherStat = {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
     color:"var(--neutral)", desc: scopeWin
-      ? `Paused (On Hold) right now (0 if ${scopeWin.label} is a past period — see Active's note), plus any that actually closed without an Irth placement during this period (lost/Cancelled, or filled by the client another way/Filled Internal Hire, wherever they were assigned). Not active.`
-      : "Paused (On Hold), or closed out without an Irth placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active."};
+      ? `Paused (On Hold) right now (0 if ${scopeWin.label} is a past period — see Active's note), plus any that actually closed without a Cornerstone placement during this period (lost/Cancelled, or filled by the client another way/Filled Internal Hire, wherever they were assigned). Not active.`
+      : "Paused (On Hold), or closed out without a Cornerstone placement — either lost (Cancelled) or filled by the client another way (Filled Internal Hire). Not active."};
   // Nicolas, 2026-09-27, round 6: "eso es lo que nos toca explicar, a traves de añadir una
   // tarjeta nueva" — de las que cuentan arriba como Active/Potential/Filled/On Hold (siempre
   // "ahora mismo"), cuantas en realidad NO se asignaron durante este periodo especifico, sino
