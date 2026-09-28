@@ -4379,7 +4379,7 @@ function computeCompletion(p){
   const held = parseD(p.intake);
   const today = new Date();
 
-  let step1 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.acceptRequest};
+  let step1 = {status:"none", elapsed:null, target:COMPLETION_TARGETS.acceptRequest, overdue:false};
   if(kickoff){
     // Si el intake quedo waived, nunca iba a existir un "Intake Requested Date" real — pedirlo
     // no aplicaba. En ese caso el paso se completa con solo aceptar la asignacion
@@ -4387,7 +4387,16 @@ function computeCompletion(p){
     // "today" igual que siempre, para que de verdad se marque overdue si nunca se acepto.
     const step1Done = requested || (p.intakeWaivedReason ? parseD(p.recruiterAcceptedDate) : null);
     const elapsed = bizDaysBetween(kickoff, step1Done || today);
-    step1 = {status: elapsed<=COMPLETION_TARGETS.acceptRequest ? "within" : "out", elapsed, target:COMPLETION_TARGETS.acceptRequest};
+    // BUG REAL 2026-09-28 (Nicolas: "aunque David ya actualizo, siguen saliendo en needs
+    // attention"): `status` por si solo queda "out" PARA SIEMPRE en cuanto el paso tardo mas del
+    // target, sin importar que ya se haya completado despues — nunca revisaba si step1Done seguia
+    // sin existir. SE-010/011/009/013 ya tenian su Intake Requested/Held logueados (el paso SI se
+    // hizo, solo tardo 2 dias habiles en vez de 1) pero seguian apareciendo en Needs Attention como
+    // si el reclutador todavia no hubiera hecho nada. `overdue` (mismo patron ya usado en
+    // step2/step3/stepHandoff: !done && fuera de target) es lo que de verdad significa "todavia
+    // accionable" — status se deja intacto para Requisition Completion, que SI debe seguir
+    // mostrando el miss historico real, incluso ya resuelto.
+    step1 = {status: elapsed<=COMPLETION_TARGETS.acceptRequest ? "within" : "out", elapsed, target:COMPLETION_TARGETS.acceptRequest, overdue: !step1Done && elapsed>COMPLETION_TARGETS.acceptRequest};
   }
 
   // stepAccept / stepIntakeRequest: la misma ventana de 1 dia habil de step1 arriba, pero
@@ -4478,7 +4487,7 @@ function completionFlags(p){
   // Igual que en la tarjeta de Requisition Completion: una vez la req paso por Handoff, la
   // aceptacion ORIGINAL (step1) ya no es lo que hay que vigilar — stepHandoff la reemplaza por
   // completo, no se muestran los dos.
-  if(!p.handoffFrom && c.step1.status==="out") flags.push(`🚩 ${p.recruiterAcceptedDate ? "Request Intake Meeting" : "Accept Requisition & Request Intake"}: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
+  if(!p.handoffFrom && c.step1.overdue) flags.push(`🚩 ${p.recruiterAcceptedDate ? "Request Intake Meeting" : "Accept Requisition & Request Intake"}: ${c.step1.elapsed} business day${c.step1.elapsed===1?"":"s"} (target ${c.step1.target})`);
   if(p.handoffFrom){
     if(c.stepHandoff.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Handoff context hasn't been confirmed, ${c.stepHandoff.elapsed} business days since the handoff (target ${c.stepHandoff.target})`);
   } else {
@@ -7807,7 +7816,7 @@ function renderDetailModal(){
     const alerts = [];
     // Igual que completionCards/completionFlags: una vez la req paso por Handoff, step1 (la
     // aceptacion ORIGINAL) ya no es lo que hay que vigilar, stepHandoff lo reemplaza por completo.
-    if(!p.handoffFrom && c.step1.status==="out") alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
+    if(!p.handoffFrom && c.step1.overdue) alerts.push({tier:"tier-red", text:`Accepting the assignment and requesting the intake meeting is now ${c.step1.elapsed} business days overdue (target ${c.step1.target}).`});
     if(p.handoffFrom){
       if(c.stepHandoff.overdue) alerts.push({tier:"tier-red", text:`Handoff context hasn't been confirmed yet, ${c.stepHandoff.elapsed} business days since the handoff (target ${c.stepHandoff.target}). Please escalate to ${ESCALATION_CONTACT}.`});
     } else {
