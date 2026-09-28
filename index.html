@@ -7791,7 +7791,7 @@ function renderDetailModal(){
     </div>`;
 
   document.getElementById("modalFacts").innerHTML =
-    renderFlowMilestones(p) +
+    (activeDetailFromDashboard ? renderFlowMilestones(p) : "") +
     factsSection("", positionFacts) +
     basicInfoEditHtml +
     urlFactsHtml +
@@ -7803,7 +7803,10 @@ function renderDetailModal(){
   // de arriba — ganttRenderAxis() escribe por id de elemento (#modalFlowAxis/Gridlines, ver
   // renderFlowMilestones()), que todavia no existen en el DOM mientras se arma el string de
   // innerHTML. Mismo patron que renderGanttGroup() ya usa para el Gantt del dashboard.
-  if(p.kickoff) ganttRenderAxis(flowCalendarFor(p).cal, "month", "modalFlowAxis", "modalFlowGridlines");
+  // El diagrama de Requisition Flow SOLO vive en el modal flotante que se abre desde el Gantt del
+  // Dashboard/Overview (activeDetailFromDashboard=true) — en Tracking (panel acoplado) no se
+  // muestra, para no duplicar/sobrecargar esa vista. Decision explicita de Nicolas.
+  if(activeDetailFromDashboard && p.kickoff) ganttRenderAxis(flowCalendarFor(p).cal, "month", "modalFlowAxis", "modalFlowGridlines");
   // Navegacion entre hermanas de Headcount Group — SIEMPRE conectada (nunca dentro del if(!isView)
   // de abajo), preserva el mismo modo/tamaño con el que ya estaba abierto este modal (view/edit,
   // agrandado o no) en vez de resetearlo.
