@@ -1756,10 +1756,16 @@
   .flow-row-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .flow-row.done .flow-row-name, .flow-row.ongoing .flow-row-name { color: var(--text-primary); }
   .flow-row.warn .flow-row-name { color: var(--warning); }
-  /* Mismo principio de color que el Gantt del overview (STAGE_COLORS) — un punto solido para lo
-     que ya paso, hueco/punteado para lo que todavia no, gris tenue para "paso pero sin fecha
-     exacta logueada" (mismos 3 estados que .flow-milestone-mark, ver flowRowDotHtml()). */
-  .flow-row-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  /* Nicolas: "los estados... no corresponden... nisiquiera las formas que se le asignaron a cada
+     estado" — revisando la leyenda REAL (renderGanttGroup()): las etapas de proceso usan
+     .gantt-legend-swatch (cuadrado redondeado), no diamante — el diamante ahi es SOLO para 2
+     desenlaces terminales (Placed/Cancelled) y para el marcador neutral "Real date". Mismo
+     tamaño/forma exacta de cada uno aqui (nunca el circulo que habia antes, ni una version
+     distinta inventada) — .diamond la anula para esas filas puntuales (ver flowRowDotHtml()).
+     Mismo principio de color (STAGE_COLORS): solido para lo que ya paso, hueco/punteado para lo
+     que todavia no, gris tenue para "paso pero sin fecha exacta logueada". */
+  .flow-row-dot { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .flow-row-dot.diamond { width: 7px; height: 7px; border-radius: 1px; transform: rotate(45deg); }
   .flow-row-dot.pending { background: transparent; border: 1.5px dashed var(--text-muted); }
   .flow-row-dot.undocumented { background: var(--text-muted); opacity: .5; }
   .flow-row-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -7539,13 +7545,16 @@ function flowConnectorHtml(pct, done){
 }
 // Nicolas: "en vez de poner los estados ahi a la izquierda usa el mismo principio del gantt de
 // overview que los estados tienen sus puntos, diamantes, etc con colores" — el punto de la
-// etiqueta usa EXACTAMENTE el mismo color que ya pinta la barra/diamante de esa fila (step.color,
-// STAGE_COLORS), y el mismo lenguaje visual de pending/undocumented (hueco punteado / gris tenue)
-// que .flow-milestone-mark ya usa, nunca uno nuevo inventado.
+// etiqueta usa EXACTAMENTE el mismo color Y LA MISMA FORMA que la leyenda real (renderGanttGroup()):
+// .gantt-legend-swatch (cuadrado redondeado) para las etapas de PROCESO (Kickoff...Filled), y
+// .gantt-legend-diamond solo para los 2 desenlaces terminales que en verdad son diamante ahi
+// (Placed/Cancelled — On Hold y Filled Internal Hire NO, ver square:true en el paso "outcome").
+// Nunca un circulo (lo que habia antes) ni una forma inventada aparte.
 function flowRowDotHtml(step, state){
-  if(state === "pending") return `<span class="flow-row-dot pending"></span>`;
-  if(state === "undocumented") return `<span class="flow-row-dot undocumented"></span>`;
-  return `<span class="flow-row-dot" style="background:${step.color||"var(--seq-400)"};"></span>`;
+  const shapeClass = (step.milestone && !step.square) ? "diamond" : "";
+  if(state === "pending") return `<span class="flow-row-dot ${shapeClass} pending"></span>`;
+  if(state === "undocumented") return `<span class="flow-row-dot ${shapeClass} undocumented"></span>`;
+  return `<span class="flow-row-dot ${shapeClass}" style="background:${step.color||"var(--seq-400)"};"></span>`;
 }
 function flowRowWrap(step, state, trackHtml, dateLine){
   return `<div class="flow-row ${state}${step.warn?" warn":""}">
@@ -7657,7 +7666,10 @@ function renderFlowMilestones(p){
   } else if(SLA_PAUSING_STATUSES.includes(p.status)){
     const pauseInfo = computeSlaPauseInfo(p);
     const pausedStr = pauseInfo.pausedSinceDate ? pauseInfo.pausedSinceDate.toISOString().slice(0,10) : null;
-    steps.push({key:"outcome", label: statusLabel(p.status), date: pausedStr, milestone:true, warn:true, subNote:"Paused — clock frozen", color:STAGE_COLORS[p.status]});
+    // On Hold es "milestone" (un punto, no una duracion que siga corriendo) pero la leyenda real
+    // (renderGanttGroup()) lo pinta con CUADRADO (.gantt-legend-swatch), no diamante — square:true
+    // fuerza esa forma aqui tambien (ver flowRowDotHtml()), nunca inventar una distinta.
+    steps.push({key:"outcome", label: statusLabel(p.status), date: pausedStr, milestone:true, square:true, warn:true, subNote:"Paused — clock frozen", color:STAGE_COLORS[p.status]});
   }
 
   const {cal} = flowCalendarFor(p);
