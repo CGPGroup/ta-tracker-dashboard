@@ -11302,7 +11302,12 @@ function startAutoRefresh(){
     // cada 2 minutos. El proxy publico de solo lectura ya trae los mismos datos sin necesitar
     // ninguna sesion.
     try {
-      if(pinModeActive){ if(await tryLoadPublicSnapshot()) renderAll(); }
+      // BUG REAL (David, 2026-09-29): tryLoadPublicSnapshot() RECONSTRUYE POSITIONS desde cero en
+      // cada tick — batchCandidates nunca viene en ese snapshot publico a proposito (ver
+      // mergeBatchCandidates()), asi que sin volver a pedirlos aqui, cualquier candidato que un
+      // reclutador en PIN mode ya veia (mergeado al hacer login) desaparecia solo, en silencio,
+      // cada 2 minutos — el propio auto-refresh se lo borraba de encima sin que nadie tocara nada.
+      if(pinModeActive){ if(await tryLoadPublicSnapshot()){ await pinLoadMyCandidatesAndMerge(); renderAll(); } }
       else await loadFromGraph();
     } catch(err){ console.error("Auto-refresh failed:", err); }
   }, 120000);
