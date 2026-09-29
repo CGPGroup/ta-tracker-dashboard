@@ -1652,6 +1652,13 @@
     flex: 1 1 auto; min-height: 140px; overflow-y: auto; margin: 10px 0 14px;
   }
   .modal-overlay.expanded .facts-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  /* Nicolas viendo la columna izquierda en un req real: "no me gusta como se ve todo esto de
+     apachurrado" — con la ventana ya tan grande, el mismo gap/margen chico que usa el modal angosto
+     de Tracking se sentia desproporcionadamente apretado al lado de las tarjetas con mas aire de
+     SLA/Completion a la derecha. Mas espacio entre secciones y entre celdas, solo en este modal. */
+  .modal-overlay.expanded .modal-col-left .facts-grid { gap: 16px 24px; margin-bottom: 18px; }
+  .modal-overlay.expanded .modal-col-left .modal-section-title { margin: 30px 0 12px; }
+  .modal-overlay.expanded .modal-col-left .modal-section-title:first-child { margin-top: 0; }
   .modal-overlay.expanded .modal-body-cols {
     display: grid; grid-template-columns: 1.05fr 1fr; gap: 0 32px; align-items: start;
     min-height: 0; overflow-y: auto; padding-right: 4px;
@@ -1744,9 +1751,16 @@
      mas espacio y sobra menos para el Gantt — asi nunca hace falta scroll vertical aqui. */
   .flow-row { display: flex; align-items: stretch; height: var(--flow-row-h, 48px); }
   .flow-row-label { width: 170px; flex: none; padding-right: 12px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-  .flow-row-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .flow-row-name { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
+  .flow-row-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .flow-row.done .flow-row-name, .flow-row.ongoing .flow-row-name { color: var(--text-primary); }
   .flow-row.warn .flow-row-name { color: var(--warning); }
+  /* Mismo principio de color que el Gantt del overview (STAGE_COLORS) — un punto solido para lo
+     que ya paso, hueco/punteado para lo que todavia no, gris tenue para "paso pero sin fecha
+     exacta logueada" (mismos 3 estados que .flow-milestone-mark, ver flowRowDotHtml()). */
+  .flow-row-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .flow-row-dot.pending { background: transparent; border: 1.5px dashed var(--text-muted); }
+  .flow-row-dot.undocumented { background: var(--text-muted); opacity: .5; }
   .flow-row-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .flow-row.pending .flow-row-date { font-style: italic; }
   .flow-subnote { font-size: 10.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -5897,7 +5911,13 @@ function renderGanttGroup(key){
     // tambien" — mismo permiso real (trackingCanEdit()) que ya usan Tracking/Positions, Tracking
     // sigue siendo el menu mas directo si alguien prefiere trabajar ahi, pero el Gantt ya no
     // obliga a saltar a otra parte solo para editar.
-    rowEl.addEventListener("click", ()=> openDetailModal(rowEl.dataset.id, trackingCanEdit() ? "edit" : "view", isAdmin(), true, true));
+    // allowDelete SIEMPRE false aqui — bug real (Nicolas: "el boton de delete por que existe si ya
+    // habiamos puesto una regla?"): esta fila pasaba isAdmin(), violando la regla ya documentada un
+    // poco mas abajo en renderDetailModal() ("Eliminar una posicion solo es posible desde
+    // Positions, nunca desde Tracking ni desde los drill-down del Dashboard"). El Gantt del
+    // Dashboard es exactamente ese drill-down — Delete solo debe verse abriendo el req real desde
+    // Positions.
+    rowEl.addEventListener("click", ()=> openDetailModal(rowEl.dataset.id, trackingCanEdit() ? "edit" : "view", false, true, true));
   });
 }
 
@@ -7511,10 +7531,20 @@ function sizeFlowRows(){
 function flowConnectorHtml(pct, done){
   return `<div class="flow-connector-v${done?" done":""}" style="left:${pct}%;"></div>`;
 }
+// Nicolas: "en vez de poner los estados ahi a la izquierda usa el mismo principio del gantt de
+// overview que los estados tienen sus puntos, diamantes, etc con colores" — el punto de la
+// etiqueta usa EXACTAMENTE el mismo color que ya pinta la barra/diamante de esa fila (step.color,
+// STAGE_COLORS), y el mismo lenguaje visual de pending/undocumented (hueco punteado / gris tenue)
+// que .flow-milestone-mark ya usa, nunca uno nuevo inventado.
+function flowRowDotHtml(step, state){
+  if(state === "pending") return `<span class="flow-row-dot pending"></span>`;
+  if(state === "undocumented") return `<span class="flow-row-dot undocumented"></span>`;
+  return `<span class="flow-row-dot" style="background:${step.color||"var(--seq-400)"};"></span>`;
+}
 function flowRowWrap(step, state, trackHtml, dateLine){
   return `<div class="flow-row ${state}${step.warn?" warn":""}">
     <div class="flow-row-label">
-      <div class="flow-row-name">${escapeHtml(step.label)}</div>
+      <div class="flow-row-name">${flowRowDotHtml(step, state)}<span class="flow-row-name-text">${escapeHtml(step.label)}</span></div>
       <div class="flow-row-date">${escapeHtml(dateLine)}</div>
       ${step.subNote ? `<div class="flow-subnote">${escapeHtml(step.subNote)}</div>` : ""}
     </div>
