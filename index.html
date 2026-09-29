@@ -2778,6 +2778,7 @@
             <option value="USD">USD</option>
             <option value="CAD">CAD</option>
             <option value="AUD">AUD</option>
+            <option value="INR">INR</option>
           </select>
           <input type="number" id="reqInfoSalaryMin" placeholder="Min (or flat amount)">
           <input type="number" id="reqInfoSalaryMax" placeholder="Max">
@@ -2793,6 +2794,18 @@
         <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-top:6px;">
           <input type="checkbox" id="reqInfoSalaryFlat" style="width:auto;"> Flat rate (no range)
         </label>
+        <!-- Nicolas: "siempre ahora toca poner el valor tanto en USD, que es nuestra referencia,
+             como en la moneda local del market" — solo aplica cuando la moneda local NO es ya
+             USD (si ya es USD no hay nada que convertir, ver toggleSalaryUsdUi()). Comparte el
+             mismo Period de arriba (es la misma compensacion, solo expresada en 2 monedas, no
+             una cadencia de pago distinta). -->
+        <div id="reqInfoSalaryUsdZone" style="display:none; margin-top:10px;">
+          <label style="font-weight:400; color:var(--text-muted); font-size:12px;">USD equivalent (our reference currency — always required alongside the local market currency)</label>
+          <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; min-width:0; margin-top:4px;">
+            <input type="number" id="reqInfoSalaryUsdMin" placeholder="USD Min (or flat amount)">
+            <input type="number" id="reqInfoSalaryUsdMax" placeholder="USD Max">
+          </div>
+        </div>
       </div>
     </div>
     <div class="form-actions">
@@ -4750,18 +4763,40 @@ function formatLocation(p){
 function locationOnly(p){
   return p.city ? `${escapeHtml(p.city)}, ${escapeHtml(p.country)}` : (escapeHtml(p.country) || "-");
 }
+// Investigado por Nicolas (INR/Lakh): India NO agrupa los digitos del sueldo como occidente
+// (1,500,000) — usa el sistema Lakh/Crore (1 Lakh = 100,000, agrupado 15,00,000), y ahi casi
+// todo el mundo habla de sueldo en "LPA" (Lakhs Per Annum). No es una moneda aparte, es solo
+// como se AGRUPAN los digitos de la rupia — toLocaleString("en-IN") ya hace esa agrupacion
+// nativa, sin libreria aparte que mantener.
+const SALARY_CURRENCY_SYMBOLS = { USD:"$", CAD:"$", AUD:"$", INR:"₹" };
+function fmtSalaryNumber(n, currency){
+  return Number(n).toLocaleString(currency === "INR" ? "en-IN" : "en-US");
+}
 // Compensacion confirmada por el reclutador con el hiring manager: moneda (ISO) + un rango de 2
 // numeros, o "flat" cuando Min y Max son el mismo valor (no hay una columna aparte para "es
 // flat", con que coincidan alcanza). Sin Currency+Min no hay nada que mostrar todavia.
+// Nicolas: "siempre ahora toca poner el valor tanto en USD... como en la moneda local del
+// market" — cuando la moneda local NO es USD y SI hay un equivalente en USD guardado
+// (salaryUsdMin/Max), se muestran los 2 juntos; si la moneda YA es USD, o el equivalente
+// todavia no se guardo (reqs viejos, esto aplica solo hacia adelante), se sigue mostrando solo
+// el local, igual que siempre — nunca rompe lo que ya existia.
 function formatSalary(p){
   if(!p.salaryCurrency || p.salaryMin == null || p.salaryMin === "") return null;
-  const fmt = n => Number(n).toLocaleString("en-US");
+  const sym = SALARY_CURRENCY_SYMBOLS[p.salaryCurrency] || "";
+  const fmt = n => fmtSalaryNumber(n, p.salaryCurrency);
   const min = fmt(p.salaryMin);
   const hasMax = p.salaryMax != null && p.salaryMax !== "" && Number(p.salaryMax) !== Number(p.salaryMin);
   const period = `/${p.salaryPeriod || "yr"}`;
-  return hasMax
-    ? `${p.salaryCurrency} $${min}-$${fmt(p.salaryMax)}${period}`
-    : `${p.salaryCurrency} $${min}${period} flat`;
+  const localStr = hasMax
+    ? `${p.salaryCurrency} ${sym}${min}-${sym}${fmt(p.salaryMax)}${period}`
+    : `${p.salaryCurrency} ${sym}${min}${period} flat`;
+  if(p.salaryCurrency === "USD" || p.salaryUsdMin == null || p.salaryUsdMin === "") return localStr;
+  const usdMin = fmtSalaryNumber(p.salaryUsdMin, "USD");
+  const hasUsdMax = p.salaryUsdMax != null && p.salaryUsdMax !== "" && Number(p.salaryUsdMax) !== Number(p.salaryUsdMin);
+  const usdStr = hasUsdMax
+    ? `USD $${usdMin}-$${fmtSalaryNumber(p.salaryUsdMax,"USD")}${period}`
+    : `USD $${usdMin}${period} flat`;
+  return `${localStr} (${usdStr})`;
 }
 function hasSalaryConfirmed(p){
   return !!(p.salaryCurrency && p.salaryMin != null && p.salaryMin !== "");
@@ -8990,7 +9025,10 @@ function openEditReqInfoModal(){
   document.getElementById("reqInfoSalaryFlat").checked = isFlat;
   document.getElementById("reqInfoSalaryMax").value = (!isFlat && p.salaryMax != null) ? p.salaryMax : "";
   document.getElementById("reqInfoSalaryPeriod").value = p.salaryPeriod || "yr";
+  document.getElementById("reqInfoSalaryUsdMin").value = p.salaryUsdMin != null ? p.salaryUsdMin : "";
+  document.getElementById("reqInfoSalaryUsdMax").value = p.salaryUsdMax != null ? p.salaryUsdMax : "";
   toggleSalaryFlatUi();
+  toggleSalaryUsdUi();
   document.getElementById("reqInfoMsg").textContent = "";
   document.getElementById("editReqInfoModal").classList.add("open");
 }
@@ -9001,6 +9039,13 @@ function toggleSalaryFlatUi(){
   document.getElementById("reqInfoSalaryMax").style.display = flat ? "none" : "";
 }
 document.getElementById("reqInfoSalaryFlat").addEventListener("change", toggleSalaryFlatUi);
+// Nicolas: el USD equivalente solo tiene sentido cuando la moneda local NO es ya USD — sin
+// moneda elegida tampoco (nada que convertir todavia).
+function toggleSalaryUsdUi(){
+  const currency = document.getElementById("reqInfoSalaryCurrency").value;
+  document.getElementById("reqInfoSalaryUsdZone").style.display = (currency && currency !== "USD") ? "" : "none";
+}
+document.getElementById("reqInfoSalaryCurrency").addEventListener("change", toggleSalaryUsdUi);
 function closeEditReqInfoModal(){
   document.getElementById("editReqInfoModal").classList.remove("open");
 }
@@ -9015,16 +9060,24 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
   const salaryFlat = document.getElementById("reqInfoSalaryFlat").checked;
   const salaryMinVal = document.getElementById("reqInfoSalaryMin").value.trim() || null;
   const salaryMaxVal = salaryFlat ? salaryMinVal : (document.getElementById("reqInfoSalaryMax").value.trim() || null);
+  const salaryCurrencyVal = document.getElementById("reqInfoSalaryCurrency").value || null;
+  // USD equivalente: solo aplica (y solo se guarda) cuando la moneda local NO es ya USD — si es
+  // USD, siempre null, para no dejar un valor viejo pegado de una moneda anterior que ya no aplica
+  // (el campo queda oculto pero el input en si no se limpia solo). Mismo flat/range que arriba.
+  const salaryUsdMinVal = (salaryCurrencyVal && salaryCurrencyVal !== "USD") ? (document.getElementById("reqInfoSalaryUsdMin").value.trim() || null) : null;
+  const salaryUsdMaxVal = (salaryCurrencyVal && salaryCurrencyVal !== "USD") ? (salaryFlat ? salaryUsdMinVal : (document.getElementById("reqInfoSalaryUsdMax").value.trim() || null)) : null;
   const checkedCountries = [...document.querySelectorAll(".reqInfoCountryCheck:checked")].map(el=>el.value);
   const fields = [
     {key:"hiringManager", header:"Hiring Manager", value: getAddNewValue("reqInfoHmSelect","reqInfoHmInput")},
     {key:"country", header:"Country", value: checkedCountries.length ? checkedCountries.join(", ") : null},
     {key:"city", header:"City", value: document.getElementById("reqInfoCity").value.trim() || null},
     {key:"workArrangement", header:"Work Arrangement", value: document.getElementById("reqInfoWorkArrangement").value},
-    {key:"salaryCurrency", header:"Salary Currency", value: document.getElementById("reqInfoSalaryCurrency").value || null},
+    {key:"salaryCurrency", header:"Salary Currency", value: salaryCurrencyVal},
     {key:"salaryMin", header:"Salary Min", value: salaryMinVal},
     {key:"salaryMax", header:"Salary Max", value: salaryMaxVal},
     {key:"salaryPeriod", header:"Salary Period", value: document.getElementById("reqInfoSalaryPeriod").value || "yr"},
+    {key:"salaryUsdMin", header:"Salary USD Min", value: salaryUsdMinVal},
+    {key:"salaryUsdMax", header:"Salary USD Max", value: salaryUsdMaxVal},
   ];
   const changed = fields.filter(f => f.value !== (p[f.key] || null));
   if(!changed.length){
@@ -9064,7 +9117,7 @@ document.getElementById("reqInfoSave").addEventListener("click", async ()=>{
   // Activity. Los 4 campos de salario cuentan como un solo "Compensation" en el log (cambiarlos
   // juntos es lo normal, no tiene sentido 4 lineas separadas para el mismo ajuste de sueldo).
   const changedLabels = [...new Set(changed.map(f =>
-    ["salaryCurrency","salaryMin","salaryMax","salaryPeriod"].includes(f.key) ? "Compensation" : f.header))];
+    ["salaryCurrency","salaryMin","salaryMax","salaryPeriod","salaryUsdMin","salaryUsdMax"].includes(f.key) ? "Compensation" : f.header))];
   await logFieldEdit(p, `Basic Info updated: ${changedLabels.join(", ")}.`);
   renderDetailModal();
   setTimeout(closeEditReqInfoModal, 900);
@@ -11819,6 +11872,11 @@ function parsePositionsTable(posHeaders, posRows){
       // real todavia no tiene la columna o el valor esta vacio, se asume "yr" — asi la data
       // migrada (todos anuales salvo GA-030) sigue mostrandose igual sin tener que retocarla.
       salaryPeriod: r[idx("Salary Period")] || "yr",
+      // Nueva columna/opcional (Nicolas: "siempre ahora toca poner el valor tanto en USD...
+      // como en la moneda local") — mismo patron idx()/-1 que cualquier otra columna opcional
+      // de arriba, no rompe nada si el Excel real todavia no la tiene.
+      salaryUsdMin: r[idx("Salary USD Min")] != null && r[idx("Salary USD Min")] !== "" ? r[idx("Salary USD Min")] : null,
+      salaryUsdMax: r[idx("Salary USD Max")] != null && r[idx("Salary USD Max")] !== "" ? r[idx("Salary USD Max")] : null,
       sourced: r[idx("Sourced")],
       directApps: r[idx("Direct Apps")],
       submittedCount: r[idx("Submitted")],
