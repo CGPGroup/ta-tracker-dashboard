@@ -1609,22 +1609,29 @@
   .modal-overlay.open .modal-card { transform: translateY(0) scale(1); }
   /* Abierto desde el Gantt (openDetailModal(..., expanded=true)) — el mismo modal de siempre,
      mucho mas ancho, para que se sienta como una ventana de trabajo y no un popup angosto. */
-  .modal-overlay.expanded { padding: 24px 20px; }
+  /* Nicolas: "hazla mas larga de abajo... ves el espacio que queda arriba? hazlo asi para todos los
+     lados" — el padding del overlay (aire alrededor de toda la tarjeta) bajo de 24/20 a algo minimo,
+     ya no reserva un margen grande que sobraba en las 4 direcciones. */
+  .modal-overlay.expanded { padding: 9px 11px; }
   /* Nicolas: "no es un minigantt, es un gantt completo... necesito que la ventana sea mas grande y
      que la informacion de la req quede en la parte de abajo... 30%... y el gantt arriba... 70%".
      .modal-card pasa de "crece con el contenido + toda la pagina scrollea" a una ventana de ALTURA
-     FIJA (90vh) dividida en 2 zonas reales: #modalFlowZone (el Requisition Flow, 70%) arriba y
+     FIJA (97vh) dividida en 2 zonas reales: #modalFlowZone (el Requisition Flow, 70%) arriba y
      .modal-body-cols (todo lo demas: facts/timeline/batches + SLA/Completion/Next Step/Activity,
      30%) abajo — cada zona con su propio scroll interno, nunca la ventana entera. expanded=true
      SOLO ocurre hoy desde el click de fila del Gantt del Dashboard (junto con fromDashboard=true,
      ver openDetailModal()), asi que este layout nunca afecta el modal angosto de Tracking/Positions. */
   .modal-overlay.expanded .modal-card {
-    /* Nicolas viendo esto en una pantalla grande: "puede ser mas ancho y cubrir mas de la ventana...
-       por que lo haces tan pequeño?" — el limite en px (1760) se quedaba corto en monitores anchos
-       mucho antes de llegar al limite en vw (94%), dejando espacio vacio de sobra a los 2 lados.
-       Subido a un limite en px mucho mas alto (2200) para que el vw (97%) sea el que de verdad
-       manda en pantallas grandes — sigue sin llegar borde a borde (97vw, no 100vw). */
-    max-width: min(2200px, 97vw); height: 90vh; max-height: 90vh;
+    /* Nicolas viendo esto en una pantalla grande: "puede ser mas ancho... por que lo haces tan
+       pequeño?" y despues "hazla mas larga de abajo... hazlo asi para todos los lados" — root cause
+       real (confirmado midiendo con getBoundingClientRect, no a ojo): TODO el tracker corre con
+       html{zoom:0.9} (ver esa regla), asi que CUALQUIER valor en px/vw/vh que se pone aqui se
+       renderiza al 90% de lo pedido — un probe de 100vw media 2296.8px con innerWidth=2552 (exacto
+       ×0.9). Sin dividir por ese 0.9, "98vw" terminaba viendose como un ~88% real, y "2200px" como
+       ~1980px reales — de ahi el espacio vacio que Nicolas seguia viendo en los 4 lados a pesar de
+       haber subido los numeros. Los valores de abajo ya vienen divididos entre 0.9 para que el
+       resultado FINAL en pantalla sea el 98%/97% real que se pretende. */
+    max-width: min(2890px, 108.9vw); height: 107.8vh; max-height: 107.8vh;
     display: flex; flex-direction: column; overflow: hidden;
   }
   .modal-overlay.expanded .modal-head,
