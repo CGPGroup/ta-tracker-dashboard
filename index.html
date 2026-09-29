@@ -1738,9 +1738,11 @@
   .flow-gantt .gantt-cal-axis { margin: 0 0 6px 170px; height: 18px; border-bottom: none; padding-bottom: 0; z-index: 2; font-size: 12px; }
   .flow-gantt .gantt-cal-gridlines { left: 170px; right: 0; top: 0; bottom: 0; z-index: 1; }
   .flow-rows { position: relative; z-index: 2; }
-  /* Nicolas: "no es un minigantt, es un gantt completo" — filas mas altas (34 -> 48px) ahora que
-     #modalFlowZone les da un 70% real de la ventana para llenar, en vez de quedar comprimidas. */
-  .flow-row { display: flex; align-items: stretch; height: 48px; }
+  /* Nicolas: "no es un minigantt, es un gantt completo" — filas mas altas (34 -> 48px por defecto)
+     ahora que #modalFlowZone les da un 70% real de la ventana para llenar. --flow-row-h la
+     encoge en vivo (nunca la agranda mas de 48px) via sizeFlowRows() cuando la info de abajo pide
+     mas espacio y sobra menos para el Gantt — asi nunca hace falta scroll vertical aqui. */
+  .flow-row { display: flex; align-items: stretch; height: var(--flow-row-h, 48px); }
   .flow-row-label { width: 170px; flex: none; padding-right: 12px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
   .flow-row-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .flow-row.done .flow-row-name, .flow-row.ongoing .flow-row-name { color: var(--text-primary); }
@@ -1759,10 +1761,10 @@
   .flow-milestone-mark.undocumented .flow-milestone-shape { background: var(--text-muted); opacity: .5; }
   .flow-row.undocumented .flow-row-date { font-style: italic; opacity: .8; }
   /* El conector vive DENTRO de la fila anterior y se extiende exactamente 1 altura de fila hacia
-     abajo (48px, igual que .flow-row) — como las filas quedan pegadas sin espacio entre si, esto
-     siempre aterriza justo en el centro vertical de la fila siguiente, sin necesitar coordenadas
-     globales calculadas en JS. */
-  .flow-connector-v { position: absolute; top: 50%; width: 2px; height: 48px; z-index: 1; background: var(--border); }
+     abajo (--flow-row-h, igual que .flow-row) — como las filas quedan pegadas sin espacio entre si,
+     esto siempre aterriza justo en el centro vertical de la fila siguiente, sin necesitar
+     coordenadas globales calculadas en JS. */
+  .flow-connector-v { position: absolute; top: 50%; width: 2px; height: var(--flow-row-h, 48px); z-index: 1; background: var(--border); }
   .flow-connector-v.done { background: var(--brand); opacity: .5; }
   /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
      texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
@@ -7483,9 +7485,29 @@ function flowCalendarFor(p){
   const cal = ganttBuildCalendar(win);
   return {win, cal};
 }
+// #modalFlowZone ya no tiene un alto fijo — cede lo que sobra despues de la info de abajo (ver CSS,
+// modal-body-cols mide su propio contenido). Eso significa que cuantas filas quepan sin scroll
+// vertical depende de cuanto espacio quedo, no de un numero fijo. Se mide DESPUES de insertar todo
+// el HTML (mismo momento que ganttRenderAxis(), ya con el layout real resuelto) y se encoge el alto
+// de fila (nunca se agranda mas de 48px, el diseño original) via la variable CSS --flow-row-h, que
+// .flow-row/.flow-connector-v ya leen. Piso de 26px: por debajo de eso el texto/las barras dejan de
+// leerse bien, asi que en un caso extremo se prefiere el scroll vertical a una fila ilegible.
+function sizeFlowRows(){
+  const zone = document.getElementById("modalFlowZone");
+  const rowsEl = zone && zone.querySelector(".flow-rows");
+  if(!rowsEl || !rowsEl.children.length) return;
+  const ganttEl = zone.querySelector(".flow-gantt");
+  const axisEl = zone.querySelector(".gantt-cal-axis");
+  const ganttCs = ganttEl ? getComputedStyle(ganttEl) : null;
+  const ganttPadding = ganttCs ? (parseFloat(ganttCs.paddingTop)||0) + (parseFloat(ganttCs.paddingBottom)||0) : 30;
+  const axisBlock = axisEl ? axisEl.offsetHeight + (parseFloat(getComputedStyle(axisEl).marginBottom)||0) : 24;
+  const available = zone.clientHeight - ganttPadding - axisBlock;
+  const perRow = Math.max(26, Math.min(48, Math.floor(available / rowsEl.children.length)));
+  zone.style.setProperty("--flow-row-h", perRow + "px");
+}
 // Conector recto entre el final visual de ESTA fila y el inicio de la siguiente — vive DENTRO del
-// carril de esta fila y se estira exactamente 1 alto de fila (34px) hacia abajo, asi que aterriza
-// solo en el centro de la fila de abajo sin necesitar coordenadas globales calculadas aparte.
+// carril de esta fila y se estira exactamente 1 alto de fila (--flow-row-h) hacia abajo, asi que
+// aterriza solo en el centro de la fila de abajo sin necesitar coordenadas globales calculadas aparte.
 function flowConnectorHtml(pct, done){
   return `<div class="flow-connector-v${done?" done":""}" style="left:${pct}%;"></div>`;
 }
@@ -8249,6 +8271,14 @@ function renderDetailModal(){
   const canRouteToEdit = activeDetailFromDashboard && !trackingCanEdit() && !!MY_RECRUITER_NAME;
   editZone.style.display = canRouteToEdit ? "" : "none";
   if(canRouteToEdit) editBtn.textContent = p.recruiter === MY_RECRUITER_NAME ? "Edit in Tracking →" : "Go to your workspace to edit →";
+  // Nicolas: "tampoco quiero scrolear el gantt, al menos no verticalmente" — sizeFlowRows() tiene
+  // que correr AL FINAL de esta funcion, despues de llenar SLA/Completion/Next Step/Activity (la
+  // columna derecha de modal-body-cols) — llamarla antes (como se hizo la primera vez) media el
+  // alto de #modalFlowZone con esa columna todavia vacia/recien limpiada, dando una lectura
+  // optimista de mas espacio del que en realidad iba a quedar una vez esa columna se llenara (bug
+  // real encontrado: el alto de fila calculado no evitaba el scroll vertical en reqs con mucha
+  // Activity, exactamente los casos donde mas hacia falta).
+  if(activeDetailFromDashboard && p.kickoff) sizeFlowRows();
 }
 
 async function saveModalDates(){
