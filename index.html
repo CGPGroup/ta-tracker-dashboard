@@ -2778,6 +2778,7 @@
             <option value="USD">USD</option>
             <option value="CAD">CAD</option>
             <option value="AUD">AUD</option>
+            <option value="NZD">NZD</option>
             <option value="INR">INR</option>
           </select>
           <input type="number" id="reqInfoSalaryMin" placeholder="Min (or flat amount)">
@@ -4768,7 +4769,7 @@ function locationOnly(p){
 // todo el mundo habla de sueldo en "LPA" (Lakhs Per Annum). No es una moneda aparte, es solo
 // como se AGRUPAN los digitos de la rupia — toLocaleString("en-IN") ya hace esa agrupacion
 // nativa, sin libreria aparte que mantener.
-const SALARY_CURRENCY_SYMBOLS = { USD:"$", CAD:"$", AUD:"$", INR:"₹" };
+const SALARY_CURRENCY_SYMBOLS = { USD:"$", CAD:"$", AUD:"$", NZD:"$", INR:"₹" };
 function fmtSalaryNumber(n, currency){
   return Number(n).toLocaleString(currency === "INR" ? "en-IN" : "en-US");
 }
@@ -8997,6 +8998,25 @@ function wireMultiselectDropdown(dropdownId, triggerId, menuId, checkboxClass, p
 }
 const refreshNewPosCountryTrigger = wireMultiselectDropdown("newPosCountryDropdown", "newPosCountryTrigger", "newPosCountryMenu", "newPosCountryCheck", "Select countries…");
 const refreshReqInfoCountryTrigger = wireMultiselectDropdown("reqInfoCountryDropdown", "reqInfoCountryTrigger", "reqInfoCountryChecks", "reqInfoCountryCheck", "Select countries…");
+// Nicolas: "dependiendo del market... se debe automaticamente elegir el currency" — marcar un
+// pais en Country deberia autoseleccionar su moneda, para no depender de que alguien lo recuerde
+// a mano. Solo dispara con EXACTAMENTE 1 pais marcado (con 2+ la moneda real es ambigua — un rol
+// "United States, Canada" no tiene una sola respuesta correcta, se deja como esta en vez de
+// adivinar mal) y solo mientras se edita interactivamente (el listener vive en el contenedor,
+// nunca en las casillas — openEditReqInfoModal() reemplaza su innerHTML cada vez que abre, asi
+// que atado al hijo se perderia; el evento change de una casilla igual burbujea hasta aqui).
+// Nunca corre solo por abrir el modal, para no pisar una moneda ya guardada a proposito.
+const COUNTRY_CURRENCY = { "United States":"USD", "Canada":"CAD", "Australia":"AUD", "New Zealand":"NZD", "India":"INR" };
+document.getElementById("reqInfoCountryChecks").addEventListener("change", ()=>{
+  const checked = [...document.querySelectorAll(".reqInfoCountryCheck:checked")].map(el=>el.value);
+  if(checked.length !== 1) return;
+  const currency = COUNTRY_CURRENCY[checked[0]];
+  if(!currency) return;
+  const select = document.getElementById("reqInfoSalaryCurrency");
+  if(select.value === currency) return;
+  select.value = currency;
+  select.dispatchEvent(new Event("change"));
+});
 
 function openEditReqInfoModal(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
