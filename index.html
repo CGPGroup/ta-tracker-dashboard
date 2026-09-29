@@ -10088,6 +10088,9 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   // duplicaba el batch entero — mismo patron ya aplicado en reassignSave/Add Position.
   const saveBtn = document.getElementById("logBatchSave");
   saveBtn.disabled = true;
+  // Declarado AQUI (no adentro del try) a proposito — se lee mas abajo, ya fuera del try/finally,
+  // para decidir si el modal se cierra solo; una variable de un try{} en JS no existe fuera de el.
+  let hadIssues = true;
   try {
   p.batches = p.batches || [];
   // count ya no se teclea a mano — siempre se deriva de los candidatos reales logueados abajo
@@ -10135,29 +10138,50 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   // Candidate (append -> upload CV -> guardar el link), pero en secuencia y sin abortar todo el
   // batch si UNO falla (ej. un archivo corrupto) — se reporta al final cuales fallaron en vez de
   // perder el trabajo de los demas.
+  // BUG REAL (David, 2026-09-29): el candidato ya quedaba creado en BatchCandidatesTable
+  // (rows/add exitoso, el id real ya existia — por eso aparecia nombrado en el error), pero un
+  // fallo TRANSITORIO en el paso de arriba (Graph/Excel tarda en indexar la fila recien creada
+  // para una relectura inmediata, mismo tipo de demora ya documentada en ensureGraphFolder()/
+  // graphUploadFile() para carpetas de OneDrive) al guardar el link del CV tiraba TODO el
+  // candidato al catch de abajo — se perdia de p.batchCandidates aunque su fila SI existiera en
+  // el Excel real, y el mensaje le decia al usuario "agregalo de nuevo", lo que habria creado una
+  // fila DUPLICADA. Confirmado en el archivo real: las 2 filas de David SI estaban ahi, solo sin
+  // CV Link. Mismo patron ya establecido en addCandidateSave (linea ~9848 mas arriba en este
+  // archivo) — separar la creacion del candidato (fatal, si esto falla de verdad no se guardo
+  // nada) del paso de CV (no fatal, un fallo aqui solo deja el candidato sin CV adjunto, nunca
+  // perdido).
   const total = logBatchPendingCandidates.length;
   const failed = [];
   const succeeded = [];
+  const cvWarnings = [];
   const author = currentAuthorName();
   for(let i=0; i<total; i++){
     const cand = logBatchPendingCandidates[i];
     msg.textContent = `Saving candidate ${i+1} of ${total} (${cand.name})…`;
     msg.style.color = "var(--text-muted)";
+    let id;
     try {
-      const id = isConnected()
+      id = isConnected()
         ? await graphAppendBatchCandidate(p.id, date, cand.name, cand.email, "Screening Interview", null, author)
         : `${p.id}-${Date.now()}-${i}`;
-      let cvLink = null;
-      if(isConnected()){
-        cvLink = await graphUploadFile("Candidate CVs", p.id, cand.file);
-        await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
-      }
-      p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening Interview", cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null });
-      succeeded.push(cand.name);
     } catch(err){
       console.error(`Could not save candidate "${cand.name}":`, err);
       failed.push({ name: cand.name, message: err.message });
+      continue;
     }
+    let cvLink = null;
+    if(isConnected()){
+      try {
+        cvLink = await graphUploadFile("Candidate CVs", p.id, cand.file);
+        await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
+      } catch(err){
+        console.error(`Candidate "${cand.name}" was saved, but attaching their CV failed:`, err);
+        cvLink = null;
+        cvWarnings.push(cand.name);
+      }
+    }
+    p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening Interview", cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null });
+    succeeded.push(cand.name);
   }
   logBatchPendingCandidates = [];
   // Nicolas (2026-09-21): "cualquier cambio que se haga, quede registrado" — un batch de
@@ -10166,12 +10190,17 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   if(succeeded.length) await logFieldEdit(p, `Batch logged (${date}, ${type}): ${succeeded.join(", ")}.`);
   renderDetailModal();
   const savedNote = autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "";
+  const cvNote = cvWarnings.length ? ` CV upload failed for: ${cvWarnings.join(", ")} — they're saved, just attach the CV again from their candidate row.` : "";
   if(failed.length){
-    msg.textContent = `Batch logged with ${total - failed.length} of ${total} candidates.${savedNote} Failed: ${failed.map(f=>`${f.name} (${f.message})`).join("; ")} — add ${failed.length===1?"them":"them"} again via "+ Add Candidate".`;
+    msg.textContent = `Batch logged with ${total - failed.length} of ${total} candidates.${savedNote}${cvNote} Failed: ${failed.map(f=>`${f.name} (${f.message})`).join("; ")} — add them again via "+ Add Candidate".`;
     msg.style.color = "var(--critical)";
+  } else if(cvWarnings.length){
+    msg.textContent = `Saved — batch and ${total} candidate${total===1?"":"s"} logged.${savedNote}${cvNote}`;
+    msg.style.color = "var(--warning)";
   } else if(isConnected()){
     msg.textContent = `Saved — batch and ${total} candidate${total===1?"":"s"} logged.${savedNote}`;
     msg.style.color = "var(--good)";
+    hadIssues = false;
   } else {
     msg.textContent = `Kept in this browser tab only (not connected to Microsoft 365) — batch and ${total} candidate${total===1?"":"s"} logged locally.${savedNote}`;
     msg.style.color = "var(--warning)";
@@ -10179,9 +10208,10 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   } finally {
     saveBtn.disabled = false;
   }
-  // Solo se cierra solo si todo salio bien — si algo fallo, se queda abierto con el mensaje de
-  // arriba para que quede visible, en vez de desaparecer a los 900ms como el resto de los saves.
-  if(!document.getElementById("logBatchMsg").textContent.startsWith("Batch logged with")){
+  // Solo se cierra solo si todo salio bien de verdad (ni fallos duros ni advertencias de CV) —
+  // si algo quedo pendiente de revisar, se queda abierto con el mensaje de arriba visible, en vez
+  // de desaparecer a los 900ms como un save limpio.
+  if(!hadIssues){
     setTimeout(closeLogBatchModal, 900);
   }
 });
@@ -12480,18 +12510,34 @@ async function resolveTableRowIndexByColumn(tableName, columnHeader, value){
 // corta). worksheets('BatchCandidates') nunca existio, asi que el PATCH de abajo SIEMPRE devolvia
 // 404 ItemNotFound — el mensaje de error generico en el catch de "Attach CV" ("Could not upload
 // this CV") escondia que el problema real pasaba DESPUES de la subida, no en ella.
-async function graphUpdateBatchCandidateField(candidateRowId, headerName, value){
-  if(pinModeActive) return workerRecruiterWrite("updateBatchCandidateField", {candidateRowId, header: headerName, value});
-  const found = await resolveTableRowIndexByColumn("BatchCandidatesTable", "Candidate Row ID", candidateRowId);
-  if(!found) throw new Error("This candidate row no longer exists in the shared file. Reload the data before trying again.");
-  const colIdx = found.headers.indexOf(headerName);
-  if(colIdx < 0) throw new Error(`Column "${headerName}" was not found in BatchCandidatesTable.`);
-  const excelRow = found.rowIndex + 2;
-  const address = `${excelColumnLetter(colIdx)}${excelRow}`;
-  await graphFetch(`${await workbookBase()}/worksheets('BatchCandidatesTable')/range(address='${address}')`, {
-    method: "PATCH",
-    body: JSON.stringify({ values: [[value]] }),
-  });
+// BUG REAL (David, 2026-09-29): esta funcion siempre se llama JUSTO DESPUES de crear la fila del
+// candidato (graphAppendBatchCandidate -> rows/add), pero resuelve la fila de nuevo desde cero
+// (resolveTableRowIndexByColumn/el equivalente en el Worker para PIN mode) en vez de reusar algo
+// del create — Graph/Excel a veces tarda en indexar una fila recien insertada para que una
+// relectura inmediata la vea (mismo tipo de demora ya documentada para carpetas de OneDrive en
+// ensureGraphFolder()), asi que ese primer intento puede fallar con "not found" aunque la fila SI
+// exista. Un solo reintento tras una pausa corta resuelve la enorme mayoria de estos casos sin
+// tener que tocar el Worker (que necesitaria un redeploy manual de Nicolas) — si el reintento
+// TAMBIEN falla, se deja que el error real suba (addCandidateSave/logBatchSave ya lo tratan como
+// no-fatal: el candidato en si queda guardado igual, solo sin CV adjunto).
+async function graphUpdateBatchCandidateField(candidateRowId, headerName, value, _isRetry){
+  try {
+    if(pinModeActive) return await workerRecruiterWrite("updateBatchCandidateField", {candidateRowId, header: headerName, value});
+    const found = await resolveTableRowIndexByColumn("BatchCandidatesTable", "Candidate Row ID", candidateRowId);
+    if(!found) throw new Error("This candidate row no longer exists in the shared file. Reload the data before trying again.");
+    const colIdx = found.headers.indexOf(headerName);
+    if(colIdx < 0) throw new Error(`Column "${headerName}" was not found in BatchCandidatesTable.`);
+    const excelRow = found.rowIndex + 2;
+    const address = `${excelColumnLetter(colIdx)}${excelRow}`;
+    await graphFetch(`${await workbookBase()}/worksheets('BatchCandidatesTable')/range(address='${address}')`, {
+      method: "PATCH",
+      body: JSON.stringify({ values: [[value]] }),
+    });
+  } catch(err){
+    if(_isRetry) throw err;
+    await new Promise(r=>setTimeout(r, 1500));
+    return graphUpdateBatchCandidateField(candidateRowId, headerName, value, true);
+  }
 }
 // Borra la fila del candidato (resuelta EN VIVO por Candidate Row ID, igual que
 // graphUpdateBatchCandidateField() de arriba — nunca un indice cacheado, otra pestaña pudo haber
