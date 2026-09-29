@@ -890,6 +890,7 @@
   @media (prefers-reduced-motion: reduce) {
     .gantt-seg[data-current="true"] { animation: none; }
     .gantt-blip { animation: none; }
+    .flow-bar.ongoing { animation: none; }
   }
   /* El diamante y su tooltip van SEPARADOS a proposito: .gantt-milestone (el contenedor
      posicionado, sin rotar) solo ubica el punto; .gantt-milestone-shape (hijo) es quien gira 45deg
@@ -1766,7 +1767,12 @@
   .flow-subnote { font-size: 10.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .flow-row-track { position: relative; flex: 1; overflow: visible; }
   .flow-bar { position: absolute; top: 50%; height: 24px; margin-top: -12px; border-radius: 5px; min-width: 6px; }
-  .flow-bar.ongoing { border-right: 2px dashed rgba(255,255,255,0.55); }
+  /* Nicolas: "necesito que el gantt de ese modal sea tambien con breath y esos efectos visuales que
+     les pusimos" — la etapa EN CURSO reusa EXACTAMENTE el mismo breath (gantt-pulse, ya definido
+     arriba para .gantt-seg del Gantt del overview) y el mismo punto blanco parpadeante (.gantt-blip,
+     mismas keyframes) en vez de inventar un tratamiento aparte — un solo lenguaje visual de "esto es
+     lo que esta pasando ahora mismo" en los 2 Gantts. */
+  .flow-bar.ongoing { animation: gantt-pulse 1.8s ease-in-out infinite; }
   /* Diamante = un milestone puntual (Kickoff, Placed, un desenlace) en vez de una duracion — mismo
      patron ya usado por .gantt-milestone en el Gantt real del dashboard, no uno nuevo inventado. */
   .flow-milestone-mark { position: absolute; top: 50%; width: 13px; height: 13px; margin-top: -6.5px; margin-left: -6.5px; z-index: 3; }
@@ -7554,7 +7560,9 @@ function flowRowWrap(step, state, trackHtml, dateLine){
 function flowBarTrackHtml(cal, start, end, color, state, connectPct, hasNext){
   const p1 = cal.pctOf(start), p2 = cal.pctOf(end);
   const left = Math.min(p1,p2), width = Math.max(0.4, Math.abs(p2-p1));
-  let html = `<div class="flow-bar ${state}" style="left:${left}%; width:${width}%; background:${color};"></div>`;
+  // Mismo .gantt-blip (punto blanco parpadeante en la punta) que ya marca la etapa EN CURSO en el
+  // Gantt del overview — solo en la barra "ongoing", nunca en done/pending.
+  let html = `<div class="flow-bar ${state}" style="left:${left}%; width:${width}%; background:${color};">${state==="ongoing" ? `<span class="gantt-blip"></span>` : ""}</div>`;
   if(hasNext) html += flowConnectorHtml(connectPct, state!=="pending");
   return html;
 }
