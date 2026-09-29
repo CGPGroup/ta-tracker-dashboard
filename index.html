@@ -1637,21 +1637,39 @@
   .modal-overlay.expanded .modal-head,
   .modal-overlay.expanded #modalNote,
   .modal-overlay.expanded #modalEditInTrackingZone { flex: none; }
-  /* flex-basis:0 + grow/shrink en proporcion 7:3 (no un % fijo del alto TOTAL de la tarjeta) — asi
-     el 70/30 real se reparte sobre el espacio que SOBRA despues del header/banner (flex:none arriba,
-     tamaño fijo), en vez de ignorarlos y terminar aplastando la zona de abajo muy por debajo de su
-     30% real (bug real encontrado probando: la zona de info quedaba con ~17% del alto, no 30%). */
+  /* Nicolas: "necesito que toda la info de la req se vea sin tener que scrolear" — un 30% RIGIDO
+     (flex:3) apretaba esa zona a una altura fija sin importar cuanto contenido real tuviera (SLA +
+     Completion + Next Step + Activity + facts + timeline + batches es MUCHO para 30% en la mayoria
+     de los reqs). Ahora modal-body-cols mide su propio contenido (flex:0 0 auto, nunca estirado ni
+     aplastado a un %) y el Gantt (#modalFlowZone) se queda con TODO lo que sobra (flex:1 1 auto) —
+     la relacion real ya no es un 70/30 fijo, varia req por req segun cuanta info tenga, pero la
+     zona de info NUNCA necesita scroll propio salvo un caso extremo (overflow-y:auto se deja solo
+     como red de seguridad, no como comportamiento esperado). */
+  /* min-height:140px (no 0) — un piso real para que el Gantt nunca quede aplastado a la nada si la
+     info de abajo pide mucho espacio; sin max-height propio, asi absorbe TODA la compresion via
+     flex-shrink en vez de que .modal-body-cols (shrink:0) sea quien ceda. */
   .modal-overlay.expanded #modalFlowZone:not(:empty) {
-    flex: 7 1 0%; min-height: 0; overflow-y: auto; margin: 10px 0 14px;
+    flex: 1 1 auto; min-height: 140px; overflow-y: auto; margin: 10px 0 14px;
   }
   .modal-overlay.expanded .facts-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-  /* Sin flow diagram (modal expandido desde un punto de entrada que no es el Gantt del Dashboard,
-     ej. Positions/Needs Attention con expanded=false — o si #modalFlowZone quedo vacio) esta zona
-     de abajo sigue ocupando TODO el alto disponible, como siempre. */
   .modal-overlay.expanded .modal-body-cols {
     display: grid; grid-template-columns: 1.05fr 1fr; gap: 0 32px; align-items: start;
-    flex: 3 1 0%; min-height: 0; overflow-y: auto; padding-right: 4px;
+    min-height: 0; overflow-y: auto; padding-right: 4px;
+    /* Por defecto (sin flow diagram — req sin kickoff todavia, o expanded=false en otro punto de
+       entrada) esta zona ocupa TODO el alto disponible, como siempre. SOLO cuando #modalFlowZone
+       (su hermano anterior en el HTML) tiene contenido real, se le quita el max-height implicito y
+       shrink:0 (ver regla ~ mas abajo) mide su propio contenido COMPLETO — sin recortar por un
+       max-height:100% que la comprimia por debajo de su alto real (bug real encontrado probando: el
+       scrollHeight seguia siendo mas alto que el clientHeight aun con flex:0 0 auto, porque
+       max-height:100% pisaba el shrink:0). El Gantt de arriba es quien cede espacio si hace falta. */
+    flex: 1 1 auto;
   }
+  /* overflow:visible aqui a proposito — un hijo flex con overflow:auto y alto "auto" calcula su
+     propia altura contra el espacio DISPONIBLE del contenedor flex, no contra su contenido real,
+     asi que aunque flex-shrink:0 diga "nunca te encojas", overflow:auto igual lo comprimia por
+     debajo de su scrollHeight real (bug real encontrado midiendo getBoundingClientRect vs
+     scrollHeight: 574px vs 638px). Sin overflow:auto, mide su contenido completo de verdad. */
+  .modal-overlay.expanded #modalFlowZone:not(:empty) ~ .modal-body-cols { flex: 0 0 auto; overflow: visible; }
   .modal-overlay.expanded .modal-col-left, .modal-overlay.expanded .modal-col-right { min-width: 0; }
   @media (prefers-reduced-motion: reduce) {
     .modal-overlay, .modal-card { transition: none; }
