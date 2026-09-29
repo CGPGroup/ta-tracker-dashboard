@@ -4863,11 +4863,18 @@ function candidateOfferDatesHtml(c){
   }
   return `<div class="batch-candidate-offer-dates">${parts.join("")}</div>`;
 }
-function candidateRowHtml(c, viewingPositionId){
+function candidateRowHtml(c, viewingPositionId, isView){
   const tone = STATUS_META[BATCH_CANDIDATE_STATUS_TONE[c.status] || "none"];
+  // Nicolas: "tengo un candidato (Ana Perez) en el batch de ese req, pero no me sale en el modal"
+  // — bug real: toda esta seccion (batchesHtml) se ocultaba entera en modo view (isView?"":...),
+  // asi que cualquier req abierto sin permiso de EDITAR (ej. el Gantt del Dashboard en el
+  // workspace de equipo, donde trackingCanEdit() da false aunque estes conectado) escondia los
+  // candidatos por completo, no solo los controles de edicion. isView ahora solo cambia los
+  // controles EDITABLES (checkbox, select, boton de borrar, Attach CV) por su version de solo
+  // lectura — el nombre/email/CV YA existente/status siguen siempre visibles.
   const cvHtml = c.cvLink
     ? `<a href="${escapeHtml(c.cvLink)}" target="_blank" rel="noopener" class="batch-candidate-cv">CV ↗</a>`
-    : `<button type="button" class="fact-edit-link candidateAttachCvBtn" data-candidate-id="${escapeHtml(c.id)}">Attach CV</button>`;
+    : (isView ? `<span class="batch-candidate-email" style="color:var(--text-muted);">No CV</span>` : `<button type="button" class="fact-edit-link candidateAttachCvBtn" data-candidate-id="${escapeHtml(c.id)}">Attach CV</button>`);
   const emailHtml = c.email
     ? `<a href="mailto:${escapeHtml(c.email)}" class="batch-candidate-email">${escapeHtml(c.email)}</a>`
     : `<span class="batch-candidate-email"></span>`;
@@ -4880,22 +4887,25 @@ function candidateRowHtml(c, viewingPositionId){
     ? `<span class="status-chip" style="background:rgba(var(--good-rgb),0.16); color:var(--good);" title="This candidate filled a different requisition in the same Headcount Group.">→ Filled ${escapeHtml(c.closedForPositionId)}${filledTarget ? " — "+escapeHtml(filledTarget.title) : ""}</span>`
     : "";
   // Placed ya no se elige a mano (ver BATCH_CANDIDATE_STATUSES) — una vez ahi, un badge fijo
-  // reemplaza el select, no queda nada mas que cambiar manualmente.
-  const statusControlHtml = c.status === "Placed"
+  // reemplaza el select, no queda nada mas que cambiar manualmente. En view tambien es siempre
+  // un badge (nunca un <select> editable, sin importar el status).
+  const statusControlHtml = (c.status === "Placed")
     ? `<span class="status-chip" style="background:rgba(var(--good-rgb),0.16); color:var(--good);" title="Set automatically once the candidate's confirmed Start Date arrived — never chosen manually.">🎉 Placed</span>`
+    : isView
+    ? `<span class="status-chip" style="background:rgba(var(--brand-rgb),0.12); color:var(--brand);">${escapeHtml(c.status)}</span>`
     : `<select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
         ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(s)}</option>`).join("")}
       </select>`;
   return `
     <div class="batch-candidate-row">
-      <input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">
+      ${isView ? "" : `<input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">`}
       <span class="dot" style="background:${tone.color};"></span>
       <span class="batch-candidate-name">${escapeHtml(c.name)}</span>
       ${emailHtml}
       ${cvHtml}
       ${filledNote}
       ${statusControlHtml}
-      <button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>
+      ${isView ? "" : `<button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>`}
     </div>
     ${candidateOfferDatesHtml(c)}`;
 }
@@ -4903,12 +4913,12 @@ function candidateRowHtml(c, viewingPositionId){
 // barra de bulk (solo aparece si hay >=1 checkbox marcado en ESE batch, ver wireCandidateEvents()
 // mas abajo) — el bulk es por batch, no global, para no mezclar candidatos de batches distintos
 // en una sola accion.
-function batchCandidatesBlockHtml(p, batchDate){
+function batchCandidatesBlockHtml(p, batchDate, isView){
   const candidates = (p.batchCandidates||[]).filter(c=>c.batchDate===batchDate);
   return `
     <div class="batch-candidates-block" data-batch-date="${escapeHtml(batchDate)}">
-      ${candidates.map(c=>candidateRowHtml(c, p.id)).join("")}
-      <div class="batch-candidates-actions">
+      ${candidates.map(c=>candidateRowHtml(c, p.id, isView)).join("")}
+      ${isView ? "" : `<div class="batch-candidates-actions">
         <button type="button" class="fact-edit-link addCandidateBtn" data-batch-date="${escapeHtml(batchDate)}">+ Add Candidate</button>
         ${candidates.length ? `
           <span class="batch-bulk-bar" data-batch-date="${escapeHtml(batchDate)}" style="display:none;">
@@ -4917,7 +4927,7 @@ function batchCandidatesBlockHtml(p, batchDate){
             </select>
             <button type="button" class="btn ghost small applyBulkBtn" data-batch-date="${escapeHtml(batchDate)}">Apply to selected</button>
           </span>` : ""}
-      </div>
+      </div>`}
     </div>`;
 }
 // Fuera del modal (tablas de Positions/Tracking, quick lists) solo se muestra el pais — la
@@ -7990,29 +8000,36 @@ function renderDetailModal(){
     </div>` : "";
   const batchesTts = computeSla(p).TTS;
   const batchesOverdue = batchesTts.status === "out";
-  const batchesHtml = isView ? "" : `
+  // Nicolas: "tengo un candidato (Ana Perez) en el batch de ese req, pero no me sale en el modal"
+  // — bug real: esta seccion ENTERA se ocultaba con isView?"":..., asi que abrir el req sin
+  // permiso de EDITAR (ej. desde el Gantt del Dashboard en el workspace de equipo, donde
+  // trackingCanEdit() da false aunque estes conectado) escondia los batches Y los candidatos por
+  // completo — no solo los botones de editar. Ahora la seccion siempre se arma; solo los
+  // controles editables de adentro (delete-batch, Log Batch, y los de cada candidato via
+  // batchCandidatesBlockHtml) se condicionan a isView.
+  const batchesHtml = `
     <div class="modal-section-title">Submission Batches</div>
     ${p.batches && p.batches.length ? `<div class="sla-grid">
       ${p.batches.slice().reverse().map(b=>`
         <div class="sla-card">
           <div class="sla-name">
             <span>${escapeHtml(b.date)}</span><span class="tag ${b.type==="Pivot Follow-up" ? "internal" : "official"}">${escapeHtml(b.type)}</span>
-            <button type="button" class="candidateDeleteBtn deleteBatchBtn" data-batch-date="${escapeHtml(b.date)}" title="Delete this batch — e.g. if it was logged by mistake">&times;</button>
+            ${isView ? "" : `<button type="button" class="candidateDeleteBtn deleteBatchBtn" data-batch-date="${escapeHtml(b.date)}" title="Delete this batch — e.g. if it was logged by mistake">&times;</button>`}
           </div>
           <div style="font-size:13px; font-weight:600;">${(() => {
             const live = batchCandidateCount(p, b.date);
             if(live > 0) return `${live} candidate${live===1?"":"s"} logged`;
             return b.count != null && b.count !== "" ? escapeHtml(String(b.count)) + " candidates" : "Count not set";
           })()}</div>
-          ${batchCandidatesBlockHtml(p, b.date)}
+          ${batchCandidatesBlockHtml(p, b.date, isView)}
         </div>`).join("")}
     </div>` : (batchesOverdue
         ? `<div class="alert-banner tier-yellow compact">No submission batches logged yet, and it's been ${batchesTts.elapsed} business days since the intake meeting (TTS target: ${batchesTts.target}).</div>`
         : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`)}
     ${p.pivotRequestedDate && !isSlaExceptionApproved(p) ? `<div class="alert-banner tier-yellow compact">Pivot SLA requested on ${escapeHtml(p.pivotRequestedDate)}, waiting on approval from ${!p.pivotApprovedByLeadDate ? "CGP TA (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"} — this only affects whether the TTF/TTH allowance applies, it doesn't block logging the next batch.</div>` : ""}
-    <div style="margin-bottom:22px;">
+    ${isView ? "" : `<div style="margin-bottom:22px;">
       <button type="button" class="btn ghost small" id="logBatchBtn">${p.batches && p.batches.length ? "+ Log Follow-up Batch" : "+ Log Batch"}</button>
-    </div>`;
+    </div>`}`;
 
   document.getElementById("modalFlowZone").innerHTML = activeDetailFromDashboard ? renderFlowMilestones(p) : "";
   document.getElementById("modalFacts").innerHTML =
