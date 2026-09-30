@@ -3550,11 +3550,15 @@ const DELIVERABLE_TEMPLATES = {
     const lastBatch = (p.batches && p.batches.length) ? p.batches[p.batches.length-1] : null;
     const candidates = lastBatch ? (p.batchCandidates||[]).filter(c=>c.batchDate===lastBatch.date) : [];
     // Regla del Master Prompt: SLA de feedback de max 3 dias habiles desde el envio — se propone
-    // ese rango real en vez de fechas inventadas o un texto vago sin fechas.
-    const today = new Date();
-    let end = today;
+    // una fecha real en vez de una fecha inventada o un texto vago sin fecha.
+    // BUG REAL reportado por Nicolas (2026-09-30): el calculo de 3 dias HABILES ya era correcto
+    // (confirmado probando con "hoy" = miercoles: jue, vie, salta el finde, cae lunes), pero el
+    // correo antes solo mostraba el RANGO de fechas ("between Sep 30 and Oct 5") sin decir "3
+    // business days" en ningun lado — cuando el finde cae en medio, ese rango se ve como 5 dias
+    // de calendario, facil de leer mal como si el SLA fuera de 5 dias y no de 3. Ahora el texto
+    // dice explicitamente "3 business days" primero, la fecha es solo la referencia concreta.
+    let end = new Date();
     for(let i=0;i<3;i++) end = nextBizDay(end);
-    const startStr = today.toISOString().slice(0,10);
     const endStr = end.toISOString().slice(0,10);
     return {
       title: "Submission Notification to Hiring Manager",
@@ -3567,7 +3571,7 @@ const DELIVERABLE_TEMPLATES = {
         <p>You can access them directly here:<br>${roleWorkableLinkHtml(p)}</p>
         <p>Please find the candidates below:</p>
         <ul>${candidates.length ? candidates.map(c=>`<li>${escapeHtml(c.name)}</li>`).join("") : "<li>[Candidate names]</li>"}</ul>
-        <p>We are aiming to provide an update to the candidates between ${startStr} and ${endStr}, so I would really appreciate your support in sharing your feedback within this timeframe.</p>
+        <p>We are aiming to provide an update to the candidates within 3 business days (by ${endStr}), so I would really appreciate your support in sharing your feedback within that timeframe.</p>
         <p>Let me know once you've had a chance to review them, or if you'd like to discuss any of the profiles in more detail. You can also leave your comments in each of their profiles.</p>`
     };
   },
