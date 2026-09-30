@@ -2830,6 +2830,13 @@
       <button class="modal-close" id="logBatchClose" type="button">&times;</button>
     </div>
 
+    <div id="logBatchSourcingRequiredState" style="display:none;">
+      <div class="panel-sub" style="margin:0 0 10px;">This requisition hasn't reached Sourcing yet — logging a batch now would jump the status straight past Job Posting Created and Sourcing Started, all the way to Submitted. Confirm those steps first, from Next Step below.</div>
+      <div class="form-actions">
+        <button class="btn primary" type="button" id="logBatchGoToNextStepBtn">Go to Next Step</button>
+      </div>
+    </div>
+
     <div id="logBatchSalaryRequiredState" style="display:none;">
       <div class="panel-sub" style="margin:0 0 10px;">Compensation needs to be confirmed with the hiring manager before logging the first submission batch — it doesn't make sense to be sourcing candidates against a range nobody's agreed on yet.</div>
       <div class="form-actions">
@@ -3700,6 +3707,13 @@ function nextStepCtaHtml(p){
       const label = p.status === "Intake Pending" ? "Confirm Post Intake Meeting Notes Sent" : "Confirm Role Understanding Summary Sent";
       return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" style="margin-top:4px; display:inline-block;">${label} &rarr;</button>${msg}`;
     }
+    // Nicolas, 2026-09-30: nuevo paso intermedio (job creation/posting), codependiente entre
+    // Intake Held/Waived y Sourcing — ver confirmJobPostingCreated()/REQUIRES_JOB_POSTING_CONFIRMED.
+    // data-action (no data-target-status, igual que el paso de arriba: esto tampoco cambia el
+    // status por si solo) distingue este boton de los otros 2 casos en el wiring de renderDetailModal().
+    if(!p.jobPostingConfirmedDate){
+      return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-action="confirmJobPosting" style="margin-top:4px; display:inline-block;">Confirm Job Posting Created &rarr;</button>${msg}`;
+    }
     return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
   }
   // CORREGIDO 2026-09-21 (Nicolas): lo que sigue despues de Submitted no es una eleccion manual
@@ -3734,7 +3748,14 @@ function nextStepGuidanceText(p){
       ? `already happened (held on ${escapeHtml(p.intake || "")})`
       : `was waived (see the reason on file above)`;
     const sourceDoc = isHeld ? "the Post Intake Meeting Notes" : "the Role Understanding Summary";
-    return `The intake meeting ${whatHappened} — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI (based on what you covered in ${sourceDoc}), then move status to Sourcing. The first batch is due within 7-9 business days of the intake meeting, not from today.`;
+    // Nicolas, 2026-09-30: "paso previo a sourcing/screening que es el job creation/posting...
+    // hacer codependent de los status entre intake meeting held y sourcing/screening" — 3er
+    // sub-paso nuevo, entre confirmar el intake summary y poder moverse a Sourcing (ver
+    // confirmJobPostingCreated()/REQUIRES_JOB_POSTING_CONFIRMED).
+    if(!p.jobPostingConfirmedDate){
+      return `The intake meeting ${whatHappened} — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI (based on what you covered in ${sourceDoc}), then confirm below once they're created. Sourcing can't start until this is confirmed.`;
+    }
+    return `The Spott Job and LinkedIn Job Posting are already created — move status to Sourcing to start sourcing candidates. The first batch is due within 7-9 business days of the intake meeting, not from today.`;
   }
   return STATUS_GUIDANCE[p.status];
 }
@@ -8354,6 +8375,8 @@ function renderDetailModal(){
   // Meeting Notes Sent", no un cambio de status — confirma directo en vez de onStatusOptionClick().
   if(nextStepPrimaryBtn) nextStepPrimaryBtn.addEventListener("click", ()=>{
     const target = nextStepPrimaryBtn.dataset.targetStatus;
+    const action = nextStepPrimaryBtn.dataset.action;
+    if(action === "confirmJobPosting"){ confirmJobPostingCreated(p); return; }
     if(!target){ confirmIntakeSummarySent(p); return; }
     // BUG REAL (Nicolas, 2026-09-26, con SE-014/017/018/019 como ejemplo: "ya puse lo de confirm
     // kickoff note sent y no paso nada"): "Confirm Kickoff Note Sent" pasaba por
@@ -8652,6 +8675,12 @@ document.addEventListener("click", (e)=>{
 // igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
 // empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
 const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Client Interview", "Offer Request", "Filled", "Hired"];
+// Nicolas, 2026-09-30: "hacer codependent de los status entre intake meeting held y sourcing/
+// screening" al paso de job creation/posting — mismo patron que REQUIRES_INTAKE_HELD justo arriba
+// (misma lista de statuses, ya que este paso pasa DESPUES del intake y ANTES de Sourcing), solo
+// que exige p.jobPostingConfirmedDate en vez de p.intake/intakeWaivedReason. Ver
+// confirmJobPostingCreated().
+const REQUIRES_JOB_POSTING_CONFIRMED = ["Sourcing", "Submitted", "Client Interview", "Offer Request", "Filled", "Hired"];
 // 2026-09-18, Nicolas: mismo principio que Compensation->Log Batch — no tiene sentido entrevistar,
 // hacer una oferta, o marcar un placement si nunca se sometio ningun candidato para este req. Solo
 // bloquea transiciones NUEVAS hechas desde la UI (dropdown o Next Step) — datos ya existentes en
@@ -8849,6 +8878,44 @@ async function confirmIntakeSummarySent(p){
     msg.style.color = "var(--warning)";
   }
 }
+// Nicolas, 2026-09-30: "paso previo a sourcing/screening que es el job creation/posting. Debe
+// estar outlined en next steps y hacer codependent de los status entre intake meeting held y
+// sourcing/screening" — nuevo paso intermedio, mismo patron EXACTO que confirmIntakeSummarySent()
+// justo arriba (confirmacion puntual con fecha/autor real, nunca cambia el status por si sola —
+// el boton siguiente "Confirm Sourcing Started" es el que de verdad avanza el status, y ahora
+// exige esto primero, ver REQUIRES_JOB_POSTING_CONFIRMED/onStatusOptionClick() mas abajo). A
+// diferencia de Intake Summary Sent, esto NO se propaga a hermanas de Headcount Group — cada
+// vacante suele tener su propio job posting en Workable/Spott/LinkedIn, no una sola conversacion
+// compartida como el intake.
+async function confirmJobPostingCreated(p){
+  const today = localTodayStr();
+  const remarkText = "Spott Job and LinkedIn Job Posting created in KeyStone AI.";
+  p.jobPostingConfirmedDate = today;
+  p.extra = p.extra || [];
+  p.extra.push({date: today, time: nowTimeStr(), type:"action", author: currentAuthorName(), text: remarkText});
+  renderDetailModal();
+  renderPositions();
+  renderTracking();
+  showUpNextPreview(p, p.status);
+  const msg = document.getElementById("nextStepDoneMsg");
+  if(isConnected()){
+    if(msg){ msg.textContent = "Logging…"; msg.style.color = "var(--text-muted)"; }
+    try {
+      await graphUpdatePositionFieldByHeader(p.id, "Job Posting Confirmed Date", today);
+      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
+      const freshMsg = document.getElementById("nextStepDoneMsg");
+      if(freshMsg){ freshMsg.textContent = "Logged."; freshMsg.style.color = "var(--good)"; }
+    } catch(err){
+      console.error(err);
+      const freshMsg = document.getElementById("nextStepDoneMsg");
+      if(freshMsg){ freshMsg.textContent = "Could not save: " + err.message; freshMsg.style.color = "var(--critical)"; }
+      alert("Could not save this confirmation. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
+    }
+  } else if(msg){
+    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+    msg.style.color = "var(--warning)";
+  }
+}
 function onStatusOptionClick(p, newStatus){
   document.getElementById("statusDropdownMenu")?.classList.remove("open");
   if(newStatus === p.status) return;
@@ -8885,6 +8952,16 @@ function onStatusOptionClick(p, newStatus){
   }
   if(REQUIRES_INTAKE_HELD.includes(newStatus) && !p.intake && !p.intakeWaivedReason){
     alert(`Can't move to "${statusLabel(newStatus)}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
+    return;
+  }
+  // Grandfathered con "STATUS_ORDER.indexOf(p.status) < ...Sourcing": este campo es nuevo
+  // (2026-09-30) y NINGUN req ya en Sourcing o mas adelante lo va a tener seteado (la columna del
+  // Excel real ni siquiera existe todavia) — sin este grandfather, TODO el pipeline activo actual
+  // de Nicolas quedaria bloqueado para cualquier avance manual de status hasta confirmar esto a
+  // mano req por req. El gate real solo debe aplicar mientras se intenta SALTAR el paso (moverse
+  // desde antes de Sourcing directo a Sourcing+), no a un req que ya paso por ahi en la vida real.
+  if(REQUIRES_JOB_POSTING_CONFIRMED.includes(newStatus) && !p.jobPostingConfirmedDate && STATUS_ORDER.indexOf(p.status) < STATUS_ORDER.indexOf("Sourcing")){
+    alert(`Can't move to "${statusLabel(newStatus)}" yet — the Spott Job and LinkedIn Job Posting haven't been confirmed created in KeyStone AI. Confirm that first from the Next Step section before starting to source.`);
     return;
   }
   // CORREGIDO 2026-09-22 (Nicolas, bug real): antes solo revisaba p.batches de ESTE req — un
@@ -9351,6 +9428,22 @@ async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
     if(!opts.skipRerender) renderDetailModal();
     return {ok:false};
   }
+  // Nicolas, 2026-09-30 audit ("Los milestone, lodges de acciones durante los estados y pasos que
+  // hay que seguir en next steps, no se estan registrando en activity"): antes de esto, el cambio
+  // de status del CANDIDATO solo dejaba rastro en Activity cuando, de paso, hacia avanzar el
+  // status del REQ (ver advancePositionForCandidateStatus) — moverlo a Rejected/Withdrawn/Keep
+  // Warm/Hiring Manager Review, o a cualquier status cuando el req ya estaba igual o mas adelante,
+  // no quedaba registrado en ningun lado. "Placed" se excluye aqui porque applyPlacedCandidate()
+  // mas abajo ya loguea su propio mensaje, mas completo ("marked as Placed Candidate...").
+  if(newStatus !== "Placed"){
+    const candStatusRemark = `${c.name}'s status changed from ${prevStatus} to ${newStatus}.`;
+    p.extra = p.extra || [];
+    p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text: candStatusRemark});
+    if(isConnected()){
+      try { await graphAppendHistorial(p.id, p.title, candStatusRemark, currentAuthorName(), "action"); }
+      catch(err){ console.error("Could not log this candidate's status change (non-fatal for the status change itself):", err); }
+    }
+  }
   // Elegido de este batch = el Placed Candidate, pero en un Headcount Group el candidato pudo
   // cerrar OTRA vacante del mismo grupo, no necesariamente esta req (Nicolas, 2026-09-22: "no solo
   // poder elegirlo, si no mostrarlo tambien"). Se pregunta cual req cerro realmente cuando hay
@@ -9410,11 +9503,20 @@ async function applyPlacedCandidate(sourceP, c, targetP){
   }
   if(targetP.placedCandidate !== c.name){
     targetP.placedCandidate = c.name;
+    // Nicolas, 2026-09-30 audit: esto NUNCA quedaba registrado localmente (p.extra) — solo se
+    // escribia a HistorialTable, y solo si isConnected() era true, a diferencia de cada otra
+    // confirmacion de milestone en este archivo (confirmJobPostingCreated, confirmIntakeSummarySent,
+    // etc.), que siempre empujan a p.extra primero, conectado o no. Ademas el type que se mandaba
+    // a Graph era "milestone", que no es un type real (ver TL_BADGE_LABELS: los unicos types son
+    // auto/action/manual/status/guidance) — se veia como "Remark" generico en vez de "Milestone".
+    const crossReqNote = (targetP.id !== sourceP.id) ? `, closing this Headcount Group requisition instead of ${sourceP.id}` : "";
+    const placedRemarkText = `${c.name} marked as Placed Candidate (from ${sourceP.id}'s ${c.batchDate} batch)${crossReqNote}.`;
+    targetP.extra = targetP.extra || [];
+    targetP.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"auto", author: currentAuthorName(), text: placedRemarkText});
     try {
       if(isConnected()){
         await graphUpdatePositionFieldByHeader(targetP.id, "Placed Candidate", c.name);
-        const crossReqNote = (targetP.id !== sourceP.id) ? `, closing this Headcount Group requisition instead of ${sourceP.id}` : "";
-        await graphAppendHistorial(targetP.id, targetP.title, `${c.name} marked as Placed Candidate (from ${sourceP.id}'s ${c.batchDate} batch)${crossReqNote}.`, currentAuthorName(), "milestone");
+        await graphAppendHistorial(targetP.id, targetP.title, placedRemarkText, currentAuthorName(), "auto");
       }
     } catch(err){ console.error("Could not save Placed Candidate (non-fatal for the status change itself):", err); }
   }
@@ -9466,6 +9568,13 @@ async function saveCandidateFillDate(p, candidateId){
   if(dateStr > today){ alert("Fill Date can't be in the future — it logs something that already happened (the candidate accepting the offer)."); return; }
   c.fillDate = dateStr;
   if(!p.fill) p.fill = dateStr;
+  // Nicolas, 2026-09-30 audit: el Fill Date en si (el hecho de que Immy confirmo offer letter +
+  // aceptacion) es un milestone real independiente de si el status del req avanza o no (ver el
+  // bloque statusChanged mas abajo, que solo corre la PRIMERA vez que algun candidato llega aqui) —
+  // sin esto, el Fill Date de cualquier candidato despues del primero no dejaba ningun rastro.
+  const fillRemarkText = `Fill Date logged for ${c.name} (${dateStr}).`;
+  p.extra = p.extra || [];
+  p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text: fillRemarkText});
   let statusChanged = false;
   let remarkText = null;
   // Mismo formato canonico que advancePositionForCandidateStatus()/commitStatusChange() usan para
@@ -9490,6 +9599,7 @@ async function saveCandidateFillDate(p, candidateId){
     try {
       await graphUpdateBatchCandidateField(c.id, "Fill Date", dateStr);
       await graphUpdatePositionField(p.id, "J", dateStr);
+      await graphAppendHistorial(p.id, p.title, fillRemarkText, currentAuthorName(), "action");
       if(statusChanged){
         await graphUpdatePositionField(p.id, "G", "Filled");
         await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
@@ -9513,6 +9623,14 @@ async function saveCandidateHireDate(p, candidateId){
   if(c.fillDate && dateStr < c.fillDate){ alert("Start Date can't be before the Fill Date — check the dates."); return; }
   c.hireDate = dateStr;
   if(!p.hire) p.hire = dateStr;
+  // Nicolas, 2026-09-30 audit: esta funcion nunca habia logueado nada en Activity — a diferencia
+  // de Fill Date (que al menos loguea el auto-avance de status), el Start Date podia quedar
+  // guardado sin dejar ningun rastro hasta que, en el mejor de los casos, llegara la fecha y
+  // checkArrivedStartDates() logueara el avance a Hired por separado (y nunca, si esa fecha nunca
+  // se compara contra "hoy" por alguna razon).
+  const hireRemarkText = `Start Date logged for ${c.name} (${dateStr}).`;
+  p.extra = p.extra || [];
+  p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author: currentAuthorName(), text: hireRemarkText});
   renderDetailModal();
   renderTracking();
   renderPositions();
@@ -9520,6 +9638,7 @@ async function saveCandidateHireDate(p, candidateId){
     try {
       await graphUpdateBatchCandidateField(c.id, "Start Date", dateStr);
       await graphUpdatePositionField(p.id, "K", dateStr);
+      await graphAppendHistorial(p.id, p.title, hireRemarkText, currentAuthorName(), "action");
     } catch(err){
       console.error(err);
       alert("Could not save this candidate's Start Date.\n\n"+err.message);
@@ -9975,11 +10094,22 @@ function openLogBatchModal(p, opts={}){
   // confirmo. Ver formatSalary()/hasSalaryConfirmed().
   const salaryMissing = isFirst && !hasSalaryConfirmed(p);
   const needsCalibration = !opts.pivotView && batchNumber >= 3 && !calibrationHeld;
+  // Nicolas, 2026-09-30 audit ("Status submitted en intake held por un momento? Revisalo y
+  // auditalo"): logBatchSave's auto-advance to "Submitted" (see autoStatusChange below) never
+  // checked the CURRENT status first — it only checked that "Submitted" was further along than
+  // wherever p.status happened to be. That let a batch logged while still in Kickoff/Intake Held/
+  // etc jump the status straight to Submitted, skipping Sourcing (and the new Job Posting
+  // Confirmed step) entirely, with no gate at all. Mirrors logBatchSalaryRequiredState just below.
+  const sourcingNotStarted = STATUS_ORDER.indexOf(p.status) < STATUS_ORDER.indexOf("Sourcing");
+  document.getElementById("logBatchSourcingRequiredState").style.display = "none";
   document.getElementById("logBatchSalaryRequiredState").style.display = "none";
   document.getElementById("logBatchFormState").style.display = "none";
   document.getElementById("pivotRequestState").style.display = "none";
   document.getElementById("pivotPendingState").style.display = "none";
-  if((opts.pivotView && !pivotOk) || needsCalibration){
+  if(sourcingNotStarted){
+    document.getElementById("logBatchModalTitle").textContent = "Sourcing Hasn't Started Yet";
+    document.getElementById("logBatchSourcingRequiredState").style.display = "";
+  } else if((opts.pivotView && !pivotOk) || needsCalibration){
     if(hasPendingRequest){
       document.getElementById("logBatchModalTitle").textContent = "Pivot SLA Pending Approval";
       document.getElementById("pivotPendingState").style.display = "";
@@ -10028,6 +10158,10 @@ document.getElementById("logBatchModal").addEventListener("click", (e)=>{
 document.getElementById("logBatchGoToSalaryBtn").addEventListener("click", ()=>{
   closeLogBatchModal();
   openEditReqInfoModal();
+});
+document.getElementById("logBatchGoToNextStepBtn").addEventListener("click", ()=>{
+  closeLogBatchModal();
+  document.getElementById("modalNextStep")?.scrollIntoView({behavior:"smooth", block:"center"});
 });
 // Estado de los candidatos pendientes de guardar en el formulario de Log Batch — cada uno es
 // {file, name, email}, name/email pre-llenados por extractCandidateInfoFromCv() (mismo parseo que
@@ -11336,6 +11470,11 @@ function startAutoRefresh(){
   if(autoRefreshTimer) return;
   autoRefreshTimer = setInterval(async ()=>{
     if(!isConnected()) return;
+    // BUG REAL (Nicolas, "status submitted en intake held por un momento"): un guardado de varios
+    // pasos (ej. logBatchSave) podia perder la carrera contra este refresco — ver el comentario
+    // grande junto a pendingWriteCount. Si hay CUALQUIER escritura en curso, este tick se salta
+    // por completo (nunca refresca a medio guardado) y simplemente lo intenta de nuevo en 2 min.
+    if(pendingWriteCount > 0) return;
     // En modo PIN no hay token propio de Graph — loadFromGraph() tronaria ("Not signed in.")
     // cada 2 minutos. El proxy publico de solo lectura ya trae los mismos datos sin necesitar
     // ninguna sesion.
@@ -11522,9 +11661,24 @@ async function getMailToken(){
 // nunca mostro un error para esas). Las lecturas (GET) no pasan por esta cola, solo lo que
 // modifica el archivo — encolarlas tambien no aportaria nada y solo haria todo mas lento.
 let graphWriteQueue = Promise.resolve();
+// pendingWriteCount: cuantas escrituras reales (Graph autenticado O Worker en PIN mode, ver
+// workerRecruiterWrite() mas abajo) estan en curso ahora mismo — usado por el auto-refresh de 2
+// min (ver startAutoRefresh()) para NUNCA refrescar mientras un guardado todavia este en vuelo.
+// BUG REAL (Nicolas/David, 2026-09-30, "status submitted en intake held por un momento"): un
+// guardado de varios pasos seguidos (ej. logBatchSave) podia perder la carrera contra el refresco
+// de 2 min — si este caia justo antes de que la ULTIMA escritura del guardado aterrizara,
+// loadFromGraph()/tryLoadPublicSnapshot() reconstruian POSITIONS desde el archivo real (todavia
+// con el status VIEJO) y lo pisaban encima del status recien puesto localmente, que parpadeaba en
+// pantalla un momento y luego se revertia solo, sin que nadie tocara nada.
+let pendingWriteCount = 0;
 function queueIfWrite(method, run){
   if(!method || method === "GET") return run();
-  const result = graphWriteQueue.then(run, run);
+  pendingWriteCount++;
+  const settle = ()=>{ pendingWriteCount = Math.max(0, pendingWriteCount-1); };
+  const result = graphWriteQueue.then(run, run).then(
+    (v)=>{ settle(); return v; },
+    (err)=>{ settle(); throw err; }
+  );
   graphWriteQueue = result.then(()=>{}, ()=>{});
   return result;
 }
@@ -11736,7 +11890,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-001", title:"Backend Engineer (Demo)", client:"Irth Solutions", hiringManager:"Jordan Ellis",
       recruiter:DEMO_RECRUITER_NAME, status:"Kickoff", country:"United States", workArrangement:"Remote", city:null,
-      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobPostingConfirmedDate:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:daysAgoStr(0), intake:null, submit:null, fill:null, hire:null,
@@ -11751,7 +11905,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-002", title:"Product Designer (Demo)", client:"Irth Solutions", hiringManager:"Priya Nandan",
       recruiter:DEMO_RECRUITER_NAME, status:"Intake Meeting Requested", country:"Canada", workArrangement:"Hybrid", city:"Toronto",
-      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobPostingConfirmedDate:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(5), intakeRequestedDate:daysAgoStr(5), recruiterAcceptedDate:daysAgoStr(5), intake:null, submit:null, fill:null, hire:null,
@@ -11766,7 +11920,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-003", title:"Data Analyst (Demo)", client:"Irth Solutions", hiringManager:"Marcus Webb",
       recruiter:DEMO_RECRUITER_NAME, status:"Sourcing", country:"United States", workArrangement:"Remote", city:null,
-      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobPostingConfirmedDate:null,
       salaryCurrency:"USD", salaryMin:90000, salaryMax:110000, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(15), intakeRequestedDate:daysAgoStr(15), recruiterAcceptedDate:daysAgoStr(15), intake:daysAgoStr(10), submit:null, fill:null, hire:null,
@@ -11781,7 +11935,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-004", title:"Customer Success Manager (Demo)", client:"Irth Solutions", hiringManager:"Devon Cruz",
       recruiter:DEMO_RECRUITER_NAME, status:"Kickoff", country:"United States", workArrangement:"Remote", city:null,
-      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobPostingConfirmedDate:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:null, intake:null, submit:null, fill:null, hire:null,
@@ -11961,6 +12115,11 @@ function parsePositionsTable(posHeaders, posRows){
       // Columna nueva/opcional: si el archivo real todavia no la tiene, idx() devuelve -1 y
       // r[-1] es undefined, asi que simplemente se muestra como "Not set" sin romper nada.
       linkedinRecruiterUrl: r[idx("LinkedIn Recruiter URL")] || null,
+      // Columna nueva/opcional (Nicolas, 2026-09-30) — confirmacion de que el Spott Job/LinkedIn
+      // Job Posting ya se crearon, paso previo obligatorio a Sourcing/Screening (ver
+      // confirmJobPostingCreated()/REQUIRES_JOB_POSTING_CONFIRMED). Mismo patron idx()/-1 de
+      // siempre para una columna que el Excel real todavia puede no tener.
+      jobPostingConfirmedDate: r[idx("Job Posting Confirmed Date")] || null,
       salaryCurrency: r[idx("Salary Currency")] || null,
       salaryMin: r[idx("Salary Min")] != null && r[idx("Salary Min")] !== "" ? r[idx("Salary Min")] : null,
       salaryMax: r[idx("Salary Max")] != null && r[idx("Salary Max")] !== "" ? r[idx("Salary Max")] : null,
@@ -12305,15 +12464,24 @@ async function tryLoadPublicSnapshot(){
 // "identifyPin" (el paso de login en si, antes de saber el nombre), no pasa por aqui — se
 // llama directo desde el sign-in screen, ver el listener de "pinLoginSave".
 async function workerRecruiterWrite(action, params){
-  const res = await fetch(`${PUBLIC_READ_URL}/recruiter-write`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recruiterName: MY_RECRUITER_NAME, pin: pinModeCode, action, ...params }),
-  });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if(!res.ok) throw new Error((data && data.error) || `Worker error (${res.status})`);
-  return data;
+  // "getMyCandidates" es una LECTURA (ver pinLoadMyCandidatesAndMerge()), no cuenta para
+  // pendingWriteCount — solo las acciones que de verdad modifican el archivo real deben bloquear
+  // el auto-refresh (ver comentario grande junto a pendingWriteCount/queueIfWrite arriba).
+  const isWrite = action !== "getMyCandidates";
+  if(isWrite) pendingWriteCount++;
+  try {
+    const res = await fetch(`${PUBLIC_READ_URL}/recruiter-write`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recruiterName: MY_RECRUITER_NAME, pin: pinModeCode, action, ...params }),
+    });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if(!res.ok) throw new Error((data && data.error) || `Worker error (${res.status})`);
+    return data;
+  } finally {
+    if(isWrite) pendingWriteCount = Math.max(0, pendingWriteCount-1);
+  }
 }
 // Candidatos por batch (nombre, CV, estado) nunca vienen en tryLoadPublicSnapshot() — son datos
 // personales de gente que aplico, no algo que el snapshot publico sin login deba exponer (ver
