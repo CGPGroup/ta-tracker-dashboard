@@ -4825,11 +4825,16 @@ function canStartSourcing(p){
 // CANDIDATE_STATUS_TO_POSITION_STATUS mas abajo, que usa este mismo valor).
 // "Active" (2026-09-21, Nicolas: "eso no deberiamos quitarlo? por si los otros status ya nos
 // dicen que pasa con el candidato") se quita — era un placeholder generico que no decia nada real
-// sobre el candidato, a diferencia de cada otro valor de esta lista. "Screening Interview" (mismo
-// dia, renombrado de "Screening" a secas — Nicolas: "debe llamarse Screening Interview") pasa a
-// ser el default real para un candidato recien agregado/logueado (ver openAddCandidateModal()/
-// logBatchSave() mas abajo) — sigue siendo real y honesto: esta con el hiring manager en revision
-// inicial del batch, todavia no en una ronda de entrevista formal.
+// sobre el candidato, a diferencia de cada otro valor de esta lista.
+// RENOMBRADO 2026-09-30 (Nicolas, viendo el default real en un batch ya logueado): "Screening
+// Interview" (el nombre que tuvo desde 2026-09-21, renombrado en su momento de "Screening" a
+// secas) sonaba a que faltaba una entrevista de screening — pero un candidato YA en un batch ya
+// paso por sourcing/screening, eso es justo por que se pudo incluir en el batch. El SIGNIFICADO
+// real de este default nunca cambio (es el mismo desde 2026-09-21, ver el comentario que sigue):
+// recien enviado al hiring manager, todavia esperando que lo revise, ninguna entrevista formal
+// agendada — "Hiring Manager Review" nombra eso de verdad, sin insinuar una entrevista que no ha
+// pasado. Sigue siendo el default real para un candidato recien agregado/logueado (ver
+// openAddCandidateModal()/logBatchSave() mas abajo), mismo tono/comportamiento, un renombre puro.
 // "Withdrawn" (2026-09-21, Nicolas) — distinto de "Rejected": Rejected es el cliente
 // descartando al candidato, Withdrawn es el candidato echandose para atras el mismo (declino
 // seguir, acepto otra oferta, etc.). Vive SOLO a nivel de candidato — "Candidate Withdrawn" se
@@ -4847,17 +4852,17 @@ function canStartSourcing(p){
 // "Placed" sigue siendo un valor VALIDO de c.status (los candidatos que ya llegaron ahi lo tienen
 // guardado), solo dejo de ser una opcion SELECCIONABLE — ver candidateRowHtml(), que muestra un
 // badge fijo en vez del select una vez que un candidato ya esta Placed.
-const BATCH_CANDIDATE_STATUSES = ["Screening Interview","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Rejected","Withdrawn","Keep Warm / Hold"];
+const BATCH_CANDIDATE_STATUSES = ["Hiring Manager Review","Technical Interview","Hiring Manager Interview","Executive Review","Offer Request","Rejected","Withdrawn","Keep Warm / Hold"];
 const BATCH_CANDIDATE_STATUS_TONE = {
-  "Screening Interview": "within", "Technical Interview": "within",
+  "Hiring Manager Review": "within", "Technical Interview": "within",
   "Hiring Manager Interview": "within", "Executive Review": "within", "Offer Request": "within",
   "Placed": "within", "Rejected": "out", "Withdrawn": "out", "Keep Warm / Hold": "risk",
 };
 // Mapea el status de un candidato individual al status del REQ que deberia empujar hacia adelante
 // (ver updateCandidateStatus()) — Technical/Hiring/Executive colapsan en un solo "Client Interview"
 // a nivel de req (no hay un orden fijo real entre esas 3, ver STATUS_ORDER), Offer Request es 1:1.
-// Screening/Active/Rejected/Keep Warm no empujan nada (no representan progreso hacia una etapa
-// nueva del req).
+// Hiring Manager Review/Rejected/Withdrawn/Keep Warm no empujan nada (no representan progreso
+// hacia una etapa nueva del req).
 const CANDIDATE_STATUS_TO_POSITION_STATUS = {
   "Technical Interview": "Client Interview",
   "Hiring Manager Interview": "Client Interview",
@@ -10162,7 +10167,7 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     let id;
     try {
       id = isConnected()
-        ? await graphAppendBatchCandidate(p.id, date, cand.name, cand.email, "Screening Interview", null, author)
+        ? await graphAppendBatchCandidate(p.id, date, cand.name, cand.email, "Hiring Manager Review", null, author)
         : `${p.id}-${Date.now()}-${i}`;
     } catch(err){
       console.error(`Could not save candidate "${cand.name}":`, err);
@@ -10180,7 +10185,7 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
         cvWarnings.push(cand.name);
       }
     }
-    p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Screening Interview", cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null });
+    p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Hiring Manager Review", cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null });
     succeeded.push(cand.name);
   }
   logBatchPendingCandidates = [];
@@ -12094,7 +12099,7 @@ function mergeBatchCandidates(positions, bcHeaders, bcRows){
       batchDate: excelValToDateStr(row[bIdx("Batch Date")]),
       name,
       email: row[bIdx("Candidate Email")] || null,
-      status: row[bIdx("Status")] || "Screening Interview",
+      status: row[bIdx("Status")] || "Hiring Manager Review",
       cvLink: row[bIdx("CV Link")] || null,
       addedBy: row[bIdx("Added By")] || null,
       addedDate: excelValToDateStr(row[bIdx("Added Date")]),
