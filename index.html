@@ -7846,9 +7846,12 @@ function renderDetailModal(){
   // vinieran antes (Hiring Manager/Recruiter/Status/Location/Work Arrangement) el grid de 3
   // columnas las partia en 2 filas distintas (Irth Careers URL sola, Spott+LinkedIn en la
   // siguiente). Con su propio facts-grid aparte, siempre quedan juntas sin importar que mas
-  // haya arriba. Orden: Irth primero (la pagina publica de la vacante), luego Spott (el
-  // sistema interno), luego LinkedIn.
+  // haya arriba. Orden (Nicolas, 2026-09-30): Workable primero (donde nace el req), luego Irth
+  // Careers (la pagina publica de la vacante, generada a partir de esa misma posting de
+  // Workable), luego Spott (el sistema interno), luego LinkedIn — ahora 4 campos, siempre en
+  // una sola fila (ver el grid-template-columns:repeat(4,1fr) mas abajo, en los 2 modos).
   const urlFacts = [];
+  if(p.workableUrl) urlFacts.push({label:"Workable URL", value: linkifyIfUrl(p.workableUrl, "View In Workable")});
   if(p.careersUrl) urlFacts.push({label:"Irth Careers Page URL", value: linkifyIfUrl(p.careersUrl, "View Posting")});
   if(p.spottJobId) urlFacts.push({label:"Spott Job URL", value: linkifyIfUrl(p.spottJobId, "View In Spott")});
   if(p.linkedinRecruiterUrl) urlFacts.push({label:"LinkedIn Recruiter URL", value: linkifyIfUrl(p.linkedinRecruiterUrl, "View Job Post")});
@@ -7991,16 +7994,25 @@ function renderDetailModal(){
   // En vista: texto fijo (los mismos urlFacts de arriba). En edicion (Tracking): compacto (link
   // + boton Edit) si ya tiene valor, formulario de captura si no; Edit/Add abren el modal
   // generico de un solo campo. Las tres van juntas en una sola fila de 3 columnas en los dos
-  // modos: Irth primero, luego Spott, luego LinkedIn.
+  // modos: Workable primero, luego Irth, luego Spott, luego LinkedIn (ver comentario de
+  // urlFacts arriba).
   // Nicolas + David: no darle de una vez la lista completa de todos los campos posibles desde el
   // arranque de la req confunde a alguien que apenas esta aprendiendo el proceso — paso a paso,
   // Spott/LinkedIn se bloquean (candado + tooltip, no se esconden) hasta que de verdad se puede
-  // empezar a sourcear. Irth Careers Page URL queda fuera de esta regla: esa la suele crear/tener
-  // el cliente desde antes, no es una accion de sourcing del reclutador.
+  // empezar a sourcear. Workable URL e Irth Careers Page URL quedan fuera de esta regla: esas
+  // las suele crear/tener el cliente desde antes, no son una accion de sourcing del reclutador.
   const sourcingLockMsg = canStartSourcing(p) ? null
     : "Available once the intake meeting is held (or waived) — sourcing shouldn't start before that.";
-  const urlFactsHtml = isView ? factsSection("", urlFacts) : `
-    <div class="facts-grid" style="margin-bottom:22px;">
+  // Nicolas, 2026-09-30: "quiero que los campos queden en la misma linea, serian 4 en una misma
+  // linea" — grid-template-columns explicito (repeat(4,1fr)) en vez del repeat(3,1fr)/auto-fit
+  // que .facts-grid trae por defecto, en LOS DOS modos (vista y edicion), para que las 4 URLs
+  // siempre queden juntas en una sola fila sin importar cuantos otros campos vengan antes.
+  const urlFactsHtml = isView
+    ? (urlFacts.length ? `<div class="facts-grid" style="grid-template-columns:repeat(4,1fr);">${urlFacts.map(f=>
+        `<div><div class="fact-label">${f.label}</div><div class="fact-value">${f.value}</div></div>`).join("")}</div>` : "")
+    : `
+    <div class="facts-grid" style="margin-bottom:22px; grid-template-columns:repeat(4,1fr);">
+      ${urlFactCell("Workable URL", p.workableUrl, "View In Workable", "editWorkableUrlBtn")}
       ${urlFactCell("Irth Careers Page URL", p.careersUrl, "View Posting", "editCareersUrlBtn")}
       ${urlFactCell("Spott Job URL", p.spottJobId, "View In Spott", "editSpottIdBtn", sourcingLockMsg)}
       ${urlFactCell("LinkedIn Recruiter URL", p.linkedinRecruiterUrl, "View Job Post", "editLinkedinUrlBtn", sourcingLockMsg)}
@@ -8139,6 +8151,23 @@ function renderDetailModal(){
           p.spottJobId = newVal;
           if(isConnected()) await graphUpdatePositionField(p.id, "AM", newVal || "");
           await logFieldEdit(p, newVal ? "Spott Job URL updated." : "Spott Job URL cleared.");
+          renderDetailModal();
+          renderPositions();
+          renderTracking();
+        },
+      });
+    });
+    document.getElementById("editWorkableUrlBtn").addEventListener("click", ()=>{
+      openEditFieldModal({
+        title: "Edit Workable URL",
+        label: "Workable URL",
+        placeholder: "e.g. https://irth-solutions.workable.com/backend/jobs/964C4C5AFF",
+        value: p.workableUrl,
+        requireUrl: true,
+        onSave: async (newVal)=>{
+          p.workableUrl = newVal;
+          if(isConnected()) await graphUpdatePositionFieldByHeader(p.id, "Workable URL", newVal || "");
+          await logFieldEdit(p, newVal ? "Workable URL updated." : "Workable URL cleared.");
           renderDetailModal();
           renderPositions();
           renderTracking();
@@ -11703,7 +11732,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-001", title:"Backend Engineer (Demo)", client:"Irth Solutions", hiringManager:"Jordan Ellis",
       recruiter:DEMO_RECRUITER_NAME, status:"Kickoff", country:"United States", workArrangement:"Remote", city:null,
-      spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:daysAgoStr(0), intake:null, submit:null, fill:null, hire:null,
@@ -11718,7 +11747,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-002", title:"Product Designer (Demo)", client:"Irth Solutions", hiringManager:"Priya Nandan",
       recruiter:DEMO_RECRUITER_NAME, status:"Intake Meeting Requested", country:"Canada", workArrangement:"Hybrid", city:"Toronto",
-      spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(5), intakeRequestedDate:daysAgoStr(5), recruiterAcceptedDate:daysAgoStr(5), intake:null, submit:null, fill:null, hire:null,
@@ -11733,7 +11762,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-003", title:"Data Analyst (Demo)", client:"Irth Solutions", hiringManager:"Marcus Webb",
       recruiter:DEMO_RECRUITER_NAME, status:"Sourcing", country:"United States", workArrangement:"Remote", city:null,
-      spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
       salaryCurrency:"USD", salaryMin:90000, salaryMax:110000, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(15), intakeRequestedDate:daysAgoStr(15), recruiterAcceptedDate:daysAgoStr(15), intake:daysAgoStr(10), submit:null, fill:null, hire:null,
@@ -11748,7 +11777,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-004", title:"Customer Success Manager (Demo)", client:"Irth Solutions", hiringManager:"Devon Cruz",
       recruiter:DEMO_RECRUITER_NAME, status:"Kickoff", country:"United States", workArrangement:"Remote", city:null,
-      spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:null, intake:null, submit:null, fill:null, hire:null,
@@ -11921,6 +11950,9 @@ function parsePositionsTable(posHeaders, posRows){
       // idx() da -1 si la columna todavia no existe en el Excel real (falta el paso manual
       // de agregarla); r[-1] es undefined en JS, no truena, simplemente no se muestra.
       spottJobId: r[idx("Spott Job ID")],
+      // Columna nueva/opcional (Nicolas, 2026-09-30) — mismo patron idx()/-1 que cualquier otra
+      // columna opcional de aqui: si el Excel real todavia no la tiene, simplemente no se muestra.
+      workableUrl: r[idx("Workable URL")] || null,
       careersUrl: r[idx("Irth Careers Page")],
       // Columna nueva/opcional: si el archivo real todavia no la tiene, idx() devuelve -1 y
       // r[-1] es undefined, asi que simplemente se muestra como "Not set" sin romper nada.
