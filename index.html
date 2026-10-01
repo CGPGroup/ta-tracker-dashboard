@@ -3413,9 +3413,15 @@ const STATUS_GUIDANCE = {
   "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Run Screening Interviews with your sourced candidates before submitting anyone formally — only candidates you'd genuinely stand behind should move forward, with your evaluation left as a comment on each profile. Once you've settled on a batch of 3-5 candidates, log them (with names, in Submission Batches) within 7-9 business days of the intake meeting — this moves to Submitted automatically once you do.",
   "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, update that candidate's own status in Submission Batches (Technical Interview, Hiring Manager Interview, or Executive Review, whichever applies) — this requisition moves to Client Interview automatically as soon as any candidate does.",
   "Client Interview": "Candidates are interviewing with the client — Technical Interview, Hiring Manager Interview, Executive Review, or some combination, the real order and number of rounds vary by role, so track it per candidate in Submission Batches rather than assuming one fixed sequence here. Feedback is due within 1-3 business days per candidate, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch. Once any candidate moves to Offer Request in Submission Batches, this requisition moves to Offer Request automatically too.",
-  "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month.",
-  "Filled": "An offer was accepted. Log the candidate's Fill Date in Submission Batches if you haven't already — this requisition moves to Filled automatically once it's logged, and this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives (see Hired).",
-  "Hired": "The candidate's start date has arrived — this is the real placement, not the offer signature. If their Start Date isn't logged yet, add it on their row in Submission Batches — this requisition moves to Placed automatically once that date is reached.",
+  // Nicolas, 2026-10-01: "todos los estados tienen una logica... cada accion" — estas 3 entradas
+  // (Offer Request/Filled/Hired) tenian una inconsistencia real: hablaban de Fill/Start Date como
+  // si todavia estuvieran pendientes, aunque por definicion YA pasaron para llegar a ese status
+  // (Filled exige Fill Date logueado, Hired exige Start Date ya llegado — ver
+  // CANDIDATE_STATUS_TO_POSITION_STATUS/checkArrivedStartDates()). Reescritas para describir lo
+  // que YA paso y lo que sigue, nunca lo ya hecho como si fuera pendiente.
+  "Offer Request": "The hiring manager wants to move forward with an offer — hand this off to Immy Nader at Irth and ask her, on the same email thread, for (1) the exact date the Offer Request goes out and (2) the confirmed start date once it's coordinated. Irth processes Offer Requests on Wednesdays (verbal offer first, formal letter to HR/IT/Payroll after) and prefers start dates between the 1st and 15th of the month. Once the candidate accepts, log their Fill Date in Submission Batches — this requisition moves to Filled automatically once you do.",
+  "Filled": "The candidate's Fill Date is already logged (the offer was accepted) — this is where Cornerstone's scope on this requisition ends. It's not fully closed until the candidate's actual start date arrives: once Immy confirms it, log it as the Start Date on their row in Submission Batches, and this requisition moves to Placed automatically once that date is reached (see Hired).",
+  "Hired": "The candidate's confirmed Start Date has arrived — this is the real placement, not the offer signature, and this requisition is now closed. Cornerstone's scope here is complete.",
   "Filled (Internal Hire)": "The client filled this requisition on their own — an internal employee move or an intern conversion — without a Cornerstone placement. This requisition is closed and does not count as a placement or an SLA miss; add a remark noting who filled it and how, if known.",
   "On Hold": "This requisition is on hold — either an automatic hold from a missed hiring manager feedback SLA (escalated to Immy Nader) or a client-driven pause. Keep a periodic check-in with the hiring manager even without a fixed deadline; don't let it go silent indefinitely.",
   // Distinto de "On Hold" normal: no es un incumplimiento de SLA, es una razon de negocio
@@ -3757,7 +3763,11 @@ function nextStepCtaHtml(p){
     // — el boton ahora abre ESE modal directamente en vez de solo dejar un remark generico.
     return `<br><button type="button" class="fact-edit-link" id="nextStepOpenBatchBtn" style="margin-top:4px; display:inline-block;">Log Submission Batch &rarr;</button>${msg}`;
   }
-  if(p.status === "Submitted" || p.status === "Client Interview" || p.status === "Filled"){
+  // Nicolas, 2026-10-01: "recuerda que todos los estados tienen una logica no? Mejor dicho, cada
+  // accion" — Offer Request se une a este mismo grupo: el handoff a Immy pasa por correo (el
+  // tracker no puede confirmarlo), pero la accion que SI se registra aqui es el Fill Date del
+  // candidato una vez acepte — eso vive en el mismo lugar que Submitted/Client Interview/Filled.
+  if(p.status === "Offer Request" || p.status === "Submitted" || p.status === "Client Interview" || p.status === "Filled"){
     // La accion real vive en Submission Batches (actualizar el status de un candidato, o loguear
     // su Fill/Start Date) — nunca una eleccion de status a nivel de req (ver
     // CANDIDATE_STATUS_TO_POSITION_STATUS/updateCandidateStatus()/candidateOfferDatesHtml()). El
@@ -3772,13 +3782,16 @@ function nextStepCtaHtml(p){
     // seguimiento recurrente).
     return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Log a Check-In &rarr;</button>${msg}`;
   }
-  // Offer Request/Hired/Filled (Internal Hire)/Cancelled: no hay ningun boton real que mostrar.
-  // Offer Request avanza solo (una vez se loguea el Fill Date del candidato en Submission
-  // Batches) y su unica accion pendiente es un correo fuera del tracker (handoff a Immy, ver
-  // STATUS_GUIDANCE) que el tracker no puede verificar que paso, asi que confirmarlo aqui seria
-  // un check vacio. Hired/Filled (Internal Hire)/Cancelled son terminales — no hay nada que
-  // confirmar. Un boton "Mark Done" en cualquiera de estos no representaba ninguna accion real,
-  // exactamente el tipo de "le doy click y no pasa nada" que Nicolas reporto.
+  if(p.status === "Filled (Internal Hire)"){
+    // El texto mismo invita a dejar un remark ("add a remark noting who filled it and how, if
+    // known") — a diferencia de Hired/Cancelled (cerrados, nada que registrar), aqui SI hay una
+    // accion real y pendiente: documentar el detalle si se llega a saber. Lleva directo a la
+    // seccion de Remarks en vez de prometer un cambio de status que nunca va a pasar.
+    return `<br><button type="button" class="fact-edit-link" id="nextStepGoToRemarkBtn" style="margin-top:4px; display:inline-block;">Add a Remark &rarr;</button>${msg}`;
+  }
+  // Hired/Cancelled: genuinamente terminales, nada pendiente que registrar (a diferencia de Filled
+  // Internal Hire justo arriba) — el texto de STATUS_GUIDANCE ya lo dice explicito ("no further
+  // action is needed" / cerrado). Un boton aqui prometeria una accion que no existe.
   return "";
 }
 // Mismo gate que nextStepCtaHtml() de arriba — ver el status real "Job Creation" (STATUS_ORDER)
@@ -8502,6 +8515,11 @@ function renderDetailModal(){
   const nextStepGoToBatchesBtn = document.getElementById("nextStepGoToBatchesBtn");
   if(nextStepGoToBatchesBtn) nextStepGoToBatchesBtn.addEventListener("click", ()=>{
     document.getElementById("modalBatchesSection")?.scrollIntoView({behavior:"smooth", block:"start"});
+  });
+  const nextStepGoToRemarkBtn = document.getElementById("nextStepGoToRemarkBtn");
+  if(nextStepGoToRemarkBtn) nextStepGoToRemarkBtn.addEventListener("click", ()=>{
+    document.getElementById("modalRemarkTitle")?.scrollIntoView({behavior:"smooth", block:"start"});
+    document.getElementById("modalRemarkText")?.focus();
   });
 
   const timeline = buildTimeline(p).slice().reverse();
