@@ -74,7 +74,7 @@
        se opaca") — seq-300 estaba casi al mismo lightness que --brand (seq-400), asi que dos
        etapas consecutivas (Intake Pending/Waived -> Sourcing) casi no se distinguian. Reespaciado
        con mas separacion de luminosidad entre cada paso, mismo hue naranja de marca en todos. */
-    --seq-100: #f6d7ba; --seq-200: #efb37e; --seq-300: #e89253; --seq-400: var(--brand); --seq-500: #c14f1b; --seq-600: #872f0f;
+    --seq-100: #f6d7ba; --seq-200: #efb37e; --seq-300: #e89253; --seq-350: #f0813a; --seq-400: var(--brand); --seq-500: #c14f1b; --seq-600: #872f0f;
 
     /* good/warning/critical llevan su *-rgb hermano por la misma razon que --brand-rgb: hay
        washes rgba() de estos tres (chips de SLA, alert-banners, tag de "Next Step") que antes
@@ -1457,6 +1457,9 @@
      Attention/quick lists se vea de una que este req viene de otro reclutador sin tener que
      abrirla. Color neutro de marca (no warning) porque no es una alerta, es informativo. */
   .pos-handoff-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--brand-wash); color: var(--brand-dark); white-space: nowrap; cursor: help; }
+  /* Flag de 24h+ en Job Creation (ver isJobCreationOverdue()) — tono critical (no warning) a
+     proposito, para distinguirse de pending-badge (ambar) como una alerta mas urgente. */
+  .pos-overdue-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; background: rgba(var(--critical-rgb),0.16); color: var(--critical); white-space: nowrap; cursor: help; }
   /* Badge del intake waived, distinto del pos-handoff-badge (tono warning, no brand) para que las
      dos señales nunca se confundan visualmente en una req que resulta ser las dos cosas a la vez
      (ver RD-019: handoff Y waived). El icono + el tooltip con la razon real puesta ahi mismo (no
@@ -3256,7 +3259,11 @@
 // ciclo de vida del req no puede acabarse... ya que lo pienso, sí es más accountability del
 // reclutador (asegurarse que el candidato este firme, revisar si esta en otros procesos) — un
 // reset no es una opcion". El reloj sigue corriendo igual que cualquier otro follow-up batch.
-const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Sourcing","Submitted","Client Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates","Cancelled"];
+// "Job Creation" (2026-10-01, Nicolas): status REAL, no un sub-paso dentro de Intake Pending/
+// Waived — el req entra aqui automaticamente al confirmar el envio de las notas del intake (ver
+// confirmIntakeSummarySent()), y sale hacia Sourcing solo una vez se loguea el Spott Job (ver
+// REQUIRES_SPOTT_JOB_LOGGED). Tiene su propia alerta de 24 horas (ver isJobCreationOverdue()).
+const STATUS_ORDER = ["Kickoff","Intake Meeting Requested","Intake Meeting Waived","Intake Pending","Job Creation","Sourcing","Submitted","Client Interview","Offer Request","Filled","Hired","Filled (Internal Hire)","On Hold","On Hold — Internal Candidates","Cancelled"];
 // Tramo de STATUS_ORDER que SI tiene un "siguiente" lineal real (Kickoff -> ... -> Hired) — el
 // resto (Filled Internal Hire, Fell Through, On Hold, On Hold Internal, Cancelled) son ramas
 // aparte / decisiones de negocio, no el proximo paso de nada. Usado por confirmNextStepDone()
@@ -3322,6 +3329,11 @@ const STATUS_DISPLAY = {
   // dice explicito en vez de dejarlo solo dentro del parrafo de STATUS_GUIDANCE, mismo patron
   // display-only de siempre (el valor guardado sigue siendo literal "Sourcing").
   "Sourcing": "Sourcing/Screening",
+  // Nicolas, 2026-10-01: "offer request no deberia llamarse mas asi, sino solo Offer" — mismo
+  // patron display-only de siempre (valor guardado sigue siendo literal "Offer Request", tanto a
+  // nivel de REQ como de CANDIDATO — BATCH_CANDIDATE_STATUSES comparte el mismo string, ver
+  // candidateRowHtml()/openAddCandidateModal(), que ahora tambien pasan por statusLabel()).
+  "Offer Request": "Offer",
 };
 function statusLabel(status){
   return STATUS_DISPLAY[status] || status;
@@ -3380,11 +3392,14 @@ const STATUS_GUIDANCE = {
   // Nota: el texto REAL que se muestra para "Intake Pending"/"Intake Meeting Waived" vive en
   // nextStepGuidanceText() (fecha real + gate de intakeSummarySentDate) — estas 2 entradas
   // quedan aqui solo como referencia estatica/documentacion, nunca se leen directamente.
-  "Intake Pending": "The intake meeting already happened (its real date is logged above) — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI, then move status to Sourcing. The first batch is due within 7-9 business days of that meeting date, not from today.",
+  "Intake Pending": "The intake meeting already happened (its real date is logged above) — send the Post Intake Meeting Notes to the hiring manager, then confirm it below. This moves to Job Creation automatically once confirmed.",
   // Rama paralela a "Intake Pending" — mismo punto del proceso, llegado por un camino distinto
   // (ver STATUS_ORDER). El texto es deliberadamente casi identico al de Intake Pending, solo
   // cambia como se llego hasta aqui, nunca lo que hay que hacer despues.
-  "Intake Meeting Waived": "The intake meeting was waived instead of held (see the reason on file above) — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI, then move status to Sourcing.",
+  "Intake Meeting Waived": "The intake meeting was waived instead of held (see the reason on file above) — send the Role Understanding Summary to the hiring manager, then confirm it below. This moves to Job Creation automatically once confirmed.",
+  // Nota: el texto REAL vive en nextStepGuidanceText() (incluye la advertencia de 24h, ver
+  // isJobCreationOverdue()) — esta entrada queda aqui solo como referencia estatica/documentacion.
+  "Job Creation": "Create the Spott Job posting in KeyStone AI (LinkedIn Job Posting recommended too) — logging the Spott Job URL is required before this can move to Sourcing. Flagged automatically if it sits here more than 24 hours.",
   // Sourcing y Screening se fusionaron en un solo status 2026-09-17 (ver STATUS_ORDER) — pasan en
   // paralelo en la practica, nunca uno despues del otro de forma separada, asi que el texto ahora
   // cubre las dos cosas en la secuencia real en que pasan.
@@ -3707,13 +3722,17 @@ function nextStepCtaHtml(p){
       const label = p.status === "Intake Pending" ? "Confirm Post Intake Meeting Notes Sent" : "Confirm Role Understanding Summary Sent";
       return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" style="margin-top:4px; display:inline-block;">${label} &rarr;</button>${msg}`;
     }
-    // Nicolas, 2026-09-30: nuevo paso intermedio (job creation/posting), codependiente entre
-    // Intake Held/Waived y Sourcing — ver confirmJobPostingCreated()/REQUIRES_JOB_POSTING_CONFIRMED.
-    // data-action (no data-target-status, igual que el paso de arriba: esto tampoco cambia el
-    // status por si solo) distingue este boton de los otros 2 casos en el wiring de renderDetailModal().
-    if(!p.jobPostingConfirmedDate){
-      return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-action="confirmJobPosting" style="margin-top:4px; display:inline-block;">Confirm Job Posting Created &rarr;</button>${msg}`;
-    }
+    // Nicolas, 2026-10-01, corrigiendome: confirmIntakeSummarySent() ya avanzo el status solo a
+    // "Job Creation" (status REAL ahora, ver STATUS_ORDER/confirmIntakeSummarySent()) — no deberia
+    // llegar aqui con intakeSummarySentDate ya puesto. Se deja sin boton como red de seguridad.
+    return "";
+  }
+  // Nuevo (2026-10-01): Job Creation es su propio status, el req entra aqui automaticamente desde
+  // Intake Held/Waived (ver confirmIntakeSummarySent()). Salir hacia Sourcing exige haber logueado
+  // el Spott Job (p.spottJobId, ver REQUIRES_SPOTT_JOB_LOGGED) — mientras tanto no hay boton real
+  // que mostrar aqui, la accion es loguear ese campo arriba en los link fields del req.
+  if(p.status === "Job Creation"){
+    if(!p.spottJobId) return msg;
     return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
   }
   // CORREGIDO 2026-09-21 (Nicolas): lo que sigue despues de Submitted no es una eleccion manual
@@ -3725,10 +3744,8 @@ function nextStepCtaHtml(p){
   // candidato en Submission Batches, no un boton aqui.
   return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button>${msg}`;
 }
-// Mismo gate que nextStepCtaHtml() de arriba: sin confirmar que el resumen del intake (Post
-// Intake Meeting Notes si hubo llamada, Role Understanding Summary si se waived) ya se envio, el
-// texto de guia no debe decirle al reclutador que vaya a crear el Spott Job/LinkedIn Job Posting
-// — eso viene DESPUES.
+// Mismo gate que nextStepCtaHtml() de arriba — ver el status real "Job Creation" (STATUS_ORDER)
+// para lo que pasa DESPUES de confirmar el resumen del intake.
 function nextStepGuidanceText(p){
   if(p.status === "Intake Pending" || p.status === "Intake Meeting Waived"){
     const isHeld = p.status === "Intake Pending";
@@ -3741,21 +3758,23 @@ function nextStepGuidanceText(p){
         ? `The intake meeting already happened (held on ${escapeHtml(p.intake || "")}) — send the Post Intake Meeting Notes to the hiring manager, covering what was actually discussed (must-haves, nice-to-haves, comp expectations, timeline), then confirm below once it's sent. It's your reference later if the Pivot SLA ever applies, and it gives the hiring manager a chance to flag anything that needs correcting.`
         : `The intake meeting was waived (see the reason on file above) — since there was no live call, send the Role Understanding Summary instead, built from the JD and whatever the hiring manager or Irth's internal team confirmed in writing, then confirm below once it's sent. It serves the same purpose as the Post Intake Meeting Notes would for a held meeting — your reference later if the Pivot SLA ever applies — just built without a live conversation.`;
     }
-    // Post-confirmacion: mismo ajuste de terminologia (Spott Job/LinkedIn Job Posting en vez de
-    // Master JD/Calibration Questions) — el "held on"/fecha real solo aplica al camino Held,
-    // Waived sigue refiriendo a la razon en archivo, igual que arriba.
-    const whatHappened = isHeld
-      ? `already happened (held on ${escapeHtml(p.intake || "")})`
-      : `was waived (see the reason on file above)`;
-    const sourceDoc = isHeld ? "the Post Intake Meeting Notes" : "the Role Understanding Summary";
-    // Nicolas, 2026-09-30: "paso previo a sourcing/screening que es el job creation/posting...
-    // hacer codependent de los status entre intake meeting held y sourcing/screening" — 3er
-    // sub-paso nuevo, entre confirmar el intake summary y poder moverse a Sourcing (ver
-    // confirmJobPostingCreated()/REQUIRES_JOB_POSTING_CONFIRMED).
-    if(!p.jobPostingConfirmedDate){
-      return `The intake meeting ${whatHappened} — use this time to create the Spott Job and LinkedIn Job Posting in KeyStone AI (based on what you covered in ${sourceDoc}), then confirm below once they're created. Sourcing can't start until this is confirmed.`;
-    }
-    return `The Spott Job and LinkedIn Job Posting are already created — move status to Sourcing to start sourcing candidates. The first batch is due within 7-9 business days of the intake meeting, not from today.`;
+    // Nicolas, 2026-10-01, corrigiendome: una vez intakeSummarySentDate queda puesto,
+    // confirmIntakeSummarySent() ya avanzo el status solo a "Job Creation" (ver mas abajo) — esto
+    // no deberia mostrarse en la practica, se deja como red de seguridad por si algo externo deja
+    // el status atrasado respecto al dato.
+    return null;
+  }
+  // Nuevo (2026-10-01): status REAL "Job Creation" entre Intake Held/Waived y Sourcing — el req
+  // entra aqui automaticamente al confirmar el envio de las notas del intake (ver
+  // confirmIntakeSummarySent()). Salir hacia Sourcing exige loguear el Spott Job (ver
+  // REQUIRES_SPOTT_JOB_LOGGED/onStatusOptionClick()). Alerta de 24h real (no dias habiles, "24
+  // horas corridas, sin excepcion" por decision explicita de Nicolas) si se queda aqui mas tiempo —
+  // ver isJobCreationOverdue().
+  if(p.status === "Job Creation"){
+    const base = "Create the Spott Job posting in KeyStone AI (the LinkedIn Job Posting too, recommended but not required) — logging the Spott Job URL above is required before this can move to Sourcing.";
+    return isJobCreationOverdue(p)
+      ? base + " ⚠ This has been in Job Creation for more than 24 hours — flag it and make sure it's actually moving."
+      : base;
   }
   return STATUS_GUIDANCE[p.status];
 }
@@ -3800,6 +3819,9 @@ const STAGE_COLORS = {
   // Mismo tono que Intake Pending, a proposito — es el mismo punto real del proceso llegado por
   // otro camino, no una etapa distinta (ver STATUS_ORDER).
   "Intake Meeting Waived": "var(--seq-300)",
+  // Nuevo (2026-10-01) — su propio tono, entre Intake (--seq-300) y Sourcing (--seq-400), para que
+  // se distinga visualmente en el Gantt (y en Needs Attention, con su badge de 24h, ver posLabel()).
+  "Job Creation": "var(--seq-350)",
   "Sourcing": "var(--seq-400)",
   // Screening se fusiono con Sourcing 2026-09-17 (ver STATUS_ORDER), asi que --seq-500 quedo
   // libre — Submitted (que antes necesitaba un color-mix porque --seq-500 ya estaba tomado por
@@ -4715,11 +4737,24 @@ function escapeHtml(str){
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+// Nicolas, 2026-10-01: "si pasa de esas 24 horas hay que flagearlo" — 24 horas CORRIDAS (no
+// habiles), decision explicita suya, desde que el req entro a "Job Creation"
+// (p.jobCreationEnteredAt, timestamp real con hora, ver confirmIntakeSummarySent()). Vive como
+// funcion aparte (no solo inline en posLabel()) porque tambien la usa nextStepGuidanceText() para
+// el texto de advertencia dentro del modal, no solo el badge de la lista.
+function isJobCreationOverdue(p){
+  if(p.status !== "Job Creation" || !p.jobCreationEnteredAt) return false;
+  const entered = new Date(p.jobCreationEnteredAt);
+  if(isNaN(entered.getTime())) return false;
+  return (Date.now() - entered.getTime()) > 24*60*60*1000;
+}
 // Se agrega el badge de "pendiente por aceptar" aqui, un solo lugar, porque posLabel() ya se usa
 // en TODAS las listas (Positions, Tracking, Needs Attention, quick lists) — antes la unica señal
 // de que una req seguia sin aceptarse era el banner de arriba (facil de perder de vista fila por
 // fila), lo que llevo justo a la confusion real que motivo esto: Nicolas viendo RD-020 en
-// Tracking y asumiendo que "poder verla y trabajarla" significaba que ya estaba aceptada.
+// Tracking y asumiendo que "poder verla y trabajarla" significaba que ya estaba aceptada. Mismo
+// principio aplicado 2026-10-01 al badge de Job Creation vencido (isJobCreationOverdue()) — una
+// sola señal visible en cualquier lista, no solo abriendo el modal.
 function posLabel(p, withCode){
   const notYetAccepted = (p.handoffFrom && !p.handoffAcceptedDate) || (!p.handoffFrom && !p.recruiterAcceptedDate);
   // Nicolas (2026-09-21), viendo Positions: "ahi deberia salir de quien a quien fue el handoff" —
@@ -4737,8 +4772,11 @@ function posLabel(p, withCode){
   const handoffBadge = (p.handoffFrom && p.handoffAcceptedDate)
     ? `<span class="pos-handoff-badge" title="Handed off from ${escapeHtml(p.handoffFrom)} to ${escapeHtml(p.recruiter||"the new recruiter")}${p.handoffDate ? " on "+escapeHtml(p.handoffDate) : ""}, accepted ${escapeHtml(p.handoffAcceptedDate)}. The SLA clock is unaffected — it still counts from the original intake meeting.">⇄ From ${escapeHtml(p.handoffFrom)}</span>`
     : "";
+  const overdueBadge = isJobCreationOverdue(p)
+    ? `<span class="pos-overdue-badge" title="In Job Creation since ${escapeHtml(p.jobCreationEnteredAt.replace("T"," "))} — more than 24 hours with no Spott Job logged yet. Flag it, make sure it's actually moving.">⚠ Job Creation 24h+</span>`
+    : "";
   const codeSpan = withCode === false ? "" : `<span class="pos-code">${escapeHtml(p.id)}</span>`;
-  return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}${handoffBadge}`;
+  return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}${handoffBadge}${overdueBadge}`;
 }
 // Campos como Spott Job ID venian historicamente como un ID crudo (no un link), pero de aqui
 // en adelante deberian guardar la URL completa (pegada tal cual desde la barra de direcciones,
@@ -4881,7 +4919,7 @@ const BATCH_CANDIDATE_STATUSES = ["Hiring Manager Review","Technical Interview",
 const BATCH_CANDIDATE_STATUS_TONE = {
   "Hiring Manager Review": "within", "Technical Interview": "within",
   "Hiring Manager Interview": "within", "Executive Review": "within", "Offer Request": "within",
-  "Placed": "within", "Rejected": "out", "Withdrawn": "out", "Keep Warm / Hold": "risk",
+  "Filled": "within", "Placed": "within", "Rejected": "out", "Withdrawn": "out", "Keep Warm / Hold": "risk",
 };
 // Mapea el status de un candidato individual al status del REQ que deberia empujar hacia adelante
 // (ver updateCandidateStatus()) — Technical/Hiring/Executive colapsan en un solo "Client Interview"
@@ -4955,12 +4993,19 @@ function candidateRowHtml(c, viewingPositionId, isView){
   // Placed ya no se elige a mano (ver BATCH_CANDIDATE_STATUSES) — una vez ahi, un badge fijo
   // reemplaza el select, no queda nada mas que cambiar manualmente. En view tambien es siempre
   // un badge (nunca un <select> editable, sin importar el status).
+  // Nicolas, 2026-10-01: "me gustaria que aqui salieran los status para el candidato de filled y
+  // placed, asi sabemos visualmente cual candidato fue el elegido" — antes el candidato se quedaba
+  // "congelado" en Offer Request en este mismo select aunque ya se le hubiera logueado el Fill
+  // Date, sin ninguna señal. "Filled" ahora es automatico igual que Placed (ver
+  // saveCandidateFillDate()), mismo patron exacto de badge fijo en vez de select.
   const statusControlHtml = (c.status === "Placed")
     ? `<span class="status-chip" style="background:rgba(var(--good-rgb),0.16); color:var(--good);" title="Set automatically once the candidate's confirmed Start Date arrived — never chosen manually.">🎉 Placed</span>`
+    : (c.status === "Filled")
+    ? `<span class="status-chip" style="background:rgba(var(--brand-rgb),0.16); color:var(--brand-dark);" title="Set automatically once this candidate's Fill Date was logged (offer accepted) — never chosen manually. Becomes Placed once their Start Date arrives.">✅ Filled</span>`
     : isView
-    ? `<span class="status-chip" style="background:rgba(var(--brand-rgb),0.12); color:var(--brand);">${escapeHtml(c.status)}</span>`
+    ? `<span class="status-chip" style="background:rgba(var(--brand-rgb),0.12); color:var(--brand);">${escapeHtml(statusLabel(c.status))}</span>`
     : `<select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
-        ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(s)}</option>`).join("")}
+        ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(statusLabel(s))}</option>`).join("")}
       </select>`;
   return `
     <div class="batch-candidate-row">
@@ -4989,7 +5034,7 @@ function batchCandidatesBlockHtml(p, batchDate, isView){
         ${candidates.length ? `
           <span class="batch-bulk-bar" data-batch-date="${escapeHtml(batchDate)}" style="display:none;">
             <select class="bulkStatusSelect" data-batch-date="${escapeHtml(batchDate)}">
-              ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}
+              ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(statusLabel(s))}</option>`).join("")}
             </select>
             <button type="button" class="btn ghost small applyBulkBtn" data-batch-date="${escapeHtml(batchDate)}">Apply to selected</button>
           </span>` : ""}
@@ -5893,6 +5938,7 @@ function renderGanttGroup(key){
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--neutral-strong);"></span>Real date — marks exactly when the stage next to it actually started</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-100);"></span>${escapeHtml(statusLabel("Kickoff"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-300);"></span>Intake Meeting (Requested & Held)</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-350);"></span>${escapeHtml(statusLabel("Job Creation"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-400);"></span>${escapeHtml(statusLabel("Sourcing"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-500);"></span>${escapeHtml(statusLabel("Submitted"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--seq-600);"></span>${escapeHtml(statusLabel("Client Interview"))}</div>
@@ -6429,6 +6475,7 @@ const STAGE_WEIGHT = {
   "Intake Meeting Requested": 0.5,
   "Intake Pending": 0.75,
   "Intake Meeting Waived": 0.75,
+  "Job Creation": 0.75,
   "Sourcing": 1.0,
   "Submitted": 1.0,
   "Client Interview": 1.0,
@@ -7702,11 +7749,21 @@ function renderFlowMilestones(p){
       pendingNote: p.intakeRequestedDate ? "Waiting on the hiring manager" : "Not requested yet",
     });
   }
-  const sourcingDate = findStatusTransitionDate(p,"Sourcing") || (p.intakeWaivedReason ? p.intakeWaivedDate : p.intake);
+  // Nuevo (2026-10-01): status real "Job Creation" entre Intake Held/Waived y Sourcing (ver
+  // STATUS_ORDER/confirmIntakeSummarySent()). jobCreationEnteredAt trae hora real (solo se usa la
+  // fecha aqui, el Gantt es por dia) — fallback a findStatusTransitionDate() para reqs migrados
+  // que nunca pasaron por este status (osea, todo el pipeline activo real hoy).
+  const jobCreationDate = p.jobCreationEnteredAt ? p.jobCreationEnteredAt.slice(0,10) : findStatusTransitionDate(p,"Job Creation");
+  steps.push({
+    key:"jobCreation", label:"Job Creation", date: jobCreationDate, color:STAGE_COLORS["Job Creation"],
+    time: findActivityTime(p, t=>t.includes("to Job Creation")),
+    pendingNote:"Intake not wrapped up yet",
+  });
+  const sourcingDate = findStatusTransitionDate(p,"Sourcing") || jobCreationDate || (p.intakeWaivedReason ? p.intakeWaivedDate : p.intake);
   steps.push({
     key:"sourcing", label:"Sourcing/Screening", date: sourcingDate, color:STAGE_COLORS["Sourcing"],
     time: findActivityTime(p, t=>t.includes("to Sourcing")),
-    pendingNote:"Intake not wrapped up yet",
+    pendingNote:"Spott Job not logged yet",
   });
   steps.push({
     key:"submitted", label:"Submitted", date:p.submit, color:STAGE_COLORS["Submitted"],
@@ -8375,8 +8432,6 @@ function renderDetailModal(){
   // Meeting Notes Sent", no un cambio de status — confirma directo en vez de onStatusOptionClick().
   if(nextStepPrimaryBtn) nextStepPrimaryBtn.addEventListener("click", ()=>{
     const target = nextStepPrimaryBtn.dataset.targetStatus;
-    const action = nextStepPrimaryBtn.dataset.action;
-    if(action === "confirmJobPosting"){ confirmJobPostingCreated(p); return; }
     if(!target){ confirmIntakeSummarySent(p); return; }
     // BUG REAL (Nicolas, 2026-09-26, con SE-014/017/018/019 como ejemplo: "ya puse lo de confirm
     // kickoff note sent y no paso nada"): "Confirm Kickoff Note Sent" pasaba por
@@ -8674,13 +8729,13 @@ document.addEventListener("click", (e)=>{
 // legitimamente waived (ver p.intakeWaivedReason, "Waive This Intake Meeting") cuenta
 // igual que uno realmente sostenido para este bloqueo — la regla es "tenemos contexto real para
 // empezar a buscar", y un intake waived documentado ya demuestra eso tanto como uno en vivo.
-const REQUIRES_INTAKE_HELD = ["Sourcing", "Submitted", "Client Interview", "Offer Request", "Filled", "Hired"];
-// Nicolas, 2026-09-30: "hacer codependent de los status entre intake meeting held y sourcing/
-// screening" al paso de job creation/posting — mismo patron que REQUIRES_INTAKE_HELD justo arriba
-// (misma lista de statuses, ya que este paso pasa DESPUES del intake y ANTES de Sourcing), solo
-// que exige p.jobPostingConfirmedDate en vez de p.intake/intakeWaivedReason. Ver
-// confirmJobPostingCreated().
-const REQUIRES_JOB_POSTING_CONFIRMED = ["Sourcing", "Submitted", "Client Interview", "Offer Request", "Filled", "Hired"];
+const REQUIRES_INTAKE_HELD = ["Job Creation", "Sourcing", "Submitted", "Client Interview", "Offer Request", "Filled", "Hired"];
+// Nicolas, 2026-10-01, corrigiendome: "Job Creation" es un status REAL en STATUS_ORDER (no un
+// sub-paso dentro de Intake Pending/Waived como lo habia construido antes) — el req entra ahi
+// automaticamente al confirmar el envio de las notas del intake (ver confirmIntakeSummarySent()),
+// y para salir de Job Creation hacia Sourcing (o cualquier status despues) hace falta haber
+// logueado el Spott Job (p.spottJobId) — eso es obligatorio, no una simple confirmacion aparte.
+const REQUIRES_SPOTT_JOB_LOGGED = ["Sourcing", "Submitted", "Client Interview", "Offer Request", "Filled", "Hired"];
 // 2026-09-18, Nicolas: mismo principio que Compensation->Log Batch — no tiene sentido entrevistar,
 // hacer una oferta, o marcar un placement si nunca se sometio ningun candidato para este req. Solo
 // bloquea transiciones NUEVAS hechas desde la UI (dropdown o Next Step) — datos ya existentes en
@@ -8845,13 +8900,28 @@ async function confirmIntakeSummarySent(p){
     s.extra = s.extra || [];
     s.extra.push({date: today, time: nowTimeStr(), type:"action", author: currentAuthorName(), text: `${docName} sent to the hiring manager (same ${isHeld ? "meeting" : "context"} as ${p.id}).`});
   });
+  // Nicolas, 2026-10-01, corrigiendome: esto SI debe avanzar el status (a "Job Creation", un status
+  // REAL en STATUS_ORDER, no un sub-paso que se queda dentro de Intake Pending/Waived) —
+  // "obligarlo" no se trata de una confirmacion aparte, sino de un status propio con su propia
+  // alerta de 24h (ver isJobCreationOverdue()) y su propio gate de salida (REQUIRES_SPOTT_JOB_LOGGED).
+  // Deliberadamente NO se propaga a hermanas de Headcount Group (a diferencia de
+  // intakeSummarySentDate arriba) — cada vacante tiene su propio Spott Job, su propio reloj de 24h.
+  let jobCreationChange = null;
+  if(!AUTO_STATUS_LOCKED.includes(p.status) && STATUS_ORDER.indexOf("Job Creation") > STATUS_ORDER.indexOf(p.status)){
+    const fromStatus = p.status;
+    p.status = "Job Creation";
+    p.jobCreationEnteredAt = `${today}T${nowTimeStr()}`;
+    jobCreationChange = {from: fromStatus, to: "Job Creation"};
+    const jcRemarkText = `Status changed from ${statusLabel(fromStatus)} to Job Creation (automatic — intake notes confirmed sent).`;
+    p.extra.push({date: today, time: nowTimeStr(), type:"status", author: currentAuthorName(), text: jcRemarkText});
+    jobCreationChange.remarkText = jcRemarkText;
+  }
   renderDetailModal();
   renderPositions();
   renderTracking();
   // BUG REAL (Nicolas, 2026-09-21): a diferencia de confirmNextStepDone(), esta funcion nunca
-  // llamaba a showUpNextPreview() — el "Up Next" nunca aparecia despues de confirmar. status no
-  // cambia aqui (solo se confirma un paso intermedio), asi que se llama con el status VIGENTE
-  // (p.status), igual que confirmNextStepDone() hace cuando tampoco hay cambio de status real.
+  // llamaba a showUpNextPreview() — el "Up Next" nunca aparecia despues de confirmar. Ahora SI hay
+  // cambio de status en el caso normal (a Job Creation), asi que se llama con el status mas reciente.
   // renderDetailModal() reconstruye #modalNextStep desde cero, asi que esto va DESPUES o el
   // preview se pierde en un nodo viejo ya desconectado (mismo comentario ya en confirmNextStepDone()).
   showUpNextPreview(p, p.status);
@@ -8865,44 +8935,11 @@ async function confirmIntakeSummarySent(p){
         await graphUpdatePositionFieldByHeader(s.id, "Intake Summary Sent Date", today);
         await graphAppendHistorial(s.id, s.title, `${docName} sent to the hiring manager (same ${isHeld ? "meeting" : "context"} as ${p.id}).`, currentAuthorName(), "action");
       }
-      const freshMsg = document.getElementById("nextStepDoneMsg");
-      if(freshMsg){ freshMsg.textContent = "Logged."; freshMsg.style.color = "var(--good)"; }
-    } catch(err){
-      console.error(err);
-      const freshMsg = document.getElementById("nextStepDoneMsg");
-      if(freshMsg){ freshMsg.textContent = "Could not save: " + err.message; freshMsg.style.color = "var(--critical)"; }
-      alert("Could not save this confirmation. It's kept in this browser tab, please retry once reconnected.\n\n"+err.message);
-    }
-  } else if(msg){
-    msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
-    msg.style.color = "var(--warning)";
-  }
-}
-// Nicolas, 2026-09-30: "paso previo a sourcing/screening que es el job creation/posting. Debe
-// estar outlined en next steps y hacer codependent de los status entre intake meeting held y
-// sourcing/screening" — nuevo paso intermedio, mismo patron EXACTO que confirmIntakeSummarySent()
-// justo arriba (confirmacion puntual con fecha/autor real, nunca cambia el status por si sola —
-// el boton siguiente "Confirm Sourcing Started" es el que de verdad avanza el status, y ahora
-// exige esto primero, ver REQUIRES_JOB_POSTING_CONFIRMED/onStatusOptionClick() mas abajo). A
-// diferencia de Intake Summary Sent, esto NO se propaga a hermanas de Headcount Group — cada
-// vacante suele tener su propio job posting en Workable/Spott/LinkedIn, no una sola conversacion
-// compartida como el intake.
-async function confirmJobPostingCreated(p){
-  const today = localTodayStr();
-  const remarkText = "Spott Job and LinkedIn Job Posting created in KeyStone AI.";
-  p.jobPostingConfirmedDate = today;
-  p.extra = p.extra || [];
-  p.extra.push({date: today, time: nowTimeStr(), type:"action", author: currentAuthorName(), text: remarkText});
-  renderDetailModal();
-  renderPositions();
-  renderTracking();
-  showUpNextPreview(p, p.status);
-  const msg = document.getElementById("nextStepDoneMsg");
-  if(isConnected()){
-    if(msg){ msg.textContent = "Logging…"; msg.style.color = "var(--text-muted)"; }
-    try {
-      await graphUpdatePositionFieldByHeader(p.id, "Job Posting Confirmed Date", today);
-      await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "action");
+      if(jobCreationChange){
+        await graphUpdatePositionField(p.id, "G", "Job Creation");
+        await graphUpdatePositionFieldByHeader(p.id, "Job Creation Entered At", p.jobCreationEnteredAt);
+        await graphAppendHistorial(p.id, p.title, jobCreationChange.remarkText, currentAuthorName(), "status");
+      }
       const freshMsg = document.getElementById("nextStepDoneMsg");
       if(freshMsg){ freshMsg.textContent = "Logged."; freshMsg.style.color = "var(--good)"; }
     } catch(err){
@@ -8954,14 +8991,12 @@ function onStatusOptionClick(p, newStatus){
     alert(`Can't move to "${statusLabel(newStatus)}" yet — there's no Intake Meeting date logged (or an Intake Waived reason). Sourcing (and everything after it) only starts once the intake meeting has actually happened, or was explicitly waived, per policy.`);
     return;
   }
-  // Grandfathered con "STATUS_ORDER.indexOf(p.status) < ...Sourcing": este campo es nuevo
-  // (2026-09-30) y NINGUN req ya en Sourcing o mas adelante lo va a tener seteado (la columna del
-  // Excel real ni siquiera existe todavia) — sin este grandfather, TODO el pipeline activo actual
-  // de Nicolas quedaria bloqueado para cualquier avance manual de status hasta confirmar esto a
-  // mano req por req. El gate real solo debe aplicar mientras se intenta SALTAR el paso (moverse
-  // desde antes de Sourcing directo a Sourcing+), no a un req que ya paso por ahi en la vida real.
-  if(REQUIRES_JOB_POSTING_CONFIRMED.includes(newStatus) && !p.jobPostingConfirmedDate && STATUS_ORDER.indexOf(p.status) < STATUS_ORDER.indexOf("Sourcing")){
-    alert(`Can't move to "${statusLabel(newStatus)}" yet — the Spott Job and LinkedIn Job Posting haven't been confirmed created in KeyStone AI. Confirm that first from the Next Step section before starting to source.`);
+  // El gate solo aplica mientras el req esta REALMENTE sentado en "Job Creation" ahora mismo — no a
+  // cualquier req que algun dia haya pasado por ahi. Asi ningun req ya en Sourcing o mas adelante
+  // (osea, absolutamente todo el pipeline activo real hoy, ya que este status es nuevo) queda
+  // bloqueado retroactivamente por no tener Spott Job logueado desde antes.
+  if(REQUIRES_SPOTT_JOB_LOGGED.includes(newStatus) && !p.spottJobId && p.status === "Job Creation"){
+    alert(`Can't move to "${statusLabel(newStatus)}" yet — the Spott Job hasn't been logged. Log the Spott Job URL above first, from the link fields.`);
     return;
   }
   // CORREGIDO 2026-09-22 (Nicolas, bug real): antes solo revisaba p.batches de ESTE req — un
@@ -9505,7 +9540,7 @@ async function applyPlacedCandidate(sourceP, c, targetP){
     targetP.placedCandidate = c.name;
     // Nicolas, 2026-09-30 audit: esto NUNCA quedaba registrado localmente (p.extra) — solo se
     // escribia a HistorialTable, y solo si isConnected() era true, a diferencia de cada otra
-    // confirmacion de milestone en este archivo (confirmJobPostingCreated, confirmIntakeSummarySent,
+    // confirmacion de milestone en este archivo (confirmIntakeSummarySent, confirmNextStepDone,
     // etc.), que siempre empujan a p.extra primero, conectado o no. Ademas el type que se mandaba
     // a Graph era "milestone", que no es un type real (ver TL_BADGE_LABELS: los unicos types son
     // auto/action/manual/status/guidance) — se veia como "Remark" generico en vez de "Milestone".
@@ -9568,6 +9603,14 @@ async function saveCandidateFillDate(p, candidateId){
   if(dateStr > today){ alert("Fill Date can't be in the future — it logs something that already happened (the candidate accepting the offer)."); return; }
   c.fillDate = dateStr;
   if(!p.fill) p.fill = dateStr;
+  // Nicolas, 2026-10-01: "me gustaria que aqui salieran los status para el candidato de filled y
+  // placed" — antes c.status se quedaba congelado en "Offer Request" en el select despues de esto,
+  // sin ninguna señal de que ya acepto la oferta. "Filled" ahora es automatico (mismo patron que
+  // "Placed", ver candidateRowHtml()/checkArrivedStartDates()) — nunca se elige a mano, y nunca
+  // DEGRADA un candidato que ya llego a Placed (si el Start Date ya llego primero, poco probable
+  // pero posible con datos migrados, se queda en Placed).
+  const prevCandidateStatus = c.status;
+  if(c.status !== "Placed") c.status = "Filled";
   // Nicolas, 2026-09-30 audit: el Fill Date en si (el hecho de que Immy confirmo offer letter +
   // aceptacion) es un milestone real independiente de si el status del req avanza o no (ver el
   // bloque statusChanged mas abajo, que solo corre la PRIMERA vez que algun candidato llega aqui) —
@@ -9611,6 +9654,15 @@ async function saveCandidateFillDate(p, candidateId){
     } catch(err){
       candFieldFailed = err;
       console.error("Could not save Fill Date on the candidate's own row (non-fatal for the requisition's Fill Date/status):", err);
+    }
+    // A diferencia de "Fill Date"/"Start Date", "Status" SI es una columna real que ya existe en
+    // BatchCandidatesTable — este escribe sin depender de que Nicolas agregue nada nuevo al Excel.
+    // Aislado en su propio try por la misma razon que el de arriba: nunca debe cancelar el guardado
+    // del req si por algun motivo fallara.
+    if(prevCandidateStatus !== "Placed"){
+      try {
+        await graphUpdateBatchCandidateField(c.id, "Status", "Filled");
+      } catch(err){ console.error("Could not save candidate Status=Filled (non-fatal for the requisition's Fill Date/status):", err); }
     }
     try {
       await graphUpdatePositionField(p.id, "J", dateStr);
@@ -9992,7 +10044,7 @@ function openAddCandidateModal(p, batchDate){
   document.getElementById("addCandidateEmail").value = "";
   document.getElementById("addCandidateCvFile").value = "";
   document.getElementById("addCandidateCvParseMsg").textContent = "";
-  document.getElementById("addCandidateStatus").innerHTML = BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  document.getElementById("addCandidateStatus").innerHTML = BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(statusLabel(s))}</option>`).join("");
   document.getElementById("addCandidateMsg").textContent = "";
   document.getElementById("addCandidateModal").dataset.positionId = p.id;
   document.getElementById("addCandidateModal").dataset.batchDate = batchDate;
@@ -11934,7 +11986,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-001", title:"Backend Engineer (Demo)", client:"Irth Solutions", hiringManager:"Jordan Ellis",
       recruiter:DEMO_RECRUITER_NAME, status:"Kickoff", country:"United States", workArrangement:"Remote", city:null,
-      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobPostingConfirmedDate:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobCreationEnteredAt:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:daysAgoStr(0), intake:null, submit:null, fill:null, hire:null,
@@ -11949,7 +12001,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-002", title:"Product Designer (Demo)", client:"Irth Solutions", hiringManager:"Priya Nandan",
       recruiter:DEMO_RECRUITER_NAME, status:"Intake Meeting Requested", country:"Canada", workArrangement:"Hybrid", city:"Toronto",
-      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobPostingConfirmedDate:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobCreationEnteredAt:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(5), intakeRequestedDate:daysAgoStr(5), recruiterAcceptedDate:daysAgoStr(5), intake:null, submit:null, fill:null, hire:null,
@@ -11964,7 +12016,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-003", title:"Data Analyst (Demo)", client:"Irth Solutions", hiringManager:"Marcus Webb",
       recruiter:DEMO_RECRUITER_NAME, status:"Sourcing", country:"United States", workArrangement:"Remote", city:null,
-      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobPostingConfirmedDate:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobCreationEnteredAt:null,
       salaryCurrency:"USD", salaryMin:90000, salaryMax:110000, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(15), intakeRequestedDate:daysAgoStr(15), recruiterAcceptedDate:daysAgoStr(15), intake:daysAgoStr(10), submit:null, fill:null, hire:null,
@@ -11979,7 +12031,7 @@ function buildDemoPositions(){
     {
       id:"DEMO-004", title:"Customer Success Manager (Demo)", client:"Irth Solutions", hiringManager:"Devon Cruz",
       recruiter:DEMO_RECRUITER_NAME, status:"Kickoff", country:"United States", workArrangement:"Remote", city:null,
-      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobPostingConfirmedDate:null,
+      workableUrl:null, spottJobId:null, careersUrl:null, linkedinRecruiterUrl:null, jobCreationEnteredAt:null,
       salaryCurrency:null, salaryMin:null, salaryMax:null, salaryPeriod:"yr",
       sourced:null, directApps:null, submittedCount:null, activeCount:null, rejectedCount:null, placedCandidate:null,
       kickoff:daysAgoStr(0), intakeRequestedDate:null, recruiterAcceptedDate:null, intake:null, submit:null, fill:null, hire:null,
@@ -12159,11 +12211,10 @@ function parsePositionsTable(posHeaders, posRows){
       // Columna nueva/opcional: si el archivo real todavia no la tiene, idx() devuelve -1 y
       // r[-1] es undefined, asi que simplemente se muestra como "Not set" sin romper nada.
       linkedinRecruiterUrl: r[idx("LinkedIn Recruiter URL")] || null,
-      // Columna nueva/opcional (Nicolas, 2026-09-30) — confirmacion de que el Spott Job/LinkedIn
-      // Job Posting ya se crearon, paso previo obligatorio a Sourcing/Screening (ver
-      // confirmJobPostingCreated()/REQUIRES_JOB_POSTING_CONFIRMED). Mismo patron idx()/-1 de
-      // siempre para una columna que el Excel real todavia puede no tener.
-      jobPostingConfirmedDate: r[idx("Job Posting Confirmed Date")] || null,
+      // Columna nueva/opcional (Nicolas, 2026-10-01) — fecha+hora en que el req entro al status
+      // "Job Creation" (ver STATUS_ORDER/confirmIntakeSummarySent()/isJobCreationOverdue()). Mismo
+      // patron idx()/-1 de siempre para una columna que el Excel real todavia puede no tener.
+      jobCreationEnteredAt: r[idx("Job Creation Entered At")] || null,
       salaryCurrency: r[idx("Salary Currency")] || null,
       salaryMin: r[idx("Salary Min")] != null && r[idx("Salary Min")] !== "" ? r[idx("Salary Min")] : null,
       salaryMax: r[idx("Salary Max")] != null && r[idx("Salary Max")] !== "" ? r[idx("Salary Max")] : null,
