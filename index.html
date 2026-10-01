@@ -3290,7 +3290,14 @@ function staleStatusHint(p){
   if(p.status==="Intake Meeting Requested" && p.intakeWaivedReason){
     return {nextStatus:"Intake Meeting Waived", reason:"an Intake Waived reason is already on file"};
   }
-  if((p.status==="Intake Pending" || p.status==="Intake Meeting Waived" || p.status==="Sourcing") && p.batches && p.batches.length){
+  // Nuevo (2026-10-01): reqs reales que ya tenian intakeSummarySentDate confirmado ANTES de que
+  // "Job Creation" existiera como status (ej. SE-014/017/018/019) se quedaban atascados en Intake
+  // Pending/Waived para siempre — confirmIntakeSummarySent() es la UNICA que dispara el avance
+  // automatico, y ya corrio para estos antes de este fix. Mismo patron que los 3 casos de arriba.
+  if((p.status==="Intake Pending" || p.status==="Intake Meeting Waived") && p.intakeSummarySentDate){
+    return {nextStatus:"Job Creation", reason:"the intake summary was already confirmed sent"};
+  }
+  if((p.status==="Intake Pending" || p.status==="Intake Meeting Waived" || p.status==="Job Creation" || p.status==="Sourcing") && p.batches && p.batches.length){
     return {nextStatus:"Submitted", reason:"a submission batch is already logged"};
   }
   return null;
@@ -3722,10 +3729,15 @@ function nextStepCtaHtml(p){
       const label = p.status === "Intake Pending" ? "Confirm Post Intake Meeting Notes Sent" : "Confirm Role Understanding Summary Sent";
       return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" style="margin-top:4px; display:inline-block;">${label} &rarr;</button>${msg}`;
     }
-    // Nicolas, 2026-10-01, corrigiendome: confirmIntakeSummarySent() ya avanzo el status solo a
-    // "Job Creation" (status REAL ahora, ver STATUS_ORDER/confirmIntakeSummarySent()) — no deberia
-    // llegar aqui con intakeSummarySentDate ya puesto. Se deja sin boton como red de seguridad.
-    return "";
+    // BUG REAL (Nicolas, 2026-10-01, encontrado probando contra datos reales — SE-014/017/018/019,
+    // que ya tenian intakeSummarySentDate confirmado ANTES de que "Job Creation" existiera como
+    // status): confirmIntakeSummarySent() es la UNICA que dispara el avance automatico, asi que
+    // estos 4 reqs reales se quedaban atascados aqui para siempre con el Next Step COMPLETAMENTE
+    // VACIO (ni texto ni boton) — exactamente el tipo de "le doy click y no pasa nada" que Nicolas
+    // reporto, salvo que aqui ni siquiera habia boton que clickear. Mismo patron que los otros 3
+    // casos de staleStatusHint() (que SI ofrece el boton real de correccion, en su propio banner
+    // aparte) — aqui, sin boton, solo se evita dejar esto en blanco.
+    return msg;
   }
   // Nuevo (2026-10-01): Job Creation es su propio status, el req entra aqui automaticamente desde
   // Intake Held/Waived (ver confirmIntakeSummarySent()). Salir hacia Sourcing exige haber logueado
@@ -3758,11 +3770,12 @@ function nextStepGuidanceText(p){
         ? `The intake meeting already happened (held on ${escapeHtml(p.intake || "")}) — send the Post Intake Meeting Notes to the hiring manager, covering what was actually discussed (must-haves, nice-to-haves, comp expectations, timeline), then confirm below once it's sent. It's your reference later if the Pivot SLA ever applies, and it gives the hiring manager a chance to flag anything that needs correcting.`
         : `The intake meeting was waived (see the reason on file above) — since there was no live call, send the Role Understanding Summary instead, built from the JD and whatever the hiring manager or Irth's internal team confirmed in writing, then confirm below once it's sent. It serves the same purpose as the Post Intake Meeting Notes would for a held meeting — your reference later if the Pivot SLA ever applies — just built without a live conversation.`;
     }
-    // Nicolas, 2026-10-01, corrigiendome: una vez intakeSummarySentDate queda puesto,
-    // confirmIntakeSummarySent() ya avanzo el status solo a "Job Creation" (ver mas abajo) — esto
-    // no deberia mostrarse en la practica, se deja como red de seguridad por si algo externo deja
-    // el status atrasado respecto al dato.
-    return null;
+    // BUG REAL (Nicolas, 2026-10-01 — ver el mismo comentario en nextStepCtaHtml()): reqs reales
+    // ya confirmados ANTES de que "Job Creation" existiera (SE-014/017/018/019) se quedaban con
+    // esto en `null` — Next Step completamente vacio, cero texto. staleStatusHint() ya ofrece el
+    // boton real de correccion (en su propio banner); aqui solo se evita dejar esto en blanco,
+    // mostrando el mismo texto estatico de referencia de STATUS_GUIDANCE para este status.
+    return STATUS_GUIDANCE[p.status];
   }
   // Nuevo (2026-10-01): status REAL "Job Creation" entre Intake Held/Waived y Sourcing — el req
   // entra aqui automaticamente al confirmar el envio de las notas del intake (ver
