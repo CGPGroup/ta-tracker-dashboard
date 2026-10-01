@@ -9695,27 +9695,40 @@ async function checkArrivedStartDates(){
   const today = localTodayStr();
   for(const p of POSITIONS){
     if(p.status !== "Filled" || AUTO_STATUS_LOCKED.includes(p.status)) continue;
-    const c = (p.batchCandidates||[]).find(x=> x.hireDate && x.hireDate <= today && x.status !== "Placed");
-    if(!c) continue;
-    c.status = "Placed";
+    let c = (p.batchCandidates||[]).find(x=> x.hireDate && x.hireDate <= today && x.status !== "Placed");
+    // BUG REAL (Nicolas, 2026-10-01: "por que sigue en Filled si ya llego la fecha de start date" —
+    // RD-007): esto dependia SOLO del Start Date propio del candidato (c.hireDate) — pero 2 casos
+    // reales dejan esto vacio aunque el req si tenga su Hire Date (p.hire, columna K de Positions,
+    // esa SI tiene columna real y SI persiste): (1) reqs llenados ANTES de que existiera el flujo
+    // por candidato (ej. RD-007/Prakash Singh) nunca tienen fila en BatchCandidatesTable para
+    // compararse; (2) BatchCandidatesTable todavia no tiene columna "Start Date" (ver
+    // saveCandidateHireDate()), asi que c.hireDate se pierde en cada recarga real aunque p.hire
+    // haya quedado bien guardado. En ambos casos la señal de verdad de "ya llego la fecha" es
+    // p.hire, no c.hireDate — asi que ahora es el fallback cuando no hay candidato con quien
+    // comparar.
+    const arrivedByPositionDate = !c && p.hire && p.hire <= today;
+    if(!c && !arrivedByPositionDate) continue;
+    const hireDateUsed = c ? c.hireDate : p.hire;
+    const candidateName = c ? c.name : (p.placedCandidate || "the placed candidate");
+    if(c) c.status = "Placed";
     const fromStatus = p.status;
     p.status = "Hired";
-    if(!p.hire) p.hire = c.hireDate;
+    if(!p.hire) p.hire = hireDateUsed;
     // Mismo formato canonico que saveCandidateFillDate()/advancePositionForCandidateStatus() —
     // ver el comentario ahi (type "status", nunca "milestone", que no es un type real).
-    const remarkText = `Status changed from ${statusLabel(fromStatus)} to ${statusLabel("Hired")} (automatic — ${c.name} started on ${c.hireDate}).`;
+    const remarkText = `Status changed from ${statusLabel(fromStatus)} to ${statusLabel("Hired")} (automatic — ${candidateName} started on ${hireDateUsed}).`;
     p.extra = p.extra || [];
     p.extra.push({date: today, time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remarkText});
-    justPlacedNotifications.push({id: p.id, title: posLabel(p), candidateName: c.name, hireDate: c.hireDate});
+    justPlacedNotifications.push({id: p.id, title: posLabel(p), candidateName: candidateName, hireDate: hireDateUsed});
     if(isConnected()){
       try {
-        await graphUpdateBatchCandidateField(c.id, "Status", "Placed");
+        if(c) await graphUpdateBatchCandidateField(c.id, "Status", "Placed");
         await graphUpdatePositionField(p.id, "G", "Hired");
         await graphUpdatePositionField(p.id, "K", p.hire);
         await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
       } catch(err){ console.error("Could not save the automatic Placed transition (non-fatal, will retry next refresh):", err); }
     }
-    await applyPlacedCandidate(p, c, p);
+    if(c) await applyPlacedCandidate(p, c, p);
   }
 }
 // BUG REAL 2026-09-28 (David reporto sus headcounts desincronizados, y el fix fue el mismo David
