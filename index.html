@@ -9596,8 +9596,23 @@ async function saveCandidateFillDate(p, candidateId){
   renderPositions();
   renderKpis();
   if(isConnected()){
+    // BUG REAL (Nicolas, 2026-10-01, RD-071/Lillia Harbar — "Column 'Start Date' was not found in
+    // BatchCandidatesTable"): BatchCandidatesTable nunca recibio las 2 columnas nuevas que este
+    // flujo necesita ("Fill Date"/"Start Date" — ver project_candidate_driven_placement.md), asi
+    // que graphUpdateBatchCandidateField SIEMPRE falla aqui todavia. Antes, ese fallo estaba en el
+    // MISMO try que el avance de status/fecha del REQ (columnas J/G, que SI existen en
+    // PositionsTable desde hace tiempo) — asi que un candidato sin su columna bloqueaba tambien que
+    // el req avanzara a Filled en el Excel real, aunque localmente se viera bien (optimista). Ahora
+    // son 2 pasos independientes: el del req (que ya funciona) nunca se cancela por el de la fila
+    // del candidato (que todavia no tiene donde escribir).
+    let candFieldFailed = null;
     try {
       await graphUpdateBatchCandidateField(c.id, "Fill Date", dateStr);
+    } catch(err){
+      candFieldFailed = err;
+      console.error("Could not save Fill Date on the candidate's own row (non-fatal for the requisition's Fill Date/status):", err);
+    }
+    try {
       await graphUpdatePositionField(p.id, "J", dateStr);
       await graphAppendHistorial(p.id, p.title, fillRemarkText, currentAuthorName(), "action");
       if(statusChanged){
@@ -9606,7 +9621,10 @@ async function saveCandidateFillDate(p, candidateId){
       }
     } catch(err){
       console.error(err);
-      alert("Could not save this candidate's Fill Date.\n\n"+err.message);
+      alert("Could not save this requisition's Fill Date.\n\n"+err.message);
+    }
+    if(candFieldFailed){
+      alert(`The requisition's Fill Date was saved, but couldn't be saved on ${c.name}'s own candidate row — needs a "Fill Date" column added to BatchCandidatesTable in the shared Excel file. It's kept in this browser tab for now.\n\n`+candFieldFailed.message);
     }
   }
 }
@@ -9635,13 +9653,26 @@ async function saveCandidateHireDate(p, candidateId){
   renderTracking();
   renderPositions();
   if(isConnected()){
+    // Mismo fix que saveCandidateFillDate() justo arriba — ver ese comentario (BUG REAL
+    // 2026-10-01, RD-071/Lillia Harbar): la columna "Start Date" tampoco existe todavia en
+    // BatchCandidatesTable, y antes ese fallo se llevaba de paso el guardado de la columna K
+    // (fecha de Start Date) del REQ, que si existe y si funciona.
+    let candFieldFailed = null;
     try {
       await graphUpdateBatchCandidateField(c.id, "Start Date", dateStr);
+    } catch(err){
+      candFieldFailed = err;
+      console.error("Could not save Start Date on the candidate's own row (non-fatal for the requisition's Start Date):", err);
+    }
+    try {
       await graphUpdatePositionField(p.id, "K", dateStr);
       await graphAppendHistorial(p.id, p.title, hireRemarkText, currentAuthorName(), "action");
     } catch(err){
       console.error(err);
-      alert("Could not save this candidate's Start Date.\n\n"+err.message);
+      alert("Could not save this requisition's Start Date.\n\n"+err.message);
+    }
+    if(candFieldFailed){
+      alert(`The requisition's Start Date was saved, but couldn't be saved on ${c.name}'s own candidate row — needs a "Start Date" column added to BatchCandidatesTable in the shared Excel file. It's kept in this browser tab for now.\n\n`+candFieldFailed.message);
     }
   }
   // Si la fecha que se acaba de guardar ya llego (o es hoy), el auto-avance a Hired pasa de
