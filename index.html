@@ -3747,14 +3747,39 @@ function nextStepCtaHtml(p){
     if(!p.spottJobId) return msg;
     return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
   }
-  // CORREGIDO 2026-09-21 (Nicolas): lo que sigue despues de Submitted no es una eleccion manual
-  // del reclutador a nivel de REQ (ver el intento anterior de este comentario, con 3 botones —
-  // reemplazado). El req nunca se mueve directo desde aqui; se deriva solo de a que status avanza
-  // cualquier candidato del batch (ver CANDIDATE_STATUS_TO_POSITION_STATUS/updateCandidateStatus()),
-  // asi que Submitted cae al "Mark Done" generico de abajo como cualquier otro status sin un CTA
-  // especial — el texto de STATUS_GUIDANCE ya explica que la accion real es actualizar cada
-  // candidato en Submission Batches, no un boton aqui.
-  return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Mark Done — Log It</button>${msg}`;
+  // Nicolas, 2026-10-01: "hay que hacer esos accionables, unos botones discretos pero que
+  // expliquen bien que están ahí para eso" — el "Mark Done" generico de antes solo dejaba una
+  // linea discreta en Activity, sin ningun cambio visible (el status, la tarjeta, nada) — se
+  // sentia como que "no pasaba nada" aunque tecnicamente si corriera. Reemplazado por botones que
+  // SI hacen algo real y visible, uno por status, segun donde vive de verdad la siguiente accion:
+  if(p.status === "Sourcing"){
+    // La accion real es loguear un batch (eso es lo que avanza el status solo, ver logBatchSave())
+    // — el boton ahora abre ESE modal directamente en vez de solo dejar un remark generico.
+    return `<br><button type="button" class="fact-edit-link" id="nextStepOpenBatchBtn" style="margin-top:4px; display:inline-block;">Log Submission Batch &rarr;</button>${msg}`;
+  }
+  if(p.status === "Submitted" || p.status === "Client Interview" || p.status === "Filled"){
+    // La accion real vive en Submission Batches (actualizar el status de un candidato, o loguear
+    // su Fill/Start Date) — nunca una eleccion de status a nivel de req (ver
+    // CANDIDATE_STATUS_TO_POSITION_STATUS/updateCandidateStatus()/candidateOfferDatesHtml()). El
+    // boton te lleva fisicamente ahi en vez de un "Mark Done" que no apunta a ningun lado.
+    return `<br><button type="button" class="fact-edit-link" id="nextStepGoToBatchesBtn" style="margin-top:4px; display:inline-block;">Go to Submission Batches &rarr;</button>${msg}`;
+  }
+  if(p.status === "On Hold" || p.status === "On Hold — Internal Candidates"){
+    // A diferencia de arriba, aqui SI tiene sentido un log generico — la accion real es un
+    // check-in periodico con el hiring manager (ver STATUS_GUIDANCE), no algo que viva en otra
+    // seccion del modal. Mismo mecanismo de siempre (confirmNextStepDone()), solo renombrado para
+    // que diga honestamente que hace (antes "Mark Done" sugeria cerrar un paso, no registrar un
+    // seguimiento recurrente).
+    return `<br><button type="button" class="fact-edit-link" id="nextStepDoneBtn" style="margin-top:4px; display:inline-block;">Log a Check-In &rarr;</button>${msg}`;
+  }
+  // Offer Request/Hired/Filled (Internal Hire)/Cancelled: no hay ningun boton real que mostrar.
+  // Offer Request avanza solo (una vez se loguea el Fill Date del candidato en Submission
+  // Batches) y su unica accion pendiente es un correo fuera del tracker (handoff a Immy, ver
+  // STATUS_GUIDANCE) que el tracker no puede verificar que paso, asi que confirmarlo aqui seria
+  // un check vacio. Hired/Filled (Internal Hire)/Cancelled son terminales — no hay nada que
+  // confirmar. Un boton "Mark Done" en cualquiera de estos no representaba ninguna accion real,
+  // exactamente el tipo de "le doy click y no pasa nada" que Nicolas reporto.
+  return "";
 }
 // Mismo gate que nextStepCtaHtml() de arriba — ver el status real "Job Creation" (STATUS_ORDER)
 // para lo que pasa DESPUES de confirmar el resumen del intake.
@@ -3784,9 +3809,12 @@ function nextStepGuidanceText(p){
   // horas corridas, sin excepcion" por decision explicita de Nicolas) si se queda aqui mas tiempo —
   // ver isJobCreationOverdue().
   if(p.status === "Job Creation"){
-    const base = "Create the Spott Job posting in KeyStone AI (the LinkedIn Job Posting too, recommended but not required) — logging the Spott Job URL above is required before this can move to Sourcing.";
+    // Nicolas, 2026-10-01: "te diga que tienes 24 horas como maximo para crear el job" — el limite
+    // se anuncia DESDE EL PRINCIPIO (no solo como advertencia una vez ya se paso), para que el
+    // reclutador sepa el plazo real sin tener que esperar a que se le pase.
+    const base = "Create the Spott Job posting in KeyStone AI (the LinkedIn Job Posting too, recommended but not required) — you have a maximum of 24 hours from when this requisition entered Job Creation to do this. Logging the Spott Job URL above is required before this can move to Sourcing.";
     return isJobCreationOverdue(p)
-      ? base + " ⚠ This has been in Job Creation for more than 24 hours — flag it and make sure it's actually moving."
+      ? base + " ⚠ It's already been more than 24 hours — flag it and make sure it's actually moving."
       : base;
   }
   return STATUS_GUIDANCE[p.status];
@@ -8156,7 +8184,7 @@ function renderDetailModal(){
   // controles editables de adentro (delete-batch, Log Batch, y los de cada candidato via
   // batchCandidatesBlockHtml) se condicionan a isView.
   const batchesHtml = `
-    <div class="modal-section-title">Submission Batches</div>
+    <div class="modal-section-title" id="modalBatchesSection">Submission Batches</div>
     ${p.batches && p.batches.length ? `<div class="sla-grid">
       ${p.batches.slice().reverse().map(b=>`
         <div class="sla-card">
@@ -8466,6 +8494,15 @@ function renderDetailModal(){
   });
   const nextStepSecondaryBtn = document.getElementById("nextStepSecondaryBtn");
   if(nextStepSecondaryBtn) nextStepSecondaryBtn.addEventListener("click", ()=> openWaiveIntakeModal(p));
+  // Nicolas, 2026-10-01: botones de Next Step que SI hacen algo real (ver nextStepCtaHtml()) en
+  // vez del "Mark Done" generico de antes — uno abre el flujo real de loguear un batch, el otro
+  // te lleva fisicamente a donde vive la accion real (Submission Batches).
+  const nextStepOpenBatchBtn = document.getElementById("nextStepOpenBatchBtn");
+  if(nextStepOpenBatchBtn) nextStepOpenBatchBtn.addEventListener("click", ()=> openLogBatchModal(p));
+  const nextStepGoToBatchesBtn = document.getElementById("nextStepGoToBatchesBtn");
+  if(nextStepGoToBatchesBtn) nextStepGoToBatchesBtn.addEventListener("click", ()=>{
+    document.getElementById("modalBatchesSection")?.scrollIntoView({behavior:"smooth", block:"start"});
+  });
 
   const timeline = buildTimeline(p).slice().reverse();
   document.getElementById("modalTimeline").innerHTML = timelineListHtml(timeline);
