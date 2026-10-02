@@ -5794,57 +5794,120 @@ function ganttRowHtml(p, cal){
 // gratis: si el Gantt esta filtrado a un solo reclutador, estos charts naturalmente muestran solo
 // lo suyo. Nunca usa dashboardPositions()/RECRUITERS globales — todo sale de lo que YA se esta
 // viendo en este Gantt especifico.
-// "Active Workload By Recruiter"/"Submitted Vs Expected" vivieron aca hasta 2026-10-02 — Nicolas:
-// "no sé si eso en realidad nos sirva... habria que reemplazar ahi esas dos por otros datos que
-// sean verdaderamente relevantes" (una vez ya filtraste a una sesion especifica del Gantt, una
-// metrica de equipo completo no aporta tanto). Reemplazadas por un desglose de SLA y de tiempo en
-// la etapa actual, las dos puntuales a lo que esta sesion ya esta mostrando.
-function renderGanttInsights(containerId, positions){
+// Los primeros 2 charts cambian segun `key` (la tarjeta que abrio este Gantt, ver
+// renderGanttGroup()) — Nicolas, 2026-10-02: "las tarjetas de onhold, potential placement,
+// filled, y placements esas son las que no nos sirve tener el workload, el submitted vs
+// expected" (CORRECCION a un primer intento mio que los habia quitado de TODAS las tarjetas,
+// incluyendo Positions/Active Positions, donde SI siguen siendo utiles). Positions/Active
+// Positions mantienen los 2 charts originales (Active Workload By Recruiter, Submitted Vs
+// Expected) sin cambios; el resto (On Hold & Other Closures, Potential Placements, Filled,
+// Placements, Carried Over — todas sobre reqs que ya no son trabajo activo en curso, donde esos 2
+// charts originales salian vacios o sin sentido) usa el reemplazo: un desglose de SLA y de tiempo
+// en la etapa actual, las dos puntuales a lo que esa sesion ya esta mostrando.
+function renderGanttInsights(containerId, positions, key){
   const container = document.getElementById(containerId);
   if(!container) return;
   const active = positions.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
+  const showLegacyCharts = key === "positions" || key === "active";
 
-  // SLA Breakdown — Nicolas, 2026-10-02: "no puede contar unicamente las que estan basadas en el
-  // concepto de active, sino en general, no?" (ej. un req en Offer Request o pausado On Hold que
-  // ya esta fuera de SLA no deberia desaparecer del numero solo porque ya no es "trabajo activo").
-  // A diferencia de las 3 barras de SLA Health (siempre "activas" globales, ver renderSlaChart()),
-  // este mini-chart usa `positions` TAL CUAL — exactamente lo que esta sesion del Gantt ya esta
-  // mostrando, sin ningun filtro adicional de "active" encima. attentionInfo() ya calcula el peor
-  // status entre TTS/TTF/TTH (y cual metrica es la responsable) — reusado aca tal cual, nunca
-  // reinventado.
-  const slaBuckets = {within:[], risk:[], out:[], none:[]};
-  positions.forEach(p=>{ slaBuckets[attentionInfo(p).worst].push(p); });
-  const slaTotal = positions.length || 1;
-  const slaSeg = (k)=> `<div class="clickable-stat" data-sla="${k}" style="width:${(slaBuckets[k].length/slaTotal*100).toFixed(2)}%; background:${gradientFill(STATUS_META[k].color)};"></div>`;
-  const slaPart = (k)=> slaBuckets[k].length ? `<span class="clickable-stat" data-sla="${k}">${slaBuckets[k].length} ${STATUS_WORD[k].toLowerCase()}</span>` : "";
-  const slaPartsHtml = ["within","risk","out","none"].map(slaPart).filter(Boolean).join(" · ") || "Nothing shown";
+  let firstTwoChartsHtml, wireFirstTwoCharts;
+  if(showLegacyCharts){
+    // Nicolas, 2026-09-26: "yo deberia aparecer de primero de izquierda a derecha, porque estoy
+    // en el tracker antes que David... si entra alguien mas pues de cuarto" — orden fijo por
+    // antiguedad real en el equipo (el orden en que cada quien se agrego a RECRUITERS, la lista
+    // maestra que ya viene en ese orden desde RecruitersTable), no por peso de trabajo actual —
+    // un recruiter con menos carga esa semana no deberia "saltar" adelante en la fila.
+    // RECRUITERS filtrado a solo quienes tienen reqs en esta vista en particular (respeta el
+    // filtro de recruiter/rol del Gantt), pero SIN reordenar.
+    const recruiterNames = RECRUITERS.filter(r=>positions.some(p=>p.recruiter===r));
+    const workloadRows = recruiterNames.map(r=>{
+      const assigned = active.filter(p=>p.recruiter===r);
+      const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
+      return {label:r, count: assigned.length, value: Math.round(weighted*10)/10, slaRate: recruiterSlaRate(assigned)};
+    });
+    const workloadCardsHtml = workloadRows.map(r=>{
+      const photo = RECRUITER_PHOTOS[r.label];
+      const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
+      const pct = Math.min(100, (r.count / WORKLOAD_MAX) * 100);
+      const slaHtml = r.slaRate === null
+        ? `<div class="workload-sla"><span class="dot" style="background:var(--grid);"></span>${r.count ? "No SLA clock running yet" : "No active reqs"}</div>`
+        : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
+      const title = RECRUITER_TITLES[r.label] || "";
+      return `<div class="workload-card compact" data-label="${escapeHtml(r.label)}">
+        <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}${recruiterDotHtml(r.label)}</div>
+        <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
+        <div class="workload-title">${escapeHtml(title)}</div>
+        <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.count))};"></div></div>
+        <div class="workload-count">${r.count} / ${WORKLOAD_MAX} req${r.count===1?"":"s"} (${r.value} weighted)</div>
+        ${slaHtml}
+      </div>`;
+    }).join("");
 
-  // Average Time In Current Stage — daysInCurrentStage() ancla en la ultima vez real que el
-  // Activity log registro "Status changed... to <status actual>" (o el Kickoff si nunca hubo ese
-  // log, nunca una fecha inventada). Agrupado por status para que se vea de un vistazo donde se
-  // esta acumulando el tiempo, mas atrasado primero.
-  const stageGroups = {};
-  positions.forEach(p=>{
-    const d = daysInCurrentStage(p);
-    if(d===null) return;
-    const label = statusLabel(p.status);
-    (stageGroups[label] = stageGroups[label] || []).push(p);
-  });
-  const stageRows = Object.entries(stageGroups).map(([label, ps])=>({
-    label, positions: ps, avg: Math.round(ps.reduce((sum,p)=>sum+daysInCurrentStage(p),0) / ps.length),
-  })).sort((a,b)=>b.avg-a.avg);
+    const sourcingStarted = active.filter(p=> !!parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake));
+    const submittedTotal = sourcingStarted.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
+    const minExpected = Math.round(sourcingStarted.reduce((sum,p)=> sum + expectedSubmittedForPosition(p), 0));
+    const ratio = minExpected>0 ? submittedTotal/minExpected : null;
+    const barColor = ratio===null ? "var(--grid)" : ratio>=1 ? "var(--good)" : ratio>=0.5 ? "var(--warning)" : "var(--critical)";
+    const barWidthPct = ratio===null ? 0 : Math.min(100, Math.round(ratio*100));
+    const displayPct = ratio===null ? "-" : Math.round(ratio*100)+"%";
 
-  const byCountry = {};
-  active.forEach(p=>{
-    (countryList(p).length ? countryList(p) : ["Unknown"]).forEach(c=>{ byCountry[c] = (byCountry[c]||0)+1; });
-  });
-  const countryRows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
-  const byArrangement = {"Remote":0,"Hybrid":0,"On-site":0};
-  active.forEach(p=>{ const arr = p.workArrangement || "Remote"; byArrangement[arr]=(byArrangement[arr]||0)+1; });
-  const arrRows = Object.entries(byArrangement).filter(([,v])=>v>0).map(([label,value])=>({label,value}));
+    firstTwoChartsHtml = `
+      <div class="gantt-mini-chart">
+        <div class="gantt-mini-title">Active Workload By Recruiter</div>
+        <div class="gantt-mini-sub">${WORKLOAD_SWEET_SPOT} active reqs is the target, ${WORKLOAD_MAX} the real max, no matter what stage they're in. The weighted number in parentheses is effort intensity only — a req in Sourcing takes more real work than one waiting on Offer Stage or paused On Hold, but it still counts as one req against the cap. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
+        <div class="workload-grid compact">${workloadCardsHtml || `<span class="panel-sub" style="margin:0;">No recruiters in this view.</span>`}</div>
+      </div>
+      <div class="gantt-mini-chart">
+        <div class="gantt-mini-title">Submitted Vs Expected</div>
+        <div class="gantt-mini-sub">Only positions where intake has already happened and that haven't reached Offer Request yet.</div>
+        <div class="funnel-row${sourcingStarted.length>0 ? " clickable-stat" : ""}" id="ganttSubmittedRow">
+          <div class="funnel-label">Candidates Submitted</div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${gradientFill(barColor)};"></div></div>
+          <div class="funnel-stat">
+            <div class="funnel-value">${submittedTotal} / ${minExpected}</div>
+            <div class="funnel-pct">${displayPct} of expected to date</div>
+          </div>
+        </div>
+      </div>`;
+    wireFirstTwoCharts = ()=>{
+      if(sourcingStarted.length>0){
+        document.getElementById("ganttSubmittedRow")?.addEventListener("click", ()=>{
+          openQuickList("Submitted Vs Expected", `${submittedTotal} submitted · expected at least ${minExpected} to date across ${sourcingStarted.length} position${sourcingStarted.length===1?"":"s"} (intake already held)`, sourcingStarted);
+        });
+      }
+    };
+  } else {
+    // SLA Breakdown — Nicolas, 2026-10-02: "no puede contar unicamente las que estan basadas en
+    // el concepto de active, sino en general, no?" (ej. un req en Offer Request o pausado On
+    // Hold que ya esta fuera de SLA no deberia desaparecer del numero solo porque ya no es
+    // "trabajo activo"). A diferencia de las 3 barras de SLA Health (siempre "activas" globales,
+    // ver renderSlaChart()), este mini-chart usa `positions` TAL CUAL — exactamente lo que esta
+    // sesion del Gantt ya esta mostrando, sin ningun filtro adicional de "active" encima.
+    // attentionInfo() ya calcula el peor status entre TTS/TTF/TTH (y cual metrica es la
+    // responsable) — reusado aca tal cual, nunca reinventado.
+    const slaBuckets = {within:[], risk:[], out:[], none:[]};
+    positions.forEach(p=>{ slaBuckets[attentionInfo(p).worst].push(p); });
+    const slaTotal = positions.length || 1;
+    const slaSeg = (k)=> `<div class="clickable-stat" data-sla="${k}" style="width:${(slaBuckets[k].length/slaTotal*100).toFixed(2)}%; background:${gradientFill(STATUS_META[k].color)};"></div>`;
+    const slaPart = (k)=> slaBuckets[k].length ? `<span class="clickable-stat" data-sla="${k}">${slaBuckets[k].length} ${STATUS_WORD[k].toLowerCase()}</span>` : "";
+    const slaPartsHtml = ["within","risk","out","none"].map(slaPart).filter(Boolean).join(" · ") || "Nothing shown";
 
-  container.innerHTML = `
-    <div class="gantt-insights-row">
+    // Average Time In Current Stage — daysInCurrentStage() ancla en la ultima vez real que el
+    // Activity log registro "Status changed... to <status actual>" (o el Kickoff si nunca hubo
+    // ese log, nunca una fecha inventada). Agrupado por status para que se vea de un vistazo
+    // donde se esta acumulando el tiempo, mas atrasado primero.
+    const stageGroups = {};
+    positions.forEach(p=>{
+      const d = daysInCurrentStage(p);
+      if(d===null) return;
+      const label = statusLabel(p.status);
+      (stageGroups[label] = stageGroups[label] || []).push(p);
+    });
+    const stageRows = Object.entries(stageGroups).map(([label, ps])=>({
+      label, positions: ps, avg: Math.round(ps.reduce((sum,p)=>sum+daysInCurrentStage(p),0) / ps.length),
+    })).sort((a,b)=>b.avg-a.avg);
+
+    firstTwoChartsHtml = `
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">SLA Breakdown — This View</div>
         <div class="gantt-mini-sub">Every position shown in this Gantt session right now, by overall SLA status (the worst of Time To Submit/Fill/Hire) — no active-only filter, so a paused, Offer Request, or Filled-but-not-started position that's already behind still counts.</div>
@@ -5858,7 +5921,40 @@ function renderGanttInsights(containerId, positions){
           const max = stageRows[0].avg || 1;
           return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.avg/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div><div class="barlist-value">${r.avg}d (${r.positions.length})</div></div>`;
         }).join("") : `<span class="panel-sub" style="margin:0;">Nothing shown.</span>`}</div>
-      </div>
+      </div>`;
+    wireFirstTwoCharts = ()=>{
+      container.querySelectorAll("#ganttSlaBar .clickable-stat, #ganttSlaCounts .clickable-stat").forEach(el=>{
+        el.addEventListener("click", ()=>{
+          const bucket = el.dataset.sla;
+          const matches = slaBuckets[bucket];
+          openQuickList(`${STATUS_WORD[bucket]} — This View`, `${matches.length} position${matches.length===1?"":"s"}`, matches, null, (p)=>{
+            const info = attentionInfo(p);
+            return slaChip(info.worstKey ? info.s[info.worstKey] : {status:"none"});
+          });
+        });
+      });
+      container.querySelectorAll("#ganttByStage .barlist-row").forEach((el,i)=>{
+        el.addEventListener("click", ()=>{
+          const row = stageRows[i];
+          openQuickList(`${row.label} — Time In Stage`, `${row.positions.length} position${row.positions.length===1?"":"s"} · avg ${row.avg}d in this stage`, row.positions,
+            (p)=> `${escapeHtml(p.recruiter)} · ${daysInCurrentStage(p)}d in ${statusLabel(p.status)}`);
+        });
+      });
+    };
+  }
+
+  const byCountry = {};
+  active.forEach(p=>{
+    (countryList(p).length ? countryList(p) : ["Unknown"]).forEach(c=>{ byCountry[c] = (byCountry[c]||0)+1; });
+  });
+  const countryRows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
+  const byArrangement = {"Remote":0,"Hybrid":0,"On-site":0};
+  active.forEach(p=>{ const arr = p.workArrangement || "Remote"; byArrangement[arr]=(byArrangement[arr]||0)+1; });
+  const arrRows = Object.entries(byArrangement).filter(([,v])=>v>0).map(([label,value])=>({label,value}));
+
+  container.innerHTML = `
+    <div class="gantt-insights-row">
+      ${firstTwoChartsHtml}
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Position By Location/Work Arrangement</div>
         <div class="gantt-mini-sub">Active positions right now, by country and by work arrangement.</div>
@@ -5879,23 +5975,7 @@ function renderGanttInsights(containerId, positions){
       </div>
     </div>
   `;
-  container.querySelectorAll("#ganttSlaBar .clickable-stat, #ganttSlaCounts .clickable-stat").forEach(el=>{
-    el.addEventListener("click", ()=>{
-      const bucket = el.dataset.sla;
-      const matches = slaBuckets[bucket];
-      openQuickList(`${STATUS_WORD[bucket]} — This View`, `${matches.length} position${matches.length===1?"":"s"}`, matches, null, (p)=>{
-        const info = attentionInfo(p);
-        return slaChip(info.worstKey ? info.s[info.worstKey] : {status:"none"});
-      });
-    });
-  });
-  container.querySelectorAll("#ganttByStage .barlist-row").forEach((el,i)=>{
-    el.addEventListener("click", ()=>{
-      const row = stageRows[i];
-      openQuickList(`${row.label} — Time In Stage`, `${row.positions.length} position${row.positions.length===1?"":"s"} · avg ${row.avg}d in this stage`, row.positions,
-        (p)=> `${escapeHtml(p.recruiter)} · ${daysInCurrentStage(p)}d in ${statusLabel(p.status)}`);
-    });
-  });
+  wireFirstTwoCharts();
   container.querySelectorAll("#ganttByCountry .barlist-row").forEach((el,i)=>{
     el.addEventListener("click", ()=>{
       const row = countryRows[i];
@@ -6009,7 +6089,7 @@ function renderGanttGroup(key){
     <div id="ganttInsightsContainer"></div>
   `;
   ganttRenderAxis(cal, "month");
-  renderGanttInsights("ganttInsightsContainer", data);
+  renderGanttInsights("ganttInsightsContainer", data, key);
   // El marco de filas mide SIEMPRE lo mismo (GANTT_VISIBLE_ROWS reales, medidos de verdad porque
   // cada fila tiene una altura distinta segun cuanta info real tenga — compensacion, HM, etc — un
   // numero fijo en px habria quedado mal para unas y sobrado para otras). Con 4 filas o menos no
@@ -6552,9 +6632,34 @@ function workloadColor(v){
   if(v >= 7) return "var(--warning)";
   return "var(--good)";
 }
-// renderReclutadorChart() (Active Workload By Recruiter) y recruiterSlaRate() vivieron aca —
-// la tarjeta de workload fue reemplazada 2026-10-02 por el desglose de SLA/tiempo en etapa, ver
-// el comentario junto a renderGanttInsights().
+// SLA compliance por reclutador, mismo criterio "on time" que ya usa el donut de SLA
+// Compliance (ninguna de TTS/TTF/TTH en "out") — solo se usa ya en las tarjetas Positions/Active
+// Positions (ver renderGanttInsights(): "a partir de On Hold" el resto de tarjetas usa el
+// desglose de SLA nuevo en su lugar, 2026-10-02). Sin posiciones activas no hay nada que medir.
+// BUG REAL (Nicolas, 2026-10-02: "no se si David y yo en verdad estamos en 100% de SLA como
+// muestra el active recruiter by workload"): esta funcion nunca tuvo el mismo fix que
+// renderSlaMeter() ya tiene (ver el comentario grande ahi, 2026-09-26 — "todos los reqs segun eso
+// estan en SLA, y no") — contaba cualquier req activo que no estuviera literalmente "out" como
+// "on SLA", INCLUIDO uno sin intake todavia (sin reloj corriendo, status "none" en los 3
+// targets). Mismo denominador correcto que esa funcion: solo las posiciones cuyo reloj ya
+// arranco.
+function recruiterSlaRate(assigned){
+  const started = assigned.filter(p=>{
+    const s = computeSla(p);
+    return s.TTS.status!=="none" || s.TTF.status!=="none" || s.TTH.status!=="none";
+  });
+  if(!started.length) return null;
+  const outOfSla = started.filter(p=>{
+    const s = computeSla(p);
+    return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
+  }).length;
+  return Math.round(((started.length - outOfSla) / started.length) * 100);
+}
+function slaRateColor(rate){
+  if(rate < 75) return "var(--critical)";
+  if(rate < 90) return "var(--warning)";
+  return "var(--good)";
+}
 
 // renderHiredLocChart() (Position By Location/Work Arrangement) vivio aca — movida a
 // renderGanttInsights() 2026-09-26, ver el comentario junto a esa funcion.
