@@ -8976,13 +8976,18 @@ async function confirmIntakeSummarySent(p){
     s.extra = s.extra || [];
     s.extra.push({date: today, time: nowTimeStr(), type:"action", author: currentAuthorName(), text: `${docName} sent to the hiring manager (same ${isHeld ? "meeting" : "context"} as ${p.id}).`});
   });
-  // Nicolas, 2026-10-01, corrigiendome: esto SI debe avanzar el status (a "Job Creation", un status
-  // REAL en STATUS_ORDER, no un sub-paso que se queda dentro de Intake Pending/Waived) —
-  // "obligarlo" no se trata de una confirmacion aparte, sino de un status propio con su propia
-  // alerta de 24h (ver isJobCreationOverdue()) y su propio gate de salida (REQUIRES_SPOTT_JOB_LOGGED).
-  // Deliberadamente NO se propaga a hermanas de Headcount Group (a diferencia de
-  // intakeSummarySentDate arriba) — cada vacante tiene su propio Spott Job, su propio reloj de 24h.
+  // BUG REAL (Nicolas, 2026-10-01: "me sale esto a pesar que ya le di a un headcount que si, eso
+  // no puede pasar" — confirmo este paso en UNA hermana del grupo, pero las demas se quedaban con
+  // intakeSummarySentDate heredado SIN el avance de status, exactamente el estado que
+  // staleStatusHint() flaguea como "atrasado"). El razonamiento original (no propagar porque "cada
+  // vacante tiene su propio Spott Job") confundia 2 cosas distintas: el STATUS (Job Creation, un
+  // simple marcador de etapa) nunca necesito ser por-vacante, solo el GATE de salida (
+  // REQUIRES_SPOTT_JOB_LOGGED, que sigue evaluando p.spottJobId de cada hermana por separado) lo
+  // es. Si la confirmacion del intake se propaga al grupo entero (ya lo hacia), el avance de
+  // status que ESA confirmacion dispara tiene que propagarse igual, o se generan exactamente estos
+  // huerfanos. Ahora cada hermana que corresponda avanza tambien, con su propio timestamp/log real.
   let jobCreationChange = null;
+  const siblingJobCreationChanges = [];
   if(!AUTO_STATUS_LOCKED.includes(p.status) && STATUS_ORDER.indexOf("Job Creation") > STATUS_ORDER.indexOf(p.status)){
     const fromStatus = p.status;
     p.status = "Job Creation";
@@ -8992,6 +8997,22 @@ async function confirmIntakeSummarySent(p){
     p.extra.push({date: today, time: nowTimeStr(), type:"status", author: currentAuthorName(), text: jcRemarkText});
     jobCreationChange.remarkText = jcRemarkText;
   }
+  // OJO: usa TODAS las hermanas del grupo (no la lista `siblings` de arriba, que a proposito
+  // EXCLUYE a las que ya tenian intakeSummarySentDate puesto de antes) — esas son justo las que
+  // se quedaron huerfanas por este bug, y necesitan el avance de status igual que cualquier otra.
+  const allGroupSiblings = p.headcountGroup
+    ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.handoffFrom)
+    : [];
+  allGroupSiblings.forEach(s=>{
+    if(!s.intakeSummarySentDate || AUTO_STATUS_LOCKED.includes(s.status) || STATUS_ORDER.indexOf("Job Creation") <= STATUS_ORDER.indexOf(s.status)) return;
+    const sFrom = s.status;
+    s.status = "Job Creation";
+    s.jobCreationEnteredAt = `${today}T${nowTimeStr()}`;
+    const sRemarkText = `Status changed from ${statusLabel(sFrom)} to Job Creation (automatic — intake notes confirmed sent, same ${isHeld ? "meeting" : "context"} as ${p.id}).`;
+    s.extra = s.extra || [];
+    s.extra.push({date: today, time: nowTimeStr(), type:"status", author: currentAuthorName(), text: sRemarkText});
+    siblingJobCreationChanges.push({sibling: s, remarkText: sRemarkText});
+  });
   renderDetailModal();
   renderPositions();
   renderTracking();
@@ -9009,6 +9030,11 @@ async function confirmIntakeSummarySent(p){
         await graphUpdatePositionField(p.id, "G", "Job Creation");
         await graphUpdatePositionFieldByHeader(p.id, "Job Creation Entered At", p.jobCreationEnteredAt);
         await graphAppendHistorial(p.id, p.title, jobCreationChange.remarkText, currentAuthorName(), "status");
+      }
+      for(const {sibling, remarkText: sRemarkText} of siblingJobCreationChanges){
+        await graphUpdatePositionField(sibling.id, "G", "Job Creation");
+        await graphUpdatePositionFieldByHeader(sibling.id, "Job Creation Entered At", sibling.jobCreationEnteredAt);
+        await graphAppendHistorial(sibling.id, sibling.title, sRemarkText, currentAuthorName(), "status");
       }
       const freshMsg = document.getElementById("nextStepDoneMsg");
       if(freshMsg){ freshMsg.textContent = "Logged."; freshMsg.style.color = "var(--good)"; }
