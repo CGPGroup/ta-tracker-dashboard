@@ -8310,8 +8310,24 @@ function renderDetailModal(){
         requireUrl: true,
         onSave: async (newVal)=>{
           p.spottJobId = newVal;
-          if(isConnected()) await graphUpdatePositionField(p.id, "AM", newVal || "");
+          // Nicolas, 2026-10-02, corrigiendome: "en spott se crea un solo job para todos los hcs"
+          // — a diferencia de lo que asumi (un Spott Job propio por vacante), un Headcount Group
+          // real comparte UN SOLO job de Spott entre todas sus vacantes. Se propaga igual que
+          // intakeSummarySentDate/intake waived (ver confirmIntakeSummarySent()) — siempre
+          // sincronizado al mismo valor, nunca "solo si esta vacio", porque es literalmente el
+          // mismo dato real, no una copia independiente que cada hermana pueda tener distinta.
+          const spottSiblings = p.headcountGroup
+            ? POSITIONS.filter(x=>x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.handoffFrom)
+            : [];
+          spottSiblings.forEach(s=> s.spottJobId = newVal);
+          if(isConnected()){
+            await graphUpdatePositionField(p.id, "AM", newVal || "");
+            for(const s of spottSiblings) await graphUpdatePositionField(s.id, "AM", newVal || "");
+          }
           await logFieldEdit(p, newVal ? "Spott Job URL updated." : "Spott Job URL cleared.");
+          for(const s of spottSiblings){
+            await logFieldEdit(s, newVal ? `Spott Job URL updated (same shared job as ${p.id}).` : `Spott Job URL cleared (same shared job as ${p.id}).`);
+          }
           renderDetailModal();
           renderPositions();
           renderTracking();
