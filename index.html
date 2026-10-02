@@ -9720,6 +9720,9 @@ async function advancePositionForCandidateStatus(p, candidateName, newStatus){
       await graphAppendHistorial(p.id, p.title, remarkText, currentAuthorName(), "status");
     } catch(err){ console.error("Could not save the req's auto status advance (non-fatal for the candidate change itself):", err); }
   }
+  // Nicolas, 2026-10-02: "TODOS los pasos, estados, confirmaciones tiene que ser congruentes con
+  // todo y los hcs asi mismo" — sincroniza de inmediato en vez de esperar al proximo auto-refresh.
+  await reconcileHeadcountGroups();
 }
 // Fill Date: "Immy nos confirma que ya le envio el offer letter al candidato y que el candidato
 // acepto" (Nicolas, 2026-09-23/24) — se captura por candidato (ver candidateOfferDatesHtml()), no
@@ -9811,6 +9814,12 @@ async function saveCandidateFillDate(p, candidateId){
       alert(`The requisition's Fill Date was saved, but couldn't be saved on ${c.name}'s own candidate row — needs a "Fill Date" column added to BatchCandidatesTable in the shared Excel file. It's kept in this browser tab for now.\n\n`+candFieldFailed.message);
     }
   }
+  // Nicolas, 2026-10-02: "TODOS los pasos, estados, confirmaciones tiene que ser congruentes con
+  // todo y los hcs asi mismo" — sincroniza de inmediato en vez de esperar al proximo auto-refresh.
+  await reconcileHeadcountGroups();
+  renderDetailModal();
+  renderTracking();
+  renderPositions();
 }
 // Start Date: la fecha real de inicio confirmada por Immy — a diferencia de Fill Date, guardarla
 // NO mueve el status todavia. El req se queda en "Filled" hasta que esa fecha efectivamente
@@ -9860,8 +9869,10 @@ async function saveCandidateHireDate(p, candidateId){
     }
   }
   // Si la fecha que se acaba de guardar ya llego (o es hoy), el auto-avance a Hired pasa de
-  // inmediato, sin esperar al proximo refresh de 2 min.
+  // inmediato, sin esperar al proximo refresh de 2 min. Misma razon para reconcileHeadcountGroups()
+  // (ver ahi, "TODOS los pasos... congruentes... los hcs asi mismo") — sync instantaneo tambien.
   await checkArrivedStartDates();
+  await reconcileHeadcountGroups();
   renderDetailModal();
   renderTracking();
   renderPositions();
@@ -9969,6 +9980,42 @@ async function reconcileHeadcountGroups(){
             await graphAppendHistorial(s.id, s.title, remark, currentAuthorName(), "status");
           } catch(err){ console.error(`Could not save headcount reconciliation for ${s.id} (non-fatal, will retry next refresh):`, err); }
         }
+      }
+    }
+  }
+  // Nicolas, 2026-10-02: "le marque a uno de los Software Engineer que ya empezo el sourcing, no
+  // se si marco el otro hc" (no lo hizo) — "TODOS los pasos, estados, confirmaciones tiene que ser
+  // congruentes con todo y los hcs asi mismo." El sync de arriba solo deriva el status de 3 fechas
+  // puntuales (kickoff/intake requested/intake held) — cualquier OTRO avance real (el dropdown de
+  // status, un candidato que llega a Client Interview/Offer Request, Fill/Start Date, el primer
+  // batch logueado) nunca tenia su propio sync por hermana, y cada sitio nuevo que cambiara
+  // p.status era una oportunidad mas de que esto se repitiera (ya paso antes con fechas, ver el
+  // comentario de BUG REAL 2026-09-28 arriba). En vez de parchar cada uno de esos sitios por
+  // separado, esto corre aqui mismo, en el chequeo que YA se autocorrige en cada carga real de
+  // datos (login y auto-refresh de 2 min) — cualquier hermana que se quede atras del status mas
+  // avanzado del grupo se adelanta sola, sin importar que lo causo. Restringido a Job Creation en
+  // adelante a proposito: antes de eso (Kickoff/Intake Requested/Intake Pending vs Waived) ya hay
+  // logica especifica arriba y en confirmIntakeSummarySent() que distingue el camino Held/Waived —
+  // forzar aqui tambien rompería esa distincion (ver el comentario de "intake" arriba, mismo tipo
+  // de bug ya encontrado una vez).
+  const JOB_CREATION_IDX = STATUS_ORDER.indexOf("Job Creation");
+  for(const members of Object.values(groups)){
+    if(members.length < 2) continue;
+    const eligible = members.filter(m => !AUTO_STATUS_LOCKED.includes(m.status) && STATUS_ORDER.indexOf(m.status) >= JOB_CREATION_IDX);
+    if(eligible.length < 2) continue;
+    const mostAdvanced = eligible.reduce((best, m) => STATUS_ORDER.indexOf(m.status) > STATUS_ORDER.indexOf(best.status) ? m : best);
+    for(const s of eligible){
+      if(s.id === mostAdvanced.id || STATUS_ORDER.indexOf(mostAdvanced.status) <= STATUS_ORDER.indexOf(s.status)) continue;
+      const sFrom = s.status;
+      s.status = mostAdvanced.status;
+      const remark = `Status changed from ${statusLabel(sFrom)} to ${statusLabel(mostAdvanced.status)} (automatic — kept in sync with ${mostAdvanced.id} in Headcount Group "${s.headcountGroup}").`;
+      s.extra = s.extra || [];
+      s.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remark});
+      if(isConnected()){
+        try {
+          await graphUpdatePositionField(s.id, "G", mostAdvanced.status);
+          await graphAppendHistorial(s.id, s.title, remark, currentAuthorName(), "status");
+        } catch(err){ console.error(`Could not sync headcount status for ${s.id} (non-fatal, will retry next refresh):`, err); }
       }
     }
   }
@@ -10588,7 +10635,12 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   // follow-up (2do, 3ro...) no siempre dispara un cambio de status (ese solo pasa en el primero),
   // asi que sin esto, loguear un batch entero podia no dejar NINGUN rastro en Activity.
   if(succeeded.length) await logFieldEdit(p, `Batch logged (${date}, ${type}): ${succeeded.join(", ")}.`);
+  // Nicolas, 2026-10-02: "TODOS los pasos, estados, confirmaciones tiene que ser congruentes con
+  // todo y los hcs asi mismo" — sincroniza de inmediato en vez de esperar al proximo auto-refresh.
+  await reconcileHeadcountGroups();
   renderDetailModal();
+  renderPositions();
+  renderTracking();
   const savedNote = autoStatusChange ? ` Status moved to ${statusLabel(autoStatusChange.to)}.` : "";
   const cvNote = cvWarnings.length ? ` CV upload failed for: ${cvWarnings.join(", ")} — they're saved, just attach the CV again from their candidate row.` : "";
   if(failed.length){
@@ -10971,6 +11023,7 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     p.status = newStatus;
     if(dateField) p[dateField.key] = dateVal;
     pendingStatusChange = null;
+    await reconcileHeadcountGroups();
     renderDetailModal();
     renderPositions();
     renderTracking();
@@ -11009,6 +11062,13 @@ async function commitStatusChange(p, newStatus, dateField, dateVal){
     msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
     msg.style.color = "var(--warning)";
   }
+  // Nicolas, 2026-10-02: "no se si marco el otro hc" — sincroniza de inmediato en vez de esperar
+  // al proximo auto-refresh de 2 min (ver reconcileHeadcountGroups()), misma logica que ya usa
+  // checkArrivedStartDates() en saveCandidateHireDate() para feedback instantaneo.
+  await reconcileHeadcountGroups();
+  renderDetailModal();
+  renderPositions();
+  renderTracking();
   if(document.getElementById("editStatusModal").classList.contains("open")){
     setTimeout(()=>{ document.getElementById("editStatusModal").classList.remove("open"); }, 900);
   }
