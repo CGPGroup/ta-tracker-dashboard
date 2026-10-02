@@ -1430,25 +1430,6 @@
   table.data tr:hover td { background: var(--surface-2); }
   table.data tr.clickable { cursor: pointer; }
   table.data tr.clickable:hover td { background: var(--brand-wash); }
-  /* Scorecard (Nicolas, 2026-09-25, metodologia EOS) — verde/rojo SOLO cuando hay una meta real
-     puesta, nunca por defecto (una celda sin meta no puede estar "mal"). */
-  #scorecardTable td, #scorecardTable th { text-align: center; }
-  #scorecardTable td:first-child, #scorecardTable th:first-child,
-  #scorecardTable td:nth-child(2), #scorecardTable th:nth-child(2) { text-align: left; }
-  .scorecard-cell { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-secondary); }
-  .scorecard-cell.good { color: var(--good); }
-  .scorecard-cell.bad { color: var(--critical); }
-  .scorecard-cell.current { background: rgba(var(--brand-rgb),0.08); border-radius: 6px; }
-  .scorecard-goal-input {
-    width: 56px; font-family: inherit; font-size: 12px; padding: 4px 6px; text-align: center;
-    border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-  }
-  .scorecard-goal-input::placeholder { color: var(--text-muted); }
-  .scorecard-current-tag { font-size: 8.5px; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.02em; display: block; }
-  .scorecard-avg { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-weight: 600; }
-  .scorecard-owner { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-
   .pos-title { font-weight: 600; }
   .pos-code { color: var(--text-muted); font-weight: 600; font-size: 11.5px; margin-left: 5px; white-space: nowrap; }
   .pos-pending-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: rgba(var(--warning-rgb),0.16); color: var(--warning); white-space: nowrap; }
@@ -1990,7 +1971,6 @@
            dentro de la fila de tabs del Dashboard. -->
       <button class="nav-item" data-view="tracking" id="navItemTracking" style="display:none;"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> <span class="nav-label">Tracking</span></button>
       <button class="nav-item" data-view="positions"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span> <span class="nav-label">Positions</span></button>
-      <button class="nav-item" data-view="scorecard"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg></span> <span class="nav-label">Scorecard</span></button>
       <button class="nav-item" data-view="manage"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="5" x2="14" y2="5"/><line x1="10" y1="5" x2="3" y2="5"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="19" x2="16" y2="19"/><line x1="12" y1="19" x2="3" y2="19"/><line x1="14" y1="3" x2="14" y2="7"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="17" x2="16" y2="21"/></svg></span> <span class="nav-label">SSOT Management</span></button>
       <button class="nav-item" data-view="guide"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> <span class="nav-label">Process & SLA Guide</span></button>
       <div id="sidebarRecentReqsZone"></div>
@@ -2129,7 +2109,7 @@
               <div class="dash-grid">
                 <div class="panel" style="grid-column: span 3;">
                   <h3>SLA Compliance</h3>
-                  <div class="panel-sub">Share of active positions with a running SLA clock that are on time on every target (submit, fill, and hire deadlines). Positions that haven't had their intake meeting yet aren't counted either way — their clock hasn't started. The rest are running behind on at least one.</div>
+                  <div class="panel-sub">Share of positions with a running SLA clock that are on time on every target (submit, fill, and hire deadlines) — including Offer Request, Filled (awaiting start), and On Hold, not just positions still being actively worked. Positions that haven't had their intake meeting yet aren't counted either way — their clock hasn't started. Fully closed or cancelled positions aren't counted either.</div>
                   <div id="chartSlaCompliance"></div>
                 </div>
                 <div class="panel" style="grid-column: span 3;">
@@ -2139,7 +2119,7 @@
                 </div>
                 <div class="panel" style="grid-column: span 6;">
                   <h3>SLA Health</h3>
-                  <div class="panel-sub">How many active positions are within, at risk of, or already past each SLA target. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
+                  <div class="panel-sub">How many positions are within, at risk of, or already past each SLA target — including Offer Request, Filled (awaiting start), and On Hold, not just positions still being actively worked; only fully closed or cancelled positions are left out. TTS counts business days from Kickoff and turns risk at 85% of its target; TTF/TTH count calendar days and turn risk once they pass their target, out past target+5 days.</div>
                   <div id="chartSla"></div>
                 </div>
                 <!-- Antes vivia en Overview, compitiendo por espacio con Submitted Vs Expected —
@@ -2206,41 +2186,6 @@
                 <th title="Time To Submit">TTS</th><th title="Time To Fill">TTF</th><th title="Time To Hire">TTH</th><th title="When the hiring manager asked to move forward with an offer">Offer Request Date</th><th>Fill Date</th><th title="The candidate's actual start date — logging it moves this requisition to Hired automatically.">Start Date</th><th>Placement</th>
               </tr></thead>
               <tbody></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ======================= SCORECARD ======================= -->
-      <!-- Nicolas, 2026-09-25: "hazlo como veas necesario, eficiente y optimo" — EOS Scorecard,
-           SOLO esa pieza de la metodologia (nada de Rocks/L10/IDS). Un numero por fila, un dueño,
-           una meta, verde/rojo, historial semanal — ver renderScorecard() y sus vecinas en el JS.
-           Las 4 metricas son reconstruidas EN VIVO desde el Activity log y BatchesTable reales
-           (nunca fabricadas, nunca necesitan que Nicolas llene nada retroactivamente) — Goal es lo
-           unico editable/persistido, en 4 columnas nuevas y opcionales de RecruitersTable (mismo
-           patron "reservado ahora, Nicolas agrega el header despues" que cualquier otro campo
-           nuevo de este proyecto). SLA Compliance % quedo deliberadamente afuera de v1: a
-           diferencia de las otras 4, no hay una fecha por evento que reconstruya su historial
-           semanal sin inventar numeros — mejor dejarla pendiente que fabricarla. -->
-      <section class="view" id="view-scorecard">
-        <!-- Nicolas, 2026-09-25: "lo que quiero con lo de needs attention, es que esa info haga
-             parte de los scorecards" — misma data/logica real que ya usan Tracking y SLA &
-             Completion (buildAttentionRows()/attentionRowsHtml(), nunca duplicada), solo un
-             tercer lugar donde se ve — pasando POSITIONS directo (no dashboardPositions()) porque
-             el Scorecard entero ya es una vista de equipo completo, sin importar en que workspace
-             estes parado, igual que la tabla de abajo. -->
-        <div class="panel" style="margin-bottom:16px;">
-          <h3>Needs Attention <span class="panel-details-count" id="scorecardAttentionCount"></span></h3>
-          <div class="panel-sub">What's worth raising in the L10 — out of SLA, at risk, or stuck on Kickoff/Intake follow-up, across the whole book.</div>
-          <div id="scorecardAttentionZone"></div>
-        </div>
-        <div class="panel">
-          <h3>Scorecard</h3>
-          <div class="panel-sub">Weekly numbers, EOS-style — one owner and one goal per row, last 8 weeks at a glance. Green means the goal was met that week, red means it wasn't, grey means no goal is set yet. Set a goal by typing a number and clicking away.</div>
-          <div style="overflow-x:auto;">
-            <table class="data" id="scorecardTable">
-              <thead><tr id="scorecardHeaderRow"></tr></thead>
-              <tbody id="scorecardBody"></tbody>
             </table>
           </div>
         </div>
@@ -4322,12 +4267,6 @@ let RECRUITER_EMAILS = {}; // nombre -> email, para poder precargar el formulari
 // formulario de Edit Recruiter — el proxy publico de solo lectura la quita antes de responder
 // (ver el Worker), asi que nunca llega a estar disponible fuera de esa sesion.
 let RECRUITER_PINS = {};
-// nombre -> {submitted, kickoffsAccepted, intakeHeld, placements} (Scorecard, ver
-// SCORECARD_MEASURES) — a diferencia de PINS, se resuelve por HEADER, no por indice fijo de
-// columna (parseRecruitersTable acepta headers opcional), y solo se llena via loadFromGraph()
-// (el proxy publico no expone estas columnas todavia). Sin meta puesta, una celda simplemente no
-// puede estar "en verde" ni "en rojo" — nunca se asume un numero que Nicolas no puso.
-let RECRUITER_GOALS = {};
 // Unico admin del tracker por ahora (Nicolas): solo esta cuenta puede eliminar requisitions
 // desde Positions. Es una barrera de interfaz, no seguridad real (ver isAdmin()).
 const ADMIN_EMAIL = "nicolas.patarroyo.ramirez@cgpgroupus.com";
@@ -4526,7 +4465,7 @@ function computeSlaPauseInfo(p){
 // accion en vivo, la misma entrada real vive en las dos a la vez. Concatenar sin mas (como se
 // hacia antes aca) no rompia findStatusTransitionDate (solo pedia la primera coincidencia, un
 // duplicado no cambia CUAL es la primera), pero SI infla cualquier conteo real sobre el Activity
-// log (ver SCORECARD_MEASURES) — de-duplicado una sola vez aca, reusado por ambos casos de uso.
+// log — de-duplicado una sola vez aca, reusado por cualquiera que necesite el log completo.
 function positionActivityEntries(p){
   const seen = new Set();
   const out = [];
@@ -4539,9 +4478,9 @@ function positionActivityEntries(p){
   return out;
 }
 // Todas las fechas reales de "Status changed from X to <toLabel>" en el Activity log, en orden
-// cronologico — a diferencia de findStatusTransitionDate() (solo la primera), esto es lo que
-// necesita el Scorecard para contar CADA vez que un req entro a ese status, no solo si alguna vez
-// entro.
+// cronologico — a diferencia de findStatusTransitionDate() (solo la primera), esto sirve para
+// contar CADA vez que un req entro a ese status, o para saber cuando entro a el por ULTIMA vez
+// (ver daysInCurrentStage(), que usa justo el ultimo elemento de este array).
 function allStatusTransitionDates(p, toLabel){
   return positionActivityEntries(p)
     .filter(e => e.type === "status" && typeof e.text === "string" && e.text.startsWith("Status changed from"))
@@ -4558,6 +4497,20 @@ function allStatusTransitionDates(p, toLabel){
 // (ver resolveEffectiveIntakeDate abajo). Una sola fuente de verdad.
 function findStatusTransitionDate(p, toLabel){
   return allStatusTransitionDates(p, toLabel)[0] || null;
+}
+// Cuantos dias calendario lleva un req en su status ACTUAL — para el mini-chart "Average Time In
+// Current Stage" dentro del Gantt (ver renderGanttInsights()), reemplazando a "Active Workload By
+// Recruiter"/"Submitted Vs Expected" (Nicolas, 2026-10-02: no le servian una vez ya filtraste a
+// una sesion especifica del Gantt). Ancla en la ULTIMA vez real que el log registro "Status
+// changed... to <status actual>" (el ultimo elemento de allStatusTransitionDates, no el primero —
+// un req puede haber pasado por el mismo status mas de una vez); sin ningun log de eso (dato
+// migrado, nunca hubo un cambio de status real registrado), cae al Kickoff como mejor fecha real
+// disponible, nunca inventa una.
+function daysInCurrentStage(p){
+  const dates = allStatusTransitionDates(p, statusLabel(p.status));
+  const since = parseD(dates.length ? dates[dates.length-1] : p.kickoff);
+  if(!since) return null;
+  return calendarDaysBetween(since, new Date());
 }
 // Ancla real de "cuando el intake quedo listo" (reunion tenida O waiver) — cadena de fallback que
 // NUNCA fabrica una fecha. Nicolas (2026-09-17) ya habia atrapado que p.intake queda null en un
@@ -5838,73 +5791,48 @@ function ganttRowHtml(p, cal){
 // Los 3 mini-charts que antes eran la tarjeta "Insights" aparte — ver el comentario de CSS junto
 // a .gantt-insights-row. `positions` ya llega recortado por ganttRecruiterFilter/ganttRoleFilter
 // (el mismo array `data` que arma las filas del Gantt), asi que "cada reclutador o all" sale
-// gratis: si el Gantt esta filtrado a un solo reclutador, Active Workload naturalmente muestra
-// solo su tarjeta. Nunca usa dashboardPositions()/RECRUITERS globales — todo sale de lo que YA se
-// esta viendo en este Gantt especifico.
+// gratis: si el Gantt esta filtrado a un solo reclutador, estos charts naturalmente muestran solo
+// lo suyo. Nunca usa dashboardPositions()/RECRUITERS globales — todo sale de lo que YA se esta
+// viendo en este Gantt especifico.
+// "Active Workload By Recruiter"/"Submitted Vs Expected" vivieron aca hasta 2026-10-02 — Nicolas:
+// "no sé si eso en realidad nos sirva... habria que reemplazar ahi esas dos por otros datos que
+// sean verdaderamente relevantes" (una vez ya filtraste a una sesion especifica del Gantt, una
+// metrica de equipo completo no aporta tanto). Reemplazadas por un desglose de SLA y de tiempo en
+// la etapa actual, las dos puntuales a lo que esta sesion ya esta mostrando.
 function renderGanttInsights(containerId, positions){
   const container = document.getElementById(containerId);
   if(!container) return;
   const active = positions.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
 
-  // Nicolas, 2026-09-26: "yo deberia aparecer de primero de izquierda a derecha, porque estoy en
-  // el tracker antes que David... si entra alguien mas pues de cuarto" — orden fijo por
-  // antiguedad real en el equipo (el orden en que cada quien se agrego a RECRUITERS, la lista
-  // maestra que ya viene en ese orden desde RecruitersTable), no por peso de trabajo actual — un
-  // recruiter con menos carga esa semana no deberia "saltar" adelante en la fila. RECRUITERS
-  // filtrado a solo quienes tienen reqs en esta vista en particular (respeta el filtro de
-  // recruiter/rol del Gantt), pero SIN reordenar.
-  const recruiterNames = RECRUITERS.filter(r=>positions.some(p=>p.recruiter===r));
-  const workloadRows = recruiterNames.map(r=>{
-    const assigned = active.filter(p=>p.recruiter===r);
-    const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
-    return {label:r, count: assigned.length, value: Math.round(weighted*10)/10, slaRate: recruiterSlaRate(assigned)};
-  });
-  const workloadCardsHtml = workloadRows.map(r=>{
-    const photo = RECRUITER_PHOTOS[r.label];
-    const avatarStyle = photo ? `background-image:url('${escapeHtml(photo)}');` : `background:${colorForName(r.label)};`;
-    // La barra y su color ahora reflejan CANTIDAD cruda de reqs contra el tope real de 12 (ver el
-    // comentario junto a WORKLOAD_MAX), no el numero pesado — esto es lo que de verdad se acaba.
-    const pct = Math.min(100, (r.count / WORKLOAD_MAX) * 100);
-    // BUG REAL 2026-09-26 (Nicolas: "que todo este a la misma altura... que se vea organizado"):
-    // esta linea se omitia POR COMPLETO (string vacio) para un reclutador sin posiciones activas
-    // (recruiterSlaRate() devuelve null ahi) — exactamente el mismo bug de altura inconsistente ya
-    // arreglado para .workload-title, solo que se me paso esta. Siempre se renderiza el div, con
-    // un placeholder neutro cuando no hay dato, para que TODAS las tarjetas reserven la misma
-    // altura sin importar si ese reclutador tiene 0 o varias posiciones activas.
-    // recruiterSlaRate() ahora tambien devuelve null cuando SI hay activos pero NINGUNO con reloj
-    // corriendo todavia (ver el fix ahi) — distinto de "no active reqs", nunca el mismo texto.
-    const slaHtml = r.slaRate === null
-      ? `<div class="workload-sla"><span class="dot" style="background:var(--grid);"></span>${r.count ? "No SLA clock running yet" : "No active reqs"}</div>`
-      : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
-    // Nicolas, 2026-09-26: "me faltaron los titulos de cada uno" — RECRUITER_TITLES (ej. "Lead
-    // Talent Partner") se habia quedado afuera de la version compacta (.workload-title ya existia
-    // en el CSS de la version anterior, solo nunca se movio a este markup nuevo).
-    // Siempre se renderiza (nunca condicional): si un reclutador no tiene cargo cargado todavia,
-    // dejar el div vacio en vez de omitirlo — con min-height reservando la misma linea, todas las
-    // tarjetas miden igual sin importar quien si/no tiene cargo (mismo principio que las tarjetas
-    // de Positions & Placements, ver [[project_positions_card_congruence_and_gantt_chip_fix]]).
-    const title = RECRUITER_TITLES[r.label] || "";
-    return `<div class="workload-card compact" data-label="${escapeHtml(r.label)}">
-      <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}${recruiterDotHtml(r.label)}</div>
-      <div class="workload-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</div>
-      <div class="workload-title">${escapeHtml(title)}</div>
-      <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.count))};"></div></div>
-      <div class="workload-count">${r.count} / ${WORKLOAD_MAX} req${r.count===1?"":"s"} (${r.value} weighted)</div>
-      ${slaHtml}
-    </div>`;
-  }).join("");
+  // SLA Breakdown — Nicolas, 2026-10-02: "no puede contar unicamente las que estan basadas en el
+  // concepto de active, sino en general, no?" (ej. un req en Offer Request o pausado On Hold que
+  // ya esta fuera de SLA no deberia desaparecer del numero solo porque ya no es "trabajo activo").
+  // A diferencia de las 3 barras de SLA Health (siempre "activas" globales, ver renderSlaChart()),
+  // este mini-chart usa `positions` TAL CUAL — exactamente lo que esta sesion del Gantt ya esta
+  // mostrando, sin ningun filtro adicional de "active" encima. attentionInfo() ya calcula el peor
+  // status entre TTS/TTF/TTH (y cual metrica es la responsable) — reusado aca tal cual, nunca
+  // reinventado.
+  const slaBuckets = {within:[], risk:[], out:[], none:[]};
+  positions.forEach(p=>{ slaBuckets[attentionInfo(p).worst].push(p); });
+  const slaTotal = positions.length || 1;
+  const slaSeg = (k)=> `<div class="clickable-stat" data-sla="${k}" style="width:${(slaBuckets[k].length/slaTotal*100).toFixed(2)}%; background:${gradientFill(STATUS_META[k].color)};"></div>`;
+  const slaPart = (k)=> slaBuckets[k].length ? `<span class="clickable-stat" data-sla="${k}">${slaBuckets[k].length} ${STATUS_WORD[k].toLowerCase()}</span>` : "";
+  const slaPartsHtml = ["within","risk","out","none"].map(slaPart).filter(Boolean).join(" · ") || "Nothing shown";
 
-  // Submitted Vs Expected — "active" arriba ya excluye TERMINAL y NOT_ACTIVELY_WORKED (Offer
-  // Request incluido), asi que "hasta Offer Request, no mas alla" ya estaba bien calculado; solo
-  // faltaba decirlo explicito en el subtitulo (Nicolas: "hay que explicar que es para posiciones
-  // que ya pasaron la etapa de intake meeting y no han llegado a offer stage").
-  const sourcingStarted = active.filter(p=> !!parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake));
-  const submittedTotal = sourcingStarted.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
-  const minExpected = Math.round(sourcingStarted.reduce((sum,p)=> sum + expectedSubmittedForPosition(p), 0));
-  const ratio = minExpected>0 ? submittedTotal/minExpected : null;
-  const barColor = ratio===null ? "var(--grid)" : ratio>=1 ? "var(--good)" : ratio>=0.5 ? "var(--warning)" : "var(--critical)";
-  const barWidthPct = ratio===null ? 0 : Math.min(100, Math.round(ratio*100));
-  const displayPct = ratio===null ? "-" : Math.round(ratio*100)+"%";
+  // Average Time In Current Stage — daysInCurrentStage() ancla en la ultima vez real que el
+  // Activity log registro "Status changed... to <status actual>" (o el Kickoff si nunca hubo ese
+  // log, nunca una fecha inventada). Agrupado por status para que se vea de un vistazo donde se
+  // esta acumulando el tiempo, mas atrasado primero.
+  const stageGroups = {};
+  positions.forEach(p=>{
+    const d = daysInCurrentStage(p);
+    if(d===null) return;
+    const label = statusLabel(p.status);
+    (stageGroups[label] = stageGroups[label] || []).push(p);
+  });
+  const stageRows = Object.entries(stageGroups).map(([label, ps])=>({
+    label, positions: ps, avg: Math.round(ps.reduce((sum,p)=>sum+daysInCurrentStage(p),0) / ps.length),
+  })).sort((a,b)=>b.avg-a.avg);
 
   const byCountry = {};
   active.forEach(p=>{
@@ -5918,21 +5846,18 @@ function renderGanttInsights(containerId, positions){
   container.innerHTML = `
     <div class="gantt-insights-row">
       <div class="gantt-mini-chart">
-        <div class="gantt-mini-title">Active Workload By Recruiter</div>
-        <div class="gantt-mini-sub">${WORKLOAD_SWEET_SPOT} active reqs is the target, ${WORKLOAD_MAX} the real max, no matter what stage they're in. The weighted number in parentheses is effort intensity only — a req in Sourcing takes more real work than one waiting on Offer Stage or paused On Hold, but it still counts as one req against the cap. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
-        <div class="workload-grid compact">${workloadCardsHtml || `<span class="panel-sub" style="margin:0;">No recruiters in this view.</span>`}</div>
+        <div class="gantt-mini-title">SLA Breakdown — This View</div>
+        <div class="gantt-mini-sub">Every position shown in this Gantt session right now, by overall SLA status (the worst of Time To Submit/Fill/Hire) — no active-only filter, so a paused, Offer Request, or Filled-but-not-started position that's already behind still counts.</div>
+        <div class="stackbar" id="ganttSlaBar">${["within","risk","out","none"].map(slaSeg).join("")}</div>
+        <div class="stackbar-counts" id="ganttSlaCounts">${slaPartsHtml} out of ${positions.length} shown</div>
       </div>
       <div class="gantt-mini-chart">
-        <div class="gantt-mini-title">Submitted Vs Expected</div>
-        <div class="gantt-mini-sub">Only positions where intake has already happened and that haven't reached Offer Request yet.</div>
-        <div class="funnel-row${sourcingStarted.length>0 ? " clickable-stat" : ""}" id="ganttSubmittedRow">
-          <div class="funnel-label">Candidates Submitted</div>
-          <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${gradientFill(barColor)};"></div></div>
-          <div class="funnel-stat">
-            <div class="funnel-value">${submittedTotal} / ${minExpected}</div>
-            <div class="funnel-pct">${displayPct} of expected to date</div>
-          </div>
-        </div>
+        <div class="gantt-mini-title">Average Time In Current Stage</div>
+        <div class="gantt-mini-sub">How long positions shown here have been sitting in their current status, grouped by status — slowest-moving first, so it's clear where time is piling up.</div>
+        <div class="barlist compact" id="ganttByStage">${stageRows.length ? stageRows.map((r,i)=>{
+          const max = stageRows[0].avg || 1;
+          return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.avg/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div><div class="barlist-value">${r.avg}d (${r.positions.length})</div></div>`;
+        }).join("") : `<span class="panel-sub" style="margin:0;">Nothing shown.</span>`}</div>
       </div>
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Position By Location/Work Arrangement</div>
@@ -5954,14 +5879,23 @@ function renderGanttInsights(containerId, positions){
       </div>
     </div>
   `;
-  // Nicolas, 2026-09-26: "en el recruiter workload, ya no es necesario que te lleve a ninguna
-  // parte" — estas tarjetas ya no navegan a ningun lado, son puramente informativas (mismo
-  // criterio que el resto del panel de insights, que ya solo filtra en el sitio).
-  if(sourcingStarted.length>0){
-    document.getElementById("ganttSubmittedRow")?.addEventListener("click", ()=>{
-      openQuickList("Submitted Vs Expected", `${submittedTotal} submitted · expected at least ${minExpected} to date across ${sourcingStarted.length} position${sourcingStarted.length===1?"":"s"} (intake already held)`, sourcingStarted);
+  container.querySelectorAll("#ganttSlaBar .clickable-stat, #ganttSlaCounts .clickable-stat").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const bucket = el.dataset.sla;
+      const matches = slaBuckets[bucket];
+      openQuickList(`${STATUS_WORD[bucket]} — This View`, `${matches.length} position${matches.length===1?"":"s"}`, matches, null, (p)=>{
+        const info = attentionInfo(p);
+        return slaChip(info.worstKey ? info.s[info.worstKey] : {status:"none"});
+      });
     });
-  }
+  });
+  container.querySelectorAll("#ganttByStage .barlist-row").forEach((el,i)=>{
+    el.addEventListener("click", ()=>{
+      const row = stageRows[i];
+      openQuickList(`${row.label} — Time In Stage`, `${row.positions.length} position${row.positions.length===1?"":"s"} · avg ${row.avg}d in this stage`, row.positions,
+        (p)=> `${escapeHtml(p.recruiter)} · ${daysInCurrentStage(p)}d in ${statusLabel(p.status)}`);
+    });
+  });
   container.querySelectorAll("#ganttByCountry .barlist-row").forEach((el,i)=>{
     el.addEventListener("click", ()=>{
       const row = countryRows[i];
@@ -6618,194 +6552,26 @@ function workloadColor(v){
   if(v >= 7) return "var(--warning)";
   return "var(--good)";
 }
-// SLA compliance por reclutador, mismo criterio "on time" que ya usa el donut de SLA
-// Compliance (ninguna de TTS/TTF/TTH en "out") — agregado a la tarjeta de Workload siguiendo
-// el patron real de ATS de recruiting (Greenhouse, etc.): visibilidad de compliance por
-// dueño/reclutador, no solo volumen de trabajo. Sin posiciones activas no hay nada que medir.
-// BUG REAL (Nicolas, 2026-10-02: "no se si David y yo en verdad estamos en 100% de SLA como
-// muestra el active recruiter by workload"): esta funcion nunca tuvo el mismo fix que
-// renderSlaMeter() ya tiene (ver el comentario grande ahi, 2026-09-26 — "todos los reqs segun eso
-// estan en SLA, y no") — contaba cualquier req activo que no estuviera literalmente "out" como
-// "on SLA", INCLUIDO uno sin intake todavia (sin reloj corriendo, status "none" en los 3
-// targets). Mismo denominador correcto que esa funcion: solo las posiciones cuyo reloj ya
-// arranco. Con la data real de hoy esto no cambio el numero (Nicolas y David ya tienen el 100% de
-// sus activos con intake hecho) — pero el bug era real y se habria visto en cuanto cualquiera de
-// los dos tuviera un req pre-intake de nuevo.
-function recruiterSlaRate(assigned){
-  const started = assigned.filter(p=>{
-    const s = computeSla(p);
-    return s.TTS.status!=="none" || s.TTF.status!=="none" || s.TTH.status!=="none";
-  });
-  if(!started.length) return null;
-  const outOfSla = started.filter(p=>{
-    const s = computeSla(p);
-    return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
-  }).length;
-  return Math.round(((started.length - outOfSla) / started.length) * 100);
-}
-function slaRateColor(rate){
-  if(rate < 75) return "var(--critical)";
-  if(rate < 90) return "var(--warning)";
-  return "var(--good)";
-}
-// renderReclutadorChart() (Active Workload By Recruiter) vivio aca — movida a
-// renderGanttInsights() 2026-09-26, ver el comentario junto a esa funcion.
-
-// ======================= SCORECARD (EOS) =======================
-// Nicolas, 2026-09-25: "me gustaria hacer una seccion de scorecards... basar esto tambien en la
-// metodologia EOS pero solo esta parte" (ni Rocks, ni L10, ni IDS — solo el Scorecard). Un numero
-// por fila, un dueño (el reclutador), una meta editable, verde/rojo, ultimas 8 semanas. Las 4
-// metricas de abajo se reconstruyen EN VIVO desde fechas reales ya logueadas (Activity log real +
-// BatchesTable) — nunca fabricadas, y el historial completo existe desde el dia uno sin que
-// Nicolas tenga que llenar nada retroactivamente. SLA Compliance % quedo fuera de v1 a proposito:
-// a diferencia de estas 4, es un estado ACTUAL (computeSla), no un evento con fecha propia — no
-// hay forma de reconstruir "cuanto era esto hace 3 semanas" sin inventar un numero, asi que mejor
-// dejarla pendiente que fingir un historial que no existe.
-function weekStartMonday(d){
-  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = date.getDay(); // 0=Sun..6=Sat
-  const diff = (day === 0 ? -6 : 1) - day;
-  date.setDate(date.getDate() + diff);
-  return date;
-}
-function scorecardWeekStarts(count){
-  const thisWeek = weekStartMonday(new Date());
-  const out = [];
-  for(let i=count-1; i>=0; i--) out.push(ganttAddDays(thisWeek, -7*i));
-  return out;
-}
-// entries: [{date:"YYYY-MM-DD"|Date, weight:number}] -> conteo por semana, mismo orden que
-// weekStarts. Cualquier entrada fuera de la ventana visible (mas vieja que la primera semana) se
-// ignora en silencio — nunca se le agrega una columna extra al reporte por un dato viejo suelto.
-function scorecardBucketWeighted(entries, weekStarts){
-  const counts = weekStarts.map(()=>0);
-  const weekTimes = weekStarts.map(w=>w.getTime());
-  entries.forEach(({date, weight})=>{
-    const d = typeof date === "string" ? parseD(date) : date;
-    if(!d) return;
-    const idx = weekTimes.indexOf(weekStartMonday(d).getTime());
-    if(idx >= 0) counts[idx] += weight;
-  });
-  return counts;
-}
-function scorecardSubmittedEntries(recruiterName){
-  const entries = [];
-  POSITIONS.filter(p=>p.recruiter===recruiterName).forEach(p=>{
-    (p.batches||[]).forEach(b=> entries.push({date:b.date, weight:effectiveBatchCount(p,b)}));
-  });
-  return entries;
-}
-function scorecardKickoffsAcceptedEntries(recruiterName){
-  const entries = [];
-  // "Accepted the assignment" (kickoff normal) Y "Handoff accepted" cuentan las dos como nueva
-  // carga real que el reclutador acepto — un handoff no es menos trabajo nuevo que una asignacion
-  // directa, solo llega por otro camino.
-  POSITIONS.filter(p=>p.recruiter===recruiterName).forEach(p=>{
-    positionActivityEntries(p).forEach(e=>{
-      if(e.type==="action" && typeof e.text==="string" &&
-         (e.text.startsWith("Accepted the assignment") || e.text.startsWith("Handoff accepted"))){
-        entries.push({date:e.date, weight:1});
-      }
-    });
-  });
-  return entries;
-}
-function scorecardStatusEntries(recruiterName, toLabel){
-  const entries = [];
-  POSITIONS.filter(p=>p.recruiter===recruiterName).forEach(p=>{
-    allStatusTransitionDates(p, toLabel).forEach(date=> entries.push({date, weight:1}));
-  });
-  return entries;
-}
-const SCORECARD_WEEKS = 8;
-const SCORECARD_MEASURES = [
-  {key:"submitted", label:"Candidates Submitted", goalHeader:"Weekly Submitted Goal",
-    entriesFn: scorecardSubmittedEntries},
-  {key:"kickoffsAccepted", label:"Kickoffs Accepted", goalHeader:"Weekly Kickoffs Accepted Goal",
-    entriesFn: scorecardKickoffsAcceptedEntries},
-  {key:"intakeHeld", label:"Intake Meetings Held", goalHeader:"Weekly Intake Held Goal",
-    // statusLabel(), no el literal "Intake Held" a mano — sigue el mismo rename display-only que
-    // ya usa el resto del tracker (status real "Intake Pending", ver project_intake_pending_rename).
-    entriesFn: (r)=> scorecardStatusEntries(r, statusLabel("Intake Pending"))},
-  {key:"placements", label:"Placements", goalHeader:"Weekly Placements Goal",
-    // Igual: statusLabel("Hired") es "Placed" (ver project_status_display_names) — el texto real
-    // logueado por checkArrivedStartDates() dice "...to Placed...", nunca "to Hired".
-    entriesFn: (r)=> scorecardStatusEntries(r, statusLabel("Hired"))},
-];
-function renderScorecardAttention(){
-  const zone = document.getElementById("scorecardAttentionZone");
-  if(!zone) return;
-  const {slaRows, completionRows} = buildAttentionRows(POSITIONS);
-  const total = slaRows.length + completionRows.length;
-  const countEl = document.getElementById("scorecardAttentionCount");
-  if(countEl) countEl.textContent = total ? `(${total})` : "(none)";
-  zone.innerHTML = total ? attentionRowsHtml(slaRows, completionRows)
-    : `<div class="panel-sub" style="margin:0;">Nothing urgent right now. Every active position is within SLA, on track with Requisition Completion, or hasn't started its clock yet.</div>`;
-  zone.querySelectorAll(".pending-offer-row").forEach(row=>{
-    row.addEventListener("click", ()=> openDetailModal(row.dataset.id, trackingCanEdit() ? "edit" : "view"));
-  });
-}
-function renderScorecard(){
-  renderScorecardAttention();
-  const headerRow = document.getElementById("scorecardHeaderRow");
-  const body = document.getElementById("scorecardBody");
-  if(!headerRow || !body) return;
-  const weekStarts = scorecardWeekStarts(SCORECARD_WEEKS);
-  const thisWeekTime = weekStartMonday(new Date()).getTime();
-  headerRow.innerHTML = `<th>Owner</th><th>Measure</th><th>Goal / Week</th>` +
-    weekStarts.map(w=>{
-      const isCurrent = w.getTime() === thisWeekTime;
-      return `<th title="Week of ${ganttFmtDate(w)}">${ganttFmtDate(w)}${isCurrent ? `<span class="scorecard-current-tag">This week, so far</span>` : ""}</th>`;
-    }).join("") +
-    `<th title="Average across the ${SCORECARD_WEEKS} weeks shown">Avg</th>`;
-  body.innerHTML = RECRUITERS.map(recruiter=>
-    SCORECARD_MEASURES.map(m=>{
-      const counts = scorecardBucketWeighted(m.entriesFn(recruiter), weekStarts);
-      const goal = RECRUITER_GOALS[recruiter]?.[m.key];
-      const hasGoal = goal != null && goal > 0;
-      const avg = counts.reduce((a,b)=>a+b,0) / counts.length;
-      const cellsHtml = counts.map((c,i)=>{
-        const cls = ["scorecard-cell"];
-        if(hasGoal) cls.push(c >= goal ? "good" : "bad");
-        if(weekStarts[i].getTime()===thisWeekTime) cls.push("current");
-        return `<td class="${cls.join(" ")}">${c}</td>`;
-      }).join("");
-      return `<tr>
-        <td><span class="scorecard-owner">${recruiterDotHtml(recruiter)}${escapeHtml(recruiter)}</span></td>
-        <td>${escapeHtml(m.label)}</td>
-        <td><input type="number" min="0" step="1" class="scorecard-goal-input" data-recruiter="${escapeHtml(recruiter)}" data-measure="${m.key}" value="${hasGoal?goal:""}" placeholder="—"></td>
-        ${cellsHtml}
-        <td class="scorecard-avg">${avg.toFixed(1)}</td>
-      </tr>`;
-    }).join("")
-  ).join("");
-  document.querySelectorAll(".scorecard-goal-input").forEach(input=>{
-    input.addEventListener("change", ()=> saveScorecardGoal(input.dataset.recruiter, input.dataset.measure, input.value));
-  });
-}
-async function saveScorecardGoal(recruiterName, measureKey, rawValue){
-  const measure = SCORECARD_MEASURES.find(m=>m.key===measureKey);
-  const value = rawValue==="" ? null : Math.max(0, Math.round(Number(rawValue)) || 0);
-  RECRUITER_GOALS[recruiterName] = RECRUITER_GOALS[recruiterName] || {};
-  if(value == null) delete RECRUITER_GOALS[recruiterName][measureKey];
-  else RECRUITER_GOALS[recruiterName][measureKey] = value;
-  renderScorecard();
-  if(!isConnected()) return; // sin sesion real, el cambio queda solo en esta pestaña (mismo aviso implicito que el resto del tracker)
-  try {
-    await graphUpdateRecruiterFieldByHeader(recruiterName, measure.goalHeader, value ?? "");
-  } catch(err){
-    alert(`Could not save this goal: ${err.message}`);
-  }
-}
+// renderReclutadorChart() (Active Workload By Recruiter) y recruiterSlaRate() vivieron aca —
+// la tarjeta de workload fue reemplazada 2026-10-02 por el desglose de SLA/tiempo en etapa, ver
+// el comentario junto a renderGanttInsights().
 
 // renderHiredLocChart() (Position By Location/Work Arrangement) vivio aca — movida a
 // renderGanttInsights() 2026-09-26, ver el comentario junto a esa funcion.
 
 function renderSlaChart(){
-  // Mismo fix que renderReclutadorChart()/renderHiredLocChart() de 2026-09-23 (ver
-  // renderGanttInsights(), donde vive esa logica ahora) — este panel dice "out of X active" en
-  // su propio texto, tenia que excluir NOT_ACTIVELY_WORKED tambien.
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
+  // BUG REAL 2026-10-02 (Nicolas: "se que por ejemplo las reqs de Carl ya estan fuera de SLA...
+  // eso no puede contar unicamente las que estan basadas en el concepto de active, sino en
+  // general, no?"): hasta ahora esto excluia NOT_ACTIVELY_WORKED (Offer Request, Filled, On
+  // Hold) ademas de TERMINAL — pero esos 3 statuses SI tienen un numero de SLA real y accionable:
+  // Offer Request no pausa el reloj (ver SLA_PAUSING_STATUSES), asi que un req estancado ahi sigue
+  // acumulando TTH de verdad; On Hold congela el reloj en el momento de la pausa pero ese status
+  // dentro/riesgo/fuera sigue siendo informacion real (si ya estaba atrasado antes de pausarse);
+  // Filled sigue corriendo TTH hasta que la fecha de inicio real llega. Excluir estos 3 escondia
+  // exactamente el tipo de caso que Nicolas senalo. Solo TERMINAL (Hired/Cancelled/Filled
+  // Internal) se sigue excluyendo — esos ya estan cerrados, su numero de SLA quedo fijo para
+  // siempre y ya no es algo que el equipo pueda seguir accionando hoy.
+  const tracked = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   const metrics = [
     {key:"TTS", label:"Time To Submit (TTS)", tag:"official", tagLabel:"Official SLA"},
     {key:"TTF", label:"Time To Fill (TTF)", tag:"internal", tagLabel:"Internal Goal"},
@@ -6813,8 +6579,8 @@ function renderSlaChart(){
   ];
   const html = metrics.map(m=>{
     const counts = {within:0, risk:0, out:0, none:0};
-    active.forEach(p=>{ counts[computeSla(p)[m.key].status]++; });
-    const total = active.length || 1;
+    tracked.forEach(p=>{ counts[computeSla(p)[m.key].status]++; });
+    const total = tracked.length || 1;
     const seg = (k)=> `<div class="clickable-stat" data-metric="${m.key}" data-status="${k}" style="width:${(counts[k]/total*100).toFixed(2)}%; background:${gradientFill(STATUS_META[k].color)};"></div>`;
     const part = (k, label)=> counts[k] ? `<span class="clickable-stat" data-metric="${m.key}" data-status="${k}">${counts[k]} ${label}</span>` : "";
     const parts = [part("within","within"), part("risk","at risk"), part("out","out of SLA"), part("none","not started")].filter(Boolean);
@@ -6825,7 +6591,7 @@ function renderSlaChart(){
           <span class="tag ${m.tag}" title="${TAG_EXPLANATIONS[m.tagLabel] || ""}">${m.tagLabel}</span>
         </div>
         <div class="stackbar">${seg("within")}${seg("risk")}${seg("out")}${seg("none")}</div>
-        <div class="stackbar-counts">${parts.join(" · ") || "No active positions"} out of ${total} active</div>
+        <div class="stackbar-counts">${parts.join(" · ") || "No positions"} out of ${total} tracked</div>
       </div>`;
   }).join("");
   document.getElementById("chartSla").innerHTML = html + `
@@ -6839,7 +6605,7 @@ function renderSlaChart(){
     seg.addEventListener("click", ()=>{
       const key = seg.dataset.metric, status = seg.dataset.status;
       const m = metrics.find(x=>x.key===key);
-      const matches = active.filter(p=>computeSla(p)[key].status===status);
+      const matches = tracked.filter(p=>computeSla(p)[key].status===status);
       openQuickList(`${m.label} (${STATUS_WORD[status]})`, `${matches.length} position${matches.length===1?"":"s"}`, matches, null, (p)=> slaChip(computeSla(p)[key]));
     });
   });
@@ -6851,8 +6617,11 @@ function renderSlaChart(){
 // mostrar rendimiento del libro completo sin exponer numeros crudos de conversion de
 // candidatos (eso fue lo que preocupo a Nicolas de "Candidate Pipeline Totals").
 function renderSlaMeter(){
-  // Mismo fix de 2026-09-23 que el resto de paneles de "active" — ver renderGanttInsights().
-  const active = dashboardPositions().filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
+  // Mismo criterio que renderSlaChart() (ver el comentario grande ahi, 2026-10-02): solo TERMINAL
+  // se excluye, no NOT_ACTIVELY_WORKED — un req en Offer Request/On Hold/Filled que ya esta fuera
+  // de SLA no deberia desaparecer de este numero solo porque ya no es "trabajo activo" del
+  // reclutador.
+  const tracked = dashboardPositions().filter(p=>!TERMINAL.includes(p.status));
   // BUG REAL 2026-09-26 (Nicolas: "todos los reqs segun eso estan en SLA, y no"): antes este
   // donut contaba TODA posicion activa que no estuviera literalmente "out" como "On Time" —
   // incluidas las que todavia no tienen intake, cuyo reloj de TTS/TTF/TTH ni siquiera ha
@@ -6861,15 +6630,15 @@ function renderSlaMeter(){
   // en realidad solo 5 tienen un reloj corriendo de verdad. Igual que Submitted Vs Expected ya
   // hace (ver renderGanttInsights()), el denominador correcto es solo las posiciones cuyo reloj
   // ya arranco — "no ha empezado" no es lo mismo que "va a tiempo".
-  const started = active.filter(p=>{
+  const started = tracked.filter(p=>{
     const s = computeSla(p);
     return s.TTS.status!=="none" || s.TTF.status!=="none" || s.TTH.status!=="none";
   });
-  // Sin posiciones con reloj corriendo (nada activo, o todo lo activo sigue pre-intake) no hay
-  // nada que medir todavia; mostrar "100%" ahi se leeria como un logro real en vez de "no hay
-  // datos", asi que este caso se muestra aparte, en gris.
+  // Sin posiciones con reloj corriendo no hay nada que medir todavia; mostrar "100%" ahi se
+  // leeria como un logro real en vez de "no hay datos", asi que este caso se muestra aparte, en
+  // gris.
   if(!started.length){
-    renderDonut("chartSlaCompliance", [{label:"No active positions", value:1, realValue:0}], ["var(--grid)"], null, 100, {value:"-", label:"No Data"});
+    renderDonut("chartSlaCompliance", [{label:"No positions with SLA tracking", value:1, realValue:0}], ["var(--grid)"], null, 100, {value:"-", label:"No Data"});
     return;
   }
   const missedAnyIds = new Set(started.filter(p=>{
@@ -11461,7 +11230,6 @@ setupFilterPresets("tracking", renderTracking);
 const TITLES = {
   dashboard: ["Dashboard", "Overview of all active positions"],
   positions: ["Positions", "Every requisition that exists, in any status"],
-  scorecard: ["Scorecard", "Weekly numbers per recruiter, EOS-style — one owner, one goal, green or red"],
   tracking: ["Tracking", "Codes, SLA, and the latest activity per position"],
   manage: ["SSOT Management", "Add new positions, recruiters, and configuration"],
   guide: ["Process & SLA Guide", "How the requisition process actually works end to end, and how every SLA is defined"],
@@ -11783,7 +11551,6 @@ function renderAll(){
   renderDashboardPanels();
   renderPositions();
   renderTracking();
-  renderScorecard();
 }
 renderAll();
 
@@ -12341,7 +12108,7 @@ async function loadDemoModeAndRender(){
   pinModeActive = false;
   POSITIONS = buildDemoPositions();
   RECRUITERS = [DEMO_RECRUITER_NAME];
-  RECRUITER_PHOTOS = {}; RECRUITER_TITLES = { [DEMO_RECRUITER_NAME]: "Talent Partner" }; RECRUITER_EMAILS = {}; RECRUITER_GOALS = {};
+  RECRUITER_PHOTOS = {}; RECRUITER_TITLES = { [DEMO_RECRUITER_NAME]: "Talent Partner" }; RECRUITER_EMAILS = {};
   LOCATIONS = [...new Set(POSITIONS.flatMap(p => splitCountries(p.country)))];
   MY_RECRUITER_NAME = DEMO_RECRUITER_NAME;
   await checkArrivedStartDates();
@@ -12702,19 +12469,10 @@ function mergeBatchCandidates(positions, bcHeaders, bcRows){
   positions.forEach(p => p.batchCandidates.sort((a,b)=> (a.addedDate||"") < (b.addedDate||"") ? -1 : 1));
 }
 // Filas de RecruitersTable (A Name, B Email, C Active?, D Photo URL, E Job Title, F PIN) -> las
-// piezas que el resto de la app necesita. `headers`, si se pasa, resuelve por NOMBRE las 4
-// columnas de Scorecard Goal (a diferencia de las de arriba, que asumen indice fijo — deuda
-// vieja, no vale la pena tocarla aca) — opcional porque el proxy publico llama esta funcion sin
-// headers (esas columnas no se exponen ahi todavia), y sin headers simplemente no hay goals.
-function parseRecruitersTable(recRows, headers){
+// piezas que el resto de la app necesita.
+function parseRecruitersTable(recRows){
   const newRecruiters = recRows.map(row => row[0]).filter(Boolean);
-  const newPhotos = {}, newTitles = {}, newEmails = {}, newPins = {}, newGoals = {};
-  const goalCols = headers ? {
-    submitted: headers.indexOf("Weekly Submitted Goal"),
-    kickoffsAccepted: headers.indexOf("Weekly Kickoffs Accepted Goal"),
-    intakeHeld: headers.indexOf("Weekly Intake Held Goal"),
-    placements: headers.indexOf("Weekly Placements Goal"),
-  } : null;
+  const newPhotos = {}, newTitles = {}, newEmails = {}, newPins = {};
   recRows.forEach(row => {
     if(row[0] && row[1]) newEmails[row[0]] = row[1];
     if(row[0] && row[3]) newPhotos[row[0]] = row[3];
@@ -12723,15 +12481,8 @@ function parseRecruitersTable(recRows, headers){
     // el proxy publico de solo lectura la quita antes de mandar la respuesta (ver el Worker),
     // asi que aqui simplemente no aparece cuando esta funcion se llama con esos datos.
     if(row[0] && row[5]) newPins[row[0]] = row[5];
-    if(row[0] && goalCols){
-      const g = {};
-      Object.entries(goalCols).forEach(([key, idx])=>{
-        if(idx >= 0 && row[idx] !== "" && row[idx] != null) g[key] = Number(row[idx]);
-      });
-      if(Object.keys(g).length) newGoals[row[0]] = g;
-    }
   });
-  return { newRecruiters, newPhotos, newTitles, newEmails, newPins, newGoals };
+  return { newRecruiters, newPhotos, newTitles, newEmails, newPins };
 }
 
 async function loadFromGraph(){
@@ -12770,21 +12521,12 @@ async function loadFromGraph(){
   try {
     const recResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
     const recRows = recResp.value.map(r => r.values[0]);
-    // headerRowRange aca (a diferencia de otras tablas) no rompe nada si falla — Scorecard Goals
-    // son opcionales, asi que un error aca simplemente deja RECRUITER_GOALS vacio, no bloquea el
-    // resto del recruiter parsing.
-    let recHeaders = null;
-    try {
-      const recHeaderResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/headerRowRange`);
-      recHeaders = recHeaderResp.values[0];
-    } catch(err){ console.warn("Could not read RecruitersTable headers (non-fatal, Scorecard goals stay unset):", err); }
-    const { newRecruiters, newPhotos, newTitles, newEmails, newPins, newGoals } = parseRecruitersTable(recRows, recHeaders);
+    const { newRecruiters, newPhotos, newTitles, newEmails, newPins } = parseRecruitersTable(recRows);
     RECRUITERS = newRecruiters;
     RECRUITER_PHOTOS = newPhotos;
     RECRUITER_TITLES = newTitles;
     RECRUITER_EMAILS = newEmails;
     RECRUITER_PINS = newPins;
-    RECRUITER_GOALS = newGoals;
     // Si el correo con el que iniciaste sesion coincide con el de un reclutador en esa
     // hoja, usamos su nombre para filtrar Tracking automaticamente por defecto.
     const myEmail = (graphAccount && graphAccount.username || "").toLowerCase();
@@ -12984,17 +12726,6 @@ async function graphUpdateRecruiterField(name, columnLetter, value){
     body: JSON.stringify({ values: [[value]] }),
   });
 }
-// Igual que graphUpdatePositionFieldByHeader() pero para RecruitersTable — usado por los Goals
-// del Scorecard, cuyas 4 columnas son opcionales/nuevas (ver parseRecruitersTable()), asi que
-// nunca vale la pena asumir de antemano en que letra de columna van a quedar.
-async function graphUpdateRecruiterFieldByHeader(name, headerName, value){
-  const headerResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/headerRowRange`);
-  const headers = (headerResp.values && headerResp.values[0]) || [];
-  const i = headers.indexOf(headerName);
-  if(i < 0) throw new Error(`Column "${headerName}" was not found in the shared file. Add a column with exactly that header text, then try again.`);
-  await graphUpdateRecruiterField(name, excelColumnLetter(i), value);
-}
-
 // type viaja a la columna "Type" de HistorialTable (manual/status/guidance) para que, al
 // recargar la app despues, Activity pueda distinguir remarks escritos a mano de cambios de
 // status y mensajes de guia — antes siempre se escribia "manual" ahi, asi que todo el historial
