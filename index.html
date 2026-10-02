@@ -2342,7 +2342,16 @@
                 <label id="newPosHeadcountGroupLabel">Headcount Group (Optional)</label>
                 <input type="text" id="newPosHeadcountGroup" placeholder="e.g. ENG-010-Group">
               </div>
-              <div class="form-field full" id="newPosCareersUrlWrap"><label>Irth Careers Page URL (Optional)</label><input type="text" id="newPosCareersUrl" placeholder="e.g. https://apply.workable.com/irth-solutions/j/964C4C5AFF"></div>
+              <!-- Nicolas, 2026-10-01: "en el SSOT Team Management lo que necesito es que cambies el
+                   Irth Careers Page por el Workable URL" — Workable permite publicar un job
+                   PUBLICAMENTE (genera un link apply.workable.com, eso es "Irth Careers Page") o
+                   solo INTERNAMENTE (visible solo para empleados de Irth, sin ese link publico en
+                   absoluto) — Workable URL (el link de administracion/backend del job en Workable)
+                   siempre existe en ambos casos, Irth Careers Page URL no. En este formulario
+                   rapido de creacion, donde antes solo se pedia Irth Careers Page, ahora se pide
+                   Workable URL en su lugar — el campo separado de Irth Careers Page sigue existiendo
+                   igual en el modal de detalle, por si el job SI termina publicado publicamente. -->
+              <div class="form-field full" id="newPosWorkableUrlWrap"><label>Workable URL (Optional)</label><input type="text" id="newPosWorkableUrl" placeholder="e.g. https://irth-solutions.workable.com/backend/jobs/1234567"></div>
               <div class="form-field"><label>Client</label><input type="text" value="Irth Solutions" disabled></div>
               <div class="form-field">
                 <label>Hiring Manager</label>
@@ -13397,9 +13406,9 @@ document.getElementById("newPosIsGroup").addEventListener("change", (e)=>{
   const isGroup = e.target.checked;
   document.getElementById("newPosCodeSingleWrap").style.display = isGroup ? "none" : "";
   document.getElementById("newPosCodesGroupWrap").style.display = isGroup ? "" : "none";
-  // La URL de careers page se pide por headcount (junto al codigo, ver newPosHeadcountRows) en
+  // La URL de Workable se pide por headcount (junto al codigo, ver newPosHeadcountRows) en
   // modo grupo, no como un campo compartido — cada headcount tiene su propio posting real.
-  document.getElementById("newPosCareersUrlWrap").style.display = isGroup ? "none" : "";
+  document.getElementById("newPosWorkableUrlWrap").style.display = isGroup ? "none" : "";
   document.getElementById("newPosHeadcountGroupLabel").textContent = isGroup ? "Headcount Group Label" : "Headcount Group (Optional)";
   document.getElementById("createPositionBtn").textContent = isGroup ? "Add Positions" : "Add Position";
   if(isGroup){
@@ -13417,7 +13426,7 @@ function addHeadcountRow(){
   row.className = "headcount-row";
   row.innerHTML = `
     <div class="form-field" style="flex:1;"><input type="text" class="headcount-code-input" placeholder="Job Code, e.g. ENG-010"></div>
-    <div class="form-field" style="flex:2;"><input type="text" class="headcount-url-input" placeholder="Irth Careers Page URL (optional)"></div>
+    <div class="form-field" style="flex:2;"><input type="text" class="headcount-url-input" placeholder="Workable URL (optional)"></div>
     <button type="button" class="headcount-row-remove" title="Remove this headcount">&times;</button>`;
   row.querySelector(".headcount-row-remove").addEventListener("click", ()=> row.remove());
   document.getElementById("newPosHeadcountRows").appendChild(row);
@@ -13437,7 +13446,10 @@ document.getElementById("newPosAddHeadcountRowBtn").addEventListener("click", ad
 // AA: Kickoff Date | AB-AJ: campos de Spott (se llenan despues a mano si aplica)
 // AK-AL: Work Arrangement, City | AM: Spott Job ID (id real de Spott, no el Job Code)
 // AN: Intake Requested Date | AO: Recruiter Accepted Date (siempre vacio aqui, una posicion
-// nueva nunca nace ya aceptada) | AP: Irth Careers Page (Workable) URL | AQ: LinkedIn
+// nueva nunca nace ya aceptada) | AP: Irth Careers Page URL (2026-10-01: ya NO se pide en este
+// formulario — Workable permite publicar un job solo internamente, sin generar nunca ese link
+// publico, asi que no es algo que siempre exista al crear el req; queda vacia aqui, se completa
+// despues a mano en el modal de detalle si el job SI termina publicado publicamente) | AQ: LinkedIn
 // Recruiter URL (este formulario no la pide, se deja vacia)
 // AR-AV: Pivot Justification, Pivot Requested/Approved/Confirmed Date, Calibration Call
 // Date — ninguna aplica a una posicion recien creada, todas vacias
@@ -13446,7 +13458,7 @@ document.getElementById("newPosAddHeadcountRowBtn").addEventListener("click", ad
 // handoff ni con el intake ya marcado como waived, asi que las primeras 3 y la ultima siempre
 // van vacias; Headcount Group se llena solo si el usuario lo escribio (o si es un grupo, con
 // el mismo valor compartido por todos los headcounts, ver el submit handler de abajo).
-function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
+function buildNewPositionRow(fields, code, headcountGroup, workableUrl){
   // BUG REAL encontrado 2026-09-14 (Nicolas: error de Graph API al asignar un req nueva —
   // "The number of rows or columns in the input array doesn't match the size or dimensions of
   // the range"). PositionsTable en el archivo real tiene 56 columnas (las ultimas 3, agregadas
@@ -13481,7 +13493,7 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     fields.workArrangement, fields.city,
     null,
     fields.intakeRequestedDate, null,
-    careersUrl, null,
+    null, null,
     null, null, null, null, null,
     null, null, null, headcountGroup, null,
     null, null, null,
@@ -13498,6 +13510,13 @@ function buildNewPositionRow(fields, code, headcountGroup, careersUrl){
     // graphAppendPosition() recorta el array al ancho real de la tabla, asi que no rompe nada
     // mientras tanto — solo no se guarda hasta que Nicolas agregue la columna.
     fields.hmRelationship,
+    // Workable URL (columna 63) — 2026-10-01: el valor que antes se guardaba en Irth Careers Page
+    // (columna 42, arriba) ahora va aqui en su lugar (ver comentario de newPosWorkableUrlWrap en
+    // el HTML del formulario). Job Creation Entered At (columna 64, ver STATUS_ORDER/
+    // confirmIntakeSummarySent()) nunca aplica a una posicion recien creada — null, reservado
+    // igual que las demas columnas nuevas de arriba (mismo patron, ver el comentario grande sobre
+    // el bug real de 2026-09-14).
+    workableUrl, null,
   ];
 }
 document.getElementById("createPositionBtn").addEventListener("click", async () => {
@@ -13540,12 +13559,12 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     document.querySelectorAll("#newPosHeadcountRows .headcount-row").forEach(row=>{
       const code = row.querySelector(".headcount-code-input").value.trim();
       if(!code) return;
-      const careersUrl = row.querySelector(".headcount-url-input").value.trim() || null;
-      codeEntriesMap.set(code, { code, careersUrl });
+      const workableUrl = row.querySelector(".headcount-url-input").value.trim() || null;
+      codeEntriesMap.set(code, { code, workableUrl });
     });
   } else {
     const code = document.getElementById("newPosCode").value.trim();
-    if(code) codeEntriesMap.set(code, { code, careersUrl: document.getElementById("newPosCareersUrl").value.trim() || null });
+    if(code) codeEntriesMap.set(code, { code, workableUrl: document.getElementById("newPosWorkableUrl").value.trim() || null });
   }
   const codes = [...codeEntriesMap.values()];
 
@@ -13585,10 +13604,10 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     // creada para pegarle las formulas de SLA, y llamadas concurrentes podrian pisarse el
     // indice unas a otras.
     for(let i=0; i<codes.length; i++){
-      const { code, careersUrl } = codes[i];
+      const { code, workableUrl } = codes[i];
       msg.textContent = isGroup ? `Saving ${i+1} of ${codes.length} (${code})…` : "Saving…";
       msg.style.color = "var(--text-muted)";
-      const row = buildNewPositionRow(fields, code, headcountGroup, careersUrl);
+      const row = buildNewPositionRow(fields, code, headcountGroup, workableUrl);
       await graphAppendPosition(row);
     }
     msg.textContent = `${codes.length} position${codes.length===1?"":"s"} created. Reloading data…`;
@@ -13600,7 +13619,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
     document.getElementById("newPosHeadcountGroup").value = "";
     document.getElementById("newPosIsGroup").checked = false;
     document.getElementById("newPosIsGroup").dispatchEvent(new Event("change"));
-    document.getElementById("newPosCareersUrl").value = "";
+    document.getElementById("newPosWorkableUrl").value = "";
     setupAddNewSelect("newPosHMSelect", "newPosHMInput", null, organicHiringManagerNames(), null);
     document.getElementById("newPosRemark").value = "";
     document.getElementById("newPosStatus").value = "Kickoff";
@@ -13617,7 +13636,7 @@ document.getElementById("createPositionBtn").addEventListener("click", async () 
   }
 });
 document.getElementById("clearPositionBtn").addEventListener("click", () => {
-  ["newPosTitle","newPosCode","newPosHeadcountGroup","newPosCareersUrl","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
+  ["newPosTitle","newPosCode","newPosHeadcountGroup","newPosWorkableUrl","newPosRemark","newPosStatusDateInput","newPosCity"].forEach(id => document.getElementById(id).value = "");
   setupAddNewSelect("newPosHMSelect", "newPosHMInput", null, organicHiringManagerNames(), null);
   document.getElementById("newPosHeadcountRows").innerHTML = "";
   document.getElementById("newPosIsGroup").checked = false;
