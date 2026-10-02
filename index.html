@@ -9610,6 +9610,19 @@ async function updateCandidateStatus(p, candidateId, newStatus, opts={}){
       try { await graphAppendHistorial(p.id, p.title, candStatusRemark, currentAuthorName(), "action"); }
       catch(err){ console.error("Could not log this candidate's status change (non-fatal for the status change itself):", err); }
     }
+    // BUG REAL (Nicolas, 2026-10-02, pedido explicito de investigar a fondo): este es el camino que
+    // un candidato recorre CASI SIEMPRE en la vida real (cambiar su status en el select, no crearlo
+    // de una ya en Client Interview/Offer Request via openAddCandidateModal) — y nunca llamaba a
+    // advancePositionForCandidateStatus(). El comentario de esa funcion decia "ambos llaman esto
+    // mismo" (refiriendose a updateCandidateStatus() y openAddCandidateModal()), pero eso dejo de
+    // ser cierto en algun momento: solo openAddCandidateModal() (linea ~10286) la llamaba de
+    // verdad. Resultado: mover un candidato a Technical Interview/Hiring Manager Interview/
+    // Executive Review/Offer Request por el select NUNCA avanzaba el status del req — el req se
+    // quedaba atras indefinidamente a menos que alguien lo adelantara a mano desde el dropdown de
+    // status. "Placed" se excluye aqui a proposito (igual que arriba) — applyPlacedCandidate() mas
+    // abajo ya llama a advancePositionForCandidateStatus() con el targetP correcto (que puede ser
+    // una hermana de Headcount Group distinta a esta misma req, ver el picker de abajo).
+    await advancePositionForCandidateStatus(p, c.name, newStatus);
   }
   // Elegido de este batch = el Placed Candidate, pero en un Headcount Group el candidato pudo
   // cerrar OTRA vacante del mismo grupo, no necesariamente esta req (Nicolas, 2026-09-22: "no solo
