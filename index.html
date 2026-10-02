@@ -5735,8 +5735,25 @@ function ganttRowHtml(p, cal){
   const targetDateTTH = (slaStart && tthInfo.target) ? ganttAddDays(slaStart, tthInfo.target) : null;
   const targetDate = targetDateTTF; // se sigue usando para el chip/meta de la izquierda (TTF)
 
-  const dashEndReal = targetDateTTH || targetDateTTF;
-  const showProjection = !terminal && !paused && dashEndReal && dashEndReal > now && end < cal.rangeEnd;
+  // Nicolas, 2026-10-02: "el card de Filled no muestra las proyecciones" — 2 causas reales
+  // encontradas en la data (CE-020/RD-011): (1) el Start Date YA estaba CONFIRMADO (p.hire, una
+  // fecha real que Immy ya dio, no una suposicion) pero el diamante de abajo solo sabia dibujar la
+  // version "si el ritmo se mantiene" (targetDateTTH, calculada desde el intake) — y esa cuenta
+  // calculada ya habia quedado en el pasado (el ritmo real NO se mantuvo), asi que showProjection
+  // la escondia por completo, aunque hubiera una fecha real y futura que SI vale la pena mostrar.
+  // (2) el diamante de TTF seguia calculandose igual despues de que Fill Date ya fuera un hecho
+  // real (p.fill) — redundante, ya no es una "proyeccion" de nada, el propio segmento de color ya
+  // marca ese hito real. drawTTF (nunca para un req ya Filled) y drawTTHReal/drawTTHProjected (el
+  // real manda si existe, sin importar si la meta calculada ya quedo atras) separan estos 2 casos.
+  const drawTTF = !p.fill && targetDateTTF;
+  const realHireDate = p.hire ? parseD(p.hire) : null;
+  const tthMarkerDate = realHireDate || targetDateTTH;
+  const tthIsConfirmed = !!realHireDate;
+  const dashEndReal = tthMarkerDate || targetDateTTF;
+  // El gate de "dashEndReal > now" solo tiene sentido para la version HIPOTETICA (no mostrar un
+  // "si el ritmo se mantiene" que ya quedo en el pasado) — una fecha REAL confirmada vale la pena
+  // mostrarla aunque el ritmo ya se haya perdido, por eso nunca aplica cuando tthIsConfirmed.
+  const showProjection = !terminal && !paused && dashEndReal && (tthIsConfirmed || dashEndReal > now) && end < cal.rangeEnd;
   let projectedHtml = "";
   if(showProjection){
     // Mismo clamp: la barra punteada nunca dibuja mas alla del borde visible del calendario,
@@ -5746,7 +5763,7 @@ function ganttRowHtml(p, cal){
     const projLeftPct = cal.pctOf(end);
     const projWidthPct = Math.max(0, cal.pctOf(clipEnd) - projLeftPct);
     let innerMilestones = "";
-    if(targetDateTTF){
+    if(drawTTF){
       const clipTTF = targetDateTTF > cal.rangeEnd ? cal.rangeEnd : targetDateTTF;
       const ttfLeftPct = projWidthPct>0 ? Math.min(100, (cal.pctOf(clipTTF)-projLeftPct)/projWidthPct*100) : 100;
       innerMilestones += `<div class="gantt-milestone target-ttf" style="left:${ttfLeftPct.toFixed(3)}%;">
@@ -5754,10 +5771,13 @@ function ganttRowHtml(p, cal){
         <div class="gantt-tooltip wide" style="bottom:16px;"><b>Projected Time To Fill target</b><br><span class="muted">Internal goal, ${ttfInfo.target}d from the intake meeting (business-day start) — ${ganttFmtDate(targetDateTTF)} if pace holds${clipTTF<targetDateTTF ? " · beyond this view" : ""}</span></div>
       </div>`;
     }
-    if(targetDateTTH){
-      innerMilestones += `<div class="gantt-milestone target-tth" style="left:100%;">
-        <svg class="gantt-milestone-svg" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.2,1.6"/></svg>
-        <div class="gantt-tooltip wide" style="bottom:16px;"><b>Projected Time To Hire target</b><br><span class="muted">Internal goal, ${tthInfo.target}d from the intake meeting (business-day start) — ${ganttFmtDate(targetDateTTH)} if pace holds${clipEnd<targetDateTTH ? " · beyond this view" : ""}</span></div>
+    if(tthMarkerDate){
+      const tthTooltip = tthIsConfirmed
+        ? `<b>Start Date Confirmed</b><br><span class="muted">${ganttFmtDate(tthMarkerDate)}${clipEnd<tthMarkerDate ? " · beyond this view" : ""} — real date, from Immy, not a projection.</span>`
+        : `<b>Projected Time To Hire target</b><br><span class="muted">Internal goal, ${tthInfo.target}d from the intake meeting (business-day start) — ${ganttFmtDate(tthMarkerDate)} if pace holds${clipEnd<tthMarkerDate ? " · beyond this view" : ""}</span>`;
+      innerMilestones += `<div class="gantt-milestone target-tth${tthIsConfirmed ? " confirmed" : ""}" style="left:100%;">
+        <svg class="gantt-milestone-svg" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="none" stroke="currentColor" stroke-width="1.6" ${tthIsConfirmed ? "" : `stroke-dasharray="2.2,1.6"`}/></svg>
+        <div class="gantt-tooltip wide" style="bottom:16px;">${tthTooltip}</div>
       </div>`;
     }
     projectedHtml = `<div class="gantt-projected" style="left:${projLeftPct}%; width:${projWidthPct}%;">${innerMilestones}</div>`;
@@ -5851,8 +5871,10 @@ function renderGanttInsights(containerId, positions){
     // arreglado para .workload-title, solo que se me paso esta. Siempre se renderiza el div, con
     // un placeholder neutro cuando no hay dato, para que TODAS las tarjetas reserven la misma
     // altura sin importar si ese reclutador tiene 0 o varias posiciones activas.
+    // recruiterSlaRate() ahora tambien devuelve null cuando SI hay activos pero NINGUNO con reloj
+    // corriendo todavia (ver el fix ahi) — distinto de "no active reqs", nunca el mismo texto.
     const slaHtml = r.slaRate === null
-      ? `<div class="workload-sla"><span class="dot" style="background:var(--grid);"></span>No active reqs</div>`
+      ? `<div class="workload-sla"><span class="dot" style="background:var(--grid);"></span>${r.count ? "No SLA clock running yet" : "No active reqs"}</div>`
       : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
     // Nicolas, 2026-09-26: "me faltaron los titulos de cada uno" — RECRUITER_TITLES (ej. "Lead
     // Talent Partner") se habia quedado afuera de la version compacta (.workload-title ya existia
@@ -6037,6 +6059,7 @@ function renderGanttGroup(key){
       <div class="gantt-legend-item"><span class="gantt-legend-swatch" style="background:var(--stage-blue);"></span>${escapeHtml(statusLabel("Filled"))}</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--brand);"></span>Projected Time To Fill (internal goal)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px dashed var(--good);"></span>Projected Time To Hire (internal goal)</div>
+      <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:transparent; border:1.5px solid var(--good);"></span>Start Date Confirmed (real date, not a projection)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--good);"></span>Placed (Hired)</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--critical);"></span>Cancelled</div>
       <div class="gantt-legend-item"><span class="gantt-legend-diamond" style="background:var(--neutral);"></span>${escapeHtml(statusLabel("Filled (Internal Hire)"))} — client filled it internally, not a Cornerstone placement</div>
@@ -6599,13 +6622,26 @@ function workloadColor(v){
 // Compliance (ninguna de TTS/TTF/TTH en "out") — agregado a la tarjeta de Workload siguiendo
 // el patron real de ATS de recruiting (Greenhouse, etc.): visibilidad de compliance por
 // dueño/reclutador, no solo volumen de trabajo. Sin posiciones activas no hay nada que medir.
+// BUG REAL (Nicolas, 2026-10-02: "no se si David y yo en verdad estamos en 100% de SLA como
+// muestra el active recruiter by workload"): esta funcion nunca tuvo el mismo fix que
+// renderSlaMeter() ya tiene (ver el comentario grande ahi, 2026-09-26 — "todos los reqs segun eso
+// estan en SLA, y no") — contaba cualquier req activo que no estuviera literalmente "out" como
+// "on SLA", INCLUIDO uno sin intake todavia (sin reloj corriendo, status "none" en los 3
+// targets). Mismo denominador correcto que esa funcion: solo las posiciones cuyo reloj ya
+// arranco. Con la data real de hoy esto no cambio el numero (Nicolas y David ya tienen el 100% de
+// sus activos con intake hecho) — pero el bug era real y se habria visto en cuanto cualquiera de
+// los dos tuviera un req pre-intake de nuevo.
 function recruiterSlaRate(assigned){
-  if(!assigned.length) return null;
-  const outOfSla = assigned.filter(p=>{
+  const started = assigned.filter(p=>{
+    const s = computeSla(p);
+    return s.TTS.status!=="none" || s.TTF.status!=="none" || s.TTH.status!=="none";
+  });
+  if(!started.length) return null;
+  const outOfSla = started.filter(p=>{
     const s = computeSla(p);
     return s.TTS.status==="out" || s.TTF.status==="out" || s.TTH.status==="out";
   }).length;
-  return Math.round(((assigned.length - outOfSla) / assigned.length) * 100);
+  return Math.round(((started.length - outOfSla) / started.length) * 100);
 }
 function slaRateColor(rate){
   if(rate < 75) return "var(--critical)";
