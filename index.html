@@ -5943,13 +5943,22 @@ function renderGanttInsights(containerId, positions, key){
     };
   }
 
+  // BUG REAL 2026-10-02 (Nicolas: "Position By Location/Work Arrangement este no muestra nada en
+  // las otras tarjetas"): este chart siempre filtraba por `active` (excluye TERMINAL y
+  // NOT_ACTIVELY_WORKED) sin importar la tarjeta — para On Hold/Potential/Filled/Placements eso
+  // vacia el set SIEMPRE, porque esos statuses SON justo lo que `active` excluye por definicion.
+  // Mismo principio que ya aplica el resto de esta funcion: en las tarjetas Positions/Active
+  // Positions se queda en `active` (sigue siendo lo correcto — "activas ahora mismo" tiene
+  // sentido ahi); en el resto usa `positions` tal cual, lo que esa sesion del Gantt ya esta
+  // mostrando, igual que el desglose de SLA.
+  const locationSourceSet = showLegacyCharts ? active : positions;
   const byCountry = {};
-  active.forEach(p=>{
+  locationSourceSet.forEach(p=>{
     (countryList(p).length ? countryList(p) : ["Unknown"]).forEach(c=>{ byCountry[c] = (byCountry[c]||0)+1; });
   });
   const countryRows = Object.entries(byCountry).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
   const byArrangement = {"Remote":0,"Hybrid":0,"On-site":0};
-  active.forEach(p=>{ const arr = p.workArrangement || "Remote"; byArrangement[arr]=(byArrangement[arr]||0)+1; });
+  locationSourceSet.forEach(p=>{ const arr = p.workArrangement || "Remote"; byArrangement[arr]=(byArrangement[arr]||0)+1; });
   const arrRows = Object.entries(byArrangement).filter(([,v])=>v>0).map(([label,value])=>({label,value}));
 
   container.innerHTML = `
@@ -5957,15 +5966,15 @@ function renderGanttInsights(containerId, positions, key){
       ${firstTwoChartsHtml}
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Position By Location/Work Arrangement</div>
-        <div class="gantt-mini-sub">Active positions right now, by country and by work arrangement.</div>
+        <div class="gantt-mini-sub">${showLegacyCharts ? "Active positions right now, by country and by work arrangement." : "Every position shown in this Gantt session right now, by country and by work arrangement."}</div>
         <div style="font-size:10.5px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">BY COUNTRY</div>
-        ${(() => { const countrySum = countryRows.reduce((s,r)=>s+r.value,0); return countrySum > active.length
-          ? `<div class="gantt-mini-sub" style="margin:-2px 0 6px;">Adds up to more than ${active.length} — a position covering more than one country counts once in each.</div>`
+        ${(() => { const countrySum = countryRows.reduce((s,r)=>s+r.value,0); return countrySum > locationSourceSet.length
+          ? `<div class="gantt-mini-sub" style="margin:-2px 0 6px;">Adds up to more than ${locationSourceSet.length} — a position covering more than one country counts once in each.</div>`
           : ""; })()}
         <div class="barlist compact" id="ganttByCountry">${countryRows.length ? countryRows.map((r,i)=>{
           const max = countryRows[0].value||1;
           return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.value/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div><div class="barlist-value">${r.value}</div></div>`;
-        }).join("") : `<span class="panel-sub" style="margin:0;">No active positions.</span>`}</div>
+        }).join("") : `<span class="panel-sub" style="margin:0;">${showLegacyCharts ? "No active positions." : "Nothing shown."}</span>`}</div>
         <div style="font-size:10.5px; font-weight:600; color:var(--text-secondary); margin:8px 0 6px;">BY ARRANGEMENT</div>
         <div class="barlist compact" id="ganttByArrangement">${arrRows.map((r,i)=>{
           const max = Math.max(...arrRows.map(x=>x.value),1);
@@ -5979,13 +5988,13 @@ function renderGanttInsights(containerId, positions, key){
   container.querySelectorAll("#ganttByCountry .barlist-row").forEach((el,i)=>{
     el.addEventListener("click", ()=>{
       const row = countryRows[i];
-      openQuickList(row.label, `${row.value} position${row.value===1?"":"s"}`, active.filter(p=>(countryList(p).length?countryList(p):["Unknown"]).includes(row.label)));
+      openQuickList(row.label, `${row.value} position${row.value===1?"":"s"}`, locationSourceSet.filter(p=>(countryList(p).length?countryList(p):["Unknown"]).includes(row.label)));
     });
   });
   container.querySelectorAll("#ganttByArrangement .barlist-row").forEach((el,i)=>{
     el.addEventListener("click", ()=>{
       const row = arrRows[i];
-      openQuickList(row.label, `${row.value} position${row.value===1?"":"s"}`, active.filter(p=>(p.workArrangement||"Remote")===row.label));
+      openQuickList(row.label, `${row.value} position${row.value===1?"":"s"}`, locationSourceSet.filter(p=>(p.workArrangement||"Remote")===row.label));
     });
   });
 }
