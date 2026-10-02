@@ -9982,6 +9982,54 @@ async function reconcileHeadcountGroups(){
         }
       }
     }
+    // Nicolas, 2026-10-02: "ese mecanismo que me dices antes de Job Creation se integra de manera
+    // correcta?" — rastreandolo a fondo, NO del todo: confirmIntakeSummarySent() propaga
+    // intakeSummarySentDate/Job Creation a las hermanas, pero SOLO en el instante del click — a
+    // diferencia de kickoff/intakeRequestedDate/intake (arriba), este campo nunca estaba en
+    // SIBLING_SYNCED_KEYS, asi que el chequeo PERIODICO (este mismo, cada carga/2 min) nunca lo
+    // volvia a revisar. Una hermana que nunca recibe ese click directo (ej. una 3ra agregada
+    // despues, o simplemente nadie la abrio) se quedaba atascada para siempre — exactamente el
+    // mismo patron de bug que el comentario de arriba ya describe para las otras 3 fechas, solo
+    // que a esta nunca se le aplico el mismo arreglo. Mismo patron exacto, agregado aqui.
+    const knownSummary = members
+      .filter(m => m.intakeSummarySentDate)
+      .map(m => ({value:m.intakeSummarySentDate, date:parseD(m.intakeSummarySentDate)}))
+      .sort((a,b)=> a.date - b.date);
+    if(knownSummary.length){
+      const canonicalSummaryDate = knownSummary[0].value;
+      for(const s of members){
+        if(AUTO_STATUS_LOCKED.includes(s.status)) continue;
+        // BUG REAL encontrado probando esto mismo (Nicolas: "ese mecanismo... se integra de manera
+        // correcta?"): una hermana que YA tenia su PROPIA intakeSummarySentDate (confirmada por
+        // separado, nunca heredada de otra) se saltaba por completo — el chequeo original salia
+        // temprano con "ya tiene fecha, nada que hacer" y nunca revisaba si su STATUS todavia
+        // necesitaba avanzar a Job Creation. Las 2 cosas son independientes: heredar la fecha (solo
+        // si le falta) y avanzar el status (siempre que haya CUALQUIER fecha de confirmacion,
+        // propia o heredada, y el status siga atras).
+        let dateJustInherited = false;
+        if(!s.intakeSummarySentDate){
+          s.intakeSummarySentDate = canonicalSummaryDate;
+          dateJustInherited = true;
+        }
+        if(STATUS_ORDER.indexOf("Job Creation") <= STATUS_ORDER.indexOf(s.status)) continue;
+        const sFrom = s.status;
+        s.status = "Job Creation";
+        s.jobCreationEnteredAt = `${localTodayStr()}T${nowTimeStr()}`;
+        const remark = dateJustInherited
+          ? `Status changed from ${statusLabel(sFrom)} to Job Creation (automatic — intake notes confirmed sent, same context as another requisition in Headcount Group "${s.headcountGroup}"; Intake Summary Sent Date (${canonicalSummaryDate}) also inherited from that requisition).`
+          : `Status changed from ${statusLabel(sFrom)} to Job Creation (automatic — intake notes confirmed sent).`;
+        s.extra = s.extra || [];
+        s.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"status", author: currentAuthorName(), text: remark});
+        if(isConnected()){
+          try {
+            if(dateJustInherited) await graphUpdatePositionFieldByHeader(s.id, "Intake Summary Sent Date", canonicalSummaryDate);
+            await graphUpdatePositionField(s.id, "G", "Job Creation");
+            await graphUpdatePositionFieldByHeader(s.id, "Job Creation Entered At", s.jobCreationEnteredAt);
+            await graphAppendHistorial(s.id, s.title, remark, currentAuthorName(), "status");
+          } catch(err){ console.error(`Could not sync intake summary/Job Creation for ${s.id} (non-fatal, will retry next refresh):`, err); }
+        }
+      }
+    }
   }
   // Nicolas, 2026-10-02: "le marque a uno de los Software Engineer que ya empezo el sourcing, no
   // se si marco el otro hc" (no lo hizo) — "TODOS los pasos, estados, confirmaciones tiene que ser
