@@ -3759,7 +3759,12 @@ function nextStepCtaHtml(p){
   // el Spott Job (p.spottJobId, ver REQUIRES_SPOTT_JOB_LOGGED) — mientras tanto no hay boton real
   // que mostrar aqui, la accion es loguear ese campo arriba en los link fields del req.
   if(p.status === "Job Creation"){
-    if(!p.spottJobId) return msg;
+    // Nicolas, 2026-10-01: "puse la evidencia pero en el next step no me da como una opcion para
+    // continuar, estoy confundido" — la guia de texto ya decia que habia que loguear el Spott Job,
+    // pero sin boton aqui la unica forma de actuar era bajar hasta el campo de Spott Job URL por
+    // su cuenta, sin ninguna señal de que ESO era "continuar" este Next Step. Reusa el mismo botón
+    // Edit que ya existe junto a ese campo (editSpottIdBtn) en vez de duplicar la logica del modal.
+    if(!p.spottJobId) return `<br><button type="button" class="fact-edit-link" id="nextStepGoToSpottBtn" style="margin-top:4px; display:inline-block;">Log the Spott Job URL &rarr;</button>${msg}`;
     return `<br><button type="button" class="fact-edit-link" id="nextStepPrimaryBtn" data-target-status="Sourcing" style="margin-top:4px; display:inline-block;">Confirm Sourcing Started &rarr; Sourcing</button>${msg}`;
   }
   // Nicolas, 2026-10-01: "hay que hacer esos accionables, unos botones discretos pero que
@@ -8540,6 +8545,12 @@ function renderDetailModal(){
   if(nextStepGoToRemarkBtn) nextStepGoToRemarkBtn.addEventListener("click", ()=>{
     document.getElementById("modalRemarkTitle")?.scrollIntoView({behavior:"smooth", block:"start"});
     document.getElementById("modalRemarkText")?.focus();
+  });
+  // Reusa el boton Edit que ya existe junto al campo de Spott Job URL (editSpottIdBtn, ver mas
+  // arriba en esta misma funcion) en vez de duplicar la logica de ese modal aqui.
+  const nextStepGoToSpottBtn = document.getElementById("nextStepGoToSpottBtn");
+  if(nextStepGoToSpottBtn) nextStepGoToSpottBtn.addEventListener("click", ()=>{
+    document.getElementById("editSpottIdBtn")?.click();
   });
 
   const timeline = buildTimeline(p).slice().reverse();
