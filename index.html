@@ -5116,6 +5116,65 @@ function statusChip(status){
 function batchCandidateCount(p, batchDate){
   return (p.batchCandidates || []).filter(c => c.batchDate === batchDate).length;
 }
+function effectiveBatchCount(p, b){
+  const live = batchCandidateCount(p, b.date);
+  return live > 0 ? live : (Number(b.count) || 0);
+}
+function batchesSubmittedCount(p){
+  return (p.batches || []).reduce((sum,b)=> sum + effectiveBatchCount(p, b), 0);
+}
+// Cuantos candidatos deberia tener submitted ESTA posicion a la fecha de hoy — usado por
+// "Submitted Vs Expected" (ver renderKpis()). 0 mientras el intake no ha pasado o sigue dentro
+// de la ventana del primer batch (9 dias habiles, SLA_TARGETS.TTS); una vez se cumple esa
+// ventana, 3.5 (primer batch), +3.5 mas por cada ciclo de 5 dias habiles adicionales — mismo
+// ritmo que ya describe STATUS_GUIDANCE["Sourcing"] ("Follow-up batches every 5 business days").
+// BUG REAL encontrado 2026-09-19 (Nicolas, viendo "23 de 21" y sin entender por que): la primera
+// version reusaba computeSla(p).TTS directo — pero esa metrica se CONGELA en Submission Date una
+// vez existe (asi debe ser PARA el TTS real, que mide "cuanto tardo el primer batch", no "cuanto
+// ha pasado en total"). Reusarla aqui hacia que una posicion ya en Offer Request con 9 candidatos
+// reales enviados (CE-020) mostrara expected=0 (el elapsed se habia congelado hace semanas, bajo
+// el target de 9 dias) — inflando el numerador sin que el denominador lo reflejara. Esta funcion
+// calcula su PROPIO elapsed, siempre hasta HOY (nunca se congela).
+// 2026-09-26: el fix de arriba en su momento tambien agrego un segundo congelamiento — expected
+// fijo en lo YA enviado una vez el status llegaba a "Submitted" o mas alla, razonando "no tiene
+// sentido pedir mas batches una vez el proceso paso a entrevistas". Nicolas lo corrigio: "yo diria
+// que tal vez no [congelar], porque las siguientes son interviews, y recuerda que van los follow
+// up batches" — un req en Client Interview puede (y de hecho suele) seguir recibiendo batches de
+// seguimiento, el cliente pidiendo mas opciones no se detiene solo porque ya hay entrevistas
+// agendadas. Quitado ese segundo congelamiento — el mismo ritmo de arriba corre para CUALQUIER
+// status todavia activo (Offer Request en adelante ya ni siquiera llega aca, se filtra antes por
+// NOT_ACTIVELY_WORKED en renderGanttInsights()).
+// BUG REAL 2026-09-26 (Nicolas, corrigiendo la logica completa): "es un initial batch entre los
+// primeros 7 a 9 dias habiles despues del intake meeting... una vez que se submite el batch, a
+// partir de la fecha en que se haya submitido, independiente de si el reclutador se tomo 2, 6 o 9
+// dias, ese follow up batch va en los siguientes 5 dias habiles EN QUE SE ENVIO ESE PRIMER BATCH."
+// La version anterior ignoraba por completo si el primer batch YA existia de verdad — siempre
+// contaba los ciclos de seguimiento desde el TARGET teorico (intake + 9 dias), nunca desde el dia
+// real en que el batch 1 se envio. Eso desalinea el reloj apenas el primero se manda antes o
+// despues del dia 9 exacto: si se mando el dia 6, el 2do batch "deberia" contarse desde el dia 6
+// + 5 = dia 11, no desde el dia 9 (target) + 5 = dia 14 como hacia la version vieja.
+// Ahora: mientras NO exista un batch real, el reloj sigue siendo el mismo de siempre (intake ->
+// target de 9 dias -> 0 hasta ahi). En cuanto el batch 1 SI existe, el ancla salta a esa fecha
+// real y los ciclos de 5 dias se cuentan desde ahi en adelante — sin volver a re-anclar en cada
+// batch posterior (si el 2do o 3er batch real se atrasa, "expected" debe poder adelantarse a
+// "actual" para mostrar precisamente ese atraso; re-anclar en cada batch real anularia esa señal).
+const FOLLOWUP_BATCH_INTERVAL_DAYS = 5;
+function expectedSubmittedForPosition(p){
+  const intake = parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake);
+  if(!intake) return 0;
+  const batches = (p.batches || []).slice().sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const firstBatchDate = batches.length ? parseD(batches[0].date) : null;
+  const target = SLA_TARGETS.TTS;
+  if(!firstBatchDate){
+    const elapsed = bizDaysBetween(intake, new Date());
+    if(elapsed<target) return 0;
+    const extraCycles = Math.floor((elapsed - target) / FOLLOWUP_BATCH_INTERVAL_DAYS);
+    return 3.5 * (1 + extraCycles);
+  }
+  const elapsedSinceFirstBatch = bizDaysBetween(firstBatchDate, new Date());
+  const extraCycles = Math.floor(elapsedSinceFirstBatch / FOLLOWUP_BATCH_INTERVAL_DAYS);
+  return 3.5 * (1 + extraCycles);
+}
 // 2026-09-18, Nicolas: "un hover bonito... con forma de t hacia abajo... con una lista... con
 // bullet points" para ver DE UNA, sin hacer click, cuales reqs componen cada numero de Positions &
 // Placements — el click a openQuickList() ya existia para el detalle completo, esto es el vistazo
@@ -5735,29 +5794,23 @@ function ganttRowHtml(p, cal){
 // gratis: si el Gantt esta filtrado a un solo reclutador, estos charts naturalmente muestran solo
 // lo suyo. Nunca usa dashboardPositions()/RECRUITERS globales — todo sale de lo que YA se esta
 // viendo en este Gantt especifico.
-// El primer chart cambia segun `key` (la tarjeta que abrio este Gantt, ver renderGanttGroup());
-// los otros 2 (Average Time In Current Stage, Position By Location/Work Arrangement) son
-// compartidos por TODAS las tarjetas. Historial de este primer slot:
-// - 2026-10-02: "las tarjetas de onhold, potential placement, filled, y placements esas son las
-//   que no nos sirve tener el workload, el submitted vs expected" (correccion a un primer intento
-//   mio que los habia quitado de TODAS las tarjetas, incluyendo Positions/Active Positions, donde
-//   SI seguian siendo utiles) — Active Workload By Recruiter se queda en Positions/Active
-//   Positions; el resto usa SLA Breakdown — This View en su lugar.
-// - 2026-10-04: "nos toca hacer algo para mostrar en que etapa estan cada una de las reqs...
-//   para Positions/Active Positions es mas relevante esta que la de Submitted Vs Expected" —
-//   Submitted Vs Expected se elimina del todo (ya no aportaba lo suficiente para justificar el
-//   4to chart que habria hecho falta para agregar esto sin quitar nada) y Average Time In Current
-//   Stage (que ya hacia justo "en que etapa esta cada una", agregado para el resto de tarjetas el
-//   2026-10-02) pasa a ser compartido por TODAS las tarjetas, Positions/Active Positions incluidas
-//   — en vez de inventar un chart nuevo solo para esas 2, que habria sido exactamente el mismo
-//   dato dos veces con otro nombre.
+// Los primeros 2 charts cambian segun `key` (la tarjeta que abrio este Gantt, ver
+// renderGanttGroup()) — Nicolas, 2026-10-02: "las tarjetas de onhold, potential placement,
+// filled, y placements esas son las que no nos sirve tener el workload, el submitted vs
+// expected" (CORRECCION a un primer intento mio que los habia quitado de TODAS las tarjetas,
+// incluyendo Positions/Active Positions, donde SI siguen siendo utiles). Positions/Active
+// Positions mantienen los 2 charts originales (Active Workload By Recruiter, Submitted Vs
+// Expected) sin cambios; el resto (On Hold & Other Closures, Potential Placements, Filled,
+// Placements, Carried Over — todas sobre reqs que ya no son trabajo activo en curso, donde esos 2
+// charts originales salian vacios o sin sentido) usa el reemplazo: un desglose de SLA y de tiempo
+// en la etapa actual, las dos puntuales a lo que esa sesion ya esta mostrando.
 function renderGanttInsights(containerId, positions, key){
   const container = document.getElementById(containerId);
   if(!container) return;
   const active = positions.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
   const showLegacyCharts = key === "positions" || key === "active";
 
-  let firstChartHtml, wireFirstChart;
+  let firstTwoChartsHtml, wireFirstTwoCharts;
   if(showLegacyCharts){
     // Nicolas, 2026-09-26: "yo deberia aparecer de primero de izquierda a derecha, porque estoy
     // en el tracker antes que David... si entra alguien mas pues de cuarto" — orden fijo por
@@ -5790,13 +5843,39 @@ function renderGanttInsights(containerId, positions, key){
       </div>`;
     }).join("");
 
-    firstChartHtml = `
+    const sourcingStarted = active.filter(p=> !!parseD(p.handoffFrom ? p.handoffAcceptedDate : p.intake));
+    const submittedTotal = sourcingStarted.reduce((sum,p)=> sum + batchesSubmittedCount(p), 0);
+    const minExpected = Math.round(sourcingStarted.reduce((sum,p)=> sum + expectedSubmittedForPosition(p), 0));
+    const ratio = minExpected>0 ? submittedTotal/minExpected : null;
+    const barColor = ratio===null ? "var(--grid)" : ratio>=1 ? "var(--good)" : ratio>=0.5 ? "var(--warning)" : "var(--critical)";
+    const barWidthPct = ratio===null ? 0 : Math.min(100, Math.round(ratio*100));
+    const displayPct = ratio===null ? "-" : Math.round(ratio*100)+"%";
+
+    firstTwoChartsHtml = `
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Active Workload By Recruiter</div>
         <div class="gantt-mini-sub">${WORKLOAD_SWEET_SPOT} active reqs is the target, ${WORKLOAD_MAX} the real max, no matter what stage they're in. The weighted number in parentheses is effort intensity only — a req in Sourcing takes more real work than one waiting on Offer Stage or paused On Hold, but it still counts as one req against the cap. SLA compliance shown per person, same rule as SLA Compliance on the SLA &amp; Completion tab.</div>
         <div class="workload-grid compact">${workloadCardsHtml || `<span class="panel-sub" style="margin:0;">No recruiters in this view.</span>`}</div>
+      </div>
+      <div class="gantt-mini-chart">
+        <div class="gantt-mini-title">Submitted Vs Expected</div>
+        <div class="gantt-mini-sub">Only positions where intake has already happened and that haven't reached Offer Request yet.</div>
+        <div class="funnel-row${sourcingStarted.length>0 ? " clickable-stat" : ""}" id="ganttSubmittedRow">
+          <div class="funnel-label">Candidates Submitted</div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${barWidthPct}%; background:${gradientFill(barColor)};"></div></div>
+          <div class="funnel-stat">
+            <div class="funnel-value">${submittedTotal} / ${minExpected}</div>
+            <div class="funnel-pct">${displayPct} of expected to date</div>
+          </div>
+        </div>
       </div>`;
-    wireFirstChart = ()=>{};
+    wireFirstTwoCharts = ()=>{
+      if(sourcingStarted.length>0){
+        document.getElementById("ganttSubmittedRow")?.addEventListener("click", ()=>{
+          openQuickList("Submitted Vs Expected", `${submittedTotal} submitted · expected at least ${minExpected} to date across ${sourcingStarted.length} position${sourcingStarted.length===1?"":"s"} (intake already held)`, sourcingStarted);
+        });
+      }
+    };
   } else {
     // SLA Breakdown — Nicolas, 2026-10-02: "no puede contar unicamente las que estan basadas en
     // el concepto de active, sino en general, no?" (ej. un req en Offer Request o pausado On
@@ -5813,14 +5892,37 @@ function renderGanttInsights(containerId, positions, key){
     const slaPart = (k)=> slaBuckets[k].length ? `<span class="clickable-stat" data-sla="${k}">${slaBuckets[k].length} ${STATUS_WORD[k].toLowerCase()}</span>` : "";
     const slaPartsHtml = ["within","risk","out","none"].map(slaPart).filter(Boolean).join(" · ") || "Nothing shown";
 
-    firstChartHtml = `
+    // Average Time In Current Stage — daysInCurrentStage() ancla en la ultima vez real que el
+    // Activity log registro "Status changed... to <status actual>" (o el Kickoff si nunca hubo
+    // ese log, nunca una fecha inventada). Agrupado por status para que se vea de un vistazo
+    // donde se esta acumulando el tiempo, mas atrasado primero.
+    const stageGroups = {};
+    positions.forEach(p=>{
+      const d = daysInCurrentStage(p);
+      if(d===null) return;
+      const label = statusLabel(p.status);
+      (stageGroups[label] = stageGroups[label] || []).push(p);
+    });
+    const stageRows = Object.entries(stageGroups).map(([label, ps])=>({
+      label, positions: ps, avg: Math.round(ps.reduce((sum,p)=>sum+daysInCurrentStage(p),0) / ps.length),
+    })).sort((a,b)=>b.avg-a.avg);
+
+    firstTwoChartsHtml = `
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">SLA Breakdown — This View</div>
         <div class="gantt-mini-sub">Every position shown in this Gantt session right now, by overall SLA status (the worst of Time To Submit/Fill/Hire) — no active-only filter, so a paused, Offer Request, or Filled-but-not-started position that's already behind still counts.</div>
         <div class="stackbar" id="ganttSlaBar">${["within","risk","out","none"].map(slaSeg).join("")}</div>
         <div class="stackbar-counts" id="ganttSlaCounts">${slaPartsHtml} out of ${positions.length} shown</div>
+      </div>
+      <div class="gantt-mini-chart">
+        <div class="gantt-mini-title">Average Time In Current Stage</div>
+        <div class="gantt-mini-sub">How long positions shown here have been sitting in their current status, grouped by status — slowest-moving first, so it's clear where time is piling up.</div>
+        <div class="barlist compact" id="ganttByStage">${stageRows.length ? stageRows.map((r,i)=>{
+          const max = stageRows[0].avg || 1;
+          return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.avg/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div><div class="barlist-value">${r.avg}d (${r.positions.length})</div></div>`;
+        }).join("") : `<span class="panel-sub" style="margin:0;">Nothing shown.</span>`}</div>
       </div>`;
-    wireFirstChart = ()=>{
+    wireFirstTwoCharts = ()=>{
       container.querySelectorAll("#ganttSlaBar .clickable-stat, #ganttSlaCounts .clickable-stat").forEach(el=>{
         el.addEventListener("click", ()=>{
           const bucket = el.dataset.sla;
@@ -5831,44 +5933,15 @@ function renderGanttInsights(containerId, positions, key){
           });
         });
       });
+      container.querySelectorAll("#ganttByStage .barlist-row").forEach((el,i)=>{
+        el.addEventListener("click", ()=>{
+          const row = stageRows[i];
+          openQuickList(`${row.label} — Time In Stage`, `${row.positions.length} position${row.positions.length===1?"":"s"} · avg ${row.avg}d in this stage`, row.positions,
+            (p)=> `${escapeHtml(p.recruiter)} · ${daysInCurrentStage(p)}d in ${statusLabel(p.status)}`);
+        });
+      });
     };
   }
-
-  // Average Time In Current Stage — compartido por TODAS las tarjetas desde 2026-10-04 (ver el
-  // comentario grande junto a la funcion). daysInCurrentStage() ancla en la ultima vez real que
-  // el Activity log registro "Status changed... to <status actual>" (o el Kickoff si nunca hubo
-  // ese log, nunca una fecha inventada). Agrupado por status para que se vea de un vistazo donde
-  // se esta acumulando el tiempo, mas atrasado primero — en Positions/Active Positions esto
-  // literalmente contesta "en que etapa esta cada req" (el pedido original), con el tiempo en esa
-  // etapa como dato extra.
-  const stageGroups = {};
-  positions.forEach(p=>{
-    const d = daysInCurrentStage(p);
-    if(d===null) return;
-    const label = statusLabel(p.status);
-    (stageGroups[label] = stageGroups[label] || []).push(p);
-  });
-  const stageRows = Object.entries(stageGroups).map(([label, ps])=>({
-    label, positions: ps, avg: Math.round(ps.reduce((sum,p)=>sum+daysInCurrentStage(p),0) / ps.length),
-  })).sort((a,b)=>b.avg-a.avg);
-  const stageChartHtml = `
-    <div class="gantt-mini-chart">
-      <div class="gantt-mini-title">Average Time In Current Stage</div>
-      <div class="gantt-mini-sub">How long positions shown here have been sitting in their current status, grouped by status — slowest-moving first, so it's clear where time is piling up.</div>
-      <div class="barlist compact" id="ganttByStage">${stageRows.length ? stageRows.map((r,i)=>{
-        const max = stageRows[0].avg || 1;
-        return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.avg/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div><div class="barlist-value">${r.avg}d (${r.positions.length})</div></div>`;
-      }).join("") : `<span class="panel-sub" style="margin:0;">Nothing shown.</span>`}</div>
-    </div>`;
-  const wireStageChart = ()=>{
-    container.querySelectorAll("#ganttByStage .barlist-row").forEach((el,i)=>{
-      el.addEventListener("click", ()=>{
-        const row = stageRows[i];
-        openQuickList(`${row.label} — Time In Stage`, `${row.positions.length} position${row.positions.length===1?"":"s"} · avg ${row.avg}d in this stage`, row.positions,
-          (p)=> `${escapeHtml(p.recruiter)} · ${daysInCurrentStage(p)}d in ${statusLabel(p.status)}`);
-      });
-    });
-  };
 
   // BUG REAL 2026-10-02 (Nicolas: "Position By Location/Work Arrangement este no muestra nada en
   // las otras tarjetas"): este chart siempre filtraba por `active` (excluye TERMINAL y
@@ -5890,8 +5963,7 @@ function renderGanttInsights(containerId, positions, key){
 
   container.innerHTML = `
     <div class="gantt-insights-row">
-      ${firstChartHtml}
-      ${stageChartHtml}
+      ${firstTwoChartsHtml}
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">Position By Location/Work Arrangement</div>
         <div class="gantt-mini-sub">${showLegacyCharts ? "Active positions right now, by country and by work arrangement." : "Every position shown in this Gantt session right now, by country and by work arrangement."}</div>
@@ -5912,8 +5984,7 @@ function renderGanttInsights(containerId, positions, key){
       </div>
     </div>
   `;
-  wireFirstChart();
-  wireStageChart();
+  wireFirstTwoCharts();
   container.querySelectorAll("#ganttByCountry .barlist-row").forEach((el,i)=>{
     el.addEventListener("click", ()=>{
       const row = countryRows[i];
@@ -6428,9 +6499,12 @@ function renderKpis(){
   allStats.forEach(s=> GANTT_DATA[s.key] = {label:s.label, positions:s.positions});
   if(ganttOpenKey) renderGanttGroup(ganttOpenKey);
 
-  // "Total Requisitions" (quitado 2026-09-25, redundante con la tarjeta de arriba) y "Active
-  // Workload By Recruiter" (quitado 2026-09-26, ahora vive DENTRO del Gantt — ver
-  // renderGanttInsights(), llamada desde renderGanttGroup() en cada refresh) vivian aca.
+  // "Total Requisitions" (quitado 2026-09-25, redundante con la tarjeta de arriba) y "Submitted
+  // Vs Expected"/"Active Workload By Recruiter" (quitados 2026-09-26, ahora viven DENTRO del
+  // Gantt — ver renderGanttInsights(), llamada desde renderGanttGroup() en cada refresh) vivian
+  // aca. La logica de "expected" real (nunca un promedio plano, cada posicion aporta segun su
+  // propio tiempo transcurrido desde el intake — ver expectedSubmittedForPosition()) y el fix de
+  // "solo cuenta si ya tuvo intake" no se perdieron, solo se movieron adentro de esa funcion.
 }
 
 function renderBarlist(elId, rows, colorVar, onClickRow){
