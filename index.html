@@ -5736,24 +5736,32 @@ function ganttRowHtml(p, cal){
     projectedHtml = `<div class="gantt-projected" style="left:${projLeftPct}%; width:${projWidthPct}%;">${innerMilestones}</div>`;
   }
 
-  const daysToTarget = targetDate ? Math.round((targetDate - now)/86400000) : null;
   let chipClass, chipLabel, chipTitle = "";
   if(paused){ chipClass = "paused"; chipLabel = `Paused — ${statusLabel(p.status)}`; }
   else if(terminal){
     chipClass = p.status==="Hired" ? "good" : (p.status==="Cancelled" ? "critical" : "neutral");
     chipLabel = `${statusLabel(p.status)} · ${ganttFmtDate(end)}`;
   }
-  // Nicolas: "por que en Filled la de Senior QA sale con el chip de Filled pero las otras no?" —
-  // no es un bug de codigo, es que esta req en concreto (RD-071) no tiene NINGUNA fecha real de
-  // intake (ni Held, ni Requested, ni una fecha logueada de cuando se waiveo — solo el motivo
-  // escrito, sin fecha) para anclar un target de Time To Fill real. Sin eso, nunca se inventa un
-  // numero — se muestra el status a secas, igual que aqui. Se veia inconsistente sin explicacion
-  // (misma tarjeta, unas con "Xd past target" y esta sola con el nombre del status), asi que ahora
-  // el chip mismo dice por que en su tooltip, en vez de dejarlo sin explicar.
-  else if(daysToTarget === null){ chipClass = "live"; chipLabel = statusLabel(p.status); chipTitle = "No Time To Fill target to compare against — this req has no real intake date on file (not held, not requested, not even a logged waiver date) to calculate one from."; }
   else {
-    chipClass = (daysToTarget < 5) ? "risk" : "live";
-    chipLabel = daysToTarget >= 0 ? `${daysToTarget}d to target` : `${-daysToTarget}d past target`;
+    // BUG REAL 2026-10-04 (Nicolas, con un req real: "ese de 37 dias ni idea de que es"): el chip
+    // anterior ("Xd to target"/"Xd past target") solo comparaba contra el target de TTF, nunca
+    // decia en que etapa estaba el req ni contra cual de los 3 targets (TTS/TTF/TTH) se media —
+    // un numero sin contexto. Reemplazado por un chip que se explica solo: la etapa ACTUAL
+    // (statusLabel) + cuantos dias lleva ahi (daysInCurrentStage() — ancla en el ultimo "Status
+    // changed... to <esta etapa>" real del Activity log, o el Kickoff si nunca hubo ese log, nunca
+    // una fecha inventada; funciona sin importar si hay o no un target de TTF calculable, asi que
+    // ya no hace falta un caso especial para reqs sin fecha de intake). El color si sigue
+    // reflejando el peor status real entre TTS/TTF/TTH (attentionInfo(), la misma fuente que ya
+    // usa Needs Attention/SLA Breakdown — nunca un umbral distinto inventado aqui), con el detalle
+    // de CUAL metrica y sus numeros reales en el tooltip.
+    const stageDays = daysInCurrentStage(p);
+    const info = attentionInfo(p);
+    chipClass = info.worst==="out" ? "critical" : info.worst==="risk" ? "risk" : info.worst==="within" ? "live" : "neutral";
+    chipLabel = stageDays!==null ? `${statusLabel(p.status)} · ${stageDays}d` : statusLabel(p.status);
+    const metricLabel = {TTS:"Time To Submit", TTF:"Time To Fill", TTH:"Time To Hire"}[info.worstKey];
+    chipTitle = info.worstKey
+      ? `${metricLabel}: ${info.s[info.worstKey].elapsed}d elapsed vs ${info.s[info.worstKey].target}d target (${STATUS_WORD[info.worst]}).`
+      : "No SLA clock running yet — no intake meeting logged for this requisition.";
   }
 
   const recName = p.recruiter || "";
@@ -5794,16 +5802,21 @@ function ganttRowHtml(p, cal){
 // gratis: si el Gantt esta filtrado a un solo reclutador, estos charts naturalmente muestran solo
 // lo suyo. Nunca usa dashboardPositions()/RECRUITERS globales — todo sale de lo que YA se esta
 // viendo en este Gantt especifico.
-// Los primeros 2 charts cambian segun `key` (la tarjeta que abrio este Gantt, ver
-// renderGanttGroup()) — Nicolas, 2026-10-02: "las tarjetas de onhold, potential placement,
-// filled, y placements esas son las que no nos sirve tener el workload, el submitted vs
-// expected" (CORRECCION a un primer intento mio que los habia quitado de TODAS las tarjetas,
-// incluyendo Positions/Active Positions, donde SI siguen siendo utiles). Positions/Active
-// Positions mantienen los 2 charts originales (Active Workload By Recruiter, Submitted Vs
-// Expected) sin cambios; el resto (On Hold & Other Closures, Potential Placements, Filled,
-// Placements, Carried Over — todas sobre reqs que ya no son trabajo activo en curso, donde esos 2
-// charts originales salian vacios o sin sentido) usa el reemplazo: un desglose de SLA y de tiempo
-// en la etapa actual, las dos puntuales a lo que esa sesion ya esta mostrando.
+// El primer chart (o los primeros 2, en Positions/Active Positions) cambia segun `key` (la
+// tarjeta que abrio este Gantt, ver renderGanttGroup()). Historial:
+// - 2026-10-02: "las tarjetas de onhold, potential placement, filled, y placements esas son las
+//   que no nos sirve tener el workload, el submitted vs expected" (correccion a un primer intento
+//   mio que los habia quitado de TODAS las tarjetas, incluyendo Positions/Active Positions, donde
+//   SI seguian siendo utiles) — Active Workload By Recruiter + Submitted Vs Expected se quedan en
+//   Positions/Active Positions; el resto usa SLA Breakdown — This View en su lugar (esas 5
+//   tarjetas son todas sobre reqs que ya no son trabajo activo en curso, donde los 2 charts
+//   originales salian vacios o sin sentido).
+// - 2026-10-04, primer intento: se agrego un 3er/2do chart compartido, "Average Time In Current
+//   Stage" (agrupado por status). Nicolas lo corrigio: "tiene que ser por req, no por etapa...
+//   cada req tiene que ser su etapa" — lo que de verdad hacia falta era informacion POR REQ, no
+//   un agregado por status. Revertido; esa necesidad quedo resuelta en su lugar directo en el
+//   chip de cada fila del Gantt (ver el chip al final de cada fila en ganttRowHtml(), que ahora
+//   muestra la etapa actual + dias en ella, en vez de dias a/desde un target).
 function renderGanttInsights(containerId, positions, key){
   const container = document.getElementById(containerId);
   if(!container) return;
@@ -5892,35 +5905,12 @@ function renderGanttInsights(containerId, positions, key){
     const slaPart = (k)=> slaBuckets[k].length ? `<span class="clickable-stat" data-sla="${k}">${slaBuckets[k].length} ${STATUS_WORD[k].toLowerCase()}</span>` : "";
     const slaPartsHtml = ["within","risk","out","none"].map(slaPart).filter(Boolean).join(" · ") || "Nothing shown";
 
-    // Average Time In Current Stage — daysInCurrentStage() ancla en la ultima vez real que el
-    // Activity log registro "Status changed... to <status actual>" (o el Kickoff si nunca hubo
-    // ese log, nunca una fecha inventada). Agrupado por status para que se vea de un vistazo
-    // donde se esta acumulando el tiempo, mas atrasado primero.
-    const stageGroups = {};
-    positions.forEach(p=>{
-      const d = daysInCurrentStage(p);
-      if(d===null) return;
-      const label = statusLabel(p.status);
-      (stageGroups[label] = stageGroups[label] || []).push(p);
-    });
-    const stageRows = Object.entries(stageGroups).map(([label, ps])=>({
-      label, positions: ps, avg: Math.round(ps.reduce((sum,p)=>sum+daysInCurrentStage(p),0) / ps.length),
-    })).sort((a,b)=>b.avg-a.avg);
-
     firstTwoChartsHtml = `
       <div class="gantt-mini-chart">
         <div class="gantt-mini-title">SLA Breakdown — This View</div>
         <div class="gantt-mini-sub">Every position shown in this Gantt session right now, by overall SLA status (the worst of Time To Submit/Fill/Hire) — no active-only filter, so a paused, Offer Request, or Filled-but-not-started position that's already behind still counts.</div>
         <div class="stackbar" id="ganttSlaBar">${["within","risk","out","none"].map(slaSeg).join("")}</div>
         <div class="stackbar-counts" id="ganttSlaCounts">${slaPartsHtml} out of ${positions.length} shown</div>
-      </div>
-      <div class="gantt-mini-chart">
-        <div class="gantt-mini-title">Average Time In Current Stage</div>
-        <div class="gantt-mini-sub">How long positions shown here have been sitting in their current status, grouped by status — slowest-moving first, so it's clear where time is piling up.</div>
-        <div class="barlist compact" id="ganttByStage">${stageRows.length ? stageRows.map((r,i)=>{
-          const max = stageRows[0].avg || 1;
-          return `<div class="barlist-row clickable-stat" data-idx="${i}"><div class="barlist-label">${escapeHtml(r.label)}</div><div class="barlist-track"><div class="barlist-fill" style="width:${(r.avg/max*100).toFixed(1)}%; background:${gradientFill("var(--seq-400)")};"></div></div><div class="barlist-value">${r.avg}d (${r.positions.length})</div></div>`;
-        }).join("") : `<span class="panel-sub" style="margin:0;">Nothing shown.</span>`}</div>
       </div>`;
     wireFirstTwoCharts = ()=>{
       container.querySelectorAll("#ganttSlaBar .clickable-stat, #ganttSlaCounts .clickable-stat").forEach(el=>{
@@ -5929,15 +5919,8 @@ function renderGanttInsights(containerId, positions, key){
           const matches = slaBuckets[bucket];
           openQuickList(`${STATUS_WORD[bucket]} — This View`, `${matches.length} position${matches.length===1?"":"s"}`, matches, null, (p)=>{
             const info = attentionInfo(p);
-            return slaChip(info.worstKey ? info.s[info.worstKey] : {status:"none"});
+            return slaChip(info.worstKey ? info.s[info.worstKey] : {status:"none"}, info.worstKey);
           });
-        });
-      });
-      container.querySelectorAll("#ganttByStage .barlist-row").forEach((el,i)=>{
-        el.addEventListener("click", ()=>{
-          const row = stageRows[i];
-          openQuickList(`${row.label} — Time In Stage`, `${row.positions.length} position${row.positions.length===1?"":"s"} · avg ${row.avg}d in this stage`, row.positions,
-            (p)=> `${escapeHtml(p.recruiter)} · ${daysInCurrentStage(p)}d in ${statusLabel(p.status)}`);
         });
       });
     };
@@ -6720,7 +6703,7 @@ function renderSlaChart(){
       const key = seg.dataset.metric, status = seg.dataset.status;
       const m = metrics.find(x=>x.key===key);
       const matches = tracked.filter(p=>computeSla(p)[key].status===status);
-      openQuickList(`${m.label} (${STATUS_WORD[status]})`, `${matches.length} position${matches.length===1?"":"s"}`, matches, null, (p)=> slaChip(computeSla(p)[key]));
+      openQuickList(`${m.label} (${STATUS_WORD[status]})`, `${matches.length} position${matches.length===1?"":"s"}`, matches, null, (p)=> slaChip(computeSla(p)[key], key));
     });
   });
 }
@@ -7042,7 +7025,14 @@ document.getElementById("positionsBulkDeleteBtn").addEventListener("click", asyn
 /* ============================================================
    TABLE: Tracking (SLA + click-through detail)
    ============================================================ */
-function slaChip(s){
+// BUG REAL 2026-10-04 (Nicolas: "dicen que estan fuera de SLA, pero no dice cual SLA... esta el
+// chip, pero no refiere cual SLA es"): en una lista que mezcla reqs cuya metrica mas atrasada
+// puede ser TTS para uno y TTF para otro (ej. el drill-down de SLA Breakdown — This View), el
+// titulo del modal no alcanza a decir "cual SLA" porque no es uno solo para toda la lista.
+// metricKey (opcional) antepone TTS/TTF/TTH al chip mismo para esos casos — se omite donde el
+// metrica ya esta claramente etiquetada afuera (columna de tabla con su propio header, o la
+// tarjeta "Time To Submit (TTS)" del modal de detalle), para no repetir la misma etiqueta 2 veces.
+function slaChip(s, metricKey){
   const m = STATUS_META[s.status];
   // holidaysInWindow solo lo trae TTS (ver slaFor()) — cuando hay al menos 1, se agrega una
   // marca chica con tooltip para que el numero no se sienta "mal contado" cuando en realidad
@@ -7051,7 +7041,8 @@ function slaChip(s){
   const holidayNote = h ? `<span class="sla-chip-holiday" title="Includes ${h} holiday${h===1?"":"s"} excluded from this business-day count">+${h}h</span>` : "";
   const ho = s.handoffInfo;
   const handoffNote = ho ? `<span class="sla-chip-handoff" title="This requisition was handed off from ${ho.from} to ${ho.to || "the new recruiter"} (accepted ${ho.acceptedDate || "pending"}) — the SLA clock is unaffected by the handoff, it still counts from the original intake meeting (${ho.originalIntake || "n/a"}).">⇄</span>` : "";
-  return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}${holidayNote}${handoffNote}</span>`;
+  const metricPrefix = metricKey ? `${escapeHtml(metricKey)} ` : "";
+  return `<span class="sla-chip ${s.status}"><span class="dot" style="background:${m.color}"></span>${metricPrefix}${s.status==="none" ? "-" : s.elapsed+"d/"+s.target+"d"}${holidayNote}${handoffNote}</span>`;
 }
 // BUG REAL encontrado 2026-09-21 (Nicolas, RD-071: TTS/TTF/TTH los 3 en Out Of SLA a la vez, pero
 // el chip de Needs Attention solo decia "Time To Submit"): el `>` estricto de abajo se queda con
