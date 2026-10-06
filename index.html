@@ -807,6 +807,10 @@
   .gantt-stage-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .gantt-stage-chip { font-size: 10.5px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-secondary); white-space: nowrap; border: 1px solid var(--border); }
   .gantt-stage-chip b { color: var(--text-primary); font-weight: 700; margin-left: 3px; }
+  /* Mismo tratamiento que .gantt-scope-btn.active (Recruiter) — ahora que el chip de verdad
+     filtra el Gantt, necesita el mismo estado "seleccionado" que sus vecinos. */
+  .gantt-stage-chip.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .gantt-stage-chip.active b { color: #fff; }
   .gantt-filter-label { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; cursor: default; }
   .gantt-role-search { position: relative; width: 230px; }
   .gantt-role-search-input {
@@ -5228,6 +5232,11 @@ let ganttOpenKey = null;
 // se elimino 2026-09-27 — ver el comentario junto a summaryScopeWindow() en renderGanttGroup().
 let ganttRecruiterFilter = null;
 let ganttRoleFilter = null;
+// Igual que Recruiter/Role, pero solo existe en Positions/Active Positions (ver showStageChips en
+// renderGanttGroup()) — Nicolas, 2026-10-06: "hacer que el gantt se filtre?" en vez de agregarle
+// una descripcion a los chips de BY STAGE — si se comportan como el resto de filtros de esa misma
+// fila (clic filtra las filas en vivo, clic otra vez lo quita), no hace falta explicar que son.
+let ganttStageFilter = null;
 // Nicolas, 2026-09-26, version final (las anteriores — paginacion con selector Show 4/10/25/30 —
 // eran una mala lectura de esto mismo, revertidas): "si hay 16, 24, 30, 90 posiciones activas, se
 // debe poder scrolear el numero del card especificamente, mas no que se limite a 4... a lo que me
@@ -6024,6 +6033,27 @@ function renderGanttGroup(key){
   let data = allData;
   if(ganttRecruiterFilter) data = data.filter(p=>p.recruiter===ganttRecruiterFilter);
   if(ganttRoleFilter) data = data.filter(p=>p.title===ganttRoleFilter);
+  // "By Stage" en la fila de filtros — Nicolas, 2026-10-06: "esto recuerda que es solo para los
+  // card de positions y active positions nada mas" — mismas 2 tarjetas que el resto de este
+  // archivo ya trata distinto (ver showLegacyCharts en renderGanttInsights()), nunca el resto.
+  // 2026-10-06, 2do round: "hacer que el gantt se filtre?" — se comporta exactamente igual que
+  // Recruiter/Role: los conteos de cada chip salen de `data` ANTES de aplicar este filtro (mismo
+  // patron que `recruiters`/`roles` arriba, que tampoco se recalculan sobre su propio resultado ya
+  // filtrado), y el filtro en si se aplica despues, antes de que `win`/`cal` se calculen con el
+  // resto.
+  const showStageChips = key === "positions" || key === "active";
+  let stageRows = [], stageActive = [];
+  if(showStageChips){
+    stageActive = data.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
+    const stageOrderLabels = STATUS_ORDER.filter(s=>!TERMINAL.includes(s) && !NOT_ACTIVELY_WORKED.includes(s)).map(s=>statusLabel(s));
+    const byStageCounts = {};
+    stageActive.forEach(p=>{ const label = statusLabel(p.status); byStageCounts[label] = (byStageCounts[label]||0)+1; });
+    stageRows = stageOrderLabels.map(label=>({label, value: byStageCounts[label]||0})).filter(r=>r.value>0);
+    if(ganttStageFilter && !stageRows.some(r=>r.label===ganttStageFilter)) ganttStageFilter = null;
+    if(ganttStageFilter) data = data.filter(p=>statusLabel(p.status)===ganttStageFilter);
+  } else {
+    ganttStageFilter = null;
+  }
   // Nicolas, 2026-09-27: "eso de last 6 weeks y all time para filtrar el gantt hay que quitarlo
   // no?" — si. El propio toggle de arriba (ganttScope: "recent"/"all", ver el comentario que este
   // reemplaza) quedo redundante en cuanto el filtro de trimestre/año de las tarjetas (summaryScope,
@@ -6036,20 +6066,8 @@ function renderGanttGroup(key){
   const win = ganttClampedWindow(summaryScopeWindow() || ganttScopeWindow("all", data), data);
   const shown = data;
   const cal = ganttBuildCalendar(win);
-  const filtersActive = !!(ganttRecruiterFilter || ganttRoleFilter);
-  const titleFilterNote = [ganttRecruiterFilter, ganttRoleFilter].filter(Boolean).map(escapeHtml).join(" · ");
-  // "By Stage" en la fila de filtros — Nicolas, 2026-10-06: "esto recuerda que es solo para los
-  // card de positions y active positions nada mas" — mismas 2 tarjetas que el resto de este
-  // archivo ya trata distinto (ver showLegacyCharts en renderGanttInsights()), nunca el resto.
-  const showStageChips = key === "positions" || key === "active";
-  let stageRows = [], stageActive = [];
-  if(showStageChips){
-    stageActive = data.filter(p=>!TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status));
-    const stageOrderLabels = STATUS_ORDER.filter(s=>!TERMINAL.includes(s) && !NOT_ACTIVELY_WORKED.includes(s)).map(s=>statusLabel(s));
-    const byStageCounts = {};
-    stageActive.forEach(p=>{ const label = statusLabel(p.status); byStageCounts[label] = (byStageCounts[label]||0)+1; });
-    stageRows = stageOrderLabels.map(label=>({label, value: byStageCounts[label]||0})).filter(r=>r.value>0);
-  }
+  const filtersActive = !!(ganttRecruiterFilter || ganttRoleFilter || ganttStageFilter);
+  const titleFilterNote = [ganttRecruiterFilter, ganttRoleFilter, ganttStageFilter].filter(Boolean).map(escapeHtml).join(" · ");
   panelEl.innerHTML = `
     <div class="gantt-head">
       <div class="gantt-title">${escapeHtml(group.label)}${titleFilterNote ? ` <span style="color:var(--brand);">· ${titleFilterNote}</span>` : ""} <span>— ${shown.length} requisition${shown.length===1?"":"s"} in ${win.label}</span></div>
@@ -6071,9 +6089,9 @@ function renderGanttGroup(key){
         </div>
       </div>
       ${filtersActive ? `<button type="button" class="gantt-filter-clear" id="ganttFilterClearAll">Clear filters</button>` : ""}
-      ${showStageChips ? `<div class="gantt-filter-group" style="margin-left:auto;" title="How many of these requisitions are in each stage right now">
+      ${showStageChips ? `<div class="gantt-filter-group" style="margin-left:auto;">
         <span class="gantt-filter-label">By Stage</span>
-        <div class="gantt-stage-chips" id="ganttActiveByStage">${stageRows.map((r,i)=>`<span class="gantt-stage-chip clickable-stat" data-idx="${i}">${escapeHtml(r.label)}<b>${r.value}</b></span>`).join("")}</div>
+        <div class="gantt-stage-chips" id="ganttActiveByStage">${stageRows.map((r,i)=>`<span class="gantt-stage-chip clickable-stat${ganttStageFilter===r.label ? " active" : ""}" data-idx="${i}" title="Click to show only ${escapeHtml(r.label)} in the Gantt below">${escapeHtml(r.label)}<b>${r.value}</b></span>`).join("")}</div>
       </div>` : ""}
     </div>
     <p class="gantt-quarter-note">Showing <b>${win.label}</b>${summaryScope==="all" ? " — this view opens here by default" : ""}.</p>
@@ -6181,12 +6199,16 @@ function renderGanttGroup(key){
   document.getElementById("ganttFilterClearAll")?.addEventListener("click", ()=>{
     ganttRecruiterFilter = null;
     ganttRoleFilter = null;
+    ganttStageFilter = null;
     renderGanttGroup(key);
   });
   panelEl.querySelectorAll("#ganttActiveByStage .gantt-stage-chip").forEach((el,i)=>{
     el.addEventListener("click", ()=>{
       const row = stageRows[i];
-      openQuickList(row.label, `${row.value} position${row.value===1?"":"s"}`, stageActive.filter(p=>statusLabel(p.status)===row.label));
+      // Mismo patron que Recruiter: clic filtra las filas del Gantt en vivo; clic otra vez en el
+      // mismo (ya activo) lo quita, en vez de un toggle on/off separado o un "All" propio.
+      ganttStageFilter = ganttStageFilter===row.label ? null : row.label;
+      renderGanttGroup(key);
     });
   });
   panelEl.querySelectorAll(".gantt-row").forEach(rowEl=>{
@@ -6224,6 +6246,7 @@ function toggleGanttPanel(key, label, positions){
   ganttOpenKey = key;
   ganttRecruiterFilter = null;
   ganttRoleFilter = null;
+  ganttStageFilter = null;
   panelEl.classList.add("show");
   renderGanttGroup(key);
   syncGanttOpenStatClass();
