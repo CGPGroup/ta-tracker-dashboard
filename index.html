@@ -6071,7 +6071,10 @@ function renderGanttGroup(key){
         </div>
       </div>
       ${filtersActive ? `<button type="button" class="gantt-filter-clear" id="ganttFilterClearAll">Clear filters</button>` : ""}
-      ${showStageChips ? `<div class="gantt-stage-chips" id="ganttActiveByStage" style="margin-left:auto;">${stageRows.map((r,i)=>`<span class="gantt-stage-chip clickable-stat" data-idx="${i}">${escapeHtml(r.label)}<b>${r.value}</b></span>`).join("")}</div>` : ""}
+      ${showStageChips ? `<div class="gantt-filter-group" style="margin-left:auto;" title="How many of these requisitions are in each stage right now">
+        <span class="gantt-filter-label">By Stage</span>
+        <div class="gantt-stage-chips" id="ganttActiveByStage">${stageRows.map((r,i)=>`<span class="gantt-stage-chip clickable-stat" data-idx="${i}">${escapeHtml(r.label)}<b>${r.value}</b></span>`).join("")}</div>
+      </div>` : ""}
     </div>
     <p class="gantt-quarter-note">Showing <b>${win.label}</b>${summaryScope==="all" ? " — this view opens here by default" : ""}.</p>
     <div class="gantt-legend">
