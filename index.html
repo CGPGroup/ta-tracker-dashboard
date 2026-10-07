@@ -12967,13 +12967,32 @@ async function graphDeleteBatch(positionId, date){
 // paso antes con Salary Period. Confirmado el orden real via lectura directa del Excel
 // (BatchCandidatesTable: ...Candidate Name, Status, CV Link, Added By, Added Date,
 // Candidate Email) antes de escribir ni una fila real con el orden equivocado.
+// BUG REAL 2026-10-07 (David, con captura: 3 de 3 candidatos fallaron al guardar un batch,
+// "Graph error 400... The number of rows or columns in the input array doesn't match the size or
+// dimensions of the range"): esta funcion seguia mandando una fila de ancho fijo (9 columnas, el
+// esquema original), pero BatchCandidatesTable ya creció desde entonces — Fill Date, Start Date y
+// Filled Position ID se agregaron DESPUES (ver saveCandidateFillDate/saveCandidateHireDate mas
+// abajo, que las escriben por separado una vez el candidato realmente tiene esa fecha). Nunca se
+// le aplico a esta funcion el mismo patron "ancho real" que graphAppendHistorial()/
+// graphAppendPosition() ya usan — rows/add exige el ancho EXACTO de la tabla real, y con la tabla
+// ya mas ancha que estos 9 valores, CADA candidato fallaba, no solo el ultimo. Se lee el header
+// real antes de escribir y se ajusta la fila a ese ancho exacto — recortando si la tabla real
+// resulta mas angosta (como ya hacian las otras 2 funciones), pero tambien RELLENANDO con "" si
+// resulta mas ancha (las 2 anteriores nunca necesitaron esto porque sus columnas nuevas no se le
+// escriben nunca desde el append; aqui si puede pasar, y de hecho ya estaba pasando).
 async function graphAppendBatchCandidate(positionId, batchDate, name, email, status, cvLink, author){
   if(pinModeActive) return (await workerRecruiterWrite("appendBatchCandidate", {positionId, batchDate, name, email: email || "", status, cvLink: cvLink || ""})).id;
   const id = `${positionId}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+  const headerResp = await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/headerRowRange`);
+  const fullRow = [id, positionId, batchDate, name, status, cvLink || "", author, localTodayStr(), email || ""];
+  const colCount = (headerResp.values[0] || []).length || fullRow.length;
+  const row = colCount >= fullRow.length
+    ? fullRow.concat(Array(colCount - fullRow.length).fill(""))
+    : fullRow.slice(0, colCount);
   await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
-      values: [[id, positionId, batchDate, name, status, cvLink || "", author, localTodayStr(), email || ""]],
+      values: [row],
     }),
   });
   return id;
