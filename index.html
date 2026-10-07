@@ -902,7 +902,6 @@
   @media (prefers-reduced-motion: reduce) {
     .gantt-seg[data-current="true"] { animation: none; }
     .gantt-blip { animation: none; }
-    .flow-bar.ongoing { animation: none; }
   }
   /* El diamante y su tooltip van SEPARADOS a proposito: .gantt-milestone (el contenedor
      posicionado, sin rotar) solo ubica el punto; .gantt-milestone-shape (hijo) es quien gira 45deg
@@ -1634,20 +1633,15 @@
   .modal-overlay.expanded .modal-head,
   .modal-overlay.expanded #modalNote,
   .modal-overlay.expanded #modalEditInTrackingZone { flex: none; }
-  /* Nicolas: "necesito que toda la info de la req se vea sin tener que scrolear" — un 30% RIGIDO
-     (flex:3) apretaba esa zona a una altura fija sin importar cuanto contenido real tuviera (SLA +
-     Completion + Next Step + Activity + facts + timeline + batches es MUCHO para 30% en la mayoria
-     de los reqs). Ahora modal-body-cols mide su propio contenido (flex:0 0 auto, nunca estirado ni
-     aplastado a un %) y el Gantt (#modalFlowZone) se queda con TODO lo que sobra (flex:1 1 auto) —
-     la relacion real ya no es un 70/30 fijo, varia req por req segun cuanta info tenga, pero la
-     zona de info NUNCA necesita scroll propio salvo un caso extremo (overflow-y:auto se deja solo
-     como red de seguridad, no como comportamiento esperado). */
-  /* min-height:140px (no 0) — un piso real para que el Gantt nunca quede aplastado a la nada si la
-     info de abajo pide mucho espacio; sin max-height propio, asi absorbe TODA la compresion via
-     flex-shrink en vez de que .modal-body-cols (shrink:0) sea quien ceda. */
-  .modal-overlay.expanded #modalFlowZone:not(:empty) {
-    flex: 1 1 auto; min-height: 140px; overflow-y: auto; margin: 10px 0 14px;
-  }
+  /* BUG REAL 2026-10-08: con el mini-Gantt de calendario (alto, 70% de la ventana) reemplazado por
+     el timeline horizontal de pasos (corto, una sola fila), el viejo arreglo "#modalFlowZone se
+     queda con TODO lo que sobra (flex:1 1 auto), modal-body-cols mide su propio contenido (flex:0
+     0 auto)" dejaba un hueco vacio enorme entre el timeline y la info de abajo — el unico hijo
+     flexible del contenedor ya no tenia casi contenido para llenar ese espacio. Invertido: el
+     timeline ahora mide su propio contenido real (flex:0 0 auto, nunca se estira) y modal-body-cols
+     vuelve a ser el que crece y absorbe el espacio restante con su propio scroll interno — el mismo
+     comportamiento de siempre, solo que ahora es el lado correcto el que crece. */
+  .modal-overlay.expanded #modalFlowZone:not(:empty) { flex: 0 0 auto; margin: 10px 0 14px; }
   .modal-overlay.expanded .facts-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   /* Nicolas viendo la columna izquierda en un req real: "no me gusta como se ve todo esto de
      apachurrado" — con la ventana ya tan grande, el mismo gap/margen chico que usa el modal angosto
@@ -1659,21 +1653,8 @@
   .modal-overlay.expanded .modal-body-cols {
     display: grid; grid-template-columns: 1.05fr 1fr; gap: 0 32px; align-items: start;
     min-height: 0; overflow-y: auto; padding-right: 4px;
-    /* Por defecto (sin flow diagram — req sin kickoff todavia, o expanded=false en otro punto de
-       entrada) esta zona ocupa TODO el alto disponible, como siempre. SOLO cuando #modalFlowZone
-       (su hermano anterior en el HTML) tiene contenido real, se le quita el max-height implicito y
-       shrink:0 (ver regla ~ mas abajo) mide su propio contenido COMPLETO — sin recortar por un
-       max-height:100% que la comprimia por debajo de su alto real (bug real encontrado probando: el
-       scrollHeight seguia siendo mas alto que el clientHeight aun con flex:0 0 auto, porque
-       max-height:100% pisaba el shrink:0). El Gantt de arriba es quien cede espacio si hace falta. */
     flex: 1 1 auto;
   }
-  /* overflow:visible aqui a proposito — un hijo flex con overflow:auto y alto "auto" calcula su
-     propia altura contra el espacio DISPONIBLE del contenedor flex, no contra su contenido real,
-     asi que aunque flex-shrink:0 diga "nunca te encojas", overflow:auto igual lo comprimia por
-     debajo de su scrollHeight real (bug real encontrado midiendo getBoundingClientRect vs
-     scrollHeight: 574px vs 638px). Sin overflow:auto, mide su contenido completo de verdad. */
-  .modal-overlay.expanded #modalFlowZone:not(:empty) ~ .modal-body-cols { flex: 0 0 auto; overflow: visible; }
   .modal-overlay.expanded .modal-col-left, .modal-overlay.expanded .modal-col-right { min-width: 0; }
   @media (prefers-reduced-motion: reduce) {
     .modal-overlay, .modal-card { transition: none; }
@@ -1728,30 +1709,20 @@
   .sla-subchip-label { font-size: 10.5px; color: var(--text-muted); font-weight: 600; }
   .modal-section-title { font-size: 12.5px; font-weight: 500; margin: 22px 0 8px; }
   .modal-section-title:first-child { margin-top: 0; }
-  /* Diagrama de flujo del modal (ver computeFlowSteps()/renderFlowMilestones()) — un mini-Gantt
-     de VERDAD, una FILA por milestone real del req, calcado del ejemplo que Nicolas mando (ClickUp:
-     una fila por tarea, barra posicionada por fecha real de calendario, conector recto entre el fin
-     de una fila y el inicio de la siguiente). Reemplaza la version anterior (pasos conectados en
-     una sola linea horizontal) — cada fila tiene SU PROPIO carril vertical, asi que 2 fechas reales
-     del mismo dia (el bug de rondas atras: cajas encimadas cuando se intento posicionar todo en una
-     sola fila) nunca colisionan sin importar que tan cerca caigan en el eje horizontal. */
-  .flow-gantt { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); padding: 14px 16px 16px; margin-bottom: 4px; overflow-x: auto; height: 100%; }
-  .flow-gantt-inner { position: relative; min-width: 640px; }
-  .flow-weekend-bands { position: absolute; top: 0; bottom: 0; left: 170px; right: 0; pointer-events: none; z-index: 0; }
-  .flow-weekend-band { position: absolute; top: 0; bottom: 0; background: rgba(127,127,127,0.08); }
-  .flow-gantt .gantt-cal-axis { margin: 0 0 6px 170px; height: 18px; border-bottom: none; padding-bottom: 0; z-index: 2; font-size: 12px; }
-  .flow-gantt .gantt-cal-gridlines { left: 170px; right: 0; top: 0; bottom: 0; z-index: 1; }
-  .flow-rows { position: relative; z-index: 2; }
-  /* Nicolas: "no es un minigantt, es un gantt completo" — filas mas altas (34 -> 48px por defecto)
-     ahora que #modalFlowZone les da un 70% real de la ventana para llenar. --flow-row-h la
-     encoge en vivo (nunca la agranda mas de 48px) via sizeFlowRows() cuando la info de abajo pide
-     mas espacio y sobra menos para el Gantt — asi nunca hace falta scroll vertical aqui. */
-  .flow-row { display: flex; align-items: stretch; height: var(--flow-row-h, 48px); }
-  .flow-row-label { width: 170px; flex: none; padding-right: 12px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-  .flow-row-name { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
-  .flow-row-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .flow-row.done .flow-row-name, .flow-row.ongoing .flow-row-name { color: var(--text-primary); }
-  .flow-row.warn .flow-row-name { color: var(--warning); }
+  /* Requisition Flow (modal de detalle) — timeline horizontal de pasos, un paso por milestone real
+     del req (ver buildFlowSteps()/computeFlowRowMeta()/renderRequisitionFlow()). Reemplaza al
+     mini-Gantt con calendario que vivia aqui antes (2026-10-07): Nicolas, viendo el angosto de la
+     columna del modal, pidio quitarlo — "eso creo que quitemolo... un timeline o algo con horas,
+     fechas, statuses" — y eligio esta version horizontal sobre una vertical en el demo ("para que
+     no ocupe tanto espacio"). */
+  .flowh-scroll { overflow-x: auto; padding-bottom: 4px; }
+  .flowh-list { display: flex; align-items: flex-start; min-width: max-content; }
+  .flowh-step { width: 128px; flex: none; text-align: center; padding: 0 4px; }
+  .flowh-dot-row { display: flex; align-items: center; height: 14px; }
+  .flowh-line { flex: 1; height: 2px; background: var(--border); }
+  .flowh-step.done .flowh-line, .flowh-step.ongoing .flowh-line { background: var(--brand); opacity: .5; }
+  .flowh-step:first-child .flowh-line:first-child,
+  .flowh-step:last-child .flowh-line:last-child { background: transparent; }
   /* Nicolas: "los estados... no corresponden... nisiquiera las formas que se le asignaron a cada
      estado" — revisando la leyenda REAL (renderGanttGroup()): las etapas de proceso usan
      .gantt-legend-swatch (cuadrado redondeado), no diamante — el diamante ahi es SOLO para 2
@@ -1764,30 +1735,17 @@
   .flow-row-dot.diamond { width: 7px; height: 7px; border-radius: 1px; transform: rotate(45deg); }
   .flow-row-dot.pending { background: transparent; border: 1.5px dashed var(--text-muted); }
   .flow-row-dot.undocumented { background: var(--text-muted); opacity: .5; }
-  .flow-row-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .flow-row.pending .flow-row-date { font-style: italic; }
-  .flow-subnote { font-size: 10.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .flow-row-track { position: relative; flex: 1; overflow: visible; }
-  .flow-bar { position: absolute; top: 50%; height: 24px; margin-top: -12px; border-radius: 5px; min-width: 6px; }
-  /* Nicolas: "necesito que el gantt de ese modal sea tambien con breath y esos efectos visuales que
-     les pusimos" — la etapa EN CURSO reusa EXACTAMENTE el mismo breath (gantt-pulse, ya definido
-     arriba para .gantt-seg del Gantt del overview) y el mismo punto blanco parpadeante (.gantt-blip,
-     mismas keyframes) en vez de inventar un tratamiento aparte — un solo lenguaje visual de "esto es
-     lo que esta pasando ahora mismo" en los 2 Gantts. */
-  .flow-bar.ongoing { animation: gantt-pulse 1.8s ease-in-out infinite; }
-  /* Diamante = un milestone puntual (Kickoff, Placed, un desenlace) en vez de una duracion — mismo
-     patron ya usado por .gantt-milestone en el Gantt real del dashboard, no uno nuevo inventado. */
-  .flow-milestone-mark { position: absolute; top: 50%; width: 13px; height: 13px; margin-top: -6.5px; margin-left: -6.5px; z-index: 3; }
-  .flow-milestone-shape { display: block; width: 100%; height: 100%; border-radius: 1px; transform: rotate(45deg); }
-  .flow-milestone-mark.pending .flow-milestone-shape { background: transparent; border: 1.5px dashed var(--text-muted); }
-  .flow-milestone-mark.undocumented .flow-milestone-shape { background: var(--text-muted); opacity: .5; }
-  .flow-row.undocumented .flow-row-date { font-style: italic; opacity: .8; }
-  /* El conector vive DENTRO de la fila anterior y se extiende exactamente 1 altura de fila hacia
-     abajo (--flow-row-h, igual que .flow-row) — como las filas quedan pegadas sin espacio entre si,
-     esto siempre aterriza justo en el centro vertical de la fila siguiente, sin necesitar
-     coordenadas globales calculadas en JS. */
-  .flow-connector-v { position: absolute; top: 50%; width: 2px; height: var(--flow-row-h, 48px); z-index: 1; background: var(--border); }
-  .flow-connector-v.done { background: var(--brand); opacity: .5; }
+  /* .flow-row-name-text sin nowrap/ellipsis aqui a proposito (BUG REAL 2026-10-07: "Assignment
+     Acc...", "Sourcing/Scree..." cortados con los 11 pasos reales) — con solo 128px de ancho por
+     paso, el nombre completo necesita poder partirse en 2 lineas en vez de recortarse. */
+  .flowh-step .flow-row-name { display: flex; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text-muted); margin-top: 6px; }
+  .flowh-step .flow-row-name-text { white-space: normal; overflow: visible; text-overflow: clip; }
+  .flowh-step.done .flow-row-name, .flowh-step.ongoing .flow-row-name { color: var(--text-primary); }
+  .flowh-step.warn .flow-row-name { color: var(--warning); }
+  .flow-row-date { font-size: 11px; color: var(--text-muted); white-space: normal; }
+  .flowh-step.pending .flow-row-date { font-style: italic; }
+  .flowh-step.undocumented .flow-row-date { font-style: italic; opacity: .8; }
+  .flow-subnote { font-size: 10.5px; color: var(--text-muted); white-space: normal; }
   /* Dropdown de Status inline: el trigger reusa .status-chip tal cual (mismo punto de color +
      texto blanco que se ve en todos lados), solo agrega cursor y quita el borde de <button>. El
      menu es una lista simple debajo, cada item con su propio punto de color via STAGE_COLORS. */
@@ -7698,40 +7656,6 @@ function findActivityTime(p, matchFn){
   const hit = buildTimeline(p).find(e=> typeof e.text === "string" && matchFn(e.text));
   return hit ? hit.time : null;
 }
-// Ventana/calendario acotada a esta UNA req — mismas funciones que ya usa el Gantt del dashboard
-// (ganttScopeWindow/ganttBuildCalendar), reusadas tal cual para que el eje de arriba (meses, dia
-// 15, linea de Hoy) sea EXACTAMENTE el mismo componente, no una version aparte reinventada.
-function flowCalendarFor(p){
-  const win = ganttScopeWindow("all", [p]);
-  const cal = ganttBuildCalendar(win);
-  return {win, cal};
-}
-// #modalFlowZone ya no tiene un alto fijo — cede lo que sobra despues de la info de abajo (ver CSS,
-// modal-body-cols mide su propio contenido). Eso significa que cuantas filas quepan sin scroll
-// vertical depende de cuanto espacio quedo, no de un numero fijo. Se mide DESPUES de insertar todo
-// el HTML (mismo momento que ganttRenderAxis(), ya con el layout real resuelto) y se encoge el alto
-// de fila (nunca se agranda mas de 48px, el diseño original) via la variable CSS --flow-row-h, que
-// .flow-row/.flow-connector-v ya leen. Piso de 26px: por debajo de eso el texto/las barras dejan de
-// leerse bien, asi que en un caso extremo se prefiere el scroll vertical a una fila ilegible.
-function sizeFlowRows(){
-  const zone = document.getElementById("modalFlowZone");
-  const rowsEl = zone && zone.querySelector(".flow-rows");
-  if(!rowsEl || !rowsEl.children.length) return;
-  const ganttEl = zone.querySelector(".flow-gantt");
-  const axisEl = zone.querySelector(".gantt-cal-axis");
-  const ganttCs = ganttEl ? getComputedStyle(ganttEl) : null;
-  const ganttPadding = ganttCs ? (parseFloat(ganttCs.paddingTop)||0) + (parseFloat(ganttCs.paddingBottom)||0) : 30;
-  const axisBlock = axisEl ? axisEl.offsetHeight + (parseFloat(getComputedStyle(axisEl).marginBottom)||0) : 24;
-  const available = zone.clientHeight - ganttPadding - axisBlock;
-  const perRow = Math.max(26, Math.min(48, Math.floor(available / rowsEl.children.length)));
-  zone.style.setProperty("--flow-row-h", perRow + "px");
-}
-// Conector recto entre el final visual de ESTA fila y el inicio de la siguiente — vive DENTRO del
-// carril de esta fila y se estira exactamente 1 alto de fila (--flow-row-h) hacia abajo, asi que
-// aterriza solo en el centro de la fila de abajo sin necesitar coordenadas globales calculadas aparte.
-function flowConnectorHtml(pct, done){
-  return `<div class="flow-connector-v${done?" done":""}" style="left:${pct}%;"></div>`;
-}
 // Nicolas: "en vez de poner los estados ahi a la izquierda usa el mismo principio del gantt de
 // overview que los estados tienen sus puntos, diamantes, etc con colores" — el punto de la
 // etiqueta usa EXACTAMENTE el mismo color Y LA MISMA FORMA que la leyenda real (renderGanttGroup()):
@@ -7745,25 +7669,6 @@ function flowRowDotHtml(step, state){
   if(state === "undocumented") return `<span class="flow-row-dot ${shapeClass} undocumented"></span>`;
   return `<span class="flow-row-dot ${shapeClass}" style="background:${step.color||"var(--seq-400)"};"></span>`;
 }
-function flowRowWrap(step, state, trackHtml, dateLine){
-  return `<div class="flow-row ${state}${step.warn?" warn":""}">
-    <div class="flow-row-label">
-      <div class="flow-row-name">${flowRowDotHtml(step, state)}<span class="flow-row-name-text">${escapeHtml(step.label)}</span></div>
-      <div class="flow-row-date">${escapeHtml(dateLine)}</div>
-      ${step.subNote ? `<div class="flow-subnote">${escapeHtml(step.subNote)}</div>` : ""}
-    </div>
-    <div class="flow-row-track">${trackHtml}</div>
-  </div>`;
-}
-function flowBarTrackHtml(cal, start, end, color, state, connectPct, hasNext){
-  const p1 = cal.pctOf(start), p2 = cal.pctOf(end);
-  const left = Math.min(p1,p2), width = Math.max(0.4, Math.abs(p2-p1));
-  // Mismo .gantt-blip (punto blanco parpadeante en la punta) que ya marca la etapa EN CURSO en el
-  // Gantt del overview — solo en la barra "ongoing", nunca en done/pending.
-  let html = `<div class="flow-bar ${state}" style="left:${left}%; width:${width}%; background:${color};">${state==="ongoing" ? `<span class="gantt-blip"></span>` : ""}</div>`;
-  if(hasNext) html += flowConnectorHtml(connectPct, state!=="pending");
-  return html;
-}
 // Busca el siguiente paso con fecha real conocida despues del indice i — includeOutcome=true para
 // encontrar el LIMITE final de una etapa que si arranco (un Cancelled a mitad de Sourcing SI debe
 // terminar su barra en la fecha de cancelacion, no seguir corriendo hasta hoy); includeOutcome=
@@ -7775,16 +7680,14 @@ function nextKnownIndex(steps, i, includeOutcome){
   }
   return -1;
 }
-function flowMilestoneTrackHtml(cal, date, color, state, connectPct, hasNext){
-  const pct = date ? cal.pctOf(date) : connectPct;
-  let html = `<div class="flow-milestone-mark ${state}" style="left:${pct}%;">
-    <span class="flow-milestone-shape" style="${color?`background:${color};`:""}"></span>
-  </div>`;
-  if(hasNext) html += flowConnectorHtml(pct, state!=="pending");
-  return html;
-}
-function renderFlowMilestones(p){
-  if(!p.kickoff) return "";
+// "Requisition Flow" (Nicolas, 2026-10-07): el mini-Gantt con calendario que vivia aqui antes
+// se veia roto/apachurrado en la columna angosta del modal (etiquetas cortadas, barras
+// diminutas) — reemplazado por un timeline horizontal de pasos (ver renderRequisitionFlow() mas
+// abajo), que Nicolas eligio sobre una version vertical ("para que no ocupe tanto espacio")
+// despues de comparar ambas en el demo. Mismos `steps` de siempre (mismas fechas reales, mismo
+// texto de pendiente/handoff/etc.) — nunca una fuente de datos nueva, solo una presentacion
+// distinta sin el calendario.
+function buildFlowSteps(p){
   const steps = [];
   steps.push({
     key:"kickoff", label:"Kickoff", date:p.kickoff, color:STAGE_COLORS["Kickoff"],
@@ -7815,10 +7718,6 @@ function renderFlowMilestones(p){
       pendingNote: p.intakeRequestedDate ? "Waiting on the hiring manager" : "Not requested yet",
     });
   }
-  // Nuevo (2026-10-01): status real "Job Creation" entre Intake Held/Waived y Sourcing (ver
-  // STATUS_ORDER/confirmIntakeSummarySent()). jobCreationEnteredAt trae hora real (solo se usa la
-  // fecha aqui, el Gantt es por dia) — fallback a findStatusTransitionDate() para reqs migrados
-  // que nunca pasaron por este status (osea, todo el pipeline activo real hoy).
   const jobCreationDate = p.jobCreationEnteredAt ? p.jobCreationEnteredAt.slice(0,10) : findStatusTransitionDate(p,"Job Creation");
   steps.push({
     key:"jobCreation", label:"Job Creation", date: jobCreationDate, color:STAGE_COLORS["Job Creation"],
@@ -7856,93 +7755,61 @@ function renderFlowMilestones(p){
     time: findActivityTime(p, t=>t.includes("to Placed") || t.includes("to Hired")),
     pendingNote:"Start Date hasn't arrived yet",
   });
-  // Desenlaces reales que rompen el camino normal (Cancelled/On Hold/Filled Internal Hire) — se
-  // agregan como un paso final aparte, marcado distinto (warn), en vez de fingir que el camino
-  // normal sigue cuando en realidad no.
   if(p.status==="Cancelled" || p.status==="Filled (Internal Hire)"){
     const closeStr = findStatusTransitionDate(p, p.status);
     steps.push({key:"outcome", label: statusLabel(p.status), date: closeStr, milestone:true, warn:true, color:STAGE_COLORS[p.status]});
   } else if(SLA_PAUSING_STATUSES.includes(p.status)){
     const pauseInfo = computeSlaPauseInfo(p);
     const pausedStr = pauseInfo.pausedSinceDate ? pauseInfo.pausedSinceDate.toISOString().slice(0,10) : null;
-    // On Hold es "milestone" (un punto, no una duracion que siga corriendo) pero la leyenda real
-    // (renderGanttGroup()) lo pinta con CUADRADO (.gantt-legend-swatch), no diamante — square:true
-    // fuerza esa forma aqui tambien (ver flowRowDotHtml()), nunca inventar una distinta.
     steps.push({key:"outcome", label: statusLabel(p.status), date: pausedStr, milestone:true, square:true, warn:true, subNote:"Paused — clock frozen", color:STAGE_COLORS[p.status]});
   }
-
-  const {cal} = flowCalendarFor(p);
-  const today = new Date();
-  const todayPct = (today>=cal.rangeStart && today<=cal.rangeEnd) ? cal.pctOf(today) : 100;
-
-  // Cada fila de DURACION (todas menos Placed/el desenlace) muestra el tiempo que el req paso EN
-  // esa etapa: la barra va de la fecha propia del paso hasta la fecha del SIGUIENTE checkpoint real
-  // conocido (nunca al reves) — asi la barra que se ve "en curso" bajo una fila SIEMPRE corresponde
-  // a la etapa que esa fila nombra (bug real encontrado probando con datos sinteticos: antes la
-  // barra en curso aparecia mal, bajo la fila del SIGUIENTE paso en vez del actual). Si un paso
-  // intermedio nunca quedo logueado (ej. Client Interview sin fecha propia) pero un paso posterior SI
-  // tiene fecha real, el paso anterior simplemente extiende su barra hasta ese siguiente checkpoint —
-  // el paso sin fecha se marca "undocumented" (paso silenciosamente, sin hora exacta), nunca "pending".
+  return steps;
+}
+// Estado/duracion de cada paso (done/ongoing/undocumented/pending) — mismo texto "Xd" que el
+// viejo Gantt del modal ya calculaba (solo que ahi se usaba para posicionar una barra de
+// calendario; aca es todo lo que un timeline sin calendario necesita).
+function computeFlowRowMeta(p, steps){
   const terminalOrPaused = TERMINAL.includes(p.status) || SLA_PAUSING_STATUSES.includes(p.status);
-  const endPoint = ganttEndPoint(p); // hoy, o el punto real donde el reloj se congelo (Cancelled/On Hold/etc.)
+  const endPoint = ganttEndPoint(p);
   let lastKnownDate = null;
-  const rowsHtml = steps.map((step,i)=>{
-    const hasNext = i < steps.length-1;
+  return steps.map((step,i)=>{
     const stepDate = step.date ? parseD(step.date) : null;
-
     if(stepDate){
-      const dateLine = `${ganttFmtDate(stepDate)}${step.time ? ` · ${step.time}` : ""}`;
+      const dateText = `${ganttFmtDate(stepDate)}${step.time ? ` · ${step.time}` : ""}`;
       if(step.milestone){
         lastKnownDate = stepDate;
-        return flowRowWrap(step, "done", flowMilestoneTrackHtml(cal, stepDate, step.color, "done", cal.pctOf(stepDate), hasNext), dateLine);
+        return {step, state:"done", dateLine: dateText};
       }
       const nextIdx = nextKnownIndex(steps, i, true);
       const endDate = nextIdx>=0 ? parseD(steps[nextIdx].date) : (terminalOrPaused ? endPoint : null);
       if(endDate){
-        // lastKnownDate queda en el LIMITE de esta barra (donde termina, no donde empieza) — un
-        // paso indocumentado que viene despues se ubica ahi, no al inicio de esta barra (real
-        // ajuste visual: antes el diamante de "sin fecha exacta" quedaba encima del arranque de
-        // Submitted, insinuando que Client Interview paso ANTES de que se sometiera el batch).
         lastKnownDate = endDate;
-        return flowRowWrap(step, "done", flowBarTrackHtml(cal, stepDate, endDate, step.color||"var(--seq-400)", "done", cal.pctOf(endDate), hasNext), dateLine);
+        const days = ganttDaysBetween(stepDate, endDate);
+        return {step, state:"done", dateLine: `${dateText} · ${days}d`};
       }
-      // Sin ningun checkpoint posterior conocido y el proceso sigue activo -> esta es la etapa
-      // REALMENTE en curso ahora mismo (solo puede haber una, por construccion).
       lastKnownDate = endPoint;
-      return flowRowWrap(step, "ongoing", flowBarTrackHtml(cal, stepDate, endPoint, step.color||"var(--seq-400)", "ongoing", todayPct, hasNext), dateLine);
+      const days = ganttDaysBetween(stepDate, endPoint);
+      return {step, state:"ongoing", dateLine: `${dateText} · ${days}d so far`};
     }
-
-    // Sin fecha propia: ¿algun paso posterior (que no sea el desenlace especial) SI tiene fecha
-    // real? Si es asi, este paso ya quedo atras sin quedar registrado — nunca lo contrario (el
-    // desenlace no prueba que un paso normal anterior de verdad ocurrio).
     const passedSilently = nextKnownIndex(steps, i, false) >= 0;
     if(passedSilently && lastKnownDate){
-      return flowRowWrap(step, "undocumented", flowMilestoneTrackHtml(cal, lastKnownDate, "var(--text-muted)", "undocumented", cal.pctOf(lastKnownDate), hasNext), "No exact date logged");
+      return {step, state:"undocumented", dateLine: "No exact date logged"};
     }
-    const dateLine = step.pendingNote || "Pending";
-    return flowRowWrap(step, "pending", flowMilestoneTrackHtml(cal, null, null, "pending", todayPct, hasNext), dateLine);
-  }).join("");
-
-  // Bandas de fin de semana — mismo cal de arriba, calculadas aqui de una (no requieren el DOM
-  // insertado todavia, a diferencia del eje de meses que si necesita sus elementos ya en el DOM).
-  let weekendHtml = "";
-  let d = new Date(cal.rangeStart);
-  while(d <= cal.rangeEnd){
-    if(d.getDay()===0 || d.getDay()===6){
-      const p1 = cal.pctOf(d), p2 = cal.pctOf(ganttAddDays(d,1));
-      weekendHtml += `<div class="flow-weekend-band" style="left:${p1}%; width:${Math.max(0,p2-p1)}%;"></div>`;
-    }
-    d = ganttAddDays(d,1);
-  }
-
-  return `
-    <div class="modal-section-title">Requisition Flow</div>
-    <div class="flow-gantt"><div class="flow-gantt-inner">
-      <div class="flow-weekend-bands">${weekendHtml}</div>
-      <div class="gantt-cal-gridlines" id="modalFlowGridlines"></div>
-      <div class="gantt-cal-axis" id="modalFlowAxis"></div>
-      <div class="flow-rows">${rowsHtml}</div>
-    </div></div>`;
+    return {step, state:"pending", dateLine: step.pendingNote || "Pending"};
+  });
+}
+function renderRequisitionFlow(p){
+  if(!p.kickoff) return "";
+  const rows = computeFlowRowMeta(p, buildFlowSteps(p));
+  const stepsHtml = rows.map(({step, state, dateLine})=>`
+    <div class="flowh-step ${state}${step.warn?" warn":""}">
+      <div class="flowh-dot-row"><span class="flowh-line"></span>${flowRowDotHtml(step, state)}<span class="flowh-line"></span></div>
+      <div class="flow-row-name"><span class="flow-row-name-text">${escapeHtml(step.label)}</span></div>
+      <div class="flow-row-date">${escapeHtml(dateLine)}</div>
+      ${step.subNote ? `<div class="flow-subnote">${escapeHtml(step.subNote)}</div>` : ""}
+    </div>`).join("");
+  return `<div class="modal-section-title">Requisition Flow</div>
+    <div class="flowh-scroll"><div class="flowh-list">${stepsHtml}</div></div>`;
 }
 function renderDetailModal(){
   const p = POSITIONS.find(x=>x.id===activeDetailId);
@@ -8232,7 +8099,10 @@ function renderDetailModal(){
       <button type="button" class="btn ghost small" id="logBatchBtn">${p.batches && p.batches.length ? "+ Log Follow-up Batch" : "+ Log Batch"}</button>
     </div>`}`;
 
-  document.getElementById("modalFlowZone").innerHTML = activeDetailFromDashboard ? renderFlowMilestones(p) : "";
+  // El diagrama de Requisition Flow SOLO vive en el modal flotante que se abre desde el Gantt del
+  // Dashboard/Overview (activeDetailFromDashboard=true) — en Tracking (panel acoplado) no se
+  // muestra, para no duplicar/sobrecargar esa vista. Decision explicita de Nicolas.
+  document.getElementById("modalFlowZone").innerHTML = activeDetailFromDashboard ? renderRequisitionFlow(p) : "";
   document.getElementById("modalFacts").innerHTML =
     factsSection("", positionFacts) +
     basicInfoEditHtml +
@@ -8241,14 +8111,6 @@ function renderDetailModal(){
     timelineHtml +
     batchesHtml +
     outcomeFactsHtml;
-  // El eje de calendario (meses/dia 15/linea de Hoy) se dibuja aparte, DESPUES de insertar el HTML
-  // de arriba — ganttRenderAxis() escribe por id de elemento (#modalFlowAxis/Gridlines, ver
-  // renderFlowMilestones()), que todavia no existen en el DOM mientras se arma el string de
-  // innerHTML. Mismo patron que renderGanttGroup() ya usa para el Gantt del dashboard.
-  // El diagrama de Requisition Flow SOLO vive en el modal flotante que se abre desde el Gantt del
-  // Dashboard/Overview (activeDetailFromDashboard=true) — en Tracking (panel acoplado) no se
-  // muestra, para no duplicar/sobrecargar esa vista. Decision explicita de Nicolas.
-  if(activeDetailFromDashboard && p.kickoff) ganttRenderAxis(flowCalendarFor(p).cal, "month", "modalFlowAxis", "modalFlowGridlines");
   // Navegacion entre hermanas de Headcount Group — SIEMPRE conectada (nunca dentro del if(!isView)
   // de abajo), preserva el mismo modo/tamaño con el que ya estaba abierto este modal (view/edit,
   // agrandado o no) en vez de resetearlo.
@@ -8592,14 +8454,6 @@ function renderDetailModal(){
   const canRouteToEdit = activeDetailFromDashboard && !trackingCanEdit() && !!MY_RECRUITER_NAME;
   editZone.style.display = canRouteToEdit ? "" : "none";
   if(canRouteToEdit) editBtn.textContent = p.recruiter === MY_RECRUITER_NAME ? "Edit in Tracking →" : "Go to your workspace to edit →";
-  // Nicolas: "tampoco quiero scrolear el gantt, al menos no verticalmente" — sizeFlowRows() tiene
-  // que correr AL FINAL de esta funcion, despues de llenar SLA/Completion/Next Step/Activity (la
-  // columna derecha de modal-body-cols) — llamarla antes (como se hizo la primera vez) media el
-  // alto de #modalFlowZone con esa columna todavia vacia/recien limpiada, dando una lectura
-  // optimista de mas espacio del que en realidad iba a quedar una vez esa columna se llenara (bug
-  // real encontrado: el alto de fila calculado no evitaba el scroll vertical en reqs con mucha
-  // Activity, exactamente los casos donde mas hacia falta).
-  if(activeDetailFromDashboard && p.kickoff) sizeFlowRows();
 }
 
 async function saveModalDates(){
