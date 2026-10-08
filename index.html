@@ -1715,9 +1715,15 @@
      columna del modal, pidio quitarlo — "eso creo que quitemolo... un timeline o algo con horas,
      fechas, statuses" — y eligio esta version horizontal sobre una vertical en el demo ("para que
      no ocupe tanto espacio"). */
+  /* Nicolas, 2026-10-08: "que se extienda de izquierda a derecha, que cubra buena cantidad" — con
+     ancho fijo (128px) los pasos quedaban apretados a la izquierda en el modal expandido (108vw),
+     dejando todo el resto de la ventana vacio. flex:1 reparte el ancho real disponible entre los
+     pasos por igual en vez de uno fijo; min-width (no 0) es el piso antes de que .flowh-scroll
+     (overflow-x:auto) tenga que entrar a hacer scroll lateral, para pantallas angostas o muchos
+     pasos a la vez. */
   .flowh-scroll { overflow-x: auto; padding-bottom: 4px; }
-  .flowh-list { display: flex; align-items: flex-start; min-width: max-content; }
-  .flowh-step { width: 128px; flex: none; text-align: center; padding: 0 4px; }
+  .flowh-list { display: flex; align-items: flex-start; width: 100%; }
+  .flowh-step { flex: 1 1 0; min-width: 90px; text-align: center; padding: 0 4px; }
   .flowh-dot-row { display: flex; align-items: center; height: 14px; }
   .flowh-line { flex: 1; height: 2px; background: var(--border); }
   .flowh-step.done .flowh-line, .flowh-step.ongoing .flowh-line { background: var(--brand); opacity: .5; }
@@ -13968,6 +13974,35 @@ document.getElementById("resetAllBtn").addEventListener("click", async () => {
   } finally {
     btn.disabled = false;
   }
+});
+
+// Nicolas, 2026-10-08: "que los modales o ventanas que se abren se puedan cerrar con ESC" — un
+// solo listener global en vez de uno por modal (14+ de ellos, mismo patron .classList en todos,
+// ver el "open" que ya usan). Cierra SOLO el de mas arriba (el primero que encuentre abierto, en
+// orden de mas inmediato/chico a mas grande), nunca todos a la vez — mismo comportamiento esperado
+// de cualquier stack de overlays real. Los dropdowns chicos (Role search, Status, User menu) van
+// primero porque son los mas faciles de disparar sin querer; los sub-dialogos que viven DENTRO del
+// modal de detalle (Edit Status, Edit Req Info) van antes que el modal de detalle mismo, para que
+// ESC los cierre a ellos primero sin saltarse directo al modal grande de atras.
+document.addEventListener("keydown", (e)=>{
+  if(e.key !== "Escape") return;
+  const roleSuggestions = document.getElementById("ganttRoleSuggestions");
+  if(roleSuggestions?.classList.contains("open")){ roleSuggestions.classList.remove("open"); return; }
+  const statusMenu = document.getElementById("statusDropdownMenu");
+  if(statusMenu?.classList.contains("open")){ statusMenu.classList.remove("open"); return; }
+  if(document.getElementById("userMenuDropdown")?.classList.contains("open")){ closeUserMenu(); return; }
+  if(document.getElementById("editStatusModal")?.classList.contains("open")){ closeEditStatusModal(); return; }
+  if(document.getElementById("editReqInfoModal")?.classList.contains("open")){ closeEditReqInfoModal(); return; }
+  if(document.getElementById("addCandidateModal")?.classList.contains("open")){ closeAddCandidateModal(); return; }
+  if(document.getElementById("logBatchModal")?.classList.contains("open")){ closeLogBatchModal(); return; }
+  if(document.getElementById("deliverablePreviewModal")?.classList.contains("open")){ closeDeliverablePreview(); return; }
+  if(document.getElementById("reassignModal")?.classList.contains("open")){ closeReassignModal(); return; }
+  if(document.getElementById("acceptHandoffModal")?.classList.contains("open")){ closeAcceptHandoffModal(); return; }
+  if(document.getElementById("editRecruiterModal")?.classList.contains("open")){ closeEditRecruiterModal(); return; }
+  if(document.getElementById("editFieldModal")?.classList.contains("open")){ closeEditFieldModal(); return; }
+  if(document.getElementById("pinLoginModal")?.classList.contains("open")){ closePinLoginModal(); return; }
+  if(document.getElementById("quickListModal")?.classList.contains("open")){ closeQuickList(); return; }
+  if(document.getElementById("detailModal")?.classList.contains("open")){ closeDetailModal(); return; }
 });
 </script>
 </body>
