@@ -1837,6 +1837,10 @@
   .timeline .tl-badge.status { background: rgba(111,147,201,0.16); color: var(--stage-blue); }
   .timeline .tl-badge.guidance { background: rgba(var(--warning-rgb),0.16); color: var(--warning); }
   .timeline .tl-badge.manual { background: var(--brand-wash); color: var(--brand-dark); }
+  /* Nicolas, 2026-10-08: "si van a aparecer en activity deberia tener un tag para reconocer que
+     ese remark fue hecho para un candidato" — color propio (--stage-purple, todavia sin usar en
+     ningun .tl-badge), nunca compartido con Remark/Status Change/etc. */
+  .timeline .tl-badge.candidateNote { background: rgba(155,132,201,0.16); color: var(--stage-purple); }
   /* "Up Next" (ver confirmNextStepDone()): una vez confirmado el paso actual, un preview de a
      donde sigue el pipeline — borde punteado a proposito, para que se lea como sugerencia/preview
      y no como un hecho ya ocurrido (a diferencia de todos los demas badges de esta lista). */
@@ -2578,6 +2582,29 @@
       <button class="modal-close" id="quickListClose" type="button">&times;</button>
     </div>
     <div class="modal-body" id="quickListBody" style="padding:8px 24px 24px;"></div>
+  </div>
+</div>
+
+<!-- Notas por candidato (Nicolas, 2026-10-08: "los remarks tambien deberian ir por cada
+     candidato... pero que sea como un modal pequeño... siento que podria saturar mucho la info").
+     Mismo patron chico que quickListModal — nunca una ventana nueva mas grande de lo necesario. -->
+<div class="modal-overlay" id="candidateNoteModal">
+  <div class="modal-card" style="max-width:480px;">
+    <div class="modal-head">
+      <div>
+        <h2 id="candidateNoteTitle" style="margin:0; font-size:16px;"></h2>
+        <div class="modal-sub" id="candidateNoteSub"></div>
+      </div>
+      <button class="modal-close" id="candidateNoteClose" type="button">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:8px 24px 24px;">
+      <ul class="timeline" id="candidateNoteList" style="margin-bottom:16px;"></ul>
+      <div class="add-remark">
+        <textarea id="candidateNoteInput" rows="2" placeholder="Add a note about this candidate…"></textarea>
+        <button class="btn primary small" id="candidateNoteSave" type="button">Add Note</button>
+        <div style="font-size:11px; margin-top:4px;" id="candidateNoteMsg"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -4335,6 +4362,15 @@ let SLA_TARGETS = { TTS: 9, TTF: 40, TTH: 50 };
 // otra cosa.
 const COMPLETION_TARGETS = { acceptRequest: 1, intakeHeld: 3, calibrationCallHeld: 3, handoffConfirmed: 1 };
 const ESCALATION_CONTACT = "Immy Nader";
+// Nicolas, 2026-10-08: 2 reglas nuevas que arrancan "a partir de hoy" (el minimo de 3 candidatos
+// por batch, y el SLA de "sin ningun remark" de Requisition Completion) — nunca retroactivas a
+// reqs que ya estaban en curso bajo las reglas viejas. Una sola fecha compartida (nunca un string
+// repetido en cada sitio) para que las dos reglas se muevan juntas si algun dia cambia.
+const RULES_CUTOVER_DATE = "2026-10-08";
+function reqIsPostCutover(p){ return !!(p.kickoff && p.kickoff >= RULES_CUTOVER_DATE); }
+// Target de la regla "sin remarks" de Requisition Completion (ver stepRemarkCadence en
+// computeCompletion mas abajo) — 3 dias habiles sin ninguna actividad REAL logueada.
+const REMARK_CADENCE_TARGET_DAYS = 3;
 // "Pivot SLA": allowance de dias calendario que se suma al target de TTF/TTH cuando la posicion
 // tiene "SLA Exception Approved?" = Yes (batch completo rechazado, atribuible al cliente segun
 // el Resumen de Intake). El master prompt documenta un rango de 11 a 13 dias; usamos el punto
@@ -4459,6 +4495,20 @@ function positionActivityEntries(p){
     out.push(e);
   });
   return out;
+}
+// La ultima fecha en que un humano realmente toco este req: un remark libre (manual), un click de
+// UI (action — aceptar, logear batch, etc.), un cambio de status real via el dropdown, o una
+// candidate note — nunca cuenta un hito "auto" (sintetico, derivado de que una fecha de Timeline ya
+// estaba puesta, nadie "hizo" nada ese dia) ni un cambio de status automatico (contiene
+// "(automatic", ver los remarks generados en commitStatusChange()/reconcileHeadcountGroups()/etc.)
+// — eso solo refleja que una fecha llego, no que alguien reviso el req. Usado por stepRemarkCadence
+// en computeCompletion() de abajo, para la regla "sin remarks en 3 dias habiles" (Nicolas,
+// 2026-10-08, ver RULES_CUTOVER_DATE).
+function lastRealActivityDate(p){
+  const real = positionActivityEntries(p).filter(e => e.type !== "auto" && e.type !== "guidance"
+    && !(e.type === "status" && typeof e.text === "string" && e.text.includes("(automatic")));
+  if(!real.length) return null;
+  return real.reduce((latest, e) => (!latest || e.date > latest) ? e.date : latest, null);
 }
 // Todas las fechas reales de "Status changed from X to <toLabel>" en el Activity log, en orden
 // cronologico — a diferencia de findStatusTransitionDate() (solo la primera), esto sirve para
@@ -4684,7 +4734,24 @@ function computeCompletion(p){
     step3 = {status: calibrationHeld ? "done" : (elapsed>COMPLETION_TARGETS.calibrationCallHeld ? "overdue" : "waiting"), elapsed, target:COMPLETION_TARGETS.calibrationCallHeld, overdue: !calibrationHeld && elapsed>COMPLETION_TARGETS.calibrationCallHeld};
   }
 
-  return {step1, stepAccept, stepIntakeRequest, step2, step3, stepHandoff};
+  // stepRemarkCadence: regla nueva pedida por Nicolas 2026-10-08 ("que no pasen 3 dias sin que se
+  // loguee algo real en la req") — solo aplica a reqs creadas desde RULES_CUTOVER_DATE en adelante
+  // (reqIsPostCutover), nunca retroactiva, y nunca en reqs ya TERMINAL (Hired/Cancelled/Filled
+  // Internal — ahi ya no hay nada que seguir reportando). Mismo patron de pausa que TTS/TTF/TTH
+  // (computeSlaPauseInfo/SLA_PAUSING_STATUSES): mientras el req esta On Hold el reloj se congela en
+  // el momento en que entro a la pausa, no sigue corriendo con el calendario real.
+  let stepRemarkCadence = {status:"none", elapsed:null, target:REMARK_CADENCE_TARGET_DAYS, overdue:false};
+  if(reqIsPostCutover(p) && !TERMINAL.includes(p.status)){
+    const lastReal = parseD(lastRealActivityDate(p)) || kickoff;
+    if(lastReal){
+      const pauseInfo = computeSlaPauseInfo(p);
+      const ref = pauseInfo.pausedSinceDate || today;
+      const elapsed = Math.max(0, bizDaysBetween(lastReal, ref) - pauseInfo.totalPausedBizDays);
+      const overdue = elapsed > REMARK_CADENCE_TARGET_DAYS;
+      stepRemarkCadence = {status: overdue ? "out" : "within", elapsed, target: REMARK_CADENCE_TARGET_DAYS, overdue};
+    }
+  }
+  return {step1, stepAccept, stepIntakeRequest, step2, step3, stepHandoff, stepRemarkCadence};
 }
 // Texto tipo slaFlags() pero para el checklist de arriba: solo aparece algo si hay una falla
 // real del reclutador (step1 out) o un recordatorio de seguimiento pendiente (step2/step3).
@@ -4702,6 +4769,7 @@ function completionFlags(p){
   }
   if(c.step3.overdue) flags.push(`⛔ Escalate To ${ESCALATION_CONTACT}: Calibration call hasn't happened, ${c.step3.elapsed} business days since the Pivot SLA was requested (target ${c.step3.target})`);
   if(p.pivotRequestedDate && !isSlaExceptionApproved(p)) flags.push(`⏳ Pivot SLA pending: waiting on ${!p.pivotApprovedByLeadDate ? "CGP TA (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"}`);
+  if(c.stepRemarkCadence.overdue) flags.push(`🚩 No remark logged in ${c.stepRemarkCadence.elapsed} business days (target ${c.stepRemarkCadence.target}) — log a quick Activity update`);
   return flags;
 }
 
@@ -4982,7 +5050,8 @@ function candidateOfferDatesHtml(c){
   }
   return `<div class="batch-candidate-offer-dates">${parts.join("")}</div>`;
 }
-function candidateRowHtml(c, viewingPositionId, isView){
+function candidateRowHtml(c, p, isView){
+  const viewingPositionId = p.id;
   const tone = STATUS_META[BATCH_CANDIDATE_STATUS_TONE[c.status] || "none"];
   // Nicolas: "tengo un candidato (Ana Perez) en el batch de ese req, pero no me sale en el modal"
   // — bug real: toda esta seccion (batchesHtml) se ocultaba entera en modo view (isView?"":...),
@@ -5022,6 +5091,13 @@ function candidateRowHtml(c, viewingPositionId, isView){
     : `<select class="candidateStatusSelect" data-candidate-id="${escapeHtml(c.id)}">
         ${BATCH_CANDIDATE_STATUSES.map(s=>`<option value="${escapeHtml(s)}" ${s===c.status?"selected":""}>${escapeHtml(statusLabel(s))}</option>`).join("")}
       </select>`;
+  // Nicolas, 2026-10-08: "los remarks tambien deberian ir por cada candidato... un modal pequeño"
+  // — boton discreto (reusa .fact-edit-link, mismo link-button chico que Attach CV/Add) en vez de
+  // un bloque de texto completo aqui mismo, que es justo lo que el queria evitar ("podria saturar
+  // mucho la info que se muestra"). Siempre visible (incluso en vista de solo lectura — leer notas
+  // no deberia requerir permiso de editar, solo AGREGAR una nueva, que openCandidateNoteModal() ya
+  // gatea por separado con trackingCanEdit()).
+  const noteCount = candidateNoteEntries(p, c.name).length;
   return `
     <div class="batch-candidate-row">
       ${isView ? "" : `<input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">`}
@@ -5031,6 +5107,7 @@ function candidateRowHtml(c, viewingPositionId, isView){
       ${cvHtml}
       ${filledNote}
       ${statusControlHtml}
+      <button type="button" class="fact-edit-link candidateNotesBtn" data-candidate-id="${escapeHtml(c.id)}" data-candidate-name="${escapeHtml(c.name)}" data-position-id="${escapeHtml(p.id)}" title="Notes about this candidate specifically — separate from the requisition's own Activity/Remarks">💬${noteCount ? ` ${noteCount}` : " Notes"}</button>
       ${isView ? "" : `<button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>`}
     </div>
     ${candidateOfferDatesHtml(c)}`;
@@ -5043,7 +5120,7 @@ function batchCandidatesBlockHtml(p, batchDate, isView){
   const candidates = (p.batchCandidates||[]).filter(c=>c.batchDate===batchDate);
   return `
     <div class="batch-candidates-block" data-batch-date="${escapeHtml(batchDate)}">
-      ${candidates.map(c=>candidateRowHtml(c, p.id, isView)).join("")}
+      ${candidates.map(c=>candidateRowHtml(c, p, isView)).join("")}
       ${isView ? "" : `<div class="batch-candidates-actions">
         <button type="button" class="fact-edit-link addCandidateBtn" data-batch-date="${escapeHtml(batchDate)}">+ Add Candidate</button>
         ${candidates.length ? `
@@ -5056,6 +5133,88 @@ function batchCandidatesBlockHtml(p, batchDate, isView){
       </div>`}
     </div>`;
 }
+// Notas por candidato (Nicolas, 2026-10-08) — reusa HistorialTable tal cual (graphAppendHistorial,
+// la MISMA tabla/funcion que cualquier otro remark de este req), nunca una tabla nueva: type
+// "candidateNote" + el nombre del candidato tejido en el propio texto ("Note on <nombre>: ...")
+// — self-contained (se lee solo en Activity, sin tener que adivinar de quien se habla) y
+// parseable para filtrar solo las de ESTE candidato en su modal chico. Texto, no un ID oculto,
+// porque el resto del archivo ya resuelve TODO por texto (allStatusTransitionDates, etc.) — mismo
+// patron, nunca un campo estructurado aparte que nadie mas usa.
+const CANDIDATE_NOTE_PREFIX = (name) => `Note on ${name}: `;
+function candidateNoteEntries(p, candidateName){
+  const prefix = CANDIDATE_NOTE_PREFIX(candidateName);
+  return positionActivityEntries(p)
+    .filter(e=> e.type==="candidateNote" && typeof e.text==="string" && e.text.startsWith(prefix))
+    .map(e=> ({date:e.date, time:e.time, type:e.type, author:e.author, text:e.text.slice(prefix.length)}))
+    .sort((a,b)=> a.date===b.date ? 0 : (a.date<b.date?-1:1));
+}
+let candidateNoteTarget = null; // {positionId, candidateName}
+function openCandidateNoteModal(positionId, candidateName){
+  const p = POSITIONS.find(x=>x.id===positionId);
+  if(!p) return;
+  candidateNoteTarget = {positionId, candidateName};
+  document.getElementById("candidateNoteTitle").textContent = candidateName;
+  document.getElementById("candidateNoteSub").textContent = `${p.id} — ${p.title}`;
+  const canAdd = trackingCanEdit();
+  document.querySelector("#candidateNoteModal .add-remark").style.display = canAdd ? "" : "none";
+  document.getElementById("candidateNoteInput").value = "";
+  document.getElementById("candidateNoteMsg").textContent = "";
+  renderCandidateNoteList();
+  document.getElementById("candidateNoteModal").classList.add("open");
+}
+function renderCandidateNoteList(){
+  if(!candidateNoteTarget) return;
+  const p = POSITIONS.find(x=>x.id===candidateNoteTarget.positionId);
+  if(!p) return;
+  const entries = candidateNoteEntries(p, candidateNoteTarget.candidateName).slice().reverse();
+  document.getElementById("candidateNoteList").innerHTML = timelineListHtml(entries, "No notes yet for this candidate.");
+}
+function closeCandidateNoteModal(){
+  document.getElementById("candidateNoteModal").classList.remove("open");
+  candidateNoteTarget = null;
+}
+document.getElementById("candidateNoteClose").addEventListener("click", closeCandidateNoteModal);
+document.getElementById("candidateNoteModal").addEventListener("click", (e)=>{
+  if(e.target.id === "candidateNoteModal") closeCandidateNoteModal();
+});
+document.getElementById("candidateNoteSave").addEventListener("click", async ()=>{
+  if(!candidateNoteTarget) return;
+  const p = POSITIONS.find(x=>x.id===candidateNoteTarget.positionId);
+  if(!p) return;
+  const input = document.getElementById("candidateNoteInput");
+  const msg = document.getElementById("candidateNoteMsg");
+  const text = input.value.trim();
+  if(!text){ msg.textContent = "Write a note before saving."; msg.style.color = "var(--critical)"; return; }
+  const saveBtn = document.getElementById("candidateNoteSave");
+  saveBtn.disabled = true;
+  try {
+    const fullText = `${CANDIDATE_NOTE_PREFIX(candidateNoteTarget.candidateName)}${text}`;
+    const author = currentAuthorName();
+    p.extra = p.extra || [];
+    p.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"candidateNote", author, text: fullText});
+    input.value = "";
+    renderCandidateNoteList();
+    renderDetailModal();
+    if(isConnected()){
+      msg.textContent = "Saving…";
+      msg.style.color = "var(--text-muted)";
+      try {
+        await graphAppendHistorial(p.id, p.title, fullText, author, "candidateNote");
+        msg.textContent = "Saved.";
+        msg.style.color = "var(--good)";
+      } catch(err){
+        console.error(err);
+        msg.textContent = "Could not save this note: " + err.message;
+        msg.style.color = "var(--critical)";
+      }
+    } else {
+      msg.textContent = "Kept in this browser tab only (not connected to Microsoft 365).";
+      msg.style.color = "var(--warning)";
+    }
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
 // Fuera del modal (tablas de Positions/Tracking, quick lists) solo se muestra el pais — la
 // ciudad/provincia solo tiene sentido dentro del detalle de una req especifica, mostrarla en
 // una lista mezclaba paises con ciudades sin ningun criterio consistente de agrupacion.
@@ -7158,15 +7317,18 @@ function attentionRowsHtml(slaRows, completionRows){
     // "Not Accepted"/"Intake Not Requested" en el chip, contradiciendo el propio texto de abajo
     // (que ya usa completionFlags(), correctamente consciente del handoff).
     const cls = p.handoffFrom
-      ? ((c.stepHandoff.overdue || c.step3.overdue) ? "out" : "risk")
-      : ((c.step1.status==="out" || c.step2.overdue || c.step3.overdue) ? "out" : "risk");
+      ? ((c.stepHandoff.overdue || c.step3.overdue || c.stepRemarkCadence.overdue) ? "out" : "risk")
+      : ((c.step1.status==="out" || c.step2.overdue || c.step3.overdue || c.stepRemarkCadence.overdue) ? "out" : "risk");
     // step1 mide "intake pedido", no "aceptado" (esos son dos campos distintos, ver
     // p.recruiterAcceptedDate vs p.intakeRequestedDate) — el label tiene que distinguir "nunca
     // acepto nada" de "ya acepto pero todavia no pide el intake", si no dice "Not
     // Accepted/Requested" incluso cuando SI esta aceptada, que es enganoso.
+    // "No Remark" (stepRemarkCadence) es siempre la ULTIMA prioridad del label — un req que ya
+    // esta out por otra razon (step1/step2/step3/handoff) no necesita que el label cambie para
+    // mencionar tambien el remark; completionFlags() de abajo ya lista las dos cosas por separado.
     const label = p.handoffFrom
-      ? ((c.stepHandoff.overdue || c.step3.overdue) ? "Escalate" : (pivotPending ? "Pivot Pending" : "Overdue"))
-      : (c.step1.status==="out" ? (p.recruiterAcceptedDate ? "Intake Not Requested" : "Not Accepted") : (c.step2.overdue || c.step3.overdue ? "Escalate" : (pivotPending ? "Pivot Pending" : "Overdue")));
+      ? ((c.stepHandoff.overdue || c.step3.overdue) ? "Escalate" : (pivotPending ? "Pivot Pending" : (c.stepRemarkCadence.overdue ? "No Remark" : "Overdue")))
+      : (c.step1.status==="out" ? (p.recruiterAcceptedDate ? "Intake Not Requested" : "Not Accepted") : (c.step2.overdue || c.step3.overdue ? "Escalate" : (pivotPending ? "Pivot Pending" : (c.stepRemarkCadence.overdue ? "No Remark" : "Overdue"))));
     return `
     <div class="pending-offer-row clickable-stat" data-id="${escapeHtml(p.id)}">
       <div>${posLabel(p)}<div style="font-size:11px; font-weight:600 !important; color:var(--text-muted); margin-top:2px;">${completionFlags(p).join(" · ")}</div></div>
@@ -7429,7 +7591,7 @@ function buildTimeline(p){
     return 0;
   });
 }
-const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step" };
+const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step", candidateNote: "Candidate Note" };
 // e.time (opcional/nueva, ver graphAppendHistorial()'s columna Time) — entradas viejas sin hora
 // simplemente no muestran la segunda linea, nunca rompe nada. Nicolas: "no se si podamos agregar
 // en el timestamp la hora para asi poder ver mejor el historial" — sobre todo util para desempatar
@@ -8347,6 +8509,12 @@ function renderDetailModal(){
         : (c.step2.waived ? null : {label:"Intake Meeting Held", tag:"Follow-Up Only", chip: followUpChip(c.step2),
             note: c.step2.status==="waiting" ? `Within Irth's 5-day ceiling, ${ESCALATION_CONTACT} tracks hiring-manager calendars to keep it on track.`
               : c.step2.status==="done" ? `Held on ${p.intake}.` : null}),
+      // Regla nueva desde RULES_CUTOVER_DATE (ver stepRemarkCadence en computeCompletion):
+      // nunca aparece en reqs de antes del cutover, para que nunca se sienta retroactiva.
+      reqIsPostCutover(p) ? {label:"Remarks Logged", tag:"Recruiter Owned", chip: recruiterChip(c.stepRemarkCadence),
+          note: c.stepRemarkCadence.overdue
+            ? `No remark or real update logged in ${c.stepRemarkCadence.elapsed} business days (target ${c.stepRemarkCadence.target}) — log a quick Activity remark to keep this current.`
+            : null} : null,
     ].filter(Boolean);
     // Enlace a la captura del correo (si se adjunto uno, ver la razon 3/4 del noteHtml de
     // "Waive Intake Meeting" mas arriba) — se agrega a los 2 banners de razon de waiver, no al
@@ -8372,6 +8540,7 @@ function renderDetailModal(){
     } else {
       if(c.step2.overdue) alerts.push({tier:"tier-red", text:`The intake meeting hasn't happened yet, ${c.step2.elapsed} business days since it was requested (target ${c.step2.target}). Please escalate to ${ESCALATION_CONTACT}.`});
     }
+    if(c.stepRemarkCadence.overdue) alerts.push({tier:"tier-red", text:`No remark or real update has been logged in ${c.stepRemarkCadence.elapsed} business days (target ${c.stepRemarkCadence.target}). Log a quick Activity remark to keep this current.`});
     const staleHint = staleStatusHint(p);
     if(staleHint) alerts.push({tier:"tier-orange", text:`Status still shows "${statusLabel(p.status)}", but ${staleHint.reason} — this looks behind.`, actionStatus: staleHint.nextStatus});
     document.getElementById("modalCompletionAlert").innerHTML = alerts.map(a=>`<div class="alert-banner ${a.tier} compact">
@@ -9389,6 +9558,9 @@ function wireCandidateEvents(p){
   document.querySelectorAll(".candidateDeleteBtn").forEach(btn=>{
     btn.addEventListener("click", ()=> deleteBatchCandidate(p, btn.dataset.candidateId));
   });
+  document.querySelectorAll(".candidateNotesBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=> openCandidateNoteModal(btn.dataset.positionId, btn.dataset.candidateName));
+  });
   document.querySelectorAll(".candidateSaveFillDateBtn").forEach(btn=>{
     btn.addEventListener("click", ()=> saveCandidateFillDate(p, btn.dataset.candidateId));
   });
@@ -9819,6 +9991,55 @@ async function checkArrivedStartDates(){
 // NOMBRE de grupo por coincidencia (bug real encontrado auditando esto mismo: RD-013 y "Full
 // Stack Developer Group" — 2 conversaciones de intake totalmente distintas, con el mismo nombre
 // solo por casualidad. Nicolas: "esa RD-013 no pertenece al grupo de hcs de David").
+// Nicolas, 2026-10-08: "si hay dos headcounts de un mismo rol, independientemente de en que
+// headcount loguees el batch, ese batch se debe compartir en todo el grupo, de la misma manera
+// que se actualizan los status." Hasta ahora un batch (y sus candidatos) solo vivian bajo la UNA
+// req donde se logueo — las hermanas heredaban la regla de "ya hay batch" (ver hasGroupBatch en
+// onStatusOptionClick) pero nunca veian los candidatos reales en su propia pantalla. Llamada desde
+// logBatchSave() justo despues de guardar los candidatos reales en la req de origen.
+// Cada hermana recibe su PROPIA copia real (su propia fila en BatchesTable/BatchCandidatesTable,
+// su propio Candidate Row ID generado por graphAppendBatchCandidate — nunca el mismo ID reusado
+// entre filas, eso rompería resolveTableRowIndexByColumn() para cualquiera que edite el status/CV/
+// Fill Date de ESE candidato despues, ya que esa busqueda se queda con la PRIMERA fila que
+// encuentre con ese ID, nunca todas). Edits posteriores (status, CV, Fill/Start Date, remarks por
+// candidato) sobre una copia NO se propagan todavia a las demas — eso queda pendiente para una
+// ronda aparte si Nicolas lo pide; esto resuelve el caso que si pidio explicitamente: que el
+// batch en si (quien se sourceo, con que CV) se vea igual sin importar desde cual hermana lo mires.
+async function propagateBatchToHeadcountSiblings(p, date, type, savedCandidateRecords){
+  if(!p.headcountGroup) return;
+  const siblings = POSITIONS.filter(x=> x.id!==p.id && x.headcountGroup===p.headcountGroup && !x.handoffFrom && !p.handoffFrom);
+  if(!siblings.length) return;
+  const author = currentAuthorName();
+  for(const s of siblings){
+    s.batches = s.batches || [];
+    // Ya tiene su propia copia de este MISMO batch (misma fecha) — no duplicar de nuevo si esta
+    // funcion llega a correr dos veces para el mismo batch (ej. un reintento).
+    if(s.batches.some(b=>b.date===date)) continue;
+    s.batches.push({date, type, count:null});
+    const remark = `Submission Batch (${date}, ${type}) logged on ${p.id} (${p.title}) — shared automatically with every requisition in Headcount Group "${s.headcountGroup}", since one real batch covers the whole group.`;
+    s.extra = s.extra || [];
+    s.extra.push({date: localTodayStr(), time: nowTimeStr(), type:"action", author, text: remark});
+    if(isConnected()){
+      try {
+        await graphAppendBatch(s.id, date, type, "");
+        await graphAppendHistorial(s.id, s.title, remark, author, "action");
+      } catch(err){ console.error(`Could not share batch with ${s.id} (non-fatal, will retry next refresh):`, err); }
+    }
+    s.batchCandidates = s.batchCandidates || [];
+    for(const cand of savedCandidateRecords){
+      let id = `${s.id}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+      if(isConnected()){
+        try {
+          id = await graphAppendBatchCandidate(s.id, date, cand.name, cand.email, cand.status, cand.cvLink, author);
+        } catch(err){
+          console.error(`Could not share candidate ${cand.name} with ${s.id} (non-fatal):`, err);
+          continue;
+        }
+      }
+      s.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email, status: cand.status, cvLink: cand.cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null });
+    }
+  }
+}
 async function reconcileHeadcountGroups(){
   const COL_BY_KEY = {kickoff:"AA", intakeRequestedDate:"AN", intake:"H"};
   const groups = {};
@@ -9925,13 +10146,25 @@ async function reconcileHeadcountGroups(){
   // logica especifica arriba y en confirmIntakeSummarySent() que distingue el camino Held/Waived —
   // forzar aqui tambien rompería esa distincion (ver el comentario de "intake" arriba, mismo tipo
   // de bug ya encontrado una vez).
+  // BUG REAL encontrado 2026-10-08 probando propagateBatchToHeadcountSiblings (Nicolas pidio
+  // batches compartidos "de la misma manera que se actualizan los status" — probandolo, el status
+  // en si no se sincronizaba): `eligible` (status >= Job Creation) exigia AL MENOS 2 miembros ya
+  // avanzados antes de sincronizar nada — si una sola hermana saltaba de Kickoff directo a
+  // Submitted (ej. al loguear su primer batch) mientras la otra seguia atras de Job Creation,
+  // `eligible.length` quedaba en 1 y el bloque entero se saltaba en silencio para SIEMPRE, sin
+  // importar que tan adelante fuera la que si avanzo — exactamente lo opuesto a lo que el propio
+  // comentario de arriba promete ("cualquier hermana que se quede atras... se adelanta sola"). Solo
+  // hace falta UNA hermana ya en Job Creation+ para tener un ancla real (mostAdvanced); las demas
+  // (member final hoisted abajo, no solo eligible) se jalan hacia ese status sin importar en que
+  // tan atras empezaron, siempre que no esten en AUTO_STATUS_LOCKED.
   const JOB_CREATION_IDX = STATUS_ORDER.indexOf("Job Creation");
   for(const members of Object.values(groups)){
     if(members.length < 2) continue;
     const eligible = members.filter(m => !AUTO_STATUS_LOCKED.includes(m.status) && STATUS_ORDER.indexOf(m.status) >= JOB_CREATION_IDX);
-    if(eligible.length < 2) continue;
+    if(!eligible.length) continue;
     const mostAdvanced = eligible.reduce((best, m) => STATUS_ORDER.indexOf(m.status) > STATUS_ORDER.indexOf(best.status) ? m : best);
-    for(const s of eligible){
+    for(const s of members){
+      if(AUTO_STATUS_LOCKED.includes(s.status)) continue;
       if(s.id === mostAdvanced.id || STATUS_ORDER.indexOf(mostAdvanced.status) <= STATUS_ORDER.indexOf(s.status)) continue;
       const sFrom = s.status;
       s.status = mostAdvanced.status;
@@ -10447,13 +10680,34 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--critical)";
     return;
   }
+  // BUG REAL/REGLA NUEVA 2026-10-08 (Nicolas: "a partir de ahora, si o si, se deben loguear un
+  // minimo de 3 candidatos por cada batch. No pueden ser menos... si no se loguea un batch, pues
+  // no se puede avanzar"; CORREGIDO el mismo dia, Nicolas: "lo del minimo de 3 es por headcount, o
+  // sea si hay dos headcounts lo minimo son 6" — el piso no es un flat 3, escala con cuantas
+  // vacantes reales comparte el Headcount Group, igual que headcountGroupMinCandidates() de abajo
+  // (groupSize*3; sin grupo, groupSize=1, osea 3 igual que antes). Sube el piso minimo de 1 (el
+  // check de arriba, que se queda igual para reqs viejos) a este numero, para TODO batch — inicial
+  // o follow-up, no solo el primero, porque cada batch ahora se comparte con todo el grupo (ver
+  // propagateBatchToHeadcountSiblings) — pero SOLO para reqs nuevos (reqIsPostCutover(), nunca
+  // retroactivo a reqs ya en curso bajo la regla vieja de "al menos 1"). De verdad bloqueante, a
+  // diferencia del aviso suave de abajo (que sigue existiendo, pero solo para reqs PRE-cutover en
+  // un grupo, donde este bloqueo nuevo todavia no aplica). Como esto bloquea el guardado mismo,
+  // cualquier batch que SI llegue a existir para un req nuevo ya cumple el minimo por construccion
+  // — el gate de REQUIRES_BATCH_LOGGED (status avanza solo si ya hay un batch logueado) no necesita
+  // ningun cambio aparte.
+  const hardMin = p.headcountGroup ? headcountGroupMinCandidates(p) : 3;
+  if(reqIsPostCutover(p) && logBatchPendingCandidates.length < hardMin){
+    msg.textContent = p.headcountGroup
+      ? `This req is part of Headcount Group "${p.headcountGroup}" (${hardMin/3} open headcounts) — every batch needs at least ${hardMin} candidates (3 per open headcount), only ${logBatchPendingCandidates.length} added so far. Add more before saving.`
+      : `This requisition requires at least 3 candidates per batch — only ${logBatchPendingCandidates.length} added so far. Add more before saving.`;
+    msg.style.color = "var(--critical)";
+    return;
+  }
   // Advertencia suave, NO bloqueante — Nicolas: "puede loguear menos, pero se le hace la
-  // advertencia que su SLA de average TTS se va a ver afectado". A diferencia de los 2 checks de
-  // arriba (que si detienen el guardado), aqui se deja pasar si el usuario confirma — el batch de
-  // un Headcount Group cubre todas sus vacantes, asi que menos del minimo real (3 por vacante)
-  // reparte menos candidatos de los que el grupo completo necesita, sin que eso sea un error de
-  // captura como los de arriba.
-  const groupMinForSave = isFirst ? headcountGroupMinCandidates(p) : null;
+  // advertencia que su SLA de average TTS se va a ver afectado". Solo le queda terreno a reqs
+  // PRE-cutover (el check duro de arriba ya cubre el mismo numero, y mas, para reqs post-cutover —
+  // si reqIsPostCutover(p) fuera true aqui ya se habria hecho return arriba antes de llegar a esto).
+  const groupMinForSave = (!reqIsPostCutover(p) && isFirst) ? headcountGroupMinCandidates(p) : null;
   if(groupMinForSave && logBatchPendingCandidates.length < groupMinForSave){
     const proceed = confirm(`This req is part of Headcount Group "${p.headcountGroup}" (${groupMinForSave/3} open headcounts) — a full initial batch for the whole group should have at least ${groupMinForSave} candidates, not ${logBatchPendingCandidates.length}. Logging fewer will make this group's average Time To Submit SLA look worse than it should. Log it anyway?`);
     if(!proceed) return;
@@ -10527,6 +10781,7 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   const total = logBatchPendingCandidates.length;
   const failed = [];
   const succeeded = [];
+  const savedCandidateRecords = [];
   const cvWarnings = [];
   const author = currentAuthorName();
   for(let i=0; i<total; i++){
@@ -10554,7 +10809,9 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
         cvWarnings.push(cand.name);
       }
     }
-    p.batchCandidates.push({ id, batchDate: date, name: cand.name, email: cand.email || null, status: "Hiring Manager Review", cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null });
+    const record = { id, batchDate: date, name: cand.name, email: cand.email || null, status: "Hiring Manager Review", cvLink, addedBy: author, addedDate: localTodayStr(), closedForPositionId: null, fillDate: null, hireDate: null };
+    p.batchCandidates.push(record);
+    savedCandidateRecords.push(record);
     succeeded.push(cand.name);
   }
   logBatchPendingCandidates = [];
@@ -10562,6 +10819,11 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   // follow-up (2do, 3ro...) no siempre dispara un cambio de status (ese solo pasa en el primero),
   // asi que sin esto, loguear un batch entero podia no dejar NINGUN rastro en Activity.
   if(succeeded.length) await logFieldEdit(p, `Batch logged (${date}, ${type}): ${succeeded.join(", ")}.`);
+  // Nicolas, 2026-10-08: "si hay dos headcounts de un mismo rol, independientemente de en que
+  // headcount loguees el batch, ese batch se debe compartir en todo el grupo, de la misma manera
+  // que se actualizan los status." Un batch real logueado en UNA req del grupo se copia a cada
+  // hermana — ver propagateBatchToHeadcountSiblings().
+  if(savedCandidateRecords.length) await propagateBatchToHeadcountSiblings(p, date, type, savedCandidateRecords);
   // Nicolas, 2026-10-02: "TODOS los pasos, estados, confirmaciones tiene que ser congruentes con
   // todo y los hcs asi mismo" — sincroniza de inmediato en vez de esperar al proximo auto-refresh.
   await reconcileHeadcountGroups();
@@ -14021,6 +14283,7 @@ document.addEventListener("keydown", (e)=>{
   if(document.getElementById("editFieldModal")?.classList.contains("open")){ closeEditFieldModal(); return; }
   if(document.getElementById("pinLoginModal")?.classList.contains("open")){ closePinLoginModal(); return; }
   if(document.getElementById("quickListModal")?.classList.contains("open")){ closeQuickList(); return; }
+  if(document.getElementById("candidateNoteModal")?.classList.contains("open")){ closeCandidateNoteModal(); return; }
   if(document.getElementById("detailModal")?.classList.contains("open")){ closeDetailModal(); return; }
 });
 </script>
