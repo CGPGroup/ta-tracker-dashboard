@@ -952,6 +952,13 @@
   .gantt-milestone.outcome-good .gantt-tooltip,
   .gantt-milestone.outcome-critical .gantt-tooltip,
   .gantt-milestone.outcome-neutral .gantt-tooltip { left: auto; right: 0; transform: none; }
+  /* BUG REAL 2026-10-08 (Nicolas, con captura: la tarjetita del hover se solapa con el borde
+     superior del Gantt y no se lee bien): el tooltip siempre se abre hacia ARRIBA por defecto
+     (bottom:calc(100% + 8px)) — en la primera fila (#ganttRows ya tiene su propio scroll, nunca
+     hay espacio real arriba de esa fila) no hay donde abrirlo sin chocar con la leyenda/eje justo
+     encima. Mismo principio que el flip horizontal de arriba (TTH/desenlaces pegados al borde
+     derecho) — la primera fila abre su tooltip hacia ABAJO en vez de arriba. */
+  .gantt-rows .gantt-row:first-child .gantt-tooltip { bottom: auto; top: calc(100% + 8px); }
   .gantt-tooltip .muted { color: var(--text-secondary); }
   /* .gantt-projected:hover NO va aqui a proposito — con dos diamantes (TTF y TTH) adentro del
      mismo contenedor punteado, ese selector prendia los DOS tooltips a la vez apenas el mouse
@@ -5593,10 +5600,22 @@ function ganttRowHtml(p, cal){
   // no iguales) y cualquier grupo con mas de un hito se abre en abanico +/-Npx para que cada uno
   // quede su propio diamante, siempre visible y hoverable por separado, sin importar cuantos
   // eventos reales hayan caido ese mismo dia.
+  // BUG REAL 2026-10-08 (Nicolas, con captura real: "no entiendo por que assignment accepted
+  // aparece despues de sourcing started y de intake meeting requested"): el sort de abajo solo
+  // ordenaba por fecha — un empate real (varios hitos el mismo dia, el caso normal cuando todo un
+  // intake se resuelve en una sola sesion) se resolvia por orden de INSERCION en el array (Array.
+  // sort es estable), nunca por el orden logico real de la etapa. "Accepted" se empuja DESPUES de
+  // todos los segmentos de etapa (Kickoff, Intake, Job Creation, Sourcing...), asi que en un
+  // empate quedaba a la derecha de etapas que en realidad pasaron despues de aceptar la
+  // asignacion. `rank` (el indice real de la etapa en `segs`, o 0.5 para Accepted — entre Kickoff
+  // y la siguiente etapa real — o Infinity para el desenlace final, que siempre va de ultimo) se
+  // sodea como criterio de desempate explicito, independiente de en que orden se haya insertado
+  // cada uno en el array.
   const milestoneEntries = [];
-  segs.filter(seg=> seg.start >= visStart && seg.start <= visEnd).forEach(seg=>{
+  segs.forEach((seg, segIdx)=>{
+    if(seg.start < visStart || seg.start > visEnd) return;
     const leftPct = (cal.pctOf(seg.start) - trackLeftPct) / trackWidthPct * 100;
-    milestoneEntries.push({date: seg.start, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
+    milestoneEntries.push({date: seg.start, rank: segIdx, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.boundaryLabel)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
     </div>`});
@@ -5616,7 +5635,7 @@ function ganttRowHtml(p, cal){
     const acceptedLabel = p.handoffFrom
       ? `Handoff accepted from ${escapeHtml(p.handoffFrom)}`
       : "Assignment accepted";
-    milestoneEntries.push({date: acceptedDate, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
+    milestoneEntries.push({date: acceptedDate, rank: 0.5, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:14px;"><b>${acceptedLabel}</b><br><span class="muted">${ganttFmtDate(acceptedDate)}${p.handoffFrom ? ` · now with ${escapeHtml(p.recruiter||"this recruiter")}` : ""}</span></div>
     </div>`});
@@ -5633,13 +5652,13 @@ function ganttRowHtml(p, cal){
     // "por que le pones closed - placed y closed - cancelled... no deberia ser solo placed y
     // cancelled" llevo a revisar el resto de la leyenda y encontrar este tambien).
     const outcomeClass = p.status==="Hired" ? "outcome-good" : (p.status==="Cancelled" ? "outcome-critical" : "outcome-neutral");
-    milestoneEntries.push({date: end, html: offsetPx => `<div class="gantt-milestone ${outcomeClass}" style="left:calc(100% + ${offsetPx}px);">
+    milestoneEntries.push({date: end, rank: Infinity, html: offsetPx => `<div class="gantt-milestone ${outcomeClass}" style="left:calc(100% + ${offsetPx}px);">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:16px;"><b>${escapeHtml(statusLabel(p.status))}</b><br><span class="muted">${ganttFmtDate(end)}</span></div>
     </div>`});
   }
 
-  milestoneEntries.sort((a,b)=> a.date - b.date);
+  milestoneEntries.sort((a,b)=> (a.date - b.date) || (a.rank - b.rank));
   const milestoneGroups = [];
   milestoneEntries.forEach(entry=>{
     const key = entry.date.toDateString();
