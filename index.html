@@ -5015,6 +5015,50 @@ const CANDIDATE_STATUS_TO_POSITION_STATUS = {
   "Executive Review": "Client Interview",
   "Offer Request": "Offer Request",
 };
+// SLA de feedback por candidato (Nicolas, 2026-10-08: reusar el mismo texto ya escrito en
+// STATUS_GUIDANCE/Process & SLA Guide — "Feedback SLA: 1-3 dias habiles, logueado en la pestaña
+// Review de Workable"). PROXY, no el dato real: el tracker no esta conectado a Workable, no puede
+// saber si Irth ya logueo el feedback ahi. Lo unico que puede medir es si EL RECLUTADOR escribio
+// una nota de candidato (ver candidateNoteEntries) desde que el candidato entro a esta ronda de
+// Client Interview — una aproximacion util, nunca el dato real de Workable (ver el tooltip de
+// candidateFeedbackChipHtml, que es explicito sobre esto). Target = el limite superior del rango
+// documentado (3 dias), igual que otras SLAs de este archivo que colapsan un rango en un solo
+// numero de alerta.
+const CLIENT_INTERVIEW_CANDIDATE_STATUSES = ["Technical Interview","Hiring Manager Interview","Executive Review"];
+const CANDIDATE_FEEDBACK_SLA_TARGET_DAYS = 3;
+function candidateFeedbackCadence(p, c){
+  const none = {status:"none", elapsed:null, target:CANDIDATE_FEEDBACK_SLA_TARGET_DAYS, overdue:false};
+  if(!CLIENT_INTERVIEW_CANDIDATE_STATUSES.includes(c.status)) return none;
+  // Fecha real en que este candidato entro a esta ronda (la ULTIMA vez que su status cambio A lo
+  // que es ahora — mismo texto exacto que updateCandidateStatus() ya escribe, ver
+  // candStatusRemark). Nunca la fecha en que se creo el candidato: si se creo directo ya en este
+  // status (sin pasar por un cambio real logueado), no hay nada real que medir — mejor no mostrar
+  // nada que fabricar una fecha.
+  const marker = `${c.name}'s status changed from `;
+  const transitions = positionActivityEntries(p)
+    .filter(e => e.type==="action" && typeof e.text === "string" && e.text.startsWith(marker) && e.text.endsWith(`to ${c.status}.`))
+    .sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const entered = transitions.length ? parseD(transitions[transitions.length-1].date) : null;
+  if(!entered) return none;
+  // Cualquier nota de candidato escrita DESDE que entro a esta ronda ya cuenta como "feedback
+  // registrado" para efectos de este proxy — una nota de la ronda ANTERIOR no cuenta (el feedback
+  // es por ronda, ver el texto real del SLA: "after any submission or interview stage").
+  const hasNote = candidateNoteEntries(p, c.name).some(n => { const d = parseD(n.date); return d && d >= entered; });
+  if(hasNote) return {status:"within", elapsed:0, target:CANDIDATE_FEEDBACK_SLA_TARGET_DAYS, overdue:false};
+  const pauseInfo = computeSlaPauseInfo(p);
+  const ref = pauseInfo.pausedSinceDate || new Date();
+  const elapsed = Math.max(0, bizDaysBetween(entered, ref) - pauseInfo.totalPausedBizDays);
+  const overdue = elapsed > CANDIDATE_FEEDBACK_SLA_TARGET_DAYS;
+  return {status: overdue ? "out" : "within", elapsed, target:CANDIDATE_FEEDBACK_SLA_TARGET_DAYS, overdue};
+}
+// Self-contained a proposito (ver feedback_self_contained_text) — un lector que nunca vio Process
+// & SLA Guide debe poder entender esto solo con el tooltip, sin tener que ir a buscar que es
+// "Workable" o por que el tracker no lo sabe de verdad.
+function candidateFeedbackChipHtml(p, c){
+  const f = candidateFeedbackCadence(p, c);
+  if(!f.overdue) return "";
+  return `<span class="status-chip" style="background:rgba(var(--critical-rgb),0.16); color:var(--critical);" title="Irth's Feedback SLA: the hiring manager should log feedback in Workable's Review tab within 1-3 business days of a candidate entering an interview round. This tracker isn't connected to Workable, so it can't see that directly — it's using your own candidate notes (above) as a stand-in signal instead. No note has been logged for this candidate in ${f.elapsed} business days since they entered ${statusLabel(c.status)} (target ${f.target}). This may not reflect the real Workable status.">⏳ No feedback note in ${f.elapsed}d</span>`;
+}
 // Fill Date/Start Date por candidato — Nicolas, 2026-09-23/24: "el fill date es cuando Immy nos
 // confirma que ya le envio el offer letter al candidato y que el candidato acepto... una vez que
 // el start date es confirmado por Immy... llega esa fecha... es cuando se pone como placed, y eso
@@ -5107,6 +5151,7 @@ function candidateRowHtml(c, p, isView){
       ${cvHtml}
       ${filledNote}
       ${statusControlHtml}
+      ${candidateFeedbackChipHtml(p, c)}
       <button type="button" class="fact-edit-link candidateNotesBtn" data-candidate-id="${escapeHtml(c.id)}" data-candidate-name="${escapeHtml(c.name)}" data-position-id="${escapeHtml(p.id)}" title="Notes about this candidate specifically — separate from the requisition's own Activity/Remarks">💬${noteCount ? ` ${noteCount}` : " Notes"}</button>
       ${isView ? "" : `<button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>`}
     </div>
