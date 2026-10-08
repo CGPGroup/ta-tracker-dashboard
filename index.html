@@ -5819,7 +5819,7 @@ function ganttRowHtml(p, cal){
   segs.forEach((seg, segIdx)=>{
     if(seg.start < visStart || seg.start > visEnd) return;
     const leftPct = (cal.pctOf(seg.start) - trackLeftPct) / trackWidthPct * 100;
-    milestoneEntries.push({date: seg.start, rank: segIdx, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
+    milestoneEntries.push({date: seg.start, rank: segIdx, size: 7, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:14px;"><b>${escapeHtml(seg.boundaryLabel)} started</b><br><span class="muted">${ganttFmtDate(seg.start)}</span></div>
     </div>`});
@@ -5839,7 +5839,7 @@ function ganttRowHtml(p, cal){
     const acceptedLabel = p.handoffFrom
       ? `Handoff accepted from ${escapeHtml(p.handoffFrom)}`
       : "Assignment accepted";
-    milestoneEntries.push({date: acceptedDate, rank: 0.5, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
+    milestoneEntries.push({date: acceptedDate, rank: 0.5, size: 7, html: offsetPx => `<div class="gantt-milestone" style="left:calc(${leftPct.toFixed(3)}% + ${offsetPx}px);">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:14px;"><b>${acceptedLabel}</b><br><span class="muted">${ganttFmtDate(acceptedDate)}${p.handoffFrom ? ` · now with ${escapeHtml(p.recruiter||"this recruiter")}` : ""}</span></div>
     </div>`});
@@ -5856,7 +5856,7 @@ function ganttRowHtml(p, cal){
     // "por que le pones closed - placed y closed - cancelled... no deberia ser solo placed y
     // cancelled" llevo a revisar el resto de la leyenda y encontrar este tambien).
     const outcomeClass = p.status==="Hired" ? "outcome-good" : (p.status==="Cancelled" ? "outcome-critical" : "outcome-neutral");
-    milestoneEntries.push({date: end, rank: Infinity, html: offsetPx => `<div class="gantt-milestone ${outcomeClass}" style="left:calc(100% + ${offsetPx}px);">
+    milestoneEntries.push({date: end, rank: Infinity, size: 9, html: offsetPx => `<div class="gantt-milestone ${outcomeClass}" style="left:calc(100% + ${offsetPx}px);">
       <span class="gantt-milestone-shape"></span>
       <div class="gantt-tooltip" style="bottom:16px;"><b>${escapeHtml(statusLabel(p.status))}</b><br><span class="muted">${ganttFmtDate(end)}</span></div>
     </div>`});
@@ -5870,10 +5870,23 @@ function ganttRowHtml(p, cal){
     if(!group){ group = {key, items: []}; milestoneGroups.push(group); }
     group.items.push(entry);
   });
-  const MILESTONE_COLLISION_STEP_PX = 6;
+  // Nicolas, 2026-10-08, con captura real: "mira como quedo. no lo arreglaste" — el abanico de
+  // 6px (round anterior) de verdad separaba los hitos del MISMO dia para que no cayeran en el
+  // pixel exacto, pero nunca comparo esa distancia contra el tamano real dibujado del diamante.
+  // .gantt-milestone-shape es un cuadrado de `size`px rotado 45 grados — su caja visible despues
+  // de rotar mide size*sqrt(2), no size (7px de cuadrado = ~9.9px de diamante en pantalla). Con un
+  // paso fijo de 6px entre centros, 2+ diamantes de ~10px de ancho se seguian encimando casi por
+  // completo — visualmente identico a no tener abanico, aunque matematicamente ya no compartieran
+  // el mismo pixel. El paso ahora se calcula del tamano REAL del hito mas grande del grupo (el
+  // desenlace terminal es 9px, un poco mas grande que los demas en 7px) mas un margen visible, asi
+  // que el abanico siempre deja un hueco real entre diamantes sin importar cuantos caigan el mismo dia.
+  const MILESTONE_MARKER_GAP_PX = 2;
   let milestonesHtml = milestoneGroups.map(group=>{
     const n = group.items.length;
-    return group.items.map((entry,i)=> entry.html(n===1 ? 0 : ((i-(n-1)/2)*MILESTONE_COLLISION_STEP_PX).toFixed(2))).join("");
+    if(n===1) return group.items[0].html(0);
+    const maxSize = Math.max(...group.items.map(it=>it.size));
+    const step = maxSize*Math.SQRT2 + MILESTONE_MARKER_GAP_PX;
+    return group.items.map((entry,i)=> entry.html(((i-(n-1)/2)*step).toFixed(2))).join("");
   }).join("");
 
   // Misma base real que el resto del tracker usa para TTF/TTH (slaFor(), ver el modal de
