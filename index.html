@@ -12829,42 +12829,65 @@ function parseRecruitersTable(recRows){
   return { newRecruiters, newPhotos, newTitles, newEmails, newPins };
 }
 
+// BUG REAL DE PERFORMANCE encontrado 2026-10-08 (Nicolas: "estos dias... se tarda" al abrir el
+// tracker): esta funcion hacia 9 llamadas a Graph, una por una, cada await esperando a que la
+// anterior terminara del todo antes de disparar la siguiente — medido en produccion, ~500-800ms
+// cada una, mas de 6 segundos solo en esta cascada secuencial. Ninguna de las 9 depende del
+// RESULTADO de otra (todas leen tablas distintas del mismo archivo), asi que no hay ninguna razon
+// real para esperarlas en fila — se disparan TODAS a la vez con Promise.allSettled (no Promise.all:
+// una tabla opcional que falla — Historial/Batches/BatchCandidates/Recruiters, ver los try/catch de
+// mas abajo, que siguen exactamente igual de "no fatal" que antes — no debe tumbar las demas que ya
+// resolvieron bien). PositionsTable sigue siendo la unica que de verdad detiene todo si falla
+// (nunca fue opcional).
 async function loadFromGraph(){
-  const posResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/rows?$select=values`);
-  const posHeaderResp = await graphFetch(`${await workbookBase()}/tables('PositionsTable')/headerRowRange`);
-  const posHeaders = posHeaderResp.values[0];
-  const posRows = posResp.value.map(r => r.values[0]);
+  const base = await workbookBase();
+  const [posResp, posHeaderResp, histResp, histHeaderResp, batchResp, batchHeaderResp, bcResp, bcHeaderResp, recResp] = await Promise.allSettled([
+    graphFetch(`${base}/tables('PositionsTable')/rows?$select=values`),
+    graphFetch(`${base}/tables('PositionsTable')/headerRowRange`),
+    graphFetch(`${base}/tables('HistorialTable')/rows?$select=values`),
+    graphFetch(`${base}/tables('HistorialTable')/headerRowRange`),
+    graphFetch(`${base}/tables('BatchesTable')/rows?$select=values`),
+    graphFetch(`${base}/tables('BatchesTable')/headerRowRange`),
+    graphFetch(`${base}/tables('BatchCandidatesTable')/rows?$select=values`),
+    graphFetch(`${base}/tables('BatchCandidatesTable')/headerRowRange`),
+    graphFetch(`${base}/tables('RecruitersTable')/rows?$select=values`),
+  ]);
+
+  if(posResp.status === "rejected") throw posResp.reason;
+  if(posHeaderResp.status === "rejected") throw posHeaderResp.reason;
+  const posHeaders = posHeaderResp.value.values[0];
+  const posRows = posResp.value.value.map(r => r.values[0]);
   const newPositions = parsePositionsTable(posHeaders, posRows);
 
   try {
-    const histResp = await graphFetch(`${await workbookBase()}/tables('HistorialTable')/rows?$select=values`);
-    const histHeaderResp = await graphFetch(`${await workbookBase()}/tables('HistorialTable')/headerRowRange`);
-    const histHeaders = histHeaderResp.values[0];
-    const histRows = histResp.value.map(r => r.values[0]);
+    if(histResp.status === "rejected") throw histResp.reason;
+    if(histHeaderResp.status === "rejected") throw histHeaderResp.reason;
+    const histHeaders = histHeaderResp.value.values[0];
+    const histRows = histResp.value.value.map(r => r.values[0]);
     mergeLatestRemarks(newPositions, histHeaders, histRows);
   } catch(err){ console.warn("Could not load Historial (non-fatal):", err); }
 
   // BatchesTable es opcional: si Nicolas todavia no la creo en el Excel real, esto simplemente
   // falla en silencio y cada posicion se queda con batches: [] (ver mergeBatches()).
   try {
-    const batchResp = await graphFetch(`${await workbookBase()}/tables('BatchesTable')/rows?$select=values`);
-    const batchHeaderResp = await graphFetch(`${await workbookBase()}/tables('BatchesTable')/headerRowRange`);
-    mergeBatches(newPositions, batchHeaderResp.values[0], batchResp.value.map(r => r.values[0]));
+    if(batchResp.status === "rejected") throw batchResp.reason;
+    if(batchHeaderResp.status === "rejected") throw batchHeaderResp.reason;
+    mergeBatches(newPositions, batchHeaderResp.value.values[0], batchResp.value.value.map(r => r.values[0]));
   } catch(err){ console.warn("Could not load Batches (non-fatal, BatchesTable may not exist yet):", err); }
 
   // BatchCandidatesTable: igual de opcional que BatchesTable arriba, hasta que Nicolas la cree en
   // el Excel real (ver [[reference]] en la guia de deploy). Solo se carga por esta ruta
   // autenticada (MSAL) o via PIN — nunca por tryLoadPublicSnapshot, ver mergeBatchCandidates().
   try {
-    const bcResp = await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/rows?$select=values`);
-    const bcHeaderResp = await graphFetch(`${await workbookBase()}/tables('BatchCandidatesTable')/headerRowRange`);
-    mergeBatchCandidates(newPositions, bcHeaderResp.values[0], bcResp.value.map(r => r.values[0]));
+    if(bcResp.status === "rejected") throw bcResp.reason;
+    if(bcHeaderResp.status === "rejected") throw bcHeaderResp.reason;
+    mergeBatchCandidates(newPositions, bcHeaderResp.value.values[0], bcResp.value.value.map(r => r.values[0]));
   } catch(err){ console.warn("Could not load Batch Candidates (non-fatal, BatchCandidatesTable may not exist yet):", err); }
 
   let myRecruiterName = null;
   try {
-    const recResp = await graphFetch(`${await workbookBase()}/tables('RecruitersTable')/rows?$select=values`);
-    const recRows = recResp.value.map(r => r.values[0]);
+    if(recResp.status === "rejected") throw recResp.reason;
+    const recRows = recResp.value.value.map(r => r.values[0]);
     const { newRecruiters, newPhotos, newTitles, newEmails, newPins } = parseRecruitersTable(recRows);
     RECRUITERS = newRecruiters;
     RECRUITER_PHOTOS = newPhotos;
