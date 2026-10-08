@@ -13101,12 +13101,27 @@ async function graphAppendHistorial(positionId, positionTitle, remark, author, t
 }
 // BatchesTable: Position ID | Date | Batch Type | Candidate Count. Tabla separada (no
 // HistorialTable) porque un batch es informacion estructurada, no un remark de texto libre.
+// BUG REAL encontrado 2026-10-08 (Nicolas preguntando si esto podia fallar, igual que ya fallo
+// antes con BatchCandidatesTable/HistorialTable): escribia una fila de ancho FIJO (4 columnas) sin
+// leer el ancho real de BatchesTable primero — a diferencia de graphAppendBatchCandidate (arriba),
+// que ya tiene este mismo fix desde el bug real de David. Hoy BatchesTable sigue teniendo
+// exactamente 4 columnas asi que no truena, pero si alguna vez se le agrega una columna nueva
+// (mismo patron que ya paso 2 veces con las otras tablas), esto habria vuelto a fallar con el mismo
+// "Graph error 400... no coincide con las dimensiones del rango". Mismo fix preventivo, y el mismo
+// aplicado tambien en el espejo de esta funcion en el Worker (doAppendBatch), para quien conecta
+// via PIN en vez de Microsoft 365.
 async function graphAppendBatch(positionId, date, batchType, candidateCount){
   if(pinModeActive) return workerRecruiterWrite("appendBatch", {positionId, date, batchType, candidateCount});
+  const headerResp = await graphFetch(`${await workbookBase()}/tables('BatchesTable')/headerRowRange`);
+  const fullRow = [positionId, date, batchType, candidateCount];
+  const colCount = (headerResp.values[0] || []).length || fullRow.length;
+  const row = colCount >= fullRow.length
+    ? fullRow.concat(Array(colCount - fullRow.length).fill(""))
+    : fullRow.slice(0, colCount);
   await graphFetch(`${await workbookBase()}/tables('BatchesTable')/rows/add`, {
     method: "POST",
     body: JSON.stringify({
-      values: [[positionId, date, batchType, candidateCount]],
+      values: [row],
     }),
   });
 }
