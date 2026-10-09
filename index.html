@@ -9625,6 +9625,21 @@ function wireCandidateEvents(p){
   document.querySelectorAll(".candidateSaveHireDateBtn").forEach(btn=>{
     btn.addEventListener("click", ()=> saveCandidateHireDate(p, btn.dataset.candidateId));
   });
+  // Nicolas, 2026-10-09: "hay que darle dos veces a save en los fill y start date" — el picker
+  // nativo de <input type="date"> se come el primer click en el boton de al lado (solo cierra el
+  // calendario, nunca llega a disparar el click real), asi que depender solo del boton Save
+  // obligaba a un segundo click "en el aire" para que de verdad se guardara. El navegador SI
+  // garantiza el evento "change" en cuanto la fecha queda elegida (click en el calendario, o
+  // escribiendola a mano y saliendo del campo) — guardar tambien ahi, sin esperar al boton, quita
+  // el problema de raiz. El boton sigue existiendo (sirve de confirmacion visual/accesibilidad);
+  // el guard "ya guardado, no-op" dentro de saveCandidateFillDate/saveCandidateHireDate evita que
+  // un click real en el boton, despues de que "change" ya guardo lo mismo, duplique el remark.
+  document.querySelectorAll(".candidateFillDateInput").forEach(inp=>{
+    inp.addEventListener("change", ()=> saveCandidateFillDate(p, inp.dataset.candidateId));
+  });
+  document.querySelectorAll(".candidateHireDateInput").forEach(inp=>{
+    inp.addEventListener("change", ()=> saveCandidateHireDate(p, inp.dataset.candidateId));
+  });
   document.querySelectorAll(".candidateCheck").forEach(chk=>{
     chk.addEventListener("change", ()=>{
       const batchDate = chk.dataset.batchDate;
@@ -9843,6 +9858,17 @@ async function saveCandidateFillDate(p, candidateId){
   const input = document.querySelector(`.candidateFillDateInput[data-candidate-id="${cssEscape(candidateId)}"]`);
   if(!c || !input || !input.value) return;
   const dateStr = input.value;
+  // Nicolas, 2026-10-09: "hay que darle dos veces a save... para que avance y muestre el start
+  // date" — esto se disparaba SOLO por el click del boton Save, y el picker nativo de
+  // <input type="date"> en Chrome/Edge se "come" el primer click cuando cae justo encima o al
+  // lado del picker todavia abierto (ese click solo cierra el calendario, nunca llega al boton) —
+  // asi que el guardado real solo pasaba en el SEGUNDO click, sin ningun error ni señal de que el
+  // primero no sirvio de nada. Fix real: tambien se dispara desde el evento "change" del input
+  // mismo (ver wireCandidateEvents()), que el navegador SI garantiza disparar en cuanto la fecha
+  // queda elegida — el boton Save sigue ahi, pero deja de ser la unica forma de que esto se
+  // guarde. El guard de abajo (fecha sin cambios = no-op) evita que un click redundante en el
+  // boton, despues de que "change" ya guardo lo mismo, duplique el remark de Activity.
+  if(c.fillDate === dateStr) return;
   const today = localTodayStr();
   if(dateStr > today){ alert("Fill Date can't be in the future — it logs something that already happened (the candidate accepting the offer)."); return; }
   c.fillDate = dateStr;
@@ -9940,6 +9966,8 @@ async function saveCandidateHireDate(p, candidateId){
   const input = document.querySelector(`.candidateHireDateInput[data-candidate-id="${cssEscape(candidateId)}"]`);
   if(!c || !input || !input.value) return;
   const dateStr = input.value;
+  // Mismo fix/razon que saveCandidateFillDate() — ver ese comentario.
+  if(c.hireDate === dateStr) return;
   if(c.fillDate && dateStr < c.fillDate){ alert("Start Date can't be before the Fill Date — check the dates."); return; }
   c.hireDate = dateStr;
   if(!p.hire) p.hire = dateStr;
