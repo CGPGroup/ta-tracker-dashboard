@@ -9628,17 +9628,26 @@ function wireCandidateEvents(p){
   // Nicolas, 2026-10-09: "hay que darle dos veces a save en los fill y start date" — el picker
   // nativo de <input type="date"> se come el primer click en el boton de al lado (solo cierra el
   // calendario, nunca llega a disparar el click real), asi que depender solo del boton Save
-  // obligaba a un segundo click "en el aire" para que de verdad se guardara. El navegador SI
-  // garantiza el evento "change" en cuanto la fecha queda elegida (click en el calendario, o
-  // escribiendola a mano y saliendo del campo) — guardar tambien ahi, sin esperar al boton, quita
-  // el problema de raiz. El boton sigue existiendo (sirve de confirmacion visual/accesibilidad);
-  // el guard "ya guardado, no-op" dentro de saveCandidateFillDate/saveCandidateHireDate evita que
-  // un click real en el boton, despues de que "change" ya guardo lo mismo, duplique el remark.
+  // obligaba a un segundo click "en el aire" para que de verdad se guardara.
+  // BUG REAL encontrado probando esto mismo (round 2, "no me deja guardar el fill date" — el
+  // primer intento de fix uso el evento "change" del input, asumiendo que solo dispara una vez
+  // con la fecha YA completa. Probado con el input real: mientras se escribe el año a mano
+  // (digito por digito, el ultimo segmento), Chrome considera el valor "completo" apenas el
+  // primer digito entra (ej. escribiendo "2026" bastaba con la "2" para que .value ya fuera una
+  // fecha valida tipo "0002-10-05", año 2) — y "change" SI dispara ahi mismo, a mitad de escribir.
+  // Guardar en ese momento llama renderDetailModal(), que reemplaza el input por texto fijo —
+  // los digitos que faltaban ("0","2","6") ya no tienen donde caer, y el candidato se queda con
+  // un Fill Date absurdo, sin forma de corregirlo desde aqui (el input ya no existe). "blur" en
+  // vez de "change" resuelve esto de raiz: solo dispara cuando el usuario YA SALIO del campo (al
+  // hacer click en Save, en el calendario, o en cualquier otro lado) — nunca a mitad de escribir,
+  // asi que el valor que lee siempre es el que el usuario de verdad termino de escribir. El click
+  // en Save sigue disparando blur primero (el foco se mueve ahi antes de que el click se procese),
+  // asi que el problema original (el click se lo come el picker) sigue resuelto igual.
   document.querySelectorAll(".candidateFillDateInput").forEach(inp=>{
-    inp.addEventListener("change", ()=> saveCandidateFillDate(p, inp.dataset.candidateId));
+    inp.addEventListener("blur", ()=> saveCandidateFillDate(p, inp.dataset.candidateId));
   });
   document.querySelectorAll(".candidateHireDateInput").forEach(inp=>{
-    inp.addEventListener("change", ()=> saveCandidateHireDate(p, inp.dataset.candidateId));
+    inp.addEventListener("blur", ()=> saveCandidateHireDate(p, inp.dataset.candidateId));
   });
   document.querySelectorAll(".candidateCheck").forEach(chk=>{
     chk.addEventListener("change", ()=>{
@@ -9858,17 +9867,15 @@ async function saveCandidateFillDate(p, candidateId){
   const input = document.querySelector(`.candidateFillDateInput[data-candidate-id="${cssEscape(candidateId)}"]`);
   if(!c || !input || !input.value) return;
   const dateStr = input.value;
-  // Nicolas, 2026-10-09: "hay que darle dos veces a save... para que avance y muestre el start
-  // date" — esto se disparaba SOLO por el click del boton Save, y el picker nativo de
-  // <input type="date"> en Chrome/Edge se "come" el primer click cuando cae justo encima o al
-  // lado del picker todavia abierto (ese click solo cierra el calendario, nunca llega al boton) —
-  // asi que el guardado real solo pasaba en el SEGUNDO click, sin ningun error ni señal de que el
-  // primero no sirvio de nada. Fix real: tambien se dispara desde el evento "change" del input
-  // mismo (ver wireCandidateEvents()), que el navegador SI garantiza disparar en cuanto la fecha
-  // queda elegida — el boton Save sigue ahi, pero deja de ser la unica forma de que esto se
-  // guarde. El guard de abajo (fecha sin cambios = no-op) evita que un click redundante en el
-  // boton, despues de que "change" ya guardo lo mismo, duplique el remark de Activity.
+  // Nicolas, 2026-10-09: 2 rounds de este mismo bug — ver wireCandidateEvents() para el detalle
+  // completo (el click se lo comia el picker nativo; el primer intento de fix via "change"
+  // guardaba a mitad de escribir el año). El guard de abajo (fecha sin cambios = no-op) evita que
+  // un click redundante en el boton Save, despues de que "blur" ya guardo lo mismo, duplique el
+  // remark de Activity. El de año implausible es una red de seguridad aparte — si por algun motivo
+  // "blur" todavia alcanza a disparar con el año a medio escribir (navegador distinto, etc.), esto
+  // evita guardar silenciosamente un Fill Date absurdo tipo "0002-10-05" sin ninguna señal visible.
   if(c.fillDate === dateStr) return;
+  if(Number(dateStr.slice(0,4)) < 2000) return;
   const today = localTodayStr();
   if(dateStr > today){ alert("Fill Date can't be in the future — it logs something that already happened (the candidate accepting the offer)."); return; }
   c.fillDate = dateStr;
@@ -9968,6 +9975,7 @@ async function saveCandidateHireDate(p, candidateId){
   const dateStr = input.value;
   // Mismo fix/razon que saveCandidateFillDate() — ver ese comentario.
   if(c.hireDate === dateStr) return;
+  if(Number(dateStr.slice(0,4)) < 2000) return;
   if(c.fillDate && dateStr < c.fillDate){ alert("Start Date can't be before the Fill Date — check the dates."); return; }
   c.hireDate = dateStr;
   if(!p.hire) p.hire = dateStr;
