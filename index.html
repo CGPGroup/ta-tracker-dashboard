@@ -5113,15 +5113,30 @@ function candidateFeedbackChipHtml(p, c){
 // mostrar un campo antes de que sea relevante): Fill Date solo aparece una vez el candidato llega
 // a Offer Request; Start Date solo una vez Fill Date ya esta confirmado. El disparo real a
 // "Placed" vive en checkArrivedStartDates(), no aqui — esto solo captura las fechas.
-function candidateOfferDatesHtml(c){
+// BUG REAL encontrado 2026-10-13 (Nicolas, conectado de verdad con su propia cuenta: "no pasa ni
+// mierda" al guardar — el campo se veia editable, Save no tiraba error, pero nada se guardaba de
+// verdad): esta funcion SIEMPRE dibujaba el input + boton Save, sin importar `isView` — a
+// diferencia de CUALQUIER otro control editable de esta misma fila (el checkbox, el select de
+// status, el boton de borrar, Attach CV — todos SI respetan isView, ver candidateRowHtml() mas
+// abajo). wireCandidateEvents() (que conecta blur/click a estos inputs) solo corre `if(!isView)`
+// en renderDetailModal() — asi que en vista de solo lectura, el input y el Save quedaban ahi,
+// con la pinta exacta de ser funcionales, pero sin NINGUN listener atras. Causa real de que
+// quedaran asi: `trackingCanEdit()` exige estar conectado Y tener `activeDashboardScope` puesto
+// al propio nombre (no solo estar conectado) — aterrizar en la vista de equipo sin perfil propio
+// elegido (el default real al entrar) ya basta para que esto pasara, aun con sesion 100% real.
+// Arreglo aqui: unificar con el resto de la fila, mostrando un texto fijo de solo lectura en vez
+// del input fantasma cuando isView es true — autoexplicativo (dice literalmente "view only, switch
+// to your own workspace to log it"), nunca una zona que parece interactiva y no hace nada.
+function candidateOfferDatesHtml(c, isView){
   if(c.status === "Placed"){
     return `<div class="batch-candidate-offer-dates placed">🎉 Placed${c.hireDate ? ` — started ${escapeHtml(c.hireDate)}` : ""}</div>`;
   }
   if(c.status !== "Offer Request" && !c.fillDate && !c.hireDate) return "";
   const parts = [];
   if(!c.fillDate){
-    parts.push(`
-      <span class="offer-date-field">
+    parts.push(isView
+      ? `<span class="offer-date-fact" style="color:var(--text-muted);">Fill Date not logged yet (view only — switch to your own workspace to log it)</span>`
+      : `<span class="offer-date-field">
         <span class="offer-date-label" title="When Immy confirms Irth sent the offer letter and the candidate accepted it.">Fill Date</span>
         <input type="date" class="candidateFillDateInput" data-candidate-id="${escapeHtml(c.id)}" max="${localTodayStr()}">
         <button type="button" class="fact-edit-link candidateSaveFillDateBtn" data-candidate-id="${escapeHtml(c.id)}">Save</button>
@@ -5129,8 +5144,9 @@ function candidateOfferDatesHtml(c){
   } else {
     parts.push(`<span class="offer-date-fact">Fill Date <b>${escapeHtml(c.fillDate)}</b></span>`);
     if(!c.hireDate){
-      parts.push(`
-        <span class="offer-date-field">
+      parts.push(isView
+        ? `<span class="offer-date-fact" style="color:var(--text-muted);">Start Date not logged yet (view only — switch to your own workspace to log it)</span>`
+        : `<span class="offer-date-field">
           <span class="offer-date-label" title="The candidate's real confirmed start date, from Immy — this requisition moves to Hired automatically once this date arrives.">Start Date</span>
           <input type="date" class="candidateHireDateInput" data-candidate-id="${escapeHtml(c.id)}">
           <button type="button" class="fact-edit-link candidateSaveHireDateBtn" data-candidate-id="${escapeHtml(c.id)}">Save</button>
@@ -5202,7 +5218,7 @@ function candidateRowHtml(c, p, isView){
       <button type="button" class="fact-edit-link candidateNotesBtn" data-candidate-id="${escapeHtml(c.id)}" data-candidate-name="${escapeHtml(c.name)}" data-position-id="${escapeHtml(p.id)}" title="Notes about this candidate specifically — separate from the requisition's own Activity/Remarks">💬${noteCount ? ` ${noteCount}` : " Notes"}</button>
       ${isView ? "" : `<button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>`}
     </div>
-    ${candidateOfferDatesHtml(c)}`;
+    ${candidateOfferDatesHtml(c, isView)}`;
 }
 // Una tarjeta de Submission Batches -> su propia lista de candidatos + "Add Candidate" + una
 // barra de bulk (solo aparece si hay >=1 checkbox marcado en ESE batch, ver wireCandidateEvents()
