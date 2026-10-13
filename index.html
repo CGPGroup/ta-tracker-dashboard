@@ -3920,8 +3920,29 @@ function updateStatusDateUI(prefix, status, prefillValue){
     input.value = "";
   }
 }
-// Sin conexion (pruebas locales, o la app recien cargo) se trata como admin: no hay una
-// identidad real que comprobar todavia, y bloquear tu propio uso local no aporta nada.
+// BUG REAL encontrado 2026-10-13 (Nicolas, probando en una ventana de incognito: "no pasa ni
+// mierda" al guardar Fill/Start Date — el campo se veia editable, Save no tiraba error, pero el
+// dato real en el Excel nunca cambiaba). Causa real: en incognito, el login de Microsoft 365 via
+// MSAL puede fallar en silencio (popups/cookies de terceros bloqueados por defecto ahi) — eso deja
+// a quien entra sin graphAccount, sin pinModeActive, y SIN haber elegido explicitamente "Public
+// Access" tampoco. isAdmin()/trackingCanEdit() trataban ese estado exactamente igual que las
+// pruebas locales de este mismo archivo (demo=1, o abrir index.html en localhost sin servidor
+// real) — "sin conexion = confiable", pensado para no estorbar mientras se prueba el codigo en la
+// maquina de quien lo desarrolla, nunca pensado para alguien real en cgpgroup.github.io. El
+// resultado: la UI se veia completamente editable (exactamente el mismo gap ya encontrado una vez
+// para Public Access especificamente, ver el comentario viejo de abajo) pero cada escritura real
+// (graphFetch) nunca se intentaba porque isConnected() seguia siendo false — Save optimista
+// localmente, nunca persistido, indistinguible a simple vista de un guardado real exitoso.
+// isLocalTestingContext() separa las dos cosas: "sin conexion" solo se trata como confiable
+// cuando ademas se esta en demo mode o corriendo localmente (localhost/127.0.0.1) — en el dominio
+// real, sin conexion real SIEMPRE es no-editable/no-admin, sin importar POR QUE quedo
+// desconectado (declino el login, broto el popup, cookies bloqueadas, lo que sea).
+function isLocalTestingContext(){
+  return isDemoModeUrl() || /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
+}
+// Sin conexion, en pruebas locales (ver isLocalTestingContext()) se trata como admin: no hay una
+// identidad real que comprobar todavia, y bloquear tu propio uso local no aporta nada. En el
+// dominio real, sin conexion real NUNCA es admin (ver el bloque de arriba).
 function isAdmin(){
   // Un login por PIN es una sesion real (aunque debil), no "nadie conectado, esto es prueba
   // local" — sin este chequeo, el fallback de abajo (!email -> admin) trataria a CUALQUIER
@@ -3931,18 +3952,20 @@ function isAdmin(){
   if(pinModeActive) return false;
   if(publicAccessMode) return false;
   const email = (graphAccount && graphAccount.username || "").toLowerCase();
-  return !email || email === ADMIN_EMAIL;
+  if(!email) return isLocalTestingContext();
+  return email === ADMIN_EMAIL;
 }
 // Cualquiera puede ENTRAR al perfil/dashboard de cualquier reclutador (para ver), pero solo
 // puede editar (status, remarks, fechas) si su cuenta de MS365 conectada es literalmente esa
-// persona. Sin conexion (pruebas locales) se trata como editable, mismo criterio que isAdmin().
+// persona. Sin conexion, solo en pruebas locales (ver isLocalTestingContext()) se trata como
+// editable, mismo criterio que isAdmin().
 function trackingCanEdit(){
   // Ver publicAccessMode: sin este chequeo, un visitante real de Public Access (sin login,
   // pero que SI paso por el gate) caia en el mismo "sin conexion = confiable" que las pruebas
   // locales, exponiendo el modal de detalle en modo edicion completo (ej. desde Needs
   // Attention en Overview, visible sin ningun click extra). Bug real reportado por Nicolas.
   if(publicAccessMode) return false;
-  if(!isConnected()) return true;
+  if(!isConnected()) return isLocalTestingContext();
   return !!activeDashboardScope && MY_RECRUITER_NAME === activeDashboardScope;
 }
 
