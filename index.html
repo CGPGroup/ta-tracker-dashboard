@@ -9673,6 +9673,17 @@ function wireCandidateEvents(p){
   document.querySelectorAll(".candidateHireDateInput").forEach(inp=>{
     inp.addEventListener("blur", ()=> saveCandidateHireDate(p, inp.dataset.candidateId));
   });
+  // INTENTO DE FIX PROBADO Y REVERTIDO EL MISMO DIA (Nicolas: "estoy eligiendo la fecha con el
+  // calendario haciendo click" — elegir del calendario nunca dispara "blur", asi que el
+  // guardado automatico nunca se disparaba solo con eso). Se probo agregar "change" ademas de
+  // "blur" (un valor elegido del calendario siempre es completo, nunca parcial) confiando en que
+  // el guard de año implausible (`Number(dateStr.slice(0,4)) < 2000`) ya bloqueaba el bug viejo de
+  // "change" disparando a medio escribir el año. PERO probado en vivo con tecleo real, el
+  // navegador se colgo (CDP "Input.dispatchKeyEvent timed out", la pestaña dejo de responder) —
+  // evidencia real, no teorica, de que "change" seguia disparando en algun punto intermedio de la
+  // escritura antes de que el guard lo bloqueara, destruyendo el input (renderDetailModal) a mitad
+  // de una secuencia de tecleo en curso. Revertido de inmediato — el riesgo de romper la escritura
+  // a mano (el flujo que si se sabe que Nicolas usa) no vale la pena por este caso.
   // BUG REAL encontrado 2026-10-13 (Nicolas: "le doy a save en la de start date y no pasa nada ni
   // sale nada" — recien confirmado que lo mismo le paso con el Fill Date): reproducido clic por
   // clic contra datos reales. Un <input type="date"> tiene 3 "segmentos" (dd/mm/aaaa) y el
