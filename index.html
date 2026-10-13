@@ -10249,6 +10249,21 @@ async function propagateBatchToHeadcountSiblings(p, date, type, savedCandidateRe
         await graphAppendHistorial(s.id, s.title, remark, author, "action");
       } catch(err){ console.error(`Could not share batch with ${s.id} (non-fatal, will retry next refresh):`, err); }
     }
+    // BUG REAL reportado por David 2026-10-13: reqs con batches ya compartidos via esta misma
+    // funcion, pero que pertenecen a un Headcount Group, seguian con el reloj de TTS corriendo
+    // indefinidamente. Causa: esta funcion copia el batch a s.batches, pero nunca tocaba
+    // s.submit — y computeSla(p).TTS=slaFor(p,"TTS",p.submit) solo CONGELA el reloj cuando ese
+    // campo tiene valor (ver slaFor(): sin el, "close" queda null y "ref" sigue siendo
+    // `new Date()` para siempre). El path de log DIRECTO (logBatchSave, mas abajo) ya fija
+    // p.submit = date en su propio isFirst — a esta hermana, que nunca pasa por ese codigo,
+    // nunca se le fijaba el equivalente.
+    if(!s.submit){
+      s.submit = date;
+      if(isConnected()){
+        try { await graphUpdatePositionField(s.id, "I", date); }
+        catch(err){ console.error(`Could not save Submission Date for ${s.id} (non-fatal, will retry next refresh):`, err); }
+      }
+    }
     s.batchCandidates = s.batchCandidates || [];
     for(const cand of savedCandidateRecords){
       let id = `${s.id}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
@@ -10429,6 +10444,13 @@ async function reconcileHeadcountGroups(){
       }
     }
     if(!canonicalBatches.size) continue;
+    // Mismo bug (David, 2026-10-13) que en propagateBatchToHeadcountSiblings: fusionar batches
+    // aqui nunca tocaba s.submit, asi que una hermana que recibe su primer batch SOLO via este
+    // merge retroactivo (nunca via el log directo ni via propagateBatchToHeadcountSiblings) se
+    // quedaba con el reloj de TTS corriendo para siempre aunque ya tuviera batches reales.
+    const earliestBatchDate = [...canonicalBatches.keys()]
+      .map(d=>({d, parsed:parseD(d)}))
+      .sort((a,b)=>a.parsed-b.parsed)[0].d;
     for(const s of members){
       s.batches = s.batches || [];
       s.batchCandidates = s.batchCandidates || [];
@@ -10445,6 +10467,13 @@ async function reconcileHeadcountGroups(){
             await graphAppendBatch(s.id, date, b.type, "");
             await graphAppendHistorial(s.id, s.title, remark, currentAuthorName(), "action");
           } catch(err){ console.error(`Could not merge headcount batch into ${s.id} (non-fatal, will retry next refresh):`, err); }
+        }
+      }
+      if(!s.submit){
+        s.submit = earliestBatchDate;
+        if(isConnected()){
+          try { await graphUpdatePositionField(s.id, "I", earliestBatchDate); }
+          catch(err){ console.error(`Could not save Submission Date for ${s.id} (non-fatal, will retry next refresh):`, err); }
         }
       }
       const existingCandKeys = new Set(s.batchCandidates.map(c=>c.batchDate+"\u0000"+c.name));
