@@ -957,8 +957,20 @@
      (bottom:calc(100% + 8px)) — en la primera fila (#ganttRows ya tiene su propio scroll, nunca
      hay espacio real arriba de esa fila) no hay donde abrirlo sin chocar con la leyenda/eje justo
      encima. Mismo principio que el flip horizontal de arriba (TTH/desenlaces pegados al borde
-     derecho) — la primera fila abre su tooltip hacia ABAJO en vez de arriba. */
-  .gantt-rows .gantt-row:first-child .gantt-tooltip { bottom: auto; top: calc(100% + 8px); }
+     derecho) — la primera fila abre su tooltip hacia ABAJO en vez de arriba.
+     BUG REAL encontrado en auditoria 2026-10-12 (Nicolas, con captura: "eso sigue bugeado, no se ve
+     bien el hover"): esta regla nunca ganaba de verdad para los tooltips de milestone individuales
+     (Kickoff/Intake/Accepted/el desenlace final), porque esos vienen con su PROPIO "bottom:14px" (o
+     16px) puesto inline en el HTML (ver mas abajo, ej. linea 5824) — un estilo inline SIEMPRE le
+     gana a una regla de hoja de estilos en la misma propiedad, sin importar que tan especifico sea
+     el selector, mientras no lleve !important. Con bottom:14px inline ganando y top:calc(100% + 8px)
+     de esta regla aplicandose igual (nada inline lo pisa), el tooltip terminaba con TOP y BOTTOM
+     fijos a la vez — el navegador estira la caja entre los dos en vez de dejarla crecer con su
+     contenido real, achicandola y descuadrandola exactamente como se ve en la captura. Mismo bug NO
+     se notaba en los tooltips sin bottom inline propio (el de cada barra de etapa, linea ~5782) —
+     por eso parecia que el flip "funcionaba", solo fallaba para los de milestone especificamente.
+     !important en las dos propiedades fuerza que de verdad gane sobre cualquier inline. */
+  .gantt-rows .gantt-row:first-child .gantt-tooltip { bottom: auto !important; top: calc(100% + 8px) !important; }
   .gantt-tooltip .muted { color: var(--text-secondary); }
   /* .gantt-projected:hover NO va aqui a proposito — con dos diamantes (TTF y TTH) adentro del
      mismo contenedor punteado, ese selector prendia los DOS tooltips a la vez apenas el mouse
