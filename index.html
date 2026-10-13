@@ -9675,28 +9675,38 @@ function wireCandidateEvents(p){
   });
   // BUG REAL encontrado 2026-10-13 (Nicolas: "le doy a save en la de start date y no pasa nada ni
   // sale nada" — recien confirmado que lo mismo le paso con el Fill Date): reproducido clic por
-  // clic. Un <input type="date"> tiene 3 "segmentos" (dd/mm/aaaa) y el navegador le da el foco de
-  // teclado al segmento que esta justo DEBAJO del punto exacto donde cae el click — si el click
-  // no cae exactamente sobre "dd" (el primero), lo que se escriba despues entra en el segmento
-  // equivocado (mes o año) y nunca llega a formar una fecha valida. Confirmado en vivo: un click a
-  // unos pocos pixeles a la derecha del borde izquierdo aterrizo en "mm" en vez de "dd" — escribir
-  // "15102026" ahi produjo "dd/12/102026" (nunca una fecha real), asi que input.value se quedo
-  // vacio para siempre sin importar cuantos digitos se tecleraran. blur SI disparaba (confirmado
-  // con un wrapper de depuracion), saveCandidateFillDate/saveCandidateHireDate SI corrian, pero su
-  // guard de entrada (`!input.value`) los hacia salir en silencio — exactamente "no pasa nada ni
-  // sale nada", sin ningun error que avisara que el problema fue el click, no el guardado.
-  // Arreglo: en el primer click que le da foco al input (nunca en uno subsecuente, para no
-  // interferir si alguien de verdad quiere corregir solo el mes o el año despues de ya estar
-  // escribiendo), se cancela el posicionamiento nativo del cursor (preventDefault en mousedown) y
-  // se fuerza el foco via JS en su lugar — foco puesto asi (no por una coordenada de click) SIEMPRE
-  // empieza en el primer segmento (dd), sin importar en que x exacta cayo el click real. Probado en
-  // vivo: la MISMA coordenada que antes producia "dd/12/102026" ahora produce "2026-10-15" correcto.
+  // clic contra datos reales. Un <input type="date"> tiene 3 "segmentos" (dd/mm/aaaa) y el
+  // navegador le da el foco de teclado al segmento que esta justo DEBAJO del punto exacto donde
+  // cae el click — si el click no cae exactamente sobre "dd" (el primero), lo que se escriba
+  // despues entra en el segmento equivocado (mes o año) y nunca llega a formar una fecha valida.
+  // Confirmado en vivo: un click a unos pocos pixeles a la derecha del borde izquierdo aterrizo en
+  // "mm" en vez de "dd" — escribir "15102026" ahi produjo "dd/12/102026" (nunca una fecha real),
+  // asi que input.value se quedo vacio para siempre sin importar cuantos digitos se tecleraran.
+  // blur SI disparaba (confirmado con un wrapper de depuracion), saveCandidateFillDate/
+  // saveCandidateHireDate SI corrian, pero su guard de entrada (`!input.value`) los hacia salir en
+  // silencio — exactamente "no pasa nada ni sale nada", sin ningun error que avisara que el
+  // problema fue el click, no el guardado.
+  // FIX: forzar el foco al primer segmento (dd) SOLO cuando el click cae claramente en la zona de
+  // texto (dd/mm/aaaa), nunca en los ultimos ~24px donde vive el icono nativo del calendario — asi
+  // el fix para quien escribe la fecha a mano nunca puede tocar/romper el click en el icono, porque
+  // simplemente nunca se ejecuta ahi (se excluye por geometria, no por suposicion). Probado en vivo
+  // contra la coordenada real que reproducia el bug original: "dd/12/102026" (nunca una fecha
+  // valida) paso a "2026-10-20" (correcta) en el primer intento.
+  // DESCARTADO a proposito: tambien se probo llamar showPicker() en 'click' para que cualquier
+  // click abriera el calendario visual (no solo el icono) — PERO se confirmo en vivo que
+  // showPicker() rompe la escritura: el mismo intento de escribir una fecha que funcionaba bien
+  // sin showPicker() se quedaba con el input vacio en cuanto showPicker() tambien estaba
+  // conectado al click, aunque el foco ya estuviera bien puesto en "dd". No vale la pena el riesgo
+  // de abrir el calendario solo si eso rompe la escritura manual, que es el flujo real que Nicolas
+  // usa — se queda SOLO con la correccion de foco, sin showPicker().
   document.querySelectorAll(".candidateFillDateInput, .candidateHireDateInput").forEach(inp=>{
     inp.addEventListener("mousedown", (e)=>{
-      if(document.activeElement !== inp){
-        e.preventDefault();
-        inp.focus();
-      }
+      if(document.activeElement === inp) return;
+      const rect = inp.getBoundingClientRect();
+      const ICON_ZONE_PX = 24;
+      if(e.clientX > rect.right - ICON_ZONE_PX) return;
+      e.preventDefault();
+      inp.focus();
     });
   });
   document.querySelectorAll(".candidateCheck").forEach(chk=>{
