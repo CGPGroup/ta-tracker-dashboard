@@ -2028,6 +2028,18 @@
         This view is showing sample data until real data finishes loading.
       </div>
 
+      <!-- Nicolas, 2026-10-12: "no hay una manera de que a los usuarios se les haga el hard refresh
+           automatico?" — GitHub Pages cachea este archivo 10 minutos en el navegador de cada quien
+           (Cache-Control: max-age=600), asi que quien ya tenia la pagina abierta sigue corriendo
+           codigo viejo hasta que recargue. Esto no puede forzar un recargo real por su cuenta (eso
+           botaria cualquier cosa que alguien tenga a medio escribir en un modal abierto, mucho peor
+           que el problema que resuelve) — en vez de eso avisa y deja el boton a un clic, ver
+           checkForNewVersion()/startVersionWatcher() mas abajo. -->
+      <div class="alert-banner tier-orange" id="newVersionBanner" style="display:none; align-items:center; justify-content:space-between;">
+        <span>A newer version of this tracker is available.</span>
+        <button type="button" class="btn primary small" id="reloadForNewVersionBtn">Reload now</button>
+      </div>
+
       <div id="pendingAssignmentZone"></div>
 
       <!-- Vive FUERA de view-dashboard (su propia seccion .view aparte) para que la fila de tabs
@@ -13868,6 +13880,39 @@ function autoOpenActiveGanttOnLanding(){
     toggleGanttPanel("active", GANTT_DATA.active.label, GANTT_DATA.active.positions);
   }
 }
+// Nicolas, 2026-10-12: "no hay una manera de que a los usuarios se les haga el hard refresh
+// automatico?" — GitHub Pages sirve este archivo con Cache-Control: max-age=600, asi que una
+// pestaña que ya estaba abierta cuando se despliega un cambio sigue corriendo el codigo VIEJO
+// hasta que alguien recargue a mano (Ctrl+Shift+R). No se puede forzar un reload real sin
+// preguntar — botaria cualquier cosa a medio escribir en un modal abierto de alguien, un problema
+// peor que el que esto resuelve — asi que en vez de eso se avisa con un banner y un boton a un
+// clic. Deteccion 100% automatica, sin tocar nada cada vez que se despliega: compara el ETag real
+// del archivo en el servidor (GitHub Pages lo manda siempre, ver respuesta HEAD) contra el que
+// tenia cuando esta pestaña cargo por primera vez — un ETag nuevo significa que el archivo cambio
+// del lado del servidor. fetch con cache:"no-store" fuerza un viaje real a la red cada vez, nunca
+// lee la copia cacheada por el navegador (si no, nunca veria el cambio). No corre en demo/local
+// (serve.ps1 no manda ETag real y no hay nada que detectar ahi).
+let KNOWN_LIVE_ETAG = null;
+async function checkForNewVersion(){
+  try {
+    const url = location.href.split(/[?#]/)[0];
+    const res = await fetch(url, { method: "HEAD", cache: "no-store" });
+    const tag = res.headers.get("etag") || res.headers.get("last-modified");
+    if(!tag) return;
+    if(KNOWN_LIVE_ETAG === null){ KNOWN_LIVE_ETAG = tag; return; }
+    if(tag !== KNOWN_LIVE_ETAG){
+      const banner = document.getElementById("newVersionBanner");
+      if(banner) banner.style.display = "flex";
+    }
+  } catch(err){ /* sin internet, CORS local, etc. — no vale la pena molestar por esto */ }
+}
+function startVersionWatcher(){
+  if(isDemoModeUrl()) return;
+  checkForNewVersion();
+  setInterval(checkForNewVersion, 120000);
+}
+document.getElementById("reloadForNewVersionBtn").addEventListener("click", ()=> location.reload());
+startVersionWatcher();
 (isDemoModeUrl() ? loadDemoModeAndRender() : trysilentConnect()).finally(()=>{ hideAppLoadingOverlay(); autoOpenActiveGanttOnLanding(); });
 // Red de seguridad: si algo se cuelga de forma inesperada (conexion lenta, error no
 // capturado en algun punto de la cadena), la pantalla de carga no debe quedar pegada para
