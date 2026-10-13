@@ -9673,6 +9673,32 @@ function wireCandidateEvents(p){
   document.querySelectorAll(".candidateHireDateInput").forEach(inp=>{
     inp.addEventListener("blur", ()=> saveCandidateHireDate(p, inp.dataset.candidateId));
   });
+  // BUG REAL encontrado 2026-10-13 (Nicolas: "le doy a save en la de start date y no pasa nada ni
+  // sale nada" — recien confirmado que lo mismo le paso con el Fill Date): reproducido clic por
+  // clic. Un <input type="date"> tiene 3 "segmentos" (dd/mm/aaaa) y el navegador le da el foco de
+  // teclado al segmento que esta justo DEBAJO del punto exacto donde cae el click — si el click
+  // no cae exactamente sobre "dd" (el primero), lo que se escriba despues entra en el segmento
+  // equivocado (mes o año) y nunca llega a formar una fecha valida. Confirmado en vivo: un click a
+  // unos pocos pixeles a la derecha del borde izquierdo aterrizo en "mm" en vez de "dd" — escribir
+  // "15102026" ahi produjo "dd/12/102026" (nunca una fecha real), asi que input.value se quedo
+  // vacio para siempre sin importar cuantos digitos se tecleraran. blur SI disparaba (confirmado
+  // con un wrapper de depuracion), saveCandidateFillDate/saveCandidateHireDate SI corrian, pero su
+  // guard de entrada (`!input.value`) los hacia salir en silencio — exactamente "no pasa nada ni
+  // sale nada", sin ningun error que avisara que el problema fue el click, no el guardado.
+  // Arreglo: en el primer click que le da foco al input (nunca en uno subsecuente, para no
+  // interferir si alguien de verdad quiere corregir solo el mes o el año despues de ya estar
+  // escribiendo), se cancela el posicionamiento nativo del cursor (preventDefault en mousedown) y
+  // se fuerza el foco via JS en su lugar — foco puesto asi (no por una coordenada de click) SIEMPRE
+  // empieza en el primer segmento (dd), sin importar en que x exacta cayo el click real. Probado en
+  // vivo: la MISMA coordenada que antes producia "dd/12/102026" ahora produce "2026-10-15" correcto.
+  document.querySelectorAll(".candidateFillDateInput, .candidateHireDateInput").forEach(inp=>{
+    inp.addEventListener("mousedown", (e)=>{
+      if(document.activeElement !== inp){
+        e.preventDefault();
+        inp.focus();
+      }
+    });
+  });
   document.querySelectorAll(".candidateCheck").forEach(chk=>{
     chk.addEventListener("change", ()=>{
       const batchDate = chk.dataset.batchDate;
@@ -9889,7 +9915,20 @@ async function advancePositionForCandidateStatus(p, candidateName, newStatus){
 async function saveCandidateFillDate(p, candidateId){
   const c = (p.batchCandidates||[]).find(x=>x.id===candidateId);
   const input = document.querySelector(`.candidateFillDateInput[data-candidate-id="${cssEscape(candidateId)}"]`);
-  if(!c || !input || !input.value) return;
+  if(!c || !input) return;
+  if(!input.value){
+    // BUG REAL 2026-10-13 (ver el comentario grande en wireCandidateEvents()): antes esto salia en
+    // silencio tambien cuando SI se habia escrito algo pero el click aterrizo en el segmento
+    // equivocado (mes/año en vez de dia) — nunca llegaba a ser una fecha valida, asi que
+    // input.value se quedaba vacio y esto se veia identico a "nunca escribio nada". badInput
+    // distingue los 2 casos: true solo cuando el navegador SI detecta texto que no logro
+    // convertirse en fecha — un blur de verdad vacio (el usuario entro y salio sin tocar nada)
+    // sigue sin mostrar nada, no es un error.
+    if(input.validity && input.validity.badInput){
+      alert("That date didn't save — it looks incomplete or landed in the wrong part of the field (day/month/year). Click directly on the day first, then type the full date again.");
+    }
+    return;
+  }
   const dateStr = input.value;
   // Nicolas, 2026-10-09: 2 rounds de este mismo bug — ver wireCandidateEvents() para el detalle
   // completo (el click se lo comia el picker nativo; el primer intento de fix via "change"
@@ -9995,7 +10034,14 @@ async function saveCandidateFillDate(p, candidateId){
 async function saveCandidateHireDate(p, candidateId){
   const c = (p.batchCandidates||[]).find(x=>x.id===candidateId);
   const input = document.querySelector(`.candidateHireDateInput[data-candidate-id="${cssEscape(candidateId)}"]`);
-  if(!c || !input || !input.value) return;
+  if(!c || !input) return;
+  if(!input.value){
+    // Mismo fix/razon que saveCandidateFillDate() — ver ese comentario (BUG REAL 2026-10-13).
+    if(input.validity && input.validity.badInput){
+      alert("That date didn't save — it looks incomplete or landed in the wrong part of the field (day/month/year). Click directly on the day first, then type the full date again.");
+    }
+    return;
+  }
   const dateStr = input.value;
   // Mismo fix/razon que saveCandidateFillDate() — ver ese comentario.
   if(c.hireDate === dateStr) return;
