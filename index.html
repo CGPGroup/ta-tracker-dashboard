@@ -6664,8 +6664,14 @@ function renderKpis(){
   // son 3 tarjetas separadas: Potential Placements (Offer Request, "ahora mismo" igual que
   // Active/On Hold), Filled (nueva, tambien "ahora mismo") y Placements (mas abajo, el unico de
   // los 3 anclado a una fecha real de evento en vez de al status actual).
-  const potentialPlacements = activeSourceSet.filter(p=>p.status === "Offer Request");
-  const filledNow = activeSourceSet.filter(p=>p.status === "Filled");
+  // Nicolas, 2026-10-13: a diferencia de Positions/Active Positions (que SI tiene sentido ver
+  // ordenadas por cuando se asignaron, ver el orden natural de POSITIONS mas abajo), estas son
+  // tarjetas de "resultado" — lo util es ver primero lo mas reciente, no lo mas viejo. Cada una
+  // ordena por su propia fecha real de evento (nunca la de asignacion), mas nueva primero.
+  const potentialPlacements = activeSourceSet.filter(p=>p.status === "Offer Request")
+    .sort((a,b)=> (parseD(b.offerRequestDate)||0) - (parseD(a.offerRequestDate)||0));
+  const filledNow = activeSourceSet.filter(p=>p.status === "Filled")
+    .sort((a,b)=> (parseD(b.fill)||0) - (parseD(a.fill)||0));
   // Placements (antes "Actual Placements") — un placement real exige DOS cosas: que el status
   // diga Hired Y que la fecha real de Start Date YA HAYA LLEGADO (hoy >= esa fecha). No basta con
   // que el campo status ya diga "Hired": encontrado en vivo el mismo dia (auditoria pedida por
@@ -6681,7 +6687,7 @@ function renderKpis(){
     if(!h || h > today) return false;
     if(!scopeWin) return true;
     return h >= scopeWin.start && h <= scopeWin.end;
-  });
+  }).sort((a,b)=> (parseD(b.hire)||0) - (parseD(a.hire)||0));
   const funnelStats = [
     {key:"positions", label:"Positions", value:positionsForPeriod.length, positions:positionsForPeriod,
       desc: scopeWin
@@ -6710,7 +6716,15 @@ function renderKpis(){
     const close = ganttCloseDate(p);
     return !!close && close >= scopeWin.start && close <= scopeWin.end;
   });
-  const otherPositions = [...onHoldNow, ...closedElsewhere];
+  // Mezcla On Hold (en curso, se ordena por desde cuando esta pausado, ver computeSlaPauseInfo())
+  // y Cancelled/Filled Internal Hire (cierre real, se ordena por ganttCloseDate()) — ambos tipos
+  // se intercalan por fecha real, mas reciente primero, en vez de agrupar un tipo antes que el
+  // otro sin mas criterio.
+  const otherEventDate = (p)=> (p.status==="On Hold" || p.status==="On Hold — Internal Candidates")
+    ? computeSlaPauseInfo(p).pausedSinceDate
+    : ganttCloseDate(p);
+  const otherPositions = [...onHoldNow, ...closedElsewhere]
+    .sort((a,b)=> (otherEventDate(b)?.getTime()||0) - (otherEventDate(a)?.getTime()||0));
   const otherStat = {key:"other", label:"On Hold & Other Closures", value:otherPositions.length, positions:otherPositions,
     color:"var(--neutral)", desc: scopeWin
       ? `Paused (On Hold) right now (0 if ${scopeWin.label} is a past period — see Active's note), plus any that actually closed without a Cornerstone placement during this period (lost/Cancelled, or filled by the client another way/Filled Internal Hire, wherever they were assigned). Not active.`
