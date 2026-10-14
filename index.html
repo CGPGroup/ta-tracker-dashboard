@@ -1511,7 +1511,14 @@
   /* Lista de candidatos dentro de una tarjeta de Submission Batches (ver batchCandidatesBlockHtml()
      / candidateRowHtml()) — una fila compacta por candidato, checkbox + nombre + CV/estado. */
   .batch-candidates-block { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
-  .batch-candidate-row { display: flex; align-items: center; gap: 7px; padding: 4px 0; font-size: 12px; }
+  /* BUG REAL (Nicolas, 2026-10-14): con varios candidatos por batch, esta fila sin wrap (nombre +
+     email + CV + status + Notes + delete, todo en una sola linea) forzaba un ancho minimo de
+     contenido enorme por tarjeta — y como .sla-grid (reusada aqui para Submission Batches) usa
+     columnas `1fr` sin `min-width:0` en `.sla-card`, el grid crecia mas alla del ancho real de
+     modal-col-left para no recortar esa linea, empujando la 2a tarjeta de batch (y su boton "x" de
+     borrar) fisicamente encima de modal-col-right (SLA/Next Step/Activity). flex-wrap permite que
+     la fila se parta en varias lineas dentro del ancho real de la tarjeta en vez de forzarlo. */
+  .batch-candidate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 4px 0; font-size: 12px; }
   .batch-candidate-row input[type="checkbox"] { width: auto; margin: 0; }
   .batch-candidate-name { font-weight: 600; white-space: nowrap; }
   .batch-candidate-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 11px; }
@@ -1717,7 +1724,11 @@
      Meeting Held, o solo Handoff Context Confirmed) — reusar el grid de 3 columnas de SLA
      dejaba una columna vacia y desbalanceada. */
   #modalCompletionGrid { grid-template-columns: repeat(2, 1fr); }
-  .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
+  /* min-width:0 (ver el mismo bug real arriba, en .batch-candidate-row): sin esto, una tarjeta de
+     Submission Batches con candidatos no podia encogerse por debajo del ancho minimo de su
+     contenido, y el grid de 3 columnas se desbordaba del contenedor real. No afecta a los otros
+     usos de .sla-card (TTS/TTF/TTH, Requisition Completion) — su contenido ya es corto. */
+  .sla-card { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; min-width: 0; }
   .hg-sibling-card:hover { border-color: var(--brand); background: rgba(var(--brand-rgb),0.06); }
   .sla-card .sla-name { font-size: 10.5px; font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   /* Una tarjeta, 2 chips adentro (ej. Accept Requisition & Request Intake) — cada fila es su
