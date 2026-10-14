@@ -2871,9 +2871,22 @@
              que Add Candidate) y queda como una fila editable antes de guardar. Save Batch exige
              al menos 1 fila con nombre. -->
         <div class="form-field full">
-          <label>Candidates <span style="font-weight:400; color:var(--text-muted);">(attach each CV — at least 1 required to log this batch)</span></label>
+          <label>Candidates <span style="font-weight:400; color:var(--text-muted);">(attach each CV, or just paste names below — at least 1 required)</span></label>
           <input type="file" id="logBatchCvFiles" accept=".pdf,.doc,.docx,.txt" multiple>
           <span class="panel-sub" id="logBatchCvParseMsg" style="display:block; margin-top:4px;"></span>
+        </div>
+        <!-- Nicolas, 2026-10-14: "si por ejemplo llegamos a submitir 10 candidatos, es una perdida
+             de tiempo" subir un CV por uno — esta es la via rapida: pegar nombres, uno por linea,
+             sin exigir CV todavia (se puede adjuntar despues por candidato, mismo boton "Attach CV"
+             que ya existe en cada fila una vez guardado). El status/notas/Placed automatico por
+             candidato siguen intactos, solo cambia que el CV ya no es obligatorio al momento de
+             cargar el nombre. -->
+        <div class="form-field full">
+          <label>Or paste names <span style="font-weight:400; color:var(--text-muted);">(one per line, no CV needed yet)</span></label>
+          <textarea id="logBatchNamesInput" rows="3" placeholder="Jane Doe&#10;John Smith&#10;..."></textarea>
+          <div class="form-actions" style="margin-top:6px;">
+            <button class="btn ghost small" type="button" id="logBatchAddNamesBtn">+ Add Names</button>
+          </div>
         </div>
         <div class="form-field full" id="logBatchCandidatesListWrap" style="display:none;">
           <label>Review before saving</label>
@@ -10959,7 +10972,9 @@ document.getElementById("logBatchGoToNextStepBtn").addEventListener("click", ()=
 // {file, name, email}, name/email pre-llenados por extractCandidateInfoFromCv() (mismo parseo que
 // Add Candidate) pero editables antes de guardar. Vive fuera de p.batchCandidates a proposito:
 // estos archivos todavia no se han subido a nada, es solo el borrador de lo que se va a crear al
-// darle Save Batch.
+// darle Save Batch. `file` ahora puede ser null (Nicolas, 2026-10-14: via "+ Add Names", sin CV
+// todavia — ver logBatchAddNamesBtn mas abajo) — el CV sigue siendo opcional, nunca obligatorio
+// para que un candidato exista.
 let logBatchPendingCandidates = [];
 function renderLogBatchCandidatesList(){
   const wrap = document.getElementById("logBatchCandidatesListWrap");
@@ -10967,7 +10982,7 @@ function renderLogBatchCandidatesList(){
   wrap.style.display = logBatchPendingCandidates.length ? "" : "none";
   list.innerHTML = logBatchPendingCandidates.map((c, i) => `
     <div class="log-batch-cand-row">
-      <span class="log-batch-cand-filename" title="${escapeHtml(c.file.name)}">${escapeHtml(c.file.name)}</span>
+      <span class="log-batch-cand-filename" title="${c.file ? escapeHtml(c.file.name) : "No CV yet — can be attached later"}">${c.file ? escapeHtml(c.file.name) : "No CV yet"}</span>
       <input type="text" class="logBatchCandNameInput" data-idx="${i}" value="${escapeHtml(c.name||"")}" placeholder="Candidate name">
       <input type="email" class="logBatchCandEmailInput" data-idx="${i}" value="${escapeHtml(c.email||"")}" placeholder="Email">
       <button type="button" class="candidateDeleteBtn logBatchCandRemoveBtn" data-idx="${i}" title="Remove this candidate from the batch">&times;</button>
@@ -11007,6 +11022,24 @@ document.getElementById("logBatchCvFiles").addEventListener("change", async ()=>
   parseMsg.textContent = `Added ${files.length} candidate${files.length===1?"":"s"}${parsedCount ? ` (auto-filled ${parsedCount} from their CV)` : ""} — double-check names before saving.`;
   parseMsg.style.color = "var(--good)";
 });
+// Nicolas, 2026-10-14: "si por ejemplo llegamos a submitir 10 candidatos, es una perdida de
+// tiempo" subir un CV por candidato uno por uno — esta es la via rapida para ese caso real: pegar
+// una lista de nombres y agregarlos todos de una, sin ningun archivo (file: null, ver el guard
+// correspondiente en logBatchSave mas abajo y en renderLogBatchCandidatesList() arriba). Cada
+// candidato sigue siendo una fila real e independiente (mismo status/notas/Placed automatico de
+// siempre) — el CV se puede adjuntar despues, por candidato, con el mismo "Attach CV" que ya
+// existe una vez guardado.
+document.getElementById("logBatchAddNamesBtn").addEventListener("click", ()=>{
+  const input = document.getElementById("logBatchNamesInput");
+  const names = input.value.split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!names.length) return;
+  names.forEach(name => logBatchPendingCandidates.push({ file: null, name, email: "" }));
+  input.value = "";
+  renderLogBatchCandidatesList();
+  const parseMsg = document.getElementById("logBatchCvParseMsg");
+  parseMsg.textContent = `Added ${names.length} candidate${names.length===1?"":"s"} by name — no CV yet, attach one later per candidate if needed.`;
+  parseMsg.style.color = "var(--good)";
+});
 document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   const p = POSITIONS.find(x=>x.id===activeDetailId);
   if(!p) return;
@@ -11027,7 +11060,7 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   // si no no te deja crearlo" — ya no hay un numero tecleado a mano como salida de emergencia, el
   // batch necesita al menos 1 candidato real (con nombre) adjuntado arriba.
   if(!logBatchPendingCandidates.length){
-    msg.textContent = "Add at least one candidate (with their CV) to log this batch.";
+    msg.textContent = "Add at least one candidate to log this batch.";
     msg.style.color = "var(--critical)";
     return;
   }
@@ -11136,7 +11169,10 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
       continue;
     }
     let cvLink = null;
-    if(isConnected()){
+    // cand.file es null para un candidato agregado por "+ Add Names" (sin CV todavia, ver el
+    // comentario junto a ese boton) — nada que subir, se deja igual que un candidato que ya
+    // existia sin CV (se adjunta despues, por candidato, con "Attach CV").
+    if(isConnected() && cand.file){
       try {
         cvLink = await graphUploadFile("Candidate CVs", p.id, cand.file);
         await graphUpdateBatchCandidateField(id, "CV Link", cvLink);
