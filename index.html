@@ -12261,7 +12261,14 @@ let autoRefreshTimer = null;
 function startAutoRefresh(){
   if(autoRefreshTimer) return;
   autoRefreshTimer = setInterval(async ()=>{
-    if(!isConnected()) return;
+    // BUG REAL (Nicolas, 2026-10-14): "ni si actualizan algo no lo puedo ver en tiempo real" — este
+    // tick solo arrancaba (ver los llamados a startAutoRefresh()) y solo corria algo (ver el
+    // `if(!isConnected())` que habia aqui) para sesiones conectadas (Microsoft 365 o PIN). Un
+    // visitante real de Public Access (sin login, sin PIN) nunca es "isConnected()" — se quedaba
+    // con el snapshot de cuando abrio el link, para siempre, sin ningun refresco, por mas que
+    // dejara la pestaña abierta. publicAccessMode (true solo despues de aceptar el disclosure de
+    // Public Access) es la señal real de que SI es ese visitante, asi que ahora tambien refresca.
+    if(!isConnected() && !publicAccessMode) return;
     // BUG REAL (Nicolas, "status submitted en intake held por un momento"): un guardado de varios
     // pasos (ej. logBatchSave) podia perder la carrera contra este refresco — ver el comentario
     // grande junto a pendingWriteCount. Si hay CUALQUIER escritura en curso, este tick se salta
@@ -12277,6 +12284,7 @@ function startAutoRefresh(){
       // reclutador en PIN mode ya veia (mergeado al hacer login) desaparecia solo, en silencio,
       // cada 2 minutos — el propio auto-refresh se lo borraba de encima sin que nadie tocara nada.
       if(pinModeActive){ if(await tryLoadPublicSnapshot()){ await pinLoadMyCandidatesAndMerge(); renderAll(); } }
+      else if(publicAccessMode) await tryLoadPublicSnapshotAndRender();
       else await loadFromGraph();
     } catch(err){ console.error("Auto-refresh failed:", err); }
   }, 120000);
@@ -14073,7 +14081,15 @@ function startVersionWatcher(){
 }
 document.getElementById("reloadForNewVersionBtn").addEventListener("click", ()=> location.reload());
 startVersionWatcher();
-(isDemoModeUrl() ? loadDemoModeAndRender() : trysilentConnect()).finally(()=>{ hideAppLoadingOverlay(); autoOpenActiveGanttOnLanding(); });
+// startAutoRefresh() ya se llama desde setConnectionUi(true,...) para sesiones conectadas
+// (Microsoft 365/PIN) — este llamado adicional es el que de verdad arranca el timer para un
+// visitante de Public Access (ver el bug real de 2026-10-14 en el propio startAutoRefresh()):
+// publicAccessMode todavia puede estar en false justo aqui (recien esta viendo la pantalla de
+// bienvenida), pero el timer ya queda corriendo — cada tick revisa publicAccessMode por su cuenta,
+// asi que empieza a refrescar de verdad en cuanto acepte el disclosure, sin esperar a recargar.
+// Idempotente (startAutoRefresh() ya se protege con `if(autoRefreshTimer) return`), asi que no
+// duplica el timer si la sesion conectada ya lo habia arrancado primero.
+(isDemoModeUrl() ? loadDemoModeAndRender() : trysilentConnect()).finally(()=>{ hideAppLoadingOverlay(); autoOpenActiveGanttOnLanding(); if(!isDemoModeUrl()) startAutoRefresh(); });
 // Red de seguridad: si algo se cuelga de forma inesperada (conexion lenta, error no
 // capturado en algun punto de la cadena), la pantalla de carga no debe quedar pegada para
 // siempre, a los 12s se revela la app igual, con lo que haya cargado hasta ese momento.
