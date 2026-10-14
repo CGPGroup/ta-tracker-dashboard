@@ -13086,21 +13086,31 @@ function mergeBatches(positions, batchHeaders, batchRows){
 // (no un ID de Excel) porque una posicion puede tener muchos candidatos y necesitamos poder
 // actualizar UNO especifico despues (status/CV) sin ambiguedad — Position ID aqui solo enlaza al
 // req, no identifica la fila (varias filas comparten el mismo Position ID).
-// Deliberadamente NO se expone via el snapshot publico (ver loadFromGraph/tryLoadPublicSnapshot)
-// — nombres de candidatos son datos personales de gente que aplico, no algo que Public Access
-// (sin login) deberia poder ver. Solo BatchesTable (un conteo) es publico.
+// Hasta 2026-10-14 esto NUNCA se exponia via el snapshot publico (nombres de candidatos son
+// datos personales de gente que aplico) — decision explicita de Nicolas ese dia de exponerlo de
+// todas formas, para que notas/feedback de candidato se vean "en cualquier workspace o cualquier
+// vista o cualquier usuario" (ver tryLoadPublicSnapshot() y el Worker, que ahora SI lo incluyen).
 function mergeBatchCandidates(positions, bcHeaders, bcRows){
   if(!bcHeaders || !bcRows) return;
   const bIdx = (name) => bcHeaders.indexOf(name);
   const byId = {};
   positions.forEach(p => { byId[p.id] = p; });
+  // BUG REAL (Nicolas, 2026-10-14): desde que tryLoadPublicSnapshot() tambien trae
+  // batchCandidates (ver su comentario de arriba), un reclutador en PIN mode termina llamando
+  // esto DOS veces seguidas sobre el mismo POSITIONS fresco — una vez con el snapshot publico
+  // completo, otra con pinLoadMyCandidatesAndMerge() (sus propias posiciones, redundante ahora
+  // pero se dejo para la carga inicial instantanea). Sin este guard, sus propios candidatos se
+  // duplicarian en cada carga/auto-refresh (creciendo sin limite con el tiempo) — seenIds hace
+  // el merge idempotente por "Candidate Row ID", sin importar cuantas veces se llame.
+  const seenIds = new Set(positions.flatMap(p => p.batchCandidates.map(c => c.id)));
   bcRows.forEach(row => {
     const pid = row[bIdx("Position ID")];
     const p = byId[pid];
     if(!p) return;
     const id = row[bIdx("Candidate Row ID")];
     const name = row[bIdx("Candidate Name")];
-    if(!id || !name) return;
+    if(!id || !name || seenIds.has(id)) return;
+    seenIds.add(id);
     p.batchCandidates.push({
       id,
       batchDate: excelValToDateStr(row[bIdx("Batch Date")]),
@@ -13251,6 +13261,14 @@ async function tryLoadPublicSnapshot(){
     const newPositions = parsePositionsTable(data.positions.headers, data.positions.rows);
     if(data.historial) mergeLatestRemarks(newPositions, data.historial.headers, data.historial.rows);
     if(data.batches) mergeBatches(newPositions, data.batches.headers, data.batches.rows);
+    // Decision explicita de Nicolas, 2026-10-14: "eso deberia poderse ver en cualquier
+    // workspace o cualquier vista o cualquier usuario" (notas de feedback de candidato) — antes
+    // batchCandidates nunca venia en este snapshot a proposito (ver el comentario viejo, todavia
+    // visible en mergeBatchCandidates() mas abajo, y en el Worker). Ahora el Worker SI lo incluye
+    // (campo opcional, null si BatchCandidatesTable todavia no existe), asi que cualquiera que
+    // cargue este snapshot —con login, en modo PIN, o el link publico sin ninguno de los dos—
+    // ve los mismos candidatos/notas que alguien con sesion completa de Microsoft 365.
+    if(data.batchCandidates) mergeBatchCandidates(newPositions, data.batchCandidates.headers, data.batchCandidates.rows);
     if(data.recruiters){
       const { newRecruiters, newPhotos, newTitles, newEmails } = parseRecruitersTable(data.recruiters.rows);
       RECRUITERS = newRecruiters;
