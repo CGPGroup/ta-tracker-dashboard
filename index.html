@@ -1511,16 +1511,24 @@
   /* Lista de candidatos dentro de una tarjeta de Submission Batches (ver batchCandidatesBlockHtml()
      / candidateRowHtml()) — una fila compacta por candidato, checkbox + nombre + CV/estado. */
   .batch-candidates-block { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
-  /* BUG REAL (Nicolas, 2026-10-14): con varios candidatos por batch, esta fila sin wrap (nombre +
-     email + CV + status + Notes + delete, todo en una sola linea) forzaba un ancho minimo de
-     contenido enorme por tarjeta — y como .sla-grid (reusada aqui para Submission Batches) usa
-     columnas `1fr` sin `min-width:0` en `.sla-card`, el grid crecia mas alla del ancho real de
-     modal-col-left para no recortar esa linea, empujando la 2a tarjeta de batch (y su boton "x" de
-     borrar) fisicamente encima de modal-col-right (SLA/Next Step/Activity). flex-wrap permite que
-     la fila se parta en varias lineas dentro del ancho real de la tarjeta en vez de forzarlo. */
-  .batch-candidate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 4px 0; font-size: 12px; }
+  /* BUG REAL (Nicolas, 2026-10-14, round 1): con varios candidatos por batch, esta fila sin wrap
+     (nombre + email + CV + status + Notes + delete, todo en una sola linea) forzaba un ancho
+     minimo de contenido enorme por tarjeta — y como .sla-grid (reusada aqui para Submission
+     Batches) usa columnas `1fr` sin `min-width:0` en `.sla-card`, el grid crecia mas alla del
+     ancho real de modal-col-left, empujando la 2a tarjeta de batch (y su boton "x" de borrar)
+     fisicamente encima de modal-col-right (SLA/Next Step/Activity). Primer intento: flex-wrap en
+     una sola fila. BUG REAL round 2 (mismo dia, viendo una captura real): ese flex-wrap partia la
+     fila en un punto DISTINTO segun el largo exacto de cada candidato (si tenia CV o no, largo del
+     correo) — Notes caia en una 2a linea para unos candidatos si y para otros de la MISMA tarjeta
+     no, nada alineado ("todo debe quedar organizado"). Arreglo real: 2 lineas FIJAS siempre (ver
+     candidateRowHtml()) — .bcr-top (nombre+correo) y .bcr-bottom (CV/status/Notes/borrar) — nunca
+     dependen del contenido, y el correo ya no compite por espacio con media docena de badges en la
+     misma linea (ver "el correo completo no se ve").*/
+  .batch-candidate-row { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; font-size: 12px; }
+  .bcr-top, .bcr-bottom { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .bcr-bottom { flex-wrap: wrap; }
   .batch-candidate-row input[type="checkbox"] { width: auto; margin: 0; }
-  .batch-candidate-name { font-weight: 600; white-space: nowrap; }
+  .batch-candidate-name { font-weight: 600; white-space: nowrap; flex: 0 0 auto; }
   .batch-candidate-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 11px; }
   .batch-candidate-cv { font-size: 11px; white-space: nowrap; }
   .candidateDeleteBtn { background: none; border: none; color: var(--text-muted); font-size: 16px; line-height: 1; padding: 2px 4px; cursor: pointer; border-radius: 4px; }
@@ -2828,7 +2836,7 @@
 <div class="modal-overlay" id="logBatchModal">
   <div class="modal-card" style="max-width:480px;">
     <div class="modal-head">
-      <div><h2 style="margin:0; font-size:16px;" id="logBatchModalTitle">Log Submission Batch</h2></div>
+      <div><h2 style="margin:0; font-size:16px;" id="logBatchModalTitle">Add Candidate</h2></div>
       <button class="modal-close" id="logBatchClose" type="button">&times;</button>
     </div>
 
@@ -3409,7 +3417,7 @@ const STATUS_GUIDANCE = {
   // Sourcing y Screening se fusionaron en un solo status 2026-09-17 (ver STATUS_ORDER) — pasan en
   // paralelo en la practica, nunca uno despues del otro de forma separada, asi que el texto ahora
   // cubre las dos cosas en la secuencia real en que pasan.
-  "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Run Screening Interviews with your sourced candidates before submitting anyone formally — only candidates you'd genuinely stand behind should move forward, with your evaluation left as a comment on each profile. Once you've settled on a batch of 3-5 candidates, log them (with names, in Submission Batches) within 7-9 business days of the intake meeting — this moves to Submitted automatically once you do.",
+  "Sourcing": "Source through KeyStone (passive outreach) and watch for LinkedIn applicants (active) — remember Workable direct applicants and internal referrals don't flow in automatically, add them to Spott by hand. Run Screening Interviews with your sourced candidates before submitting anyone formally — only candidates you'd genuinely stand behind should move forward, with your evaluation left as a comment on each profile. Add each one (with their name, in Submission Batches) as soon as you'd stand behind them — no need to wait and group several together — starting within 7-9 business days of the intake meeting; this moves to Submitted automatically once you add the first one.",
   "Submitted": "The batch is with the hiring manager for review — log it in Submission Batches if you haven't already, this status moves automatically once you do. Once they respond wanting to move a candidate forward, update that candidate's own status in Submission Batches (Technical Interview, Hiring Manager Interview, or Executive Review, whichever applies) — this requisition moves to Client Interview automatically as soon as any candidate does.",
   "Client Interview": "Candidates are interviewing with the client — Technical Interview, Hiring Manager Interview, Executive Review, or some combination, the real order and number of rounds vary by role, so track it per candidate in Submission Batches rather than assuming one fixed sequence here. Feedback is due within 1-3 business days per candidate, logged in Workable's Review tab — if it doesn't come, pause that candidate and escalate to Immy Nader; the requisition goes On Hold automatically until it's resolved. Once feedback arrives and they want to move forward, there's a separate 3-business-day decision SLA per candidate, never per batch. Once any candidate moves to Offer Request in Submission Batches, this requisition moves to Offer Request automatically too.",
   // Nicolas, 2026-10-01: "todos los estados tienen una logica... cada accion" — estas 3 entradas
@@ -3765,7 +3773,7 @@ function nextStepCtaHtml(p){
   if(p.status === "Sourcing"){
     // La accion real es loguear un batch (eso es lo que avanza el status solo, ver logBatchSave())
     // — el boton ahora abre ESE modal directamente en vez de solo dejar un remark generico.
-    return `<br><button type="button" class="fact-edit-link" id="nextStepOpenBatchBtn" style="margin-top:4px; display:inline-block;">Log Submission Batch &rarr;</button>${msg}`;
+    return `<br><button type="button" class="fact-edit-link" id="nextStepOpenBatchBtn" style="margin-top:4px; display:inline-block;">Add Candidate &rarr;</button>${msg}`;
   }
   // Nicolas, 2026-10-01: "recuerda que todos los estados tienen una logica no? Mejor dicho, cada
   // accion" — Offer Request se une a este mismo grupo: el handoff a Immy pasa por correo (el
@@ -5216,18 +5224,30 @@ function candidateRowHtml(c, p, isView){
   // no deberia requerir permiso de editar, solo AGREGAR una nueva, que openCandidateNoteModal() ya
   // gatea por separado con trackingCanEdit()).
   const noteCount = candidateNoteEntries(p, c.name).length;
+  // BUG REAL (Nicolas, 2026-10-14, viendo una captura real): todo esto vivia en una sola fila
+  // flex — con flex-wrap (agregado para el bug de overlap del mismo dia, ver .sla-card
+  // min-width:0 mas abajo) el punto de quiebre dependia del largo EXACTO de cada candidato
+  // (nombre/correo/si tenia CV o no), asi que Notes caia en una segunda linea para unos
+  // candidatos y no para otros de la MISMA tarjeta — "todo debe quedar organizado y a la
+  // vista". Ahora son 2 lineas FIJAS para TODOS por igual (nunca depende del contenido): nombre
+  // + correo arriba (correo con mucho mas espacio propio, ya no se recorta a 1-2 caracteres
+  // compitiendo con CV/status/Notes en la misma linea), CV/status/Notes/borrar siempre abajo.
   return `
     <div class="batch-candidate-row">
-      ${isView ? "" : `<input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">`}
-      <span class="dot" style="background:${tone.color};"></span>
-      <span class="batch-candidate-name">${escapeHtml(c.name)}</span>
-      ${emailHtml}
+      <div class="bcr-top">
+        ${isView ? "" : `<input type="checkbox" class="candidateCheck" data-candidate-id="${escapeHtml(c.id)}" data-batch-date="${escapeHtml(c.batchDate)}">`}
+        <span class="dot" style="background:${tone.color};"></span>
+        <span class="batch-candidate-name">${escapeHtml(c.name)}</span>
+        ${emailHtml}
+      </div>
+      <div class="bcr-bottom">
       ${cvHtml}
       ${filledNote}
       ${statusControlHtml}
       ${candidateFeedbackChipHtml(p, c)}
       <button type="button" class="fact-edit-link candidateNotesBtn" data-candidate-id="${escapeHtml(c.id)}" data-candidate-name="${escapeHtml(c.name)}" data-position-id="${escapeHtml(p.id)}" title="Notes about this candidate specifically — separate from the requisition's own Activity/Remarks">💬${noteCount ? ` ${noteCount}` : " Notes"}</button>
       ${isView ? "" : `<button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>`}
+      </div>
     </div>
     ${candidateOfferDatesHtml(c, isView)}`;
 }
@@ -8429,7 +8449,7 @@ function renderDetailModal(){
         : `<div class="panel-sub" style="margin:0 0 10px;">No batches logged yet.</div>`)}
     ${p.pivotRequestedDate && !isSlaExceptionApproved(p) ? `<div class="alert-banner tier-yellow compact">Pivot SLA requested on ${escapeHtml(p.pivotRequestedDate)}, waiting on approval from ${!p.pivotApprovedByLeadDate ? "CGP TA (Nicolás Patarroyo, Lead Talent Partner)" : "Irth TA (Immy Nader)"} — this only affects whether the TTF/TTH allowance applies, it doesn't block logging the next batch.</div>` : ""}
     ${isView ? "" : `<div style="margin-bottom:22px;">
-      <button type="button" class="btn ghost small" id="logBatchBtn">${p.batches && p.batches.length ? "+ Log Follow-up Batch" : "+ Log Batch"}</button>
+      <button type="button" class="btn ghost small" id="logBatchBtn">+ Add Candidate</button>
     </div>`}`;
 
   // El diagrama de Requisition Flow SOLO vive en el modal flotante que se abre desde el Gantt del
@@ -9672,7 +9692,7 @@ async function markPivotApproval(p, who){
   if(isSlaExceptionApproved(p)){
     document.getElementById("pivotPendingState").style.display = "none";
     document.getElementById("logBatchFormState").style.display = "";
-    document.getElementById("logBatchModalTitle").textContent = "Log Submission Batch";
+    document.getElementById("logBatchModalTitle").textContent = "Add Candidate";
     document.getElementById("logBatchDate").value = localTodayStr();
     document.getElementById("logBatchCount").value = "";
     document.getElementById("logBatchTypeDisplay").textContent = "Pivot Follow-up";
@@ -10894,7 +10914,7 @@ function openLogBatchModal(p, opts={}){
     document.getElementById("logBatchModalTitle").textContent = "Confirm Compensation First";
     document.getElementById("logBatchSalaryRequiredState").style.display = "";
   } else {
-    document.getElementById("logBatchModalTitle").textContent = "Log Submission Batch";
+    document.getElementById("logBatchModalTitle").textContent = "Add Candidate";
     document.getElementById("logBatchFormState").style.display = "";
     document.getElementById("logBatchDate").value = localTodayStr();
     document.getElementById("logBatchCvFiles").value = "";
@@ -11016,34 +11036,14 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
     msg.style.color = "var(--critical)";
     return;
   }
-  // BUG REAL/REGLA NUEVA 2026-10-08 (Nicolas: "a partir de ahora, si o si, se deben loguear un
-  // minimo de 3 candidatos por cada batch. No pueden ser menos... si no se loguea un batch, pues
-  // no se puede avanzar"; CORREGIDO el mismo dia, Nicolas: "lo del minimo de 3 es por headcount, o
-  // sea si hay dos headcounts lo minimo son 6" — el piso no es un flat 3, escala con cuantas
-  // vacantes reales comparte el Headcount Group, igual que headcountGroupMinCandidates() de abajo
-  // (groupSize*3; sin grupo, groupSize=1, osea 3 igual que antes). Sube el piso minimo de 1 (el
-  // check de arriba, que se queda igual para reqs viejos) a este numero, para TODO batch — inicial
-  // o follow-up, no solo el primero, porque cada batch ahora se comparte con todo el grupo (ver
-  // propagateBatchToHeadcountSiblings) — pero SOLO para reqs nuevos (reqIsPostCutover(), nunca
-  // retroactivo a reqs ya en curso bajo la regla vieja de "al menos 1"). De verdad bloqueante, a
-  // diferencia del aviso suave de abajo (que sigue existiendo, pero solo para reqs PRE-cutover en
-  // un grupo, donde este bloqueo nuevo todavia no aplica). Como esto bloquea el guardado mismo,
-  // cualquier batch que SI llegue a existir para un req nuevo ya cumple el minimo por construccion
-  // — el gate de REQUIRES_BATCH_LOGGED (status avanza solo si ya hay un batch logueado) no necesita
-  // ningun cambio aparte.
-  const hardMin = p.headcountGroup ? headcountGroupMinCandidates(p) : 3;
-  if(reqIsPostCutover(p) && logBatchPendingCandidates.length < hardMin){
-    msg.textContent = p.headcountGroup
-      ? `This req is part of Headcount Group "${p.headcountGroup}" (${hardMin/3} open headcounts) — every batch needs at least ${hardMin} candidates (3 per open headcount), only ${logBatchPendingCandidates.length} added so far. Add more before saving.`
-      : `This requisition requires at least 3 candidates per batch — only ${logBatchPendingCandidates.length} added so far. Add more before saving.`;
-    msg.style.color = "var(--critical)";
-    return;
-  }
-  // Advertencia suave, NO bloqueante — Nicolas: "puede loguear menos, pero se le hace la
-  // advertencia que su SLA de average TTS se va a ver afectado". Solo le queda terreno a reqs
-  // PRE-cutover (el check duro de arriba ya cubre el mismo numero, y mas, para reqs post-cutover —
-  // si reqIsPostCutover(p) fuera true aqui ya se habria hecho return arriba antes de llegar a esto).
-  const groupMinForSave = (!reqIsPostCutover(p) && isFirst) ? headcountGroupMinCandidates(p) : null;
+  // REGLA REVERTIDA 2026-10-14 (Nicolas: "ya no funciona como tal por batches... necesitan que
+  // vayamos enviando gente a medida que llegan"): el minimo DURO de 3 por batch (o 3 por headcount
+  // abierto) que se agrego el 2026-10-08 ya no aplica — el negocio cambio a enviar candidatos
+  // segun van llegando, no a juntar un grupo antes de poder guardar. El unico minimo que queda es
+  // el de siempre, "al menos 1 candidato real con nombre" (ver el check de arriba). El aviso suave
+  // de abajo ya no distingue reqs pre/post-cutover (esa distincion solo existia para dejarle
+  // terreno al bloqueo duro que se acaba de quitar) — ahora aplica igual para cualquier req.
+  const groupMinForSave = isFirst ? headcountGroupMinCandidates(p) : null;
   if(groupMinForSave && logBatchPendingCandidates.length < groupMinForSave){
     const proceed = confirm(`This req is part of Headcount Group "${p.headcountGroup}" (${groupMinForSave/3} open headcounts) — a full initial batch for the whole group should have at least ${groupMinForSave} candidates, not ${logBatchPendingCandidates.length}. Logging fewer will make this group's average Time To Submit SLA look worse than it should. Log it anyway?`);
     if(!proceed) return;
