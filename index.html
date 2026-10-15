@@ -1630,6 +1630,15 @@
     transition: opacity 0.16s ease, visibility 0.16s ease;
   }
   .modal-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
+  /* BUG REAL (Nicolas, 2026-10-15): "le doy click a Notes en cada candidato y no me sale nada...
+     queda detras del modal del req" — todos los modal-overlay comparten el mismo z-index:50, asi
+     que cual queda ENCIMA cuando dos estan abiertos a la vez (#detailModal + un modal hijo que se
+     abre desde adentro, como #candidateNoteModal) depende solo del orden en el HTML, no de cual se
+     abrio despues — #candidateNoteModal vive ANTES que #detailModal en el documento, asi que
+     siempre quedaba pintado debajo, invisible pero tecnicamente "abierto" (por eso desaparecia solo
+     con cerrar el modal del req). z-index explicito, mas alto que el 50 base, en vez de depender
+     del orden del HTML — mas robusto contra el mismo bug si se agrega otro modal hijo despues. */
+  #candidateNoteModal { z-index: 55; }
   .modal-card {
     background: var(--surface-1); border-radius: var(--radius); box-shadow: var(--shadow);
     width: 100%; max-width: 780px; padding: 22px 26px 26px;
@@ -2644,8 +2653,8 @@
     <div class="modal-body" style="padding:8px 24px 24px;">
       <ul class="timeline" id="candidateNoteList" style="margin-bottom:16px;"></ul>
       <div class="add-remark">
-        <textarea id="candidateNoteInput" rows="2" placeholder="Add a note about this candidate…"></textarea>
-        <button class="btn primary small" id="candidateNoteSave" type="button">Add Note</button>
+        <textarea id="candidateNoteInput" rows="2" placeholder="Add a remark about this candidate…"></textarea>
+        <button class="btn primary small" id="candidateNoteSave" type="button">Add Remark</button>
         <div style="font-size:11px; margin-top:4px;" id="candidateNoteMsg"></div>
       </div>
     </div>
@@ -5268,7 +5277,7 @@ function candidateRowHtml(c, p, isView){
       ${filledNote}
       ${statusControlHtml}
       ${candidateFeedbackChipHtml(p, c)}
-      <button type="button" class="fact-edit-link candidateNotesBtn" data-candidate-id="${escapeHtml(c.id)}" data-candidate-name="${escapeHtml(c.name)}" data-position-id="${escapeHtml(p.id)}" title="Notes about this candidate specifically — separate from the requisition's own Activity/Remarks">💬${noteCount ? ` ${noteCount}` : " Notes"}</button>
+      <button type="button" class="fact-edit-link candidateNotesBtn" data-candidate-id="${escapeHtml(c.id)}" data-candidate-name="${escapeHtml(c.name)}" data-position-id="${escapeHtml(p.id)}" title="Remarks about this candidate specifically — grouped here, and also logged in this requisition's own Activity below">💬${noteCount ? ` ${noteCount}` : " Remarks"}</button>
       ${isView ? "" : `<button type="button" class="candidateDeleteBtn" data-candidate-id="${escapeHtml(c.id)}" title="Remove this candidate — e.g. if they were added to the wrong batch">&times;</button>`}
       </div>
     </div>
@@ -5302,12 +5311,19 @@ function batchCandidatesBlockHtml(p, batchDate, isView){
 // parseable para filtrar solo las de ESTE candidato en su modal chico. Texto, no un ID oculto,
 // porque el resto del archivo ya resuelve TODO por texto (allStatusTransitionDates, etc.) — mismo
 // patron, nunca un campo estructurado aparte que nadie mas usa.
-const CANDIDATE_NOTE_PREFIX = (name) => `Note on ${name}: `;
+// Nicolas, 2026-10-15: "en vez de que se llame notes, se deberia llamar remarks" — renombrado de
+// cara al usuario (boton, modal, Activity). Prefijo nuevo para lo que se guarde de aqui en
+// adelante; el prefijo viejo ("Note on X: ") sigue reconocido abajo SOLO para leer remarks ya
+// guardados antes de este cambio — si no, desaparecerian de este modal chico (seguirian visibles
+// en el Activity general, que no depende del prefijo, pero no aqui, filtrado por candidato).
+const CANDIDATE_NOTE_PREFIX = (name) => `Remark logged for ${name}: `;
+const CANDIDATE_NOTE_PREFIX_LEGACY = (name) => `Note on ${name}: `;
 function candidateNoteEntries(p, candidateName){
   const prefix = CANDIDATE_NOTE_PREFIX(candidateName);
+  const legacyPrefix = CANDIDATE_NOTE_PREFIX_LEGACY(candidateName);
   return positionActivityEntries(p)
-    .filter(e=> e.type==="candidateNote" && typeof e.text==="string" && e.text.startsWith(prefix))
-    .map(e=> ({date:e.date, time:e.time, type:e.type, author:e.author, text:e.text.slice(prefix.length)}))
+    .filter(e=> e.type==="candidateNote" && typeof e.text==="string" && (e.text.startsWith(prefix) || e.text.startsWith(legacyPrefix)))
+    .map(e=> ({date:e.date, time:e.time, type:e.type, author:e.author, text:e.text.slice(e.text.startsWith(prefix) ? prefix.length : legacyPrefix.length)}))
     .sort((a,b)=> a.date===b.date ? 0 : (a.date<b.date?-1:1));
 }
 let candidateNoteTarget = null; // {positionId, candidateName}
@@ -5329,7 +5345,7 @@ function renderCandidateNoteList(){
   const p = POSITIONS.find(x=>x.id===candidateNoteTarget.positionId);
   if(!p) return;
   const entries = candidateNoteEntries(p, candidateNoteTarget.candidateName).slice().reverse();
-  document.getElementById("candidateNoteList").innerHTML = timelineListHtml(entries, "No notes yet for this candidate.");
+  document.getElementById("candidateNoteList").innerHTML = timelineListHtml(entries, "No remarks yet for this candidate.");
 }
 function closeCandidateNoteModal(){
   document.getElementById("candidateNoteModal").classList.remove("open");
@@ -5346,7 +5362,7 @@ document.getElementById("candidateNoteSave").addEventListener("click", async ()=
   const input = document.getElementById("candidateNoteInput");
   const msg = document.getElementById("candidateNoteMsg");
   const text = input.value.trim();
-  if(!text){ msg.textContent = "Write a note before saving."; msg.style.color = "var(--critical)"; return; }
+  if(!text){ msg.textContent = "Write a remark before saving."; msg.style.color = "var(--critical)"; return; }
   const saveBtn = document.getElementById("candidateNoteSave");
   saveBtn.disabled = true;
   try {
@@ -7780,7 +7796,7 @@ function buildTimeline(p){
     return 0;
   });
 }
-const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step", candidateNote: "Candidate Note" };
+const TL_BADGE_LABELS = { auto: "Milestone", action: "Action", manual: "Remark", status: "Status Change", guidance: "Next Step", candidateNote: "Candidate Remark" };
 // e.time (opcional/nueva, ver graphAppendHistorial()'s columna Time) — entradas viejas sin hora
 // simplemente no muestran la segunda linea, nunca rompe nada. Nicolas: "no se si podamos agregar
 // en el timestamp la hora para asi poder ver mejor el historial" — sobre todo util para desempatar
