@@ -14134,24 +14134,40 @@ function autoOpenActiveGanttOnLanding(){
 // hasta que alguien recargue a mano (Ctrl+Shift+R). No se puede forzar un reload real sin
 // preguntar — botaria cualquier cosa a medio escribir en un modal abierto de alguien, un problema
 // peor que el que esto resuelve — asi que en vez de eso se avisa con un banner y un boton a un
-// clic. Deteccion 100% automatica, sin tocar nada cada vez que se despliega: compara el ETag real
-// del archivo en el servidor (GitHub Pages lo manda siempre, ver respuesta HEAD) contra el que
-// tenia cuando esta pestaña cargo por primera vez — un ETag nuevo significa que el archivo cambio
-// del lado del servidor. fetch con cache:"no-store" fuerza un viaje real a la red cada vez, nunca
-// lee la copia cacheada por el navegador (si no, nunca veria el cambio). No corre en demo/local
-// (serve.ps1 no manda ETag real y no hay nada que detectar ahi).
+// clic.
+// Nicolas, 2026-10-15: "le puedes poner el numero de la version... al banner de refrescar?" — el
+// banner solo decia "hay una version nueva", sin decir CUAL, porque la deteccion comparaba el ETag
+// opaco que manda GitHub Pages (un hash sin significado para nadie), nunca un numero real. APP_VERSION
+// de abajo es ese numero real — se incrementa a mano en cada cambio real que se publica (fecha +
+// contador del dia, para que sea legible de un vistazo: "2026-10-15.2" = el 2o cambio de hoy). El
+// chequeo ahora SI lee ese numero del archivo real en el servidor (GET, no solo HEAD) y lo compara
+// contra el de esta pestaña — si difiere, el banner dice exactamente cual version nueva esta
+// disponible. El chequeo viejo por ETag se deja como respaldo SOLO si por algo el numero no se pudo
+// leer del archivo descargado (nunca deberia pasar, pero evita que la deteccion completa dependa de
+// que yo nunca me equivoque tecleando la constante).
+const APP_VERSION = "2026-10-15.1";
 let KNOWN_LIVE_ETAG = null;
 async function checkForNewVersion(){
   try {
     const url = location.href.split(/[?#]/)[0];
-    const res = await fetch(url, { method: "HEAD", cache: "no-store" });
+    const res = await fetch(url, { cache: "no-store" });
     const tag = res.headers.get("etag") || res.headers.get("last-modified");
+    const body = await res.text();
+    const match = body.match(/const APP_VERSION = "([^"]+)"/);
+    const banner = document.getElementById("newVersionBanner");
+    if(match && match[1] !== APP_VERSION){
+      if(banner){
+        banner.querySelector("span").textContent = `A newer version (v${match[1]}) is available — you're on v${APP_VERSION}.`;
+        banner.style.display = "flex";
+      }
+      return;
+    }
+    if(match) return; // numero leido y coincide — version al dia, nada que avisar
+    // Respaldo: no se pudo leer APP_VERSION del archivo (no deberia pasar nunca) — vuelve al
+    // chequeo viejo por ETag en vez de quedarse ciego a cualquier cambio futuro.
     if(!tag) return;
     if(KNOWN_LIVE_ETAG === null){ KNOWN_LIVE_ETAG = tag; return; }
-    if(tag !== KNOWN_LIVE_ETAG){
-      const banner = document.getElementById("newVersionBanner");
-      if(banner) banner.style.display = "flex";
-    }
+    if(tag !== KNOWN_LIVE_ETAG && banner) banner.style.display = "flex";
   } catch(err){ /* sin internet, CORS local, etc. — no vale la pena molestar por esto */ }
 }
 function startVersionWatcher(){
