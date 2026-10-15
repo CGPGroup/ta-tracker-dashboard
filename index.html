@@ -3992,6 +3992,14 @@ function isAdmin(){
 // puede editar (status, remarks, fechas) si su cuenta de MS365 conectada es literalmente esa
 // persona. Sin conexion, solo en pruebas locales (ver isLocalTestingContext()) se trata como
 // editable, mismo criterio que isAdmin().
+// Nicolas, 2026-10-15: "necesito remover el hold de uno de los FSD y no puedo... los reqs que no
+// son mios no me deja editarlos" — real, el criterio de arriba exigia ser LITERALMENTE el dueño
+// del req, sin excepcion ni para el admin. Nicolas (isAdmin()) ahora puede editar cualquier req,
+// de cualquier reclutador, sin tener que entrar al workspace de esa persona primero — sigue
+// siendo el UNICO gate real de edicion en todo el archivo (ver los demas usos de
+// trackingCanEdit()), asi que este cambio se propaga solo a status/batches/remarks/fechas, sin
+// tocar nada mas. Otros reclutadores (no-admin) siguen exactamente igual que antes: solo sus
+// propios reqs.
 function trackingCanEdit(){
   // Ver publicAccessMode: sin este chequeo, un visitante real de Public Access (sin login,
   // pero que SI paso por el gate) caia en el mismo "sin conexion = confiable" que las pruebas
@@ -3999,6 +4007,7 @@ function trackingCanEdit(){
   // Attention en Overview, visible sin ningun click extra). Bug real reportado por Nicolas.
   if(publicAccessMode) return false;
   if(!isConnected()) return isLocalTestingContext();
+  if(isAdmin()) return true;
   return !!activeDashboardScope && MY_RECRUITER_NAME === activeDashboardScope;
 }
 
