@@ -10911,6 +10911,27 @@ function headcountGroupMinCandidates(p){
   const groupSize = POSITIONS.filter(x=>x.headcountGroup===p.headcountGroup).length;
   return groupSize * 3;
 }
+// Minimo (3) e ideal (5) reales por vacante abierta, aplicando igual a un req suelto (cuenta como
+// 1 "headcount" propio) y a un Headcount Group completo (suma las vacantes reales del grupo) —
+// Nicolas, 2026-11-09: "el minimo son 3 candidatos, lo ideal 5," acumulados a traves de cualquier
+// cantidad de guardados pequeños (1-2 candidatos a la vez, a medida que se consiguen), nunca en
+// un solo batch de una. Ver candidatesSubmittedSoFar() justo abajo para el acumulado real.
+function headcountGroupSize(p){
+  return p.headcountGroup ? POSITIONS.filter(x=>x.headcountGroup===p.headcountGroup).length : 1;
+}
+function minCandidatesTarget(p){ return headcountGroupSize(p) * 3; }
+function idealCandidatesTarget(p){ return headcountGroupSize(p) * 5; }
+// Cuantos candidatos YA se han logueado (antes de este guardado en curso) para el req. A
+// diferencia de un primer intento de esta funcion (sumar batchesSubmittedCount() de cada hermana
+// del grupo), eso DUPLICABA el conteo: propagateBatchToHeadcountSiblings() ya le copia cada batch
+// real (y sus candidatos) a TODAS las hermanas apenas se loguea en cualquiera de ellas (ver esa
+// funcion, llamada desde logBatchSave()), asi que p.batches de UNA sola hermana ya refleja el
+// total real compartido de todo el grupo — sumarlo de nuevo por cada hermana cuenta cada
+// candidato una vez por cada vacante del grupo. Confirmado en vivo (demo): un grupo de 2 con 3
+// candidatos reales mostraba 6 en vez de 3 antes de este fix.
+function candidatesSubmittedSoFar(p){
+  return batchesSubmittedCount(p);
+}
 function openLogBatchModal(p, opts={}){
   document.getElementById("logBatchMsg").textContent = "";
   const batchNumber = (p.batches ? p.batches.length : 0) + 1;
@@ -10965,12 +10986,23 @@ function openLogBatchModal(p, opts={}){
     document.getElementById("logBatchTypeDisplay").textContent = isFirst ? "Initial" : (batchNumber === 2 ? "Follow-up" : "Pivot Follow-up");
     const formNote = document.getElementById("logBatchFormNote");
     const groupMin = headcountGroupMinCandidates(p);
-    if(isFirst){
-      formNote.textContent = "Remember, this triggers the first batch and its corresponding SLAs, this field is what's used for the initial batch."
-        + (groupMin ? ` This req is part of Headcount Group "${p.headcountGroup}" — this batch counts for the whole group, so the initial batch should have at least ${groupMin} candidates total (3 per open headcount in the group), not just 3-5 for this one req.` : "");
-      formNote.style.display = "";
-    } else if(batchNumber >= 3 && !pivotOk){
+    const minTarget = minCandidatesTarget(p);
+    const idealTarget = idealCandidatesTarget(p);
+    const soFar = candidatesSubmittedSoFar(p);
+    // 2026-11-09: ya no es "completa un batch de una" — el progreso hacia el minimo (3) e ideal
+    // (5) se muestra mientras no se alcance el ideal, sin importar si se va logueando de a 1
+    // candidato a la vez o varios de una, nunca limitado al primer guardado.
+    const progressNote = `${soFar} of ${minTarget} minimum (${idealTarget} ideal) candidates logged so far toward the initial submission window`
+      + (groupMin ? ` — shared across Headcount Group "${p.headcountGroup}" (${groupMin/3} open headcounts)` : "")
+      + `. No need to wait for a full batch, log them as they come in.`;
+    if(batchNumber >= 3 && !pivotOk){
       formNote.textContent = `This is batch #${batchNumber} — past the calibration call held on ${p.calibrationCallDate}. Consider requesting Pivot SLA from the "Pivot SLA" field in Timeline to protect the TTF/TTH metric.`;
+      formNote.style.display = "";
+    } else if(isFirst){
+      formNote.textContent = `This is the first candidate logged for this req — it starts the Time To Submit clock. ` + progressNote;
+      formNote.style.display = "";
+    } else if(soFar < idealTarget){
+      formNote.textContent = progressNote;
       formNote.style.display = "";
     } else {
       formNote.style.display = "none";
@@ -11098,13 +11130,25 @@ document.getElementById("logBatchSave").addEventListener("click", async ()=>{
   // REGLA REVERTIDA 2026-10-14 (Nicolas: "ya no funciona como tal por batches... necesitan que
   // vayamos enviando gente a medida que llegan"): el minimo DURO de 3 por batch (o 3 por headcount
   // abierto) que se agrego el 2026-10-08 ya no aplica — el negocio cambio a enviar candidatos
-  // segun van llegando, no a juntar un grupo antes de poder guardar. El unico minimo que queda es
-  // el de siempre, "al menos 1 candidato real con nombre" (ver el check de arriba). El aviso suave
-  // de abajo ya no distingue reqs pre/post-cutover (esa distincion solo existia para dejarle
-  // terreno al bloqueo duro que se acaba de quitar) — ahora aplica igual para cualquier req.
-  const groupMinForSave = isFirst ? headcountGroupMinCandidates(p) : null;
-  if(groupMinForSave && logBatchPendingCandidates.length < groupMinForSave){
-    const proceed = confirm(`This req is part of Headcount Group "${p.headcountGroup}" (${groupMinForSave/3} open headcounts) — a full initial batch for the whole group should have at least ${groupMinForSave} candidates, not ${logBatchPendingCandidates.length}. Logging fewer will make this group's average Time To Submit SLA look worse than it should. Log it anyway?`);
+  // segun van llegando, no a juntar un grupo antes de poder guardar. El unico minimo duro que
+  // queda es el de siempre, "al menos 1 candidato real con nombre" (ver el check de arriba).
+  // BUG REAL encontrado 2026-11-09 (Nicolas, agregando los reqs de la hoja de David): el aviso
+  // suave de abajo, pese a que el comentario original de 2026-10-14 decia que ya aplicaba "igual
+  // para cualquier req", en realidad solo se evaluaba para reqs de Headcount Group
+  // (headcountGroupMinCandidates() devuelve null para un req suelto) y solo miraba el tamano de
+  // ESTE guardado puntual, nunca lo ya acumulado en guardados anteriores — asi que loguear de a
+  // 1-2 candidatos (el flujo real que pidio el negocio) disparaba la advertencia cada vez, incluso
+  // ya habiendo acumulado el minimo real entre varios guardados chicos. Ahora: minimo (3) e ideal
+  // (5) aplican por igual a reqs sueltos y de grupo (minCandidatesTarget()/candidatesSubmittedSoFar()
+  // arriba), el acumulado cuenta TODO lo ya logueado antes de este guardado (para el req, o para
+  // todo el grupo si aplica), y deja de advertir en cuanto ese acumulado ya alcanzo el minimo, sin
+  // importar cuantos guardados mas chicos se hagan despues.
+  const minTarget = minCandidatesTarget(p);
+  const alreadySubmitted = candidatesSubmittedSoFar(p);
+  const afterThisSave = alreadySubmitted + logBatchPendingCandidates.length;
+  if(alreadySubmitted < minTarget && afterThisSave < minTarget){
+    const groupNote = p.headcountGroup ? ` (shared across Headcount Group "${p.headcountGroup}", ${headcountGroupSize(p)} open headcounts)` : "";
+    const proceed = confirm(`So far ${alreadySubmitted} of the ${minTarget} candidates expected${groupNote} for the initial submission window have been logged. Adding ${logBatchPendingCandidates.length} more brings it to ${afterThisSave}, still short of ${minTarget}. This will make the average Time To Submit SLA look worse than it should. Log it anyway?`);
     if(!proceed) return;
   }
   // Sin bloquear el boton, un doble clic (o un reintento antes de que "Saved." aparezca)
