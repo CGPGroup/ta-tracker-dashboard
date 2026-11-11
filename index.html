@@ -1468,6 +1468,13 @@
      Attention/quick lists se vea de una que este req viene de otro reclutador sin tener que
      abrirla. Color neutro de marca (no warning) porque no es una alerta, es informativo. */
   .pos-handoff-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--brand-wash); color: var(--brand-dark); white-space: nowrap; cursor: help; }
+  /* Recruiter de registro NO es un reclutador de Cornerstone (no esta en RECRUITERS) — el dia a
+     dia quedo en manos del cliente (ej. Pratik Kurhekar, Irth), sin que nadie de Cornerstone lo
+     siga trabajando. Visualmente distinto de pos-handoff-badge (ese es reclutador-a-reclutador
+     DENTRO de Cornerstone, este es reclutador-a-cliente) para que nunca se confundan si una req
+     resulta tener las dos señales a la vez. Icono y color propios, mismo tono informativo (no
+     warning/critical) que pos-handoff-badge. */
+  .pos-client-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: rgba(var(--accent-rgb,124,58,237),0.16); color: var(--accent, #7c3aed); white-space: nowrap; cursor: help; }
   /* Flag de 24h+ en Job Creation (ver isJobCreationOverdue()) — tono critical (no warning) a
      proposito, para distinguirse de pending-badge (ambar) como una alerta mas urgente. */
   .pos-overdue-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; background: rgba(var(--critical-rgb),0.16); color: var(--critical); white-space: nowrap; cursor: help; }
@@ -4956,8 +4963,16 @@ function posLabel(p, withCode){
   const overdueBadge = isJobCreationOverdue(p)
     ? `<span class="pos-overdue-badge" title="In Job Creation since ${escapeHtml(p.jobCreationEnteredAt.replace("T"," "))} — more than 24 hours with no Spott Job logged yet. Flag it, make sure it's actually moving.">⚠ Job Creation 24h+</span>`
     : "";
+  // Recruiter de registro no esta en RECRUITERS (no es un reclutador de Cornerstone) — el dia a
+  // dia de esta req quedo con el cliente directamente, no con nadie de nuestro equipo. Nicolas,
+  // 2026-11-11: reqs de India entregadas a Pratik Kurhekar (Irth) donde David ya no trabaja nada,
+  // pero sin tocar el Status real (pipeline) ni el mecanismo de Handoff interno (ese asume que
+  // quien recibe puede entrar al tracker y aceptar — un contacto del cliente no puede).
+  const clientBadge = (p.recruiter && typeof RECRUITERS !== "undefined" && !RECRUITERS.includes(p.recruiter))
+    ? `<span class="pos-client-badge" title="Recruiter of record (${escapeHtml(p.recruiter)}) is not a Cornerstone team member — this requisition's day-to-day work is being handled directly by the client, not by our team.">🔄 With ${escapeHtml(p.recruiter)} (Client)</span>`
+    : "";
   const codeSpan = withCode === false ? "" : `<span class="pos-code">${escapeHtml(p.id)}</span>`;
-  return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}${handoffBadge}${overdueBadge}`;
+  return `<span class="pos-title">${escapeHtml(p.title)}</span>${codeSpan}${pendingBadge}${handoffBadge}${overdueBadge}${clientBadge}`;
 }
 // Campos como Spott Job ID venian historicamente como un ID crudo (no un link), pero de aqui
 // en adelante deberian guardar la URL completa (pegada tal cual desde la barra de direcciones,
