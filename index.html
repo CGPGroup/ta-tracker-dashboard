@@ -4380,12 +4380,13 @@ function isActivelyWorkedByUs(p){
   return !TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status)
     && (!p.recruiter || typeof RECRUITERS === "undefined" || RECRUITERS.includes(p.recruiter));
 }
-// Nicolas, 2026-11-11: "las posiciones... deben quedar organizadas en orden ascendente... de mas
-// antigua a mas nueva segun fecha de kickoff" en CUALQUIER parte del tracker que muestre una lista
-// de reqs, no solo el Gantt. Hoisted para que cada listado use el mismo criterio (y el mismo
-// fallback para sin-Kickoff-Date) en vez de que cada uno reinvente su propio orden o se quede, como
-// hasta ahora, en el orden crudo de insercion de PositionsTable. No muta el array que recibe.
-function sortByKickoffAsc(positions){
+// Nicolas, 2026-11-11, corregido el mismo dia: "es en orden descendente... primero las mas
+// recientes se ven arriba y las mas antiguas abajo" (su pedido original decia ascendente, pero esa
+// era la correccion real) — en CUALQUIER parte del tracker que muestre una lista de reqs, no solo
+// el Gantt. Hoisted para que cada listado use el mismo criterio (y el mismo fallback para
+// sin-Kickoff-Date) en vez de que cada uno reinvente su propio orden o se quede, como hasta ahora,
+// en el orden crudo de insercion de PositionsTable. No muta el array que recibe.
+function sortByKickoffDesc(positions){
   // BUG REAL encontrado probando esto mismo: ordenar SOLO por Kickoff Date no alcanza cuando
   // varias reqs comparten la MISMA fecha exacta (caso real: RD-014/RD-015/RD-037/SE-008/SE-00? de
   // Maria, todas creadas el mismo Kickoff) — el sort de JS es estable, asi que un empate se
@@ -4400,8 +4401,11 @@ function sortByKickoffAsc(positions){
   // mitades con la req suelta en medio. Usar su propio Position ID como "grupo" la deja desempatar
   // por una clave que nunca coincide con la de otra req (salvo coincidencia real de IDs, imposible
   // aqui), asi que nunca interrumpe a un grupo real ajeno.
+  // Fallback "0000-00-00" (no "9999-99-99"): en descendente, el valor MAS CHICO es el que termina
+  // de ULTIMO — una req sin Kickoff Date todavia sigue yendo al final de la lista, nunca al
+  // principio, sin importar que la direccion del sort se haya invertido.
   return [...positions].sort((a,b)=>
-    (a.kickoff || "9999-99-99").localeCompare(b.kickoff || "9999-99-99")
+    (b.kickoff || "0000-00-00").localeCompare(a.kickoff || "0000-00-00")
     || (a.headcountGroup || a.id).localeCompare(b.headcountGroup || b.id)
     || a.id.localeCompare(b.id));
 }
@@ -6457,9 +6461,9 @@ function renderGanttGroup(key){
   // las filas viven en PositionsTable. Caso real que lo expuso: varias reqs de Maria
   // (RD-014/RD-015/RD-037/SE-008/SE-00?) comparten el mismo Kickoff Date exacto pero se crearon en
   // momentos distintos de la sesion, asi que salian intercaladas sin ningun criterio. Ver
-  // sortByKickoffAsc() (junto a isActivelyWorkedByUs) para el criterio compartido con el resto del
+  // sortByKickoffDesc() (junto a isActivelyWorkedByUs) para el criterio compartido con el resto del
   // tracker.
-  data = sortByKickoffAsc(data);
+  data = sortByKickoffDesc(data);
   // Nicolas, 2026-09-27: "eso de last 6 weeks y all time para filtrar el gantt hay que quitarlo
   // no?" — si. El propio toggle de arriba (ganttScope: "recent"/"all", ver el comentario que este
   // reemplaza) quedo redundante en cuanto el filtro de trimestre/año de las tarjetas (summaryScope,
@@ -7357,8 +7361,8 @@ function renderPositions(){
   if(clearAllChipsBtn) clearAllChipsBtn.addEventListener("click", ()=>{ chips.forEach(c=>c.clear()); renderPositions(); });
 
   // Nicolas, 2026-11-11: orden ascendente por Kickoff Date en cualquier listado del tracker, ver
-  // sortByKickoffAsc() junto a isActivelyWorkedByUs().
-  const rows = sortByKickoffAsc(POSITIONS.filter(p=>{
+  // sortByKickoffDesc() junto a isActivelyWorkedByUs().
+  const rows = sortByKickoffDesc(POSITIONS.filter(p=>{
     if(est && p.status!==est) return false;
     if(rec && p.recruiter!==rec) return false;
     if(hm && p.hiringManager!==hm) return false;
@@ -7675,8 +7679,8 @@ function renderTracking(){
   // dashboardPositions() ya viene filtrado al reclutador del perfil activo (Tracking solo se
   // puede ver dentro de un perfil), asi que no hace falta un select de "Recruiter" aparte.
   // Nicolas, 2026-11-11: orden ascendente por Kickoff Date en cualquier listado del tracker, ver
-  // sortByKickoffAsc() junto a isActivelyWorkedByUs().
-  const rows = sortByKickoffAsc(dashboardPositions().filter(p=>{
+  // sortByKickoffDesc() junto a isActivelyWorkedByUs().
+  const rows = sortByKickoffDesc(dashboardPositions().filter(p=>{
     // "Active Only" usaba solo TERMINAL — dejaba pasar Filled/On Hold/On Hold-Internal, que ya
     // no cuentan como "activo" en ningun otro lugar del tracker (ver NOT_ACTIVELY_WORKED,
     // encontrado en auditoria 2026-09-19: este checkbox era el unico lugar que se habia quedado
