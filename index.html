@@ -4371,6 +4371,31 @@ function isActivelyWorkedByUs(p){
   return !TERMINAL.includes(p.status) && !NOT_ACTIVELY_WORKED.includes(p.status)
     && (!p.recruiter || typeof RECRUITERS === "undefined" || RECRUITERS.includes(p.recruiter));
 }
+// Nicolas, 2026-11-11: "las posiciones... deben quedar organizadas en orden ascendente... de mas
+// antigua a mas nueva segun fecha de kickoff" en CUALQUIER parte del tracker que muestre una lista
+// de reqs, no solo el Gantt. Hoisted para que cada listado use el mismo criterio (y el mismo
+// fallback para sin-Kickoff-Date) en vez de que cada uno reinvente su propio orden o se quede, como
+// hasta ahora, en el orden crudo de insercion de PositionsTable. No muta el array que recibe.
+function sortByKickoffAsc(positions){
+  // BUG REAL encontrado probando esto mismo: ordenar SOLO por Kickoff Date no alcanza cuando
+  // varias reqs comparten la MISMA fecha exacta (caso real: RD-014/RD-015/RD-037/SE-008/SE-00? de
+  // Maria, todas creadas el mismo Kickoff) — el sort de JS es estable, asi que un empate se
+  // resuelve con el orden que ya traian (orden de insercion/creacion en PositionsTable), que no
+  // tiene nada que ver con que sean el mismo rol. Eso era exactamente lo que Nicolas via: QA,
+  // luego Data Science, luego QA otra vez. Segundo criterio de desempate: Headcount Group (si
+  // existe) para que los hermanos siempre queden seguidos; tercer criterio (Position ID) solo para
+  // que el orden sea 100% deterministico entre recargas, nunca para decidir nada por si solo.
+  // (a.headcountGroup || a.id), nunca (a.headcountGroup || ""): una req SIN grupo que comparta
+  // Kickoff Date con una req CON grupo no puede desempatar con "" — eso la mandaria siempre antes
+  // de CUALQUIER grupo real (toda cadena no vacia es "mayor" que ""), partiendo el grupo en dos
+  // mitades con la req suelta en medio. Usar su propio Position ID como "grupo" la deja desempatar
+  // por una clave que nunca coincide con la de otra req (salvo coincidencia real de IDs, imposible
+  // aqui), asi que nunca interrumpe a un grupo real ajeno.
+  return [...positions].sort((a,b)=>
+    (a.kickoff || "9999-99-99").localeCompare(b.kickoff || "9999-99-99")
+    || (a.headcountGroup || a.id).localeCompare(b.headcountGroup || b.id)
+    || a.id.localeCompare(b.id));
+}
 // Estados que son una decision de negocio explicita, no un paso mas del pipeline lineal — nunca
 // se tocan por un efecto secundario silencioso de loguear una fecha/batch (ver DATE_IMPLIES_STATUS
 // en saveModalDates() y el auto-avance de logBatchSave). Hoisted aqui (antes vivia solo dentro de
@@ -6412,6 +6437,13 @@ function renderGanttGroup(key){
   } else {
     ganttStageFilter = null;
   }
+  // Nicolas, 2026-11-11: antes `data` nunca se ordenaba aqui, se mostraba en el orden crudo en que
+  // las filas viven en PositionsTable. Caso real que lo expuso: varias reqs de Maria
+  // (RD-014/RD-015/RD-037/SE-008/SE-00?) comparten el mismo Kickoff Date exacto pero se crearon en
+  // momentos distintos de la sesion, asi que salian intercaladas sin ningun criterio. Ver
+  // sortByKickoffAsc() (junto a isActivelyWorkedByUs) para el criterio compartido con el resto del
+  // tracker.
+  data = sortByKickoffAsc(data);
   // Nicolas, 2026-09-27: "eso de last 6 weeks y all time para filtrar el gantt hay que quitarlo
   // no?" — si. El propio toggle de arriba (ganttScope: "recent"/"all", ver el comentario que este
   // reemplaza) quedo redundante en cuanto el filtro de trimestre/año de las tarjetas (summaryScope,
@@ -7308,7 +7340,9 @@ function renderPositions(){
   const clearAllChipsBtn = document.getElementById("positionsClearAllChips");
   if(clearAllChipsBtn) clearAllChipsBtn.addEventListener("click", ()=>{ chips.forEach(c=>c.clear()); renderPositions(); });
 
-  const rows = POSITIONS.filter(p=>{
+  // Nicolas, 2026-11-11: orden ascendente por Kickoff Date en cualquier listado del tracker, ver
+  // sortByKickoffAsc() junto a isActivelyWorkedByUs().
+  const rows = sortByKickoffAsc(POSITIONS.filter(p=>{
     if(est && p.status!==est) return false;
     if(rec && p.recruiter!==rec) return false;
     if(hm && p.hiringManager!==hm) return false;
@@ -7322,7 +7356,7 @@ function renderPositions(){
     }
     if(q && !(p.title.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.hiringManager.toLowerCase().includes(q) || p.recruiter.toLowerCase().includes(q))) return false;
     return true;
-  });
+  }));
   // Active Positions = misma definicion que el KPI de Overview (NOT_ACTIVELY_WORKED, ver esa
   // constante) — este conteo tenia su propia logica vieja aparte ("no terminal", sin excluir
   // Filled/On Hold) y mostraba un numero DISTINTO bajo el mismo nombre "Active Positions" que
@@ -7624,7 +7658,9 @@ function renderTracking(){
 
   // dashboardPositions() ya viene filtrado al reclutador del perfil activo (Tracking solo se
   // puede ver dentro de un perfil), asi que no hace falta un select de "Recruiter" aparte.
-  const rows = dashboardPositions().filter(p=>{
+  // Nicolas, 2026-11-11: orden ascendente por Kickoff Date en cualquier listado del tracker, ver
+  // sortByKickoffAsc() junto a isActivelyWorkedByUs().
+  const rows = sortByKickoffAsc(dashboardPositions().filter(p=>{
     // "Active Only" usaba solo TERMINAL — dejaba pasar Filled/On Hold/On Hold-Internal, que ya
     // no cuentan como "activo" en ningun otro lugar del tracker (ver NOT_ACTIVELY_WORKED,
     // encontrado en auditoria 2026-09-19: este checkbox era el unico lugar que se habia quedado
@@ -7639,7 +7675,7 @@ function renderTracking(){
     }
     if(q && !(p.title.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.hiringManager.toLowerCase().includes(q) || p.recruiter.toLowerCase().includes(q))) return false;
     return true;
-  });
+  }));
   document.getElementById("trackingCount").textContent = rows.length + " positions";
   // Checkbox de seleccion en lote: solo si el perfil actual es editable por ti — reasignar
   // reqs es una accion tuya sobre tus propias posiciones, no algo que tenga sentido mientras
