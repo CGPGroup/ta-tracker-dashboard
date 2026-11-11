@@ -1337,6 +1337,14 @@
      identico a las demas filas. */
   .workload-sla { font-size: 10.5px; font-weight: 600; text-align: center; }
   .workload-sla .dot { margin-right: 4px; vertical-align: middle; }
+  /* Nicolas, 2026-11-11: "si hay algunas reqs que tengamos on hold cada uno, solo las de on hold
+     solito" -- SOLO el status "On Hold" exacto, nunca "On Hold — Internal Candidates" (ese ya
+     cuenta aparte, es una historia distinta: una decision pendiente del cliente sobre un interno,
+     no la misma razon de negocio que un On Hold llano). Mismo tono informativo que
+     .pos-handoff-badge/.pos-client-badge (warning, no critical -- es una pausa real pero
+     esperada, no una alerta urgente). Nunca se renderiza si el conteo es 0: no tiene sentido
+     mostrarle "0 on hold" a alguien sin ninguna, eso es ruido, no informacion. */
+  .workload-onhold { font-size: 10.5px; color: var(--warning); text-align: center; }
   /* Version compacta de workload-card/barlist, solo para los mini-charts dentro del Gantt (ver
      renderGanttInsights()) — Nicolas, 2026-09-26: "estan muy grandes en pixeles" sobre el tamaño
      que tenian como tarjeta de Insights aparte; mas chico aca porque comparten espacio con 2
@@ -1352,6 +1360,7 @@
   .workload-card.compact .workload-title { font-size: 9px; margin-top: 0; }
   .workload-card.compact .workload-count { font-size: 9.5px; }
   .workload-card.compact .workload-sla { font-size: 9.5px; }
+  .workload-card.compact .workload-onhold { font-size: 9.5px; }
   .barlist.compact { gap: 6px; }
   .barlist.compact .barlist-row { grid-template-columns: 78px 1fr 26px; gap: 6px; }
   .barlist.compact .barlist-label, .barlist.compact .barlist-value { font-size: 11px; }
@@ -6236,7 +6245,12 @@ function renderGanttInsights(containerId, positions, key){
     const workloadRows = recruiterNames.map(r=>{
       const assigned = active.filter(p=>p.recruiter===r);
       const weighted = assigned.reduce((sum,p)=> sum + (STAGE_WEIGHT[p.status] ?? 1), 0);
-      return {label:r, count: assigned.length, value: Math.round(weighted*10)/10, slaRate: recruiterSlaRate(assigned)};
+      // Nicolas, 2026-11-11: "on hold" aqui es SOLO el status "On Hold" exacto, nunca "On Hold —
+      // Internal Candidates" (razon de negocio distinta) -- contado contra `positions` (todas las
+      // reqs de este reclutador en esta vista), no contra `active` (On Hold ya esta excluido ahi a
+      // proposito, ver NOT_ACTIVELY_WORKED/isActivelyWorkedByUs).
+      const onHold = positions.filter(p=>p.recruiter===r && p.status==="On Hold").length;
+      return {label:r, count: assigned.length, value: Math.round(weighted*10)/10, slaRate: recruiterSlaRate(assigned), onHold};
     });
     const workloadCardsHtml = workloadRows.map(r=>{
       const photo = RECRUITER_PHOTOS[r.label];
@@ -6245,6 +6259,7 @@ function renderGanttInsights(containerId, positions, key){
       const slaHtml = r.slaRate === null
         ? `<div class="workload-sla"><span class="dot" style="background:var(--grid);"></span>${r.count ? "No SLA clock running yet" : "No active reqs"}</div>`
         : `<div class="workload-sla" style="color:${slaRateColor(r.slaRate)};"><span class="dot" style="background:${slaRateColor(r.slaRate)};"></span>${r.slaRate}% on SLA</div>`;
+      const onHoldHtml = r.onHold ? `<div class="workload-onhold" title="Requisitions currently paused on 'On Hold' status (not 'On Hold — Internal Candidates', that's tracked separately).">⏸ ${r.onHold} on hold</div>` : "";
       const title = RECRUITER_TITLES[r.label] || "";
       return `<div class="workload-card compact" data-label="${escapeHtml(r.label)}">
         <div class="workload-avatar" style="${avatarStyle}">${photo ? "" : escapeHtml(initialsFor(r.label))}${recruiterDotHtml(r.label)}</div>
@@ -6253,6 +6268,7 @@ function renderGanttInsights(containerId, positions, key){
         <div class="workload-track"><div class="workload-fill" style="width:${pct.toFixed(1)}%; background:${gradientFill(workloadColor(r.count))};"></div></div>
         <div class="workload-count">${r.count} / ${WORKLOAD_MAX} req${r.count===1?"":"s"} (${r.value} weighted)</div>
         ${slaHtml}
+        ${onHoldHtml}
       </div>`;
     }).join("");
 
