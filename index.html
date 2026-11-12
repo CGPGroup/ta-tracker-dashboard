@@ -7312,7 +7312,12 @@ function renderPositions(){
   const tthSel = document.getElementById("positionsTTH");
   const placementSel = document.getElementById("positionsPlacement");
   fillSelectOnce(statusSel, STATUS_ORDER, statusLabel);
-  fillSelectOnce(recSel, RECRUITERS);
+  // RECRUITERS (RecruitersTable) solo lista al equipo interno a proposito -- excluye recruiters
+  // del cliente como Pratik Kurhekar (ver clientBadge en posLabel()), asi que usarlo aqui dejaba
+  // ese filtro sin poder seleccionarlos aunque SI aparezcan como Recruiter real en POSITIONS.
+  // Mismo patron que hmSel justo abajo: construir las opciones de lo que de verdad existe en los
+  // datos, no de la lista fija del equipo.
+  fillSelectOnce(recSel, [...new Set(POSITIONS.map(p=>p.recruiter).filter(Boolean))].sort());
   fillSelectOnce(hmSel, [...new Set(POSITIONS.map(p=>p.hiringManager))].sort());
   fillSelectOnce(locSel, LOCATIONS);
   fillSlaSelectOnce(ttsSel);
